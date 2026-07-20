@@ -60,6 +60,7 @@
 ## 커밋 컨벤션
 
 - 커밋 제목은 `<gitmoji> <type>: <명령형 요약>` 형식을 사용한다.
+- 요약은 한 문장으로 짧고 완결되게 쓰며, `~하고`·`~하여`·`~해` 같은 연결형으로 끝내지 않는다.
 - 허용 type은 `feat`, `fix`, `refactor`, `test`, `docs`, `infra`, `chore`, `perf`, `security`다.
 - Gitmoji와 type의 의미를 일치시키고 하나의 커밋에는 하나의 의도만 담는다.
 - Formatter 결과와 기능 변경은 가능한 한 별도 커밋으로 분리한다.

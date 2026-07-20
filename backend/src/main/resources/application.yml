@@ -36,6 +36,5 @@ springdoc:
     enabled: false
     doc-expansion: none
     filter: true
-    operations-sorter: alpha
     tags-sorter: alpha
     display-request-duration: true

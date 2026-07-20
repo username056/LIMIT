@@ -25,16 +25,16 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @Tag(name = "14. 알림")
 public interface NotificationApi {
 
-    @Operation(operationId = "notification01", summary = "알림 수신 설정 조회", description = "요청\n권한: MEMBER\n\n응답\n200 OK\n{\"data\":{\"dropNotificationEnabled\":true,\"purchaseResultNotificationEnabled\":true,\"orderNotificationEnabled\":true,\"shippingNotificationEnabled\":true,\"emailNotificationEnabled\":true,\"webNotificationEnabled\":true}}", security = @SecurityRequirement(name = "bearerAuth"))
+    @Operation(operationId = "notification01", summary = "알림 수신 설정 조회", description = "요청\n권한: MEMBER", security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "명세 응답", content = @Content(schema = @Schema(ref = "#/components/schemas/NotificationSettingsResponse")))
+        @ApiResponse(responseCode = "200", description = "알림 수신 설정 조회 성공", content = @Content(schema = @Schema(ref = "#/components/schemas/NotificationSettingsResponse")))
     })
     @RequestMapping(method = RequestMethod.GET, path = "/api/v1/members/me/notification-settings", produces = MediaType.APPLICATION_JSON_VALUE)
     ResponseEntity<Void> notification01();
-    @Operation(operationId = "notification02", summary = "알림 수신 설정 수정", description = "요청\n권한: MEMBER\nBody:\n{\"dropNotificationEnabled\":true,\"purchaseResultNotificationEnabled\":true,\"orderNotificationEnabled\":false,\"shippingNotificationEnabled\":true,\"emailNotificationEnabled\":false,\"webNotificationEnabled\":true}\n처리: 전달된 필드만 변경\n\n응답\n200 OK\n{\"data\":{\"dropNotificationEnabled\":true,\"purchaseResultNotificationEnabled\":true,\"orderNotificationEnabled\":false,\"shippingNotificationEnabled\":true,\"emailNotificationEnabled\":false,\"webNotificationEnabled\":true,\"updatedAt\":\"2026-07-16T11:30:00+09:00\"}}\n오류: 400 INVALID_INPUT", security = @SecurityRequirement(name = "bearerAuth"))
+    @Operation(operationId = "notification02", summary = "알림 수신 설정 수정", description = "요청\n권한: MEMBER\n처리: 전달된 필드만 변경", security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "명세 응답", content = @Content(schema = @Schema(ref = "#/components/schemas/NotificationSettingsResponse"))),
-        @ApiResponse(responseCode = "400", description = "명세 오류 응답")
+        @ApiResponse(responseCode = "200", description = "알림 수신 설정 수정 성공", content = @Content(schema = @Schema(ref = "#/components/schemas/NotificationSettingsResponse"))),
+        @ApiResponse(responseCode = "400", description = "INVALID_INPUT")
     })
     @RequestMapping(method = RequestMethod.PATCH, path = "/api/v1/members/me/notification-settings", produces = MediaType.APPLICATION_JSON_VALUE)
     ResponseEntity<Void> notification02(
