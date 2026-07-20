@@ -71,3 +71,7 @@ body {
 .demo-link.grafana .demo-link-title {
   color: #c2410c;
 }
+
+.demo-link.sonar .demo-link-title {
+  color: #7c3aed;
+}

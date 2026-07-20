@@ -11,6 +11,7 @@ const grafanaUrl = resolveDemoUrl(
   'http://localhost:3000',
   import.meta.env.VITE_GRAFANA_URL,
 )
+const sonarUrl = import.meta.env.VITE_SONAR_URL || 'http://localhost:9000'
 </script>
 
 <template>
@@ -38,6 +39,16 @@ const grafanaUrl = resolveDemoUrl(
       >
         <span class="demo-link-title">Grafana</span>
         <span class="demo-link-description">모니터링 보기 <span aria-hidden="true">↗</span></span>
+      </a>
+      <a
+        class="demo-link sonar"
+        data-testid="sonar-link"
+        :href="sonarUrl"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <span class="demo-link-title">SonarCloud</span>
+        <span class="demo-link-description">코드 품질 보기 <span aria-hidden="true">↗</span></span>
       </a>
     </nav>
   </main>
