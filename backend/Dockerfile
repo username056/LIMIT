@@ -12,7 +12,9 @@ RUN --mount=type=cache,target=/home/gradle/.gradle,uid=1000,gid=1000 \
 
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-RUN addgroup -S spring && adduser -S spring -G spring
+RUN apk upgrade --no-cache \
+    && addgroup -S spring \
+    && adduser -S spring -G spring
 COPY --from=builder /workspace/build/libs/*.jar app.jar
 USER spring:spring
 EXPOSE 8080
