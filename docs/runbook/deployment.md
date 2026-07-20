@@ -158,6 +158,7 @@ MySQL exporter 전용 최소권한 계정 생성도 운영 DB 변경 승인 후 
 - `backend_unit_test`와 `backend_integration_test`를 병렬 실행하고 각각의 JaCoCo execution data를 artifact로 전달한다.
 - `backend_coverage`가 두 execution data를 합산해 coverage report와 검증 완료 JAR을 생성하고, `backend/Dockerfile.ci`가 해당 JAR을 이미지에 넣는다. CI 이미지 단계에서 Gradle 빌드를 다시 실행하지 않는다.
 - `backend_image`는 unit, integration, coverage 작업이 모두 성공해야 시작하며 SonarQube 완료는 기다리지 않는다.
+- `dependency_check`는 GitLab Pipeline Schedule(예: 매주 1회)로 실행되므로 프로젝트 설정에서 Schedule을 등록해야 동작한다. NVD 캐시(`.gradle/dependency-check-data`)는 최초 실행 시에만 느리고 이후에는 변경분만 받는다. `backend/build.gradle`이 변경된 Merge Request에서는 정기 실행을 기다리지 않고 즉시 검사한다.
 - 2026-07-20 로컬 `--rerun-tasks` 기준 기존 직렬 test+integration+coverage는 81초였다. 분리 후 unit 48초와 integration 53초를 병렬 실행하고 coverage/JAR 12초를 이어 실행해 예상 critical path는 약 65초로, 약 20% 단축됐다. 실제 Runner 시간은 Merge Request pipeline에서 계속 기록한다.
 - `sonar-project.properties`만 변경되면 전체 테스트 대신 Sonar 분석에 필요한 `classes`만 생성한다. Secret guard는 생략하지 않고 테스트 job과 병렬로 실행한다.
 - 배포 job은 원격 실행 전에 `scripts/sync-deploy-files.sh`로 배포 스크립트, Compose 정의와 모니터링 설정을 동기화한다. 서버 전용 `infra/.env`, `infra/secrets`, `infra/state`는 전송하거나 덮어쓰지 않는다.
