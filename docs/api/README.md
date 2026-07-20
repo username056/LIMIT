@@ -25,13 +25,20 @@
   "error": {
     "code": "STABLE_ERROR_CODE",
     "message": "사용자에게 보여 줄 메시지",
-    "fieldErrors": []
+    "fieldErrors": [
+      {
+        "field": "email",
+        "reason": "이메일 형식이 올바르지 않습니다."
+      }
+    ]
   },
   "traceId": "요청 추적 ID"
 }
 ```
 
 공통 성공·실패 응답은 `com.c203.limit.global.response`를 사용합니다. 페이징 응답은 `common.dto.response.PageResponse<T>`를 사용하며 제네릭 타입을 유지합니다.
+검증 실패 응답에는 민감 정보가 포함될 수 있는 거절값을 담지 않고 필드명과 사유만 제공합니다.
+비즈니스 예외와 Spring MVC 공통 예외는 모두 위 실패 응답 형태로 변환하며, 도메인별 오류 코드는 기능 구현 시 `ErrorCode`에 추가합니다.
 
 ## 기본 엔드포인트
 

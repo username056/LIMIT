@@ -16,7 +16,7 @@ public record ApiErrorResponse(ErrorDetail error, String traceId) {
     public record ErrorDetail(String code, String message, List<FieldError> fieldErrors) {}
 
     @Schema(name = "FieldErrorResponse", description = "필드 검증 오류 상세")
-    public record FieldError(String field, Object rejectedValue, String reason) {}
+    public record FieldError(String field, String reason) {}
 
     public static ApiErrorResponse of(ErrorCode errorCode, String traceId) {
         return of(errorCode, errorCode.getMessage(), List.of(), traceId);
@@ -28,6 +28,6 @@ public record ApiErrorResponse(ErrorDetail error, String traceId) {
 
     public static ApiErrorResponse of(
             ErrorCode errorCode, String message, List<FieldError> fieldErrors, String traceId) {
-        return new ApiErrorResponse(new ErrorDetail(errorCode.name(), message, fieldErrors), traceId);
+        return new ApiErrorResponse(new ErrorDetail(errorCode.getCode(), message, fieldErrors), traceId);
     }
 }

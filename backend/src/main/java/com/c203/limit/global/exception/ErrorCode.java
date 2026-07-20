@@ -18,9 +18,11 @@ public enum ErrorCode {
     VALIDATION_FAILED(HttpStatus.BAD_REQUEST, "요청 값 검증에 실패했습니다."),
     INVALID_INPUT(HttpStatus.BAD_REQUEST, "입력 값이 올바르지 않습니다."),
     INVALID_REQUEST_BODY(HttpStatus.BAD_REQUEST, "요청 본문을 해석할 수 없습니다."),
+    MISSING_REQUIRED_VALUE(HttpStatus.BAD_REQUEST, "필수 요청 값이 누락되었습니다."),
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "인증이 필요합니다."),
     FORBIDDEN(HttpStatus.FORBIDDEN, "접근 권한이 없습니다."),
     NOT_FOUND(HttpStatus.NOT_FOUND, "리소스를 찾을 수 없습니다."),
+    METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "지원하지 않는 HTTP 메서드입니다."),
     CONFLICT(HttpStatus.CONFLICT, "요청이 현재 상태와 충돌합니다."),
     DUPLICATE_RESOURCE(HttpStatus.CONFLICT, "이미 존재하는 리소스입니다."),
     DUPLICATE_REQUEST(HttpStatus.CONFLICT, "이미 처리된 요청입니다."),
@@ -68,4 +70,8 @@ public enum ErrorCode {
 
     private final HttpStatus status;
     private final String message;
+
+    public String getCode() {
+        return name();
+    }
 }
