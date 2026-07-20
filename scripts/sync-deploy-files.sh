@@ -19,10 +19,11 @@ tar -czf - \
   scripts/smoke-test.sh \
   infra/compose.yml \
   infra/compose.prod.yml \
+  infra/admin \
   infra/monitoring \
   | ssh -i "$DEPLOY_SSH_KEY_FILE" \
       -o BatchMode=yes \
       -o IdentitiesOnly=yes \
       -o StrictHostKeyChecking=yes \
       "$DEPLOY_USER@$DEPLOY_HOST" \
-      "install -d -m 0755 '$DEPLOY_PATH/scripts' '$DEPLOY_PATH/infra' && tar -xzf - -C '$DEPLOY_PATH'"
+      "install -d -m 0755 '$DEPLOY_PATH/scripts' '$DEPLOY_PATH/infra' && tar -xzf - -C '$DEPLOY_PATH' && sudo -n install -d -m 0755 /var/www/limit-admin && sudo -n install -m 0644 '$DEPLOY_PATH/infra/admin/index.html' '$DEPLOY_PATH/infra/admin/admin.css' '$DEPLOY_PATH/infra/admin/admin.js' /var/www/limit-admin/"

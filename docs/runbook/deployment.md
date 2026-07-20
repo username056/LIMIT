@@ -107,6 +107,8 @@ Spring Boot 4의 MongoDB 연결 속성은 `spring.mongodb.uri`를 사용한다. 
 
 `dev` 또는 `main`에 변경이 병합되어 push pipeline이 생성되면 관련 영역의 검증 잡 이후 배포 잡이 자동 실행된다. 백엔드는 `backend_image`와 `container_scan`을 통과한 digest를 `deploy_prod`가 동일한 `limit-prod` 스택에 배포하고, 프론트엔드는 `frontend_verify` 산출물을 `frontend_deploy_prod`가 배포한다.
 
+백엔드 배포 파일 동기화 단계는 `infra/admin`의 운영 포털 정적 파일도 `/var/www/limit-admin`에 갱신한다.
+
 스크립트는 비활성 색상을 기동하고 `/actuator/health/readiness`를 반복 확인한 다음 upstream을 전환한다. 외부 `/health` smoke test가 성공해야 이전 색상을 중지한다. readiness 실패 시 신규 색상만 제거한다. 전환 후 smoke 실패 시 이전 upstream을 복원·reload하고 신규 색상을 제거한다.
 
 수동 rollback은 보호된 `dev`, `main` 브랜치 파이프라인의 선택적 `rollback_prod` job으로만 실행한다. 실행하지 않은 rollback job은 자동배포 파이프라인 완료를 막지 않는다. 운영자가 이미지 문자열을 입력하지 않으며, job은 `infra/state/prod.active`의 반대 색상에 남은 중지 컨테이너에서 이전 image digest를 자동으로 읽는다. 활성 컨테이너가 실행 중이고 반대 색상 컨테이너가 중지 상태이며 이전 이미지가 `@sha256:<64-hex>` 형식일 때만 기존 Blue/Green 배포 로직을 호출한다.
