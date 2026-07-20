@@ -16,7 +16,10 @@ describe('App', () => {
     })
     expect(wrapper.get('[data-testid="grafana-link"]').attributes('href'))
       .toBe('http://localhost:3000')
-    expect(wrapper.get('[data-testid="sonar-link"]').attributes('href'))
-      .toBe('http://localhost:9000')
+    expect(wrapper.get('[data-testid="sonar-link"]').attributes()).toMatchObject({
+      href: 'http://localhost:9000',
+      rel: 'noopener noreferrer',
+      target: '_blank',
+    })
   })
 })

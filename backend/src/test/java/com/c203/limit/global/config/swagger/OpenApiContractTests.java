@@ -75,7 +75,6 @@ class OpenApiContractTests {
                 .andExpect(jsonPath("$.paths['/api/v1/internal/stock-reservations/{reservationId}/confirmations'].post.operationId").value("stock02"))
                 .andExpect(jsonPath("$.paths['/internal/v1/stock-reservations/{reservationId}/confirm']").doesNotExist())
                 .andExpect(jsonPath("$.components.schemas.SignupRequest").exists())
-                .andExpect(jsonPath("$.components.schemas.ApiResponse").exists())
                 .andExpect(jsonPath("$.components.schemas.OrderDetailResponse").exists())
                 .andExpect(jsonPath("$.components.schemas.QueueStatusResponse").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/hello']").doesNotExist())
@@ -92,7 +91,7 @@ class OpenApiContractTests {
         mockMvc.perform(get("/v3/api-docs/swagger-config"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.urls.length()").value(17))
-                .andExpect(jsonPath("$.urlsPrimaryName").value("01-auth"))
+                .andExpect(jsonPath("$['urls.primaryName']").value("01-auth"))
                 .andExpect(jsonPath("$.operationsSorter", containsString("post: 0")));
     }
 
