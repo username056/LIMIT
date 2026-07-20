@@ -237,6 +237,34 @@ backend_image:
     - if: '$CI_COMMIT_BRANCH == "dev"'
       changes: *backend_changes
 
+container_scan:
+  stage: package
+  image:
+    name: aquasec/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f
+    entrypoint: [""]
+  needs:
+    - job: backend_image
+      artifacts: true
+  cache:
+    key: trivy-db
+    paths: [.trivycache]
+  variables:
+    TRIVY_CACHE_DIR: "$CI_PROJECT_DIR/.trivycache"
+    TRIVY_NO_PROGRESS: "true"
+    TRIVY_USERNAME: "$DOCKERHUB_USERNAME"
+    TRIVY_PASSWORD: "$DOCKERHUB_TOKEN"
+  script:
+    - test -n "$DEPLOY_IMAGE"
+    - trivy image --scanners vuln --exit-code 1 --severity HIGH,CRITICAL --format json --output trivy-report.json "$DEPLOY_IMAGE"
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths: [trivy-report.json]
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/ && $CI_COMMIT_REF_PROTECTED == "true"'
+    - if: '$CI_COMMIT_BRANCH == "dev"'
+      changes: *backend_changes
+
 deploy_prod:
   stage: deploy
   image: alpine:3.22
@@ -245,6 +273,8 @@ deploy_prod:
   needs:
     - job: backend_image
       artifacts: true
+    - job: container_scan
+      artifacts: false
   environment:
     name: production
   before_script:
