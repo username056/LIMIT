@@ -1,0 +1,1 @@
+package com.c203.limit.domain.admin.repository; import java.util.Optional; import org.springframework.data.jpa.repository.JpaRepository; import com.c203.limit.domain.admin.entity.AdminAccount; public interface AdminAccountRepository extends JpaRepository<AdminAccount,Long>{Optional<AdminAccount> findByEmailIgnoreCase(String email);}

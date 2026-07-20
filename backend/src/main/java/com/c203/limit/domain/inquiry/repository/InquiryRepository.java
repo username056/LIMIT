@@ -1,0 +1,1 @@
+package com.c203.limit.domain.inquiry.repository;import org.springframework.data.jpa.repository.JpaRepository;import com.c203.limit.domain.inquiry.entity.Inquiry;public interface InquiryRepository extends JpaRepository<Inquiry,Long>{}
