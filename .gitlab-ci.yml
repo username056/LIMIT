@@ -47,8 +47,14 @@ variables:
   image: gradle:9-jdk21-jammy
   cache:
     key:
-      files: [backend/gradle/wrapper/gradle-wrapper.properties]
-    paths: [.gradle/caches, .gradle/wrapper, .gradle/dependency-check-data]
+      files:
+        - backend/gradle/wrapper/gradle-wrapper.properties
+        - backend/gradle.properties
+    paths:
+      - .gradle/caches
+      - .gradle/caches/build-cache-1
+      - .gradle/wrapper
+      - .gradle/dependency-check-data
 
 secret_guard:
   stage: guard
