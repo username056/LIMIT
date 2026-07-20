@@ -12,6 +12,9 @@ import com.c203.limit.domain.auth.repository.SocialAccountRepository;
 import com.c203.limit.domain.seller.repository.SellerApplicationRepository;
 import com.c203.limit.domain.seller.repository.SellerApplicationDocumentRepository;
 import com.c203.limit.domain.seller.repository.SellerRepository;
+import com.c203.limit.domain.admin.repository.*;
+import com.c203.limit.domain.inquiry.repository.*;
+import com.c203.limit.domain.withdrawal.repository.WithdrawalRequestRepository;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -41,6 +44,13 @@ class OpenApiContractTests {
     @MockitoBean SellerApplicationRepository sellerApplicationRepository;
     @MockitoBean SellerApplicationDocumentRepository sellerApplicationDocumentRepository;
     @MockitoBean SellerRepository sellerRepository;
+    @MockitoBean AdminAccountRepository adminAccountRepository;
+    @MockitoBean MemberRestrictionRepository memberRestrictionRepository;
+    @MockitoBean AdminActionLogRepository adminActionLogRepository;
+    @MockitoBean MemberRoleAssignmentRepository memberRoleAssignmentRepository;
+    @MockitoBean InquiryRepository inquiryRepository;
+    @MockitoBean InquiryAnswerRepository inquiryAnswerRepository;
+    @MockitoBean WithdrawalRequestRepository withdrawalRequestRepository;
 
     @Autowired
     MockMvc mockMvc;

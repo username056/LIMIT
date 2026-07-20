@@ -1,0 +1,1 @@
+package com.c203.limit.domain.admin.repository; import org.springframework.data.jpa.repository.JpaRepository; import com.c203.limit.domain.admin.entity.AdminActionLog; public interface AdminActionLogRepository extends JpaRepository<AdminActionLog,Long>{}

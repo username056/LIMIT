@@ -67,6 +67,9 @@ public class Member {
     }
     public void recordLogin() { this.lastLoginAt = OffsetDateTime.now(); }
     public void grantSellerRole() { this.role = MemberRole.SELLER; }
+    public void markWithdrawalPending() { this.status = MemberStatus.WITHDRAWAL_PENDING; this.updatedAt = OffsetDateTime.now(); }
+    public void completeWithdrawal() { this.status = MemberStatus.WITHDRAWN; this.updatedAt = OffsetDateTime.now(); }
+    public void reactivate() { this.status = MemberStatus.ACTIVE; this.updatedAt = OffsetDateTime.now(); }
     public Long getId() { return id; }
     public String getEmail() { return email; }
     public String getPassword() { return password; }
