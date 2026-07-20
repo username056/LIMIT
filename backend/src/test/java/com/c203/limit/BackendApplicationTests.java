@@ -5,6 +5,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import com.c203.limit.domain.member.repository.MemberRepository;
 import com.c203.limit.domain.auth.repository.SocialAccountRepository;
+import com.c203.limit.domain.seller.repository.SellerApplicationRepository;
+import com.c203.limit.domain.seller.repository.SellerApplicationDocumentRepository;
+import com.c203.limit.domain.seller.repository.SellerRepository;
 
 @SpringBootTest(properties = {
         "spring.autoconfigure.exclude="
@@ -23,6 +26,9 @@ class BackendApplicationTests {
     MemberRepository memberRepository;
     @MockitoBean
     SocialAccountRepository socialAccountRepository;
+    @MockitoBean SellerApplicationRepository sellerApplicationRepository;
+    @MockitoBean SellerApplicationDocumentRepository sellerApplicationDocumentRepository;
+    @MockitoBean SellerRepository sellerRepository;
 
     @Test
     void contextLoads() {

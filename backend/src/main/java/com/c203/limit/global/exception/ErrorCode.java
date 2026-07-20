@@ -34,7 +34,16 @@ public enum ErrorCode {
     SOCIAL_MEMBER_PASSWORD_UNAVAILABLE("MEM008", HttpStatus.UNPROCESSABLE_ENTITY, "소셜 전용 회원은 비밀번호를 변경할 수 없습니다."),
     UNSUPPORTED_SOCIAL_PROVIDER("AUTH006", HttpStatus.BAD_REQUEST, "지원하지 않거나 구성되지 않은 소셜 로그인 공급자입니다."),
     SOCIAL_ACCOUNT_NOT_FOUND("AUTH007", HttpStatus.NOT_FOUND, "연동된 소셜 계정을 찾을 수 없습니다."),
-    LAST_LOGIN_METHOD("AUTH008", HttpStatus.CONFLICT, "마지막 로그인 수단은 해제할 수 없습니다.");
+    LAST_LOGIN_METHOD("AUTH008", HttpStatus.CONFLICT, "마지막 로그인 수단은 해제할 수 없습니다."),
+    SELLER_APPLICATION_NOT_FOUND("SEL001", HttpStatus.NOT_FOUND, "판매자 신청서를 찾을 수 없습니다."),
+    ACTIVE_SELLER_APPLICATION_EXISTS("SEL002", HttpStatus.CONFLICT, "처리 중인 판매자 신청서가 있습니다."),
+    ALREADY_SELLER("SEL003", HttpStatus.CONFLICT, "이미 판매자 권한을 가진 회원입니다."),
+    SELLER_APPLICATION_NOT_EDITABLE("SEL004", HttpStatus.CONFLICT, "수정할 수 없는 판매자 신청서 상태입니다."),
+    SELLER_APPLICATION_INCOMPLETE("SEL005", HttpStatus.BAD_REQUEST, "판매자 신청 필수 정보와 증빙을 확인해 주세요."),
+    SELLER_APPLICATION_NOT_CANCELABLE("SEL006", HttpStatus.CONFLICT, "취소할 수 없는 판매자 신청서 상태입니다."),
+    SELLER_DOCUMENT_NOT_FOUND("SEL007", HttpStatus.NOT_FOUND, "판매자 증빙 문서를 찾을 수 없습니다."),
+    INVALID_SELLER_DOCUMENT("SEL008", HttpStatus.BAD_REQUEST, "허용되지 않는 판매자 증빙 문서입니다."),
+    SELLER_PROFILE_NOT_FOUND("SEL009", HttpStatus.NOT_FOUND, "판매자 프로필을 찾을 수 없습니다.");
 
     private final String code;
     private final HttpStatus status;
