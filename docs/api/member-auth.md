@@ -17,6 +17,9 @@ Refresh Token 저장소는 기본값이 `memory`이므로 다중 인스턴스 �
 소셜 로그인은 `SocialIdentityClient`를 공급자별로 구현해 등록한다. 공급자 구현이 없는 경우
 해당 로그인 요청은 `AUTH006`으로 거절된다.
 
+모든 성공 응답은 공통 `{ "data": ..., "meta": null }` 래퍼를 사용하며, 보호 API는
+`Authorization: Bearer {accessToken}` 헤더를 요구한다.
+
 ## DB 반영 필요 사항
 
 API 계약을 만족하려면 기존 ERD의 `user_account`에 `email_verified_at`, `last_login_at`,
