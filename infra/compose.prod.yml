@@ -15,6 +15,7 @@ services:
   backend-blue:
     image: ${BACKEND_BLUE_IMAGE:?BACKEND_BLUE_IMAGE is required}
     profiles: [application]
+    restart: unless-stopped
     environment: *backend-environment
     depends_on:
       mysql: { condition: service_healthy }
@@ -38,6 +39,7 @@ services:
   backend-green:
     image: ${BACKEND_GREEN_IMAGE:?BACKEND_GREEN_IMAGE is required}
     profiles: [application]
+    restart: unless-stopped
     environment: *backend-environment
     depends_on:
       mysql: { condition: service_healthy }
@@ -54,6 +56,7 @@ services:
   prometheus:
     image: prom/prometheus:v3.4.1
     profiles: [observability]
+    restart: unless-stopped
     command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=7d", "--storage.tsdb.retention.size=8GB"]
     volumes:
       - ./monitoring/prometheus:/etc/prometheus:ro
@@ -67,6 +70,7 @@ services:
   loki:
     image: grafana/loki:3.5.1
     profiles: [observability]
+    restart: unless-stopped
     command: ["-config.file=/etc/loki/config.yml"]
     volumes:
       - ./monitoring/loki/config.yml:/etc/loki/config.yml:ro
@@ -79,6 +83,7 @@ services:
   grafana:
     image: grafana/grafana:12.0.1
     profiles: [observability]
+    restart: unless-stopped
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:?GRAFANA_ADMIN_USER is required}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
@@ -101,6 +106,7 @@ services:
   alertmanager:
     image: prom/alertmanager:v0.28.1
     profiles: [observability]
+    restart: unless-stopped
     command: ["--config.file=/etc/alertmanager/config.yml"]
     volumes: ["./monitoring/alertmanager/config.yml:/etc/alertmanager/config.yml:ro"]
     networks: [app]
@@ -111,6 +117,7 @@ services:
   node-exporter:
     image: prom/node-exporter:v1.9.1
     profiles: [observability]
+    restart: unless-stopped
     command: ["--path.rootfs=/host"]
     volumes: ["/:/host:ro,rslave"]
     networks: [app]
@@ -121,6 +128,7 @@ services:
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.52.1
     profiles: [observability]
+    restart: unless-stopped
     privileged: true
     devices: ["/dev/kmsg:/dev/kmsg"]
     volumes:
@@ -137,6 +145,7 @@ services:
   alloy:
     image: grafana/alloy:v1.9.1
     profiles: [observability]
+    restart: unless-stopped
     command: ["run", "/etc/alloy/config.alloy", "--storage.path=/var/lib/alloy/data"]
     volumes:
       - ./monitoring/alloy/config.alloy:/etc/alloy/config.alloy:ro
@@ -151,6 +160,7 @@ services:
   mysql-exporter:
     image: prom/mysqld-exporter:v0.17.2
     profiles: [observability]
+    restart: unless-stopped
     command: ["--config.my-cnf=/run/secrets/mysql-exporter-config"]
     secrets: [mysql-exporter-config]
     networks: [app, data]
@@ -163,6 +173,7 @@ services:
   mongodb-exporter:
     image: percona/mongodb_exporter:0.47.1
     profiles: [observability]
+    restart: unless-stopped
     environment:
       MONGODB_URI: ${MONGODB_URI:?MONGODB_URI is required}
     command: ["--collect-all", "--compatible-mode"]
@@ -176,6 +187,7 @@ services:
   redis-exporter:
     image: oliver006/redis_exporter:v1.74.0
     profiles: [observability]
+    restart: unless-stopped
     environment:
       REDIS_ADDR: redis://redis:6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
@@ -189,6 +201,7 @@ services:
   nginx-exporter:
     image: nginx/nginx-prometheus-exporter:1.4.2
     profiles: [observability]
+    restart: unless-stopped
     command: ["--nginx.scrape-uri=http://host.docker.internal:8088/stub_status"]
     extra_hosts: ["host.docker.internal:host-gateway"]
     networks: [app]

@@ -1,12 +1,18 @@
 package com.c203.limit.global.config.swagger;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Assumptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import com.c203.limit.domain.member.repository.MemberRepository;
 import com.c203.limit.domain.auth.repository.SocialAccountRepository;
 import com.c203.limit.domain.seller.repository.SellerApplicationRepository;
@@ -71,6 +77,23 @@ class OpenApiContractTests {
                 .andExpect(jsonPath("$.components.schemas.ApiResponse").exists())
                 .andExpect(jsonPath("$.components.schemas.OrderDetailResponse").exists())
                 .andExpect(jsonPath("$.components.schemas.QueueStatusResponse").exists());
+    }
+
+    @Test
+    void exportsCurrentOpenApi() throws Exception {
+        String output = System.getProperty("openapi.output");
+        Assumptions.assumeTrue(output != null && !output.isBlank());
+
+        MvcResult result = mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andReturn();
+        Path outputPath = Path.of(output).toAbsolutePath().normalize();
+        Files.createDirectories(outputPath.getParent());
+        Files.writeString(
+                outputPath,
+                result.getResponse().getContentAsString(StandardCharsets.UTF_8),
+                StandardCharsets.UTF_8
+        );
     }
 
     @Test
