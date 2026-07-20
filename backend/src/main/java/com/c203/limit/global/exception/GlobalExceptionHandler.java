@@ -56,13 +56,12 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiErrorResponse> handleUnreadableBody(HttpMessageNotReadableException exception) {
-        return ResponseEntity.status(ErrorCode.INVALID_REQUEST_BODY.getStatus())
-                .body(ApiErrorResponse.of(ErrorCode.INVALID_REQUEST_BODY, traceId()));
+        return errorResponse(ErrorCode.INVALID_INPUT_VALUE);
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ApiErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException exception) {
-        return errorResponse(ErrorCode.INVALID_INPUT);
+        return errorResponse(ErrorCode.INVALID_TYPE_VALUE);
     }
 
     @ExceptionHandler({
@@ -70,23 +69,24 @@ public class GlobalExceptionHandler {
             MissingRequestHeaderException.class
     })
     public ResponseEntity<ApiErrorResponse> handleMissingRequiredValue(Exception exception) {
-        return errorResponse(ErrorCode.MISSING_REQUIRED_VALUE);
+        return errorResponse(ErrorCode.MISSING_REQUEST_PARAMETER);
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
-    public ResponseEntity<ApiErrorResponse> handleNotFound(NoResourceFoundException exception) {
-        return errorResponse(ErrorCode.NOT_FOUND);
+    public ResponseEntity<Void> handleNotFound(NoResourceFoundException exception) {
+        log.debug("resource not found: {}", exception.getResourcePath());
+        return ResponseEntity.notFound().build();
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
-    public ResponseEntity<ApiErrorResponse> handleMethodNotAllowed(HttpRequestMethodNotSupportedException exception) {
-        return errorResponse(ErrorCode.METHOD_NOT_ALLOWED);
+    public ResponseEntity<Void> handleMethodNotAllowed(HttpRequestMethodNotSupportedException exception) {
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).build();
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleUnexpected(Exception exception) {
         log.error("unhandled exception", exception);
-        return errorResponse(ErrorCode.INTERNAL_SERVER_ERROR);
+        return errorResponse(ErrorCode.INTERNAL_ERROR);
     }
 
     @ExceptionHandler({

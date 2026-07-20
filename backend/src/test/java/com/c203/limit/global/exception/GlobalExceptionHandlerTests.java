@@ -33,14 +33,14 @@ class GlobalExceptionHandlerTests {
 
     @Test
     void businessExceptionUsesErrorCodeWhenCustomMessageIsBlank() {
-        BusinessException exception = new BusinessException(ErrorCode.CONFLICT, " ");
+        BusinessException exception = new BusinessException(ErrorCode.INVALID_INPUT_VALUE, " ");
 
         var response = handler.handleBusiness(exception);
 
-        assertThat(response.getStatusCode()).isEqualTo(ErrorCode.CONFLICT.getStatus());
+        assertThat(response.getStatusCode()).isEqualTo(ErrorCode.INVALID_INPUT_VALUE.getStatus());
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().error().code()).isEqualTo("CONFLICT");
-        assertThat(response.getBody().error().message()).isEqualTo(ErrorCode.CONFLICT.getMessage());
+        assertThat(response.getBody().error().code()).isEqualTo("CMN003");
+        assertThat(response.getBody().error().message()).isEqualTo(ErrorCode.INVALID_INPUT_VALUE.getMessage());
         assertThat(response.getBody().traceId()).isEqualTo("trace-test");
     }
 
@@ -67,9 +67,9 @@ class GlobalExceptionHandlerTests {
     void malformedRequestBodyUsesCommonErrorResponse() {
         var response = handler.handleUnreadableBody(mock(HttpMessageNotReadableException.class));
 
-        assertThat(response.getStatusCode()).isEqualTo(ErrorCode.INVALID_REQUEST_BODY.getStatus());
+        assertThat(response.getStatusCode()).isEqualTo(ErrorCode.INVALID_INPUT_VALUE.getStatus());
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().error().code()).isEqualTo("INVALID_REQUEST_BODY");
+        assertThat(response.getBody().error().code()).isEqualTo("CMN003");
         assertThat(response.getBody().traceId()).isEqualTo("trace-test");
     }
 
@@ -85,9 +85,9 @@ class GlobalExceptionHandlerTests {
                 new MissingServletRequestParameterException("productId", "long"));
 
         assertThat(invalidResponse.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(invalidResponse.getBody().error().code()).isEqualTo("INVALID_INPUT");
+        assertThat(invalidResponse.getBody().error().code()).isEqualTo("CMN004");
         assertThat(missingResponse.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(missingResponse.getBody().error().code()).isEqualTo("MISSING_REQUIRED_VALUE");
+        assertThat(missingResponse.getBody().error().code()).isEqualTo("CMN005");
     }
 
     @Test
@@ -97,19 +97,19 @@ class GlobalExceptionHandlerTests {
                 new HttpRequestMethodNotSupportedException("PATCH"));
 
         assertThat(notFoundResponse.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(notFoundResponse.getBody().error().code()).isEqualTo("NOT_FOUND");
+        assertThat(notFoundResponse.getBody()).isNull();
         assertThat(methodNotAllowedResponse.getStatusCode()).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED);
-        assertThat(methodNotAllowedResponse.getBody().error().code()).isEqualTo("METHOD_NOT_ALLOWED");
+        assertThat(methodNotAllowedResponse.getBody()).isNull();
     }
 
     @Test
     void unexpectedExceptionDoesNotExposeInternalMessage() {
         var response = handler.handleUnexpected(new IllegalStateException("database-host-secret"));
 
-        assertThat(response.getStatusCode()).isEqualTo(ErrorCode.INTERNAL_SERVER_ERROR.getStatus());
+        assertThat(response.getStatusCode()).isEqualTo(ErrorCode.INTERNAL_ERROR.getStatus());
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().error().message())
-                .isEqualTo(ErrorCode.INTERNAL_SERVER_ERROR.getMessage());
+                .isEqualTo(ErrorCode.INTERNAL_ERROR.getMessage());
         assertThat(response.getBody().toString()).doesNotContain("database-host-secret");
     }
 
