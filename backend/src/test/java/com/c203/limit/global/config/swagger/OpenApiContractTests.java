@@ -9,6 +9,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import com.c203.limit.domain.member.repository.MemberRepository;
 import com.c203.limit.domain.auth.repository.SocialAccountRepository;
+import com.c203.limit.domain.seller.repository.SellerApplicationRepository;
+import com.c203.limit.domain.seller.repository.SellerApplicationDocumentRepository;
+import com.c203.limit.domain.seller.repository.SellerRepository;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -35,6 +38,9 @@ class OpenApiContractTests {
     MemberRepository memberRepository;
     @MockitoBean
     SocialAccountRepository socialAccountRepository;
+    @MockitoBean SellerApplicationRepository sellerApplicationRepository;
+    @MockitoBean SellerApplicationDocumentRepository sellerApplicationDocumentRepository;
+    @MockitoBean SellerRepository sellerRepository;
 
     @Autowired
     MockMvc mockMvc;
