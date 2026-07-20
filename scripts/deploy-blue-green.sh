@@ -101,6 +101,7 @@ for _ in $(seq 1 "${READINESS_ATTEMPTS:-30}"); do
 done
 if [[ "$ready" != "true" ]]; then
   echo "$target_service did not become ready" >&2
+  cleanup_target
   exit 1
 fi
 
@@ -135,6 +136,7 @@ if ! sh "$root_dir/scripts/smoke-test.sh" "$smoke_base_url"; then
     switch_proxy "$old_proxy"
   fi
   echo "smoke test failed; restored the previous upstream" >&2
+  cleanup_target
   exit 1
 fi
 
