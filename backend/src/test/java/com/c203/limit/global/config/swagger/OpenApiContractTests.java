@@ -80,6 +80,12 @@ class OpenApiContractTests {
     }
 
     @Test
+    void exposesSwaggerUiEntryPointWithoutAuthentication() throws Exception {
+        mockMvc.perform(get("/swagger-ui.html"))
+                .andExpect(status().is3xxRedirection());
+    }
+
+    @Test
     void exportsCurrentOpenApi() throws Exception {
         String output = System.getProperty("openapi.output");
         Assumptions.assumeTrue(output != null && !output.isBlank());

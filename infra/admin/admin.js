@@ -5,6 +5,7 @@ const apiOrigin = `https://api.${rootDomain}`
 document.querySelector('#api-link').href = `${apiOrigin}/api/v1/`
 document.querySelector('#docs-link').href = `https://docs.${rootDomain}/`
 document.querySelector('#grafana-link').href = `https://grafana.${rootDomain}/`
+document.querySelector('#sonar-link').href = 'https://sonarcloud.io/project/overview?id=limit'
 
 const statusElement = document.querySelector('#api-status')
 const refreshButton = document.querySelector('#refresh-status')
