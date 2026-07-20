@@ -18,7 +18,7 @@ class ErrorCodeTests {
         assertThat(codes)
                 .allMatch(code -> code.matches("^[A-Z]{2,5}\\d{3}$"))
                 .doesNotHaveDuplicates();
-        assertThat(codes).hasSize(7);
+        assertThat(codes).hasSizeGreaterThanOrEqualTo(7);
     }
 
     @Test

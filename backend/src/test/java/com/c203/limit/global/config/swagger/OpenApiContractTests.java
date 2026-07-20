@@ -5,7 +5,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import com.c203.limit.domain.member.repository.MemberRepository;
+import com.c203.limit.domain.auth.repository.SocialAccountRepository;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -27,6 +30,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @ActiveProfiles("local")
 class OpenApiContractTests {
+
+    @MockitoBean
+    MemberRepository memberRepository;
+    @MockitoBean
+    SocialAccountRepository socialAccountRepository;
 
     @Autowired
     MockMvc mockMvc;
@@ -50,9 +58,11 @@ class OpenApiContractTests {
     }
 
     @Test
-    void unimplementedDomainControllerReturnsEmptyBody() throws Exception {
+    void publicAvailabilityEndpointReturnsCommonResponse() throws Exception {
         mockMvc.perform(get("/api/v1/auth/email-availability").param("email", "user@example.com"))
                 .andExpect(status().isOk())
-                .andExpect(content().string(""));
+                .andExpect(jsonPath("$.data.email").value("user@example.com"))
+                .andExpect(jsonPath("$.data.available").value(true))
+                .andExpect(jsonPath("$.meta").doesNotExist());
     }
 }
