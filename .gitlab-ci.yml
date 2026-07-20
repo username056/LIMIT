@@ -118,6 +118,18 @@ backend_sonar_compile:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes: [sonar-project.properties]
 
+openapi_export:
+  extends: .backend_gradle_job
+  stage: test
+  needs: []
+  script: ["sh scripts/export-openapi.sh backend/build/openapi/current.json"]
+  artifacts:
+    expire_in: 1 day
+    paths: [backend/build/openapi/current.json]
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *backend_changes
+
 frontend_verify:
   stage: test
   needs: []
@@ -196,6 +208,20 @@ dependency_check:
     paths:
       - backend/build/reports/dependency-check-report.html
       - backend/build/reports/dependency-check-report.json
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *backend_changes
+
+openapi_contract:
+  stage: quality
+  image:
+    name: tufin/oasdiff:v1.17.0@sha256:440ea5929aafc385d040af1165b49c6264549aa0a207c8dc98edd71a7422c6ad
+    entrypoint: [""]
+  needs:
+    - job: openapi_export
+      artifacts: true
+  script:
+    - oasdiff breaking --fail-on ERR docs/api/openapi.json backend/build/openapi/current.json
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes: *backend_changes

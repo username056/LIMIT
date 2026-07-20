@@ -100,6 +100,22 @@ tasks.named('check') {
     dependsOn tasks.named('integrationTest')
 }
 
+tasks.register('openApiExport', Test) {
+    description = 'Exports the generated SpringDoc OpenAPI contract.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform()
+    filter {
+        includeTestsMatching 'com.c203.limit.global.config.swagger.OpenApiContractTests.exportsCurrentOpenApi'
+    }
+
+    def outputFile = providers.gradleProperty('openApiOutput')
+            .orElse(layout.buildDirectory.file('openapi/current.json').map { it.asFile.absolutePath })
+    systemProperty 'openapi.output', outputFile.get()
+    outputs.file(outputFile)
+}
+
 tasks.named('bootJar') {
     archiveFileName = 'app.jar'
 }
