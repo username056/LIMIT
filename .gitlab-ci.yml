@@ -227,6 +227,7 @@ sonarqube:
 dependency_check:
   extends: .backend_gradle_job
   stage: quality
+  timeout: 2h
   cache:
     - key:
         files:
@@ -251,9 +252,6 @@ dependency_check:
       - backend/build/reports/dependency-check-report.json
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        - backend/build.gradle
 
 openapi_contract:
   stage: quality
