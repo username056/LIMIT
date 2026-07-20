@@ -5,10 +5,17 @@ set -eu
 image_tag="${IMAGE_TAG:-$(git rev-parse --verify HEAD)}"
 image_ref="${IMAGE_REPOSITORY}:${image_tag}"
 root_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+dockerfile="${DOCKERFILE:-$root_dir/backend/Dockerfile}"
+
+if [ ! -f "$dockerfile" ]; then
+  echo "dockerfile not found: $dockerfile" >&2
+  exit 1
+fi
 
 if [ "${PUSH_IMAGE:-false}" = "true" ]; then
   docker buildx build \
     --push \
+    --file "$dockerfile" \
     --tag "$image_ref" \
     --cache-from "type=registry,ref=${IMAGE_REPOSITORY}:buildcache" \
     --cache-to "type=registry,ref=${IMAGE_REPOSITORY}:buildcache,mode=max" \
@@ -17,7 +24,7 @@ if [ "${PUSH_IMAGE:-false}" = "true" ]; then
   digest=$(docker buildx imagetools inspect "$image_ref" --format '{{.Manifest.Digest}}')
   deploy_image="${IMAGE_REPOSITORY}@${digest}"
 else
-  docker buildx build --load --tag "$image_ref" "$root_dir/backend"
+  docker buildx build --load --file "$dockerfile" --tag "$image_ref" "$root_dir/backend"
   deploy_image="$image_ref"
 fi
 

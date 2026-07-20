@@ -20,4 +20,9 @@ public class CurrentUser {
         if (!"MEMBER".equals(user.accountType())) throw new BusinessException(ErrorCode.FORBIDDEN);
         return user.id();
     }
+    public Long adminId() {
+        AuthenticatedUser user = require();
+        if (!"ADMIN".equals(user.accountType())) throw new BusinessException(ErrorCode.FORBIDDEN);
+        return user.id();
+    }
 }

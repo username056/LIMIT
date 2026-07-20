@@ -5,15 +5,15 @@ deploy_env="${1:-}"
 image_ref="${2:-}"
 smoke_base_url="${3:-${SMOKE_BASE_URL:-}}"
 
-if [[ "$deploy_env" != "dev" && "$deploy_env" != "prod" ]]; then
-  echo "usage: $0 <dev|prod> <image-ref>" >&2
+if [[ "$deploy_env" != "prod" ]]; then
+  echo "usage: $0 prod <image-ref>" >&2
   exit 64
 fi
 if [[ ! "$image_ref" =~ ^[^[:space:]]+(@sha256:[a-f0-9]{64}|:[A-Za-z0-9._-]+)$ ]]; then
   echo "invalid image reference" >&2
   exit 64
 fi
-if [[ "$deploy_env" == "prod" && ! "$image_ref" =~ @sha256:[a-f0-9]{64}$ ]]; then
+if [[ ! "$image_ref" =~ @sha256:[a-f0-9]{64}$ ]]; then
   echo "production deployment requires an immutable sha256 digest" >&2
   exit 64
 fi
@@ -21,22 +21,21 @@ if [[ ! "$smoke_base_url" =~ ^https?://[^[:space:]]+$ ]]; then
   echo "a valid smoke test base URL is required" >&2
   exit 64
 fi
-if [[ "$deploy_env" == "prod" && ! "$smoke_base_url" =~ ^https:// ]]; then
+if [[ ! "$smoke_base_url" =~ ^https:// ]]; then
   echo "production smoke test URL must use HTTPS" >&2
   exit 64
 fi
 
 root_dir=$(cd -- "$(dirname -- "$0")/.." && pwd)
 state_dir="${DEPLOY_STATE_DIR:-$root_dir/infra/state}"
-state_file="$state_dir/${deploy_env}.active"
-# dev와 prod 모두 동일한 운영형 Compose 계약을 사용하고 project/state만 분리한다.
+state_file="$state_dir/prod.active"
 overlay="$root_dir/infra/compose.prod.yml"
 compose_env_file="${COMPOSE_ENV_FILE:-$root_dir/infra/.env}"
 if [[ ! -f "$compose_env_file" ]]; then
   echo "compose environment file not found: $compose_env_file" >&2
   exit 1
 fi
-compose=(docker compose --env-file "$compose_env_file" -p "limit-${deploy_env}" -f "$root_dir/infra/compose.yml" -f "$overlay")
+compose=(docker compose --env-file "$compose_env_file" -p "limit-prod" -f "$root_dir/infra/compose.yml" -f "$overlay")
 mkdir -p "$state_dir"
 
 readiness_up() {

@@ -9,7 +9,7 @@ image_ref="${2:-}"
 : "${DEPLOY_PATH:?DEPLOY_PATH is required}"
 : "${DEPLOY_SSH_KEY_FILE:?DEPLOY_SSH_KEY_FILE is required}"
 
-case "$deploy_env" in dev|prod) ;; *) exit 64 ;; esac
+case "$deploy_env" in prod) ;; *) exit 64 ;; esac
 printf '%s' "$DEPLOY_HOST" | grep -Eq '^[A-Za-z0-9.-]+$'
 printf '%s' "$DEPLOY_USER" | grep -Eq '^[A-Za-z_][A-Za-z0-9_-]*$'
 printf '%s' "$DEPLOY_PATH" | grep -Eq '^/[A-Za-z0-9._/-]+$'

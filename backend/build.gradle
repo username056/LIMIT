@@ -1,6 +1,7 @@
 plugins {
     id 'java'
     id 'jacoco'
+    id 'org.owasp.dependencycheck' version '12.2.2'
     id 'org.springframework.boot' version '4.0.7'
     id 'io.spring.dependency-management' version '1.1.7'
 }
@@ -17,6 +18,17 @@ java {
 
 repositories {
     mavenCentral()
+}
+
+dependencyCheck {
+    failBuildOnCVSS = 7.0
+    formats = ['HTML', 'JSON']
+    data.directory = "${gradle.gradleUserHomeDir}/dependency-check-data"
+
+    def nvdApiKey = System.getenv('NVD_API_KEY')
+    if (nvdApiKey) {
+        nvd.apiKey = nvdApiKey
+    }
 }
 
 dependencies {
@@ -69,11 +81,14 @@ tasks.register('integrationTest', Test) {
 
 tasks.named('test') {
     useJUnitPlatform()
-    finalizedBy tasks.named('jacocoTestReport')
 }
 
 tasks.named('jacocoTestReport') {
-    dependsOn tasks.named('test')
+    dependsOn tasks.named('test'), tasks.named('integrationTest')
+    executionData(
+            layout.buildDirectory.file('jacoco/test.exec'),
+            layout.buildDirectory.file('jacoco/integrationTest.exec')
+    )
     reports {
         xml.required = true
         html.required = true
@@ -82,4 +97,24 @@ tasks.named('jacocoTestReport') {
 
 tasks.named('check') {
     dependsOn tasks.named('integrationTest')
+}
+
+tasks.register('openApiExport', Test) {
+    description = 'Exports the generated SpringDoc OpenAPI contract.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform()
+    filter {
+        includeTestsMatching 'com.c203.limit.global.config.swagger.OpenApiContractTests.exportsCurrentOpenApi'
+    }
+
+    def outputFile = providers.gradleProperty('openApiOutput')
+            .orElse(layout.buildDirectory.file('openapi/current.json').map { it.asFile.absolutePath })
+    systemProperty 'openapi.output', outputFile.get()
+    outputs.file(outputFile)
+}
+
+tasks.named('bootJar') {
+    archiveFileName = 'app.jar'
 }
