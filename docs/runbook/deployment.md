@@ -115,7 +115,16 @@ bash scripts/deploy-blue-green.sh prod \
 
 스크립트는 비활성 색상을 기동하고 `/actuator/health/readiness`를 반복 확인한 다음 upstream을 전환한다. `/api/v1/hello`까지 smoke test가 성공해야 이전 색상을 중지한다. readiness 실패 시 신규 색상만 제거한다. 전환 후 smoke 실패 시 이전 upstream을 복원·reload하고 신규 색상을 제거한다.
 
-수동 rollback은 이전 digest로 같은 명령을 실행한다. destructive DB migration은 이미지 rollback으로 복구되지 않으므로 Flyway migration은 expand-and-contract 방식으로 작성하고 운영 migration은 별도 승인을 받는다.
+수동 rollback은 보호된 SemVer 태그 파이프라인의 `deploy_rollback_prod` job으로만 실행한다. 운영자가 이미지 문자열을 입력하지 않으며, job은 `infra/state/prod.active`의 반대 색상에 남은 중지 컨테이너에서 이전 image digest를 자동으로 읽는다. 활성 컨테이너가 실행 중이고 반대 색상 컨테이너가 중지 상태이며 이전 이미지가 `@sha256:<64-hex>` 형식일 때만 기존 Blue/Green 배포 로직을 호출한다.
+
+```bash
+# 운영 서버에서의 직접 실행도 이미지 인자를 받지 않는다.
+bash scripts/rollback-blue-green.sh https://api.example.com
+```
+
+`deploy_prod`와 `deploy_rollback_prod`는 모두 `resource_group: limit-prod`와 `interruptible: false`를 사용하므로 동시에 실행되지 않는다. 이전 컨테이너나 digest가 없으면 전환 전에 실패한다. readiness 실패 시 이전 컨테이너만 정리하고 기존 upstream을 유지하며, upstream 전환 후 smoke 실패 시 기존 upstream을 복구한다. 성공한 경우에만 `prod.active`를 이전 색상으로 갱신하고 기존 활성 컨테이너를 중지한다. 실제 프록시 전환은 승인된 운영 점검 시간에만 수행한다.
+
+이미지 rollback은 애플리케이션 컨테이너만 복구한다. destructive DB migration은 되돌리지 않으므로 Flyway migration은 expand-and-contract 방식으로 작성하고 운영 migration은 별도 승인을 받는다.
 
 ## 7. 장애 확인과 로그
 
@@ -161,6 +170,7 @@ MySQL exporter 전용 최소권한 계정 생성도 운영 DB 변경 승인 후 
 - protected variables: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PATH`, `SMOKE_BASE_URL`, `SONAR_HOST_URL`, `SONAR_TOKEN`.
 - 프론트 protected variables: `AWS_DEPLOY_ROLE_ARN`, `FRONTEND_BUCKET_NAME`, `CLOUDFRONT_DISTRIBUTION_ID`, `FRONTEND_PUBLIC_URL`, `VITE_API_BASE_URL`.
 - 운영 수동 job은 protected release tag에서 검증·생성된 `DEPLOY_IMAGE=...@sha256:...` artifact만 사용한다. 운영자가 별도 image 문자열을 입력하지 않는다.
+- 백엔드 rollback job도 protected release tag에서만 노출하며 서버에 남아 있는 반대 색상 컨테이너의 immutable digest를 자동 선택한다. 운영자가 rollback image 변수를 입력하지 않는다.
 - CodeRabbit GitLab app을 연결하고 `review-ready` label을 만든다. `.coderabbit.yaml`이 Draft/WIP를 제외하고 해당 label만 opt-in한다.
 - 프론트엔드는 개발 기간 동안 ESLint·build로 검증하고, SonarQube와 Quality Gate는 백엔드만 대상으로 한다. 필수 CI와 승인자 리뷰를 merge 조건으로 지정하고 redundant pipeline auto-cancel을 활성화한다.
 - GitLab과 GitHub 중 하나만 배포 권한을 갖게 하며 public 전환 전 전체 Git history를 gitleaks로 검사한다.
