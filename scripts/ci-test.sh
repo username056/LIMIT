@@ -4,6 +4,21 @@ set -eu
 scope="${1:-all}"
 root_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 
+run_backend_compile() {
+  cd "$root_dir/backend"
+  ./gradlew classes --no-daemon
+}
+
+run_backend_unit() {
+  cd "$root_dir/backend"
+  ./gradlew test jacocoTestReport bootJar --no-daemon
+}
+
+run_backend_integration() {
+  cd "$root_dir/backend"
+  ./gradlew integrationTest --no-daemon
+}
+
 run_backend() {
   cd "$root_dir/backend"
   ./gradlew test integrationTest jacocoTestReport bootJar --no-daemon
@@ -18,6 +33,9 @@ run_frontend() {
 }
 
 case "$scope" in
+  backend-compile) run_backend_compile ;;
+  backend-unit) run_backend_unit ;;
+  backend-integration) run_backend_integration ;;
   backend) run_backend ;;
   frontend) run_frontend ;;
   all)
@@ -25,7 +43,7 @@ case "$scope" in
     run_frontend
     ;;
   *)
-    echo "usage: $0 [backend|frontend|all]" >&2
+    echo "usage: $0 [backend-compile|backend-unit|backend-integration|backend|frontend|all]" >&2
     exit 64
     ;;
 esac

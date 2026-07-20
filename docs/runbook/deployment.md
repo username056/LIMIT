@@ -33,13 +33,15 @@ test -f /var/run/reboot-required && cat /var/run/reboot-required
 
 권장 배치 경로는 `/opt/limit`이다. 배포 사용자는 이 경로와 Docker에 필요한 최소 권한만 갖고, `sudo -n install`, `nginx -t`, `systemctl reload nginx`만 제한적으로 허용한다. Docker socket 권한은 사실상 root 권한이므로 GitLab project runner/배포 사용자 범위를 protected branch/tag로 제한한다.
 
-서버의 배포 사용자로 GitLab Container Registry에 로그인해 private image pull을 확인한다. 가능하면 장기 개인 토큰 대신 read-registry 범위의 project deploy token을 사용하고 서버 전용 Docker credential store에 보관한다.
+서버의 배포 사용자로 Docker Hub private repository에 로그인해 image pull을 확인한다. CI에는 read/write 범위의 전용 Personal Access Token을 사용하고, 서버에는 별도로 발급한 read-only token을 서버 전용 Docker credential store에 보관한다. 개인 비밀번호나 하나의 token을 CI와 서버에서 공유하지 않는다.
 
 `infra/.env`는 서버에서 600 권한으로 생성하고 `.env.example`의 변수 이름만 참고한다. Mongo URI에는 사용자명·비밀번호와 `authSource=admin`을 포함한다. exporter용 MySQL client 파일과 Qdrant API key 파일도 서버 전용 경로에 600 권한으로 만들고 다음 변수로 연결한다.
 
 Spring profile은 `local`, `prod`만 사용한다. Compose도 `compose.yml` base와 `compose.local.yml`, `compose.prod.yml`만 유지한다. dev 배포는 운영 설정과의 차이를 줄이기 위해 `compose.prod.yml`과 `prod` profile을 그대로 사용하고 Compose project/state만 `limit-dev`로 분리한다. Testcontainers 테스트는 별도 profile 없이 동적 접속 정보를 주입한다.
 
 Blue/Green host port가 8081/8082로 고정되어 있으므로 dev와 prod를 같은 EC2에서 동시에 실행할 수 없다. 자동 dev 배포와 운영 배포를 병행하려면 별도 dev 호스트를 사용해야 하며, 단일 EC2만 사용할 때는 운영 전환 시 dev stack을 중지하는 별도 승인 절차가 필요하다.
+
+현재는 단일 EC2 정책을 사용한다. `dev` 파이프라인은 검증과 Docker Hub candidate image 생성까지만 수행하고 서버에 배포하지 않는다. `v<major>.<minor>.<patch>` protected tag 파이프라인이 백엔드를 다시 검증하고 immutable digest image를 생성하며, 승인된 `deploy_prod` manual job만 `limit-prod` Blue/Green 스택을 변경한다. 동일 EC2에 `limit-dev` Compose project를 기동하지 않는다.
 
 ```text
 MYSQL_EXPORTER_CONFIG_FILE=/opt/limit-secrets/mysql-exporter.my.cnf
@@ -143,11 +145,20 @@ MySQL exporter 전용 최소권한 계정 생성도 운영 DB 변경 승인 후 
 ## 9. GitLab 설정 체크리스트
 
 - `dev`, `main`, `v*`를 protected로 설정하고 직접 push를 금지한다.
-- shared runner/Container Registry 사용 가능 여부를 확인한다. 불가하면 EC2 project runner를 `concurrent = 1`로 시작한다.
+- shared runner 사용 가능 여부를 확인한다. 불가하면 EC2 project runner를 우선 `concurrent = 1`로 등록하고 서버 자원을 확인한다.
+- 단일 EC2에서는 Runner `concurrent = 2`와 job/service 각각 CPU 1개, memory 3 GiB 제한을 사용한다. `sudo bash scripts/configure-gitlab-runner.sh apply`로 적용하고 이상 시 `rollback`한다.
+- Docker Hub에 private backend repository를 만들고 `DOCKERHUB_IMAGE=<namespace>/<repository>`를 protected variable로 등록한다.
+- `DOCKERHUB_USERNAME`은 protected variable, read/write 권한의 `DOCKERHUB_TOKEN`은 masked/protected variable로 등록한다.
+- EC2 배포 사용자는 CI token과 분리된 read-only Docker Hub token으로 `docker login`을 완료한다.
+- `backend_verify`가 생성한 검증 완료 JAR을 `backend/Dockerfile.ci`가 이미지에 넣는다. CI 이미지 단계에서 Gradle 빌드를 다시 실행하지 않는다.
+- 백엔드 unit·coverage·JAR 작업과 Testcontainers integration 작업은 병렬 job으로 실행한다. `backend_image`는 두 작업이 모두 성공해야 시작하며 SonarQube 완료는 기다리지 않는다.
+- `sonar-project.properties`만 변경되면 전체 테스트 대신 Sonar 분석에 필요한 `classes`만 생성한다. Secret guard는 생략하지 않고 테스트 job과 병렬로 실행한다.
+- 배포 job은 원격 실행 전에 `scripts/sync-deploy-files.sh`로 배포 스크립트, Compose 정의와 모니터링 설정을 동기화한다. 서버 전용 `infra/.env`, `infra/secrets`, `infra/state`는 전송하거나 덮어쓰지 않는다.
+- 데이터, 활성 백엔드와 관측 컨테이너는 `restart: unless-stopped`로 Docker 재시작 이후 복구한다. Blue/Green 전환 중 명시적으로 중지된 이전 색상은 자동 재시작하지 않는다.
 - protected/file variables: `DEPLOY_SSH_PRIVATE_KEY`, `SSH_KNOWN_HOSTS`.
 - protected variables: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PATH`, `SMOKE_BASE_URL`, `SONAR_HOST_URL`, `SONAR_TOKEN`.
 - 프론트 protected variables: `AWS_DEPLOY_ROLE_ARN`, `FRONTEND_BUCKET_NAME`, `CLOUDFRONT_DISTRIBUTION_ID`, `FRONTEND_PUBLIC_URL`, `VITE_API_BASE_URL`.
-- 운영 수동 job에는 dev에서 검증된 `PRODUCTION_IMAGE=...@sha256:...`를 제공한다.
+- 운영 수동 job은 protected release tag에서 검증·생성된 `DEPLOY_IMAGE=...@sha256:...` artifact만 사용한다. 운영자가 별도 image 문자열을 입력하지 않는다.
 - CodeRabbit GitLab app을 연결하고 `review-ready` label을 만든다. `.coderabbit.yaml`이 Draft/WIP를 제외하고 해당 label만 opt-in한다.
 - 프론트엔드는 개발 기간 동안 ESLint·build로 검증하고, SonarQube와 Quality Gate는 백엔드만 대상으로 한다. 필수 CI와 승인자 리뷰를 merge 조건으로 지정하고 redundant pipeline auto-cancel을 활성화한다.
 - GitLab과 GitHub 중 하나만 배포 권한을 갖게 하며 public 전환 전 전체 Git history를 gitleaks로 검사한다.
