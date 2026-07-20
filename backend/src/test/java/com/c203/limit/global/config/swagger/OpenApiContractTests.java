@@ -92,7 +92,8 @@ class OpenApiContractTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.urls.length()").value(17))
                 .andExpect(jsonPath("$['urls.primaryName']").value("01-auth"))
-                .andExpect(jsonPath("$.operationsSorter", containsString("post: 0")));
+                .andExpect(jsonPath("$.operationsSorter", containsString("post: 0")))
+                .andExpect(jsonPath("$.operationsSorter", containsString("delete: 4")));
     }
 
     @Test
