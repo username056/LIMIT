@@ -1,0 +1,5 @@
+bucket         = "replace-me-terraform-state"
+key            = "limit/prod/dns/terraform.tfstate"
+region         = "ap-northeast-2"
+encrypt        = true
+use_lockfile   = true

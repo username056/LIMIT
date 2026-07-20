@@ -1,0 +1,5 @@
+interface:
+  display_name: "Backend Issue Workflow"
+  short_description: "Implement and verify backend issues consistently"
+  default_prompt: "Use $backend-issue-workflow to implement and verify a backend issue."
+

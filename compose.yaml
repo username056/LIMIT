@@ -1,0 +1,5 @@
+# 로컬 편의 진입점입니다. 운영은 infra/compose.yml + infra/compose.prod.yml을 사용합니다.
+include:
+  - path:
+      - ./infra/compose.yml
+      - ./infra/compose.local.yml

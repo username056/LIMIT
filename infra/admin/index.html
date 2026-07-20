@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Limit 운영 포털</title>
+    <link rel="stylesheet" href="/admin.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <p class="eyebrow">LIMIT OPERATIONS</p>
+        <h1>운영 도구를 한곳에서 확인하세요.</h1>
+        <p class="description">API 상태, 명세와 모니터링 화면으로 이동할 수 있습니다.</p>
+      </header>
+
+      <section class="status-card" aria-live="polite">
+        <div>
+          <p class="label">API readiness</p>
+          <p id="api-status" class="status pending">확인 중</p>
+        </div>
+        <button id="refresh-status" type="button">다시 확인</button>
+      </section>
+
+      <nav class="service-grid" aria-label="운영 서비스">
+        <a id="api-link" class="service-card" href="#">
+          <span class="service-type">REST API</span>
+          <strong>API</strong>
+          <span>버전이 명시된 /api/v1 엔드포인트</span>
+        </a>
+        <a id="docs-link" class="service-card" href="#">
+          <span class="service-type">OPENAPI</span>
+          <strong>Swagger</strong>
+          <span>백엔드 API 계약과 요청 예시</span>
+        </a>
+        <a id="grafana-link" class="service-card" href="#">
+          <span class="service-type">OBSERVABILITY</span>
+          <strong>Grafana</strong>
+          <span>지표, 로그와 서비스 상태</span>
+        </a>
+      </nav>
+    </main>
+    <script type="module" src="/admin.js"></script>
+  </body>
+</html>

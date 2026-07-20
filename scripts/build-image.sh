@@ -1,0 +1,28 @@
+#!/bin/sh
+set -eu
+
+: "${IMAGE_REPOSITORY:?IMAGE_REPOSITORY is required}"
+image_tag="${IMAGE_TAG:-$(git rev-parse --verify HEAD)}"
+image_ref="${IMAGE_REPOSITORY}:${image_tag}"
+root_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+
+if [ "${PUSH_IMAGE:-false}" = "true" ]; then
+  docker buildx build \
+    --push \
+    --tag "$image_ref" \
+    --cache-from "type=registry,ref=${IMAGE_REPOSITORY}:buildcache" \
+    --cache-to "type=registry,ref=${IMAGE_REPOSITORY}:buildcache,mode=max" \
+    "$root_dir/backend"
+
+  digest=$(docker buildx imagetools inspect "$image_ref" --format '{{.Manifest.Digest}}')
+  deploy_image="${IMAGE_REPOSITORY}@${digest}"
+else
+  docker buildx build --load --tag "$image_ref" "$root_dir/backend"
+  deploy_image="$image_ref"
+fi
+
+if [ -n "${IMAGE_ENV_FILE:-}" ]; then
+  printf 'DEPLOY_IMAGE=%s\n' "$deploy_image" > "$IMAGE_ENV_FILE"
+fi
+
+printf '%s\n' "$deploy_image"

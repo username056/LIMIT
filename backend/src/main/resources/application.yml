@@ -1,0 +1,41 @@
+spring:
+  application:
+    name: backend
+  jpa:
+    open-in-view: false
+  flyway:
+    enabled: true
+
+server:
+  port: 8080
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{traceId:-no-trace}] %logger{36} - %msg%n"
+
+limit:
+  qdrant:
+    url: ${QDRANT_URL:http://localhost:6333}
+    api-key: ${QDRANT_API_KEY:}
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+    doc-expansion: none
+    filter: true
+    operations-sorter: alpha
+    tags-sorter: alpha
+    display-request-duration: true

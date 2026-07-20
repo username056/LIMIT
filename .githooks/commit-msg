@@ -1,0 +1,13 @@
+#!/usr/bin/env sh
+set -eu
+
+message="$(sed -n '1p' "$1")"
+
+case "$message" in
+  "✨ feat: "*|"🐛 fix: "*|"♻️ refactor: "*|"✅ test: "*|"📝 docs: "*|"🚀 infra: "*|"🔧 chore: "*|"⚡️ perf: "*|"🔒 security: "*) ;;
+  *)
+    echo "커밋 제목은 <gitmoji> <type>: <명령형 요약> 형식이어야 합니다." >&2
+    echo "예: ✨ feat: 주문 생성 API 구현" >&2
+    exit 1
+    ;;
+esac

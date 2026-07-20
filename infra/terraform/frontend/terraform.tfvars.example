@@ -1,0 +1,20 @@
+project_name = "limit"
+environment  = "prod"
+aws_region   = "ap-northeast-2"
+
+# S3 이름은 AWS 전체에서 고유해야 합니다.
+bucket_name = "replace-me-limit-prod-frontend"
+
+# 도메인을 구매한 뒤 us-east-1 ACM 인증서와 함께 설정합니다.
+# custom_domain_name = "www.example.com"
+# additional_domain_names = ["example.com"]
+# create_acm_certificate = true
+# attach_custom_domain    = false # DNS 검증 완료 후 true
+# acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/replace-me"
+
+# AWS 계정에 GitLab OIDC provider가 준비된 뒤 활성화합니다.
+# create_gitlab_deploy_role = true
+# gitlab_oidc_provider_arn  = "arn:aws:iam::123456789012:oidc-provider/gitlab.com"
+# gitlab_oidc_issuer_host   = "gitlab.com"
+# gitlab_oidc_audience      = "sts.amazonaws.com"
+# gitlab_oidc_subject       = "project_path:group/project:ref_type:tag:ref:v*"

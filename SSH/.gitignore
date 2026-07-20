@@ -1,0 +1,4 @@
+*
+!.gitignore
+!connect.sh
+!.env.example

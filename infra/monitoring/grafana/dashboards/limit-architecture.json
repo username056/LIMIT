@@ -1,0 +1,150 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 1,
+  "links": [
+    {"title": "All container logs", "type": "link", "url": "/explore?left={\"datasource\":\"loki\",\"queries\":[{\"expr\":\"{source=\\\"docker\\\"}\"}]}", "targetBlank": false}
+  ],
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "mappings": [
+            {"options": {"0": {"color": "red", "text": "장애"}, "1": {"color": "green", "text": "정상"}}, "type": "value"}
+          ],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "yellow", "value": 0.5}, {"color": "green", "value": 1}]}
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 14, "w": 24, "x": 0, "y": 0},
+      "id": 1,
+      "options": {
+        "inlineEditing": false,
+        "showAdvancedTypes": true,
+        "panZoom": false,
+        "infinitePan": false,
+        "root": {
+          "background": {"color": {"fixed": "transparent"}},
+          "border": {"color": {"fixed": "dark-green"}},
+          "elements": [
+            {
+              "name": "Vue CloudFront S3", "type": "rectangle",
+              "config": {"align": "center", "color": {"fixed": "text"}, "size": 18, "text": {"fixed": "Vue 3\nS3 + CloudFront", "mode": "fixed"}, "valign": "middle"},
+              "background": {"color": {"fixed": "#1F60C4"}}, "border": {"color": {"fixed": "#73BF69"}, "width": 2},
+              "constraint": {"horizontal": "left", "vertical": "top"}, "placement": {"top": 40, "left": 30, "width": 180, "height": 80}
+            },
+            {
+              "name": "Nginx", "type": "rectangle",
+              "config": {"align": "center", "color": {"fixed": "text"}, "size": 18, "text": {"fixed": "HTTPS :443\nNginx", "mode": "fixed"}, "valign": "middle"},
+              "background": {"color": {"field": "Nginx"}}, "border": {"color": {"fixed": "#73BF69"}, "width": 2},
+              "constraint": {"horizontal": "left", "vertical": "top"}, "placement": {"top": 40, "left": 270, "width": 180, "height": 80},
+              "links": [{"title": "Nginx logs", "url": "/explore?left={\"datasource\":\"loki\",\"queries\":[{\"expr\":\"{service=\\\"nginx\\\"}\"}]}", "targetBlank": false}]
+            },
+            {
+              "name": "Spring Blue Green", "type": "rectangle",
+              "config": {"align": "center", "color": {"fixed": "text"}, "size": 18, "text": {"fixed": "Spring Boot\nBlue / Green", "mode": "fixed"}, "valign": "middle"},
+              "background": {"color": {"field": "Backend"}}, "border": {"color": {"fixed": "#5794F2"}, "width": 2},
+              "constraint": {"horizontal": "left", "vertical": "top"}, "placement": {"top": 40, "left": 510, "width": 200, "height": 80},
+              "links": [{"title": "Backend logs", "url": "/explore?left={\"datasource\":\"loki\",\"queries\":[{\"expr\":\"{service=~\\\"backend-(blue|green)\\\"}\"}]}", "targetBlank": false}]
+            },
+            {
+              "name": "MySQL", "type": "rectangle",
+              "config": {"align": "center", "color": {"fixed": "text"}, "size": 16, "text": {"fixed": "MySQL", "mode": "fixed"}, "valign": "middle"},
+              "background": {"color": {"field": "MySQL"}}, "border": {"color": {"fixed": "#73BF69"}, "width": 2},
+              "constraint": {"horizontal": "left", "vertical": "top"}, "placement": {"top": 190, "left": 90, "width": 150, "height": 70},
+              "links": [{"title": "MySQL logs", "url": "/explore?left={\"datasource\":\"loki\",\"queries\":[{\"expr\":\"{service=\\\"mysql\\\"}\"}]}", "targetBlank": false}]
+            },
+            {
+              "name": "MongoDB", "type": "rectangle",
+              "config": {"align": "center", "color": {"fixed": "text"}, "size": 16, "text": {"fixed": "MongoDB", "mode": "fixed"}, "valign": "middle"},
+              "background": {"color": {"field": "MongoDB"}}, "border": {"color": {"fixed": "#73BF69"}, "width": 2},
+              "constraint": {"horizontal": "left", "vertical": "top"}, "placement": {"top": 190, "left": 280, "width": 150, "height": 70},
+              "links": [{"title": "MongoDB logs", "url": "/explore?left={\"datasource\":\"loki\",\"queries\":[{\"expr\":\"{service=\\\"mongodb\\\"}\"}]}", "targetBlank": false}]
+            },
+            {
+              "name": "Redis", "type": "rectangle",
+              "config": {"align": "center", "color": {"fixed": "text"}, "size": 16, "text": {"fixed": "Redis", "mode": "fixed"}, "valign": "middle"},
+              "background": {"color": {"field": "Redis"}}, "border": {"color": {"fixed": "#73BF69"}, "width": 2},
+              "constraint": {"horizontal": "left", "vertical": "top"}, "placement": {"top": 190, "left": 470, "width": 150, "height": 70},
+              "links": [{"title": "Redis logs", "url": "/explore?left={\"datasource\":\"loki\",\"queries\":[{\"expr\":\"{service=\\\"redis\\\"}\"}]}", "targetBlank": false}]
+            },
+            {
+              "name": "Qdrant", "type": "rectangle",
+              "config": {"align": "center", "color": {"fixed": "text"}, "size": 16, "text": {"fixed": "Qdrant", "mode": "fixed"}, "valign": "middle"},
+              "background": {"color": {"field": "Qdrant"}}, "border": {"color": {"fixed": "#73BF69"}, "width": 2},
+              "constraint": {"horizontal": "left", "vertical": "top"}, "placement": {"top": 190, "left": 660, "width": 150, "height": 70},
+              "links": [{"title": "Qdrant logs", "url": "/explore?left={\"datasource\":\"loki\",\"queries\":[{\"expr\":\"{service=\\\"qdrant\\\"}\"}]}", "targetBlank": false}]
+            }
+          ],
+          "name": "Limit Architecture", "type": "frame"
+        }
+      },
+      "pluginVersion": "12.0.1",
+      "targets": [
+        {"expr": "max(up{job=~\"spring-blue|spring-green\"})", "instant": true, "legendFormat": "Backend", "refId": "Backend"},
+        {"expr": "up{job=\"mysql\"}", "instant": true, "legendFormat": "MySQL", "refId": "MySQL"},
+        {"expr": "up{job=\"mongodb\"}", "instant": true, "legendFormat": "MongoDB", "refId": "MongoDB"},
+        {"expr": "up{job=\"redis\"}", "instant": true, "legendFormat": "Redis", "refId": "Redis"},
+        {"expr": "up{job=\"qdrant\"}", "instant": true, "legendFormat": "Qdrant", "refId": "Qdrant"},
+        {"expr": "up{job=\"nginx\"}", "instant": true, "legendFormat": "Nginx", "refId": "Nginx"}
+      ],
+      "title": "Limit 서비스 아키텍처 — 노드를 클릭하면 Loki 로그로 이동", "type": "canvas"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 0.75}, {"color": "red", "value": 0.9}]}}, "overrides": []},
+      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 14}, "id": 2,
+      "options": {"colorMode": "background", "graphMode": "area", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}},
+      "targets": [{"expr": "1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m]))", "refId": "A"}],
+      "title": "EC2 CPU", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 0.75}, {"color": "red", "value": 0.9}]}}, "overrides": []},
+      "gridPos": {"h": 6, "w": 8, "x": 8, "y": 14}, "id": 3,
+      "options": {"colorMode": "background", "graphMode": "area", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}},
+      "targets": [{"expr": "1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes", "refId": "A"}],
+      "title": "EC2 RAM", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 0.75}, {"color": "red", "value": 0.9}]}}, "overrides": []},
+      "gridPos": {"h": 6, "w": 8, "x": 16, "y": 14}, "id": 4,
+      "options": {"colorMode": "background", "graphMode": "area", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}},
+      "targets": [{"expr": "1 - node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"}", "refId": "A"}],
+      "title": "EC2 Disk", "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []},
+      "gridPos": {"h": 7, "w": 8, "x": 0, "y": 20}, "id": 5,
+      "targets": [{"expr": "sum(rate(nginx_http_requests_total[5m]))", "legendFormat": "requests/s", "refId": "A"}],
+      "title": "Nginx 요청률", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percentunit"}, "overrides": []},
+      "gridPos": {"h": 7, "w": 8, "x": 8, "y": 20}, "id": 6,
+      "targets": [{"expr": "sum(rate(http_server_requests_seconds_count{status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count[5m])), 1)", "legendFormat": "5xx ratio", "refId": "A"}],
+      "title": "API 오류율", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "gridPos": {"h": 7, "w": 8, "x": 16, "y": 20}, "id": 7,
+      "targets": [{"expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket[5m])))", "legendFormat": "p95", "refId": "A"}],
+      "title": "API p95 지연", "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 41,
+  "tags": ["limit", "production"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timezone": "browser",
+  "title": "Limit Platform Overview",
+  "uid": "limit-platform-overview",
+  "version": 1
+}

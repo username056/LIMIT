@@ -1,0 +1,6 @@
+# Terraform state 전용 버킷은 애플리케이션 리소스와 분리해 먼저 생성합니다.
+bucket       = "replace-me-terraform-state"
+key          = "limit/prod/frontend.tfstate"
+region       = "ap-northeast-2"
+encrypt      = true
+use_lockfile = true

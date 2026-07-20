@@ -1,0 +1,4 @@
+cloudflare_zone_id = "0123456789abcdef0123456789abcdef"
+
+# 대상 EC2가 바뀔 때만 수정합니다.
+ec2_origin_hostname = "i15c203.p.ssafy.io"

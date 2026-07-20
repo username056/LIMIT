@@ -1,0 +1,27 @@
+groups:
+  - name: limit-platform
+    rules:
+      - alert: NoReadyBackend
+        expr: sum(up{job=~"spring-blue|spring-green"}) < 1
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: No Spring Boot color is ready
+      - alert: HostMemoryPressure
+        expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.90
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: EC2 memory usage is above 90%
+      - alert: HostDiskPressure
+        expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) < 0.15
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: EC2 disk free space is below 15%
+      - alert: ContainerRestarting
+        expr: changes(container_start_time_seconds{name!=""}[15m]) > 2
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: A container restarted repeatedly

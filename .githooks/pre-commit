@@ -1,0 +1,17 @@
+#!/usr/bin/env sh
+set -eu
+
+blocked="$(git diff --cached --name-only | grep -E '(^|/)(\.env($|\.)|.*\.(pem|key|p12|jks)$)' | grep -vE '\.env\.example$' || true)"
+if [ -n "$blocked" ]; then
+  echo "커밋 차단: Secret 파일은 커밋할 수 없습니다:" >&2
+  echo "$blocked" >&2
+  exit 1
+fi
+
+secret_pattern="^\\+.*(api[_-]?key|secret|token|password)[[:space:]]*[:=][[:space:]]*['\"][^\\$<{][^'\"]{7,}['\"]"
+if git diff --cached --no-ext-diff --unified=0 -- . ':(exclude).githooks/pre-commit' | grep -Eiq "$secret_pattern"; then
+  echo "커밋 차단: 하드코딩된 Secret 의심 값이 추가되었습니다." >&2
+  exit 1
+fi
+
+echo "pre-commit 검사 통과"

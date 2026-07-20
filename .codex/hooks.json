@@ -1,0 +1,32 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^(Bash|apply_patch|Edit|Write)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "root=\"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\"; sh \"$root/.codex/hooks/guard.sh\"",
+            "commandWindows": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$root = (git rev-parse --show-toplevel 2>$null); if (-not $root) { $root = (Get-Location).Path }; & (Join-Path $root '.codex/hooks/guard.ps1')\"",
+            "timeout": 30,
+            "statusMessage": "저장소 안전 정책 확인 중"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^(apply_patch|Edit|Write)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "root=\"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\"; sh \"$root/.codex/hooks/quick-check.sh\" >/dev/null",
+            "commandWindows": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$root = (git rev-parse --show-toplevel 2>$null); if (-not $root) { $root = (Get-Location).Path }; & (Join-Path $root '.codex/hooks/quick-check.ps1')\"",
+            "timeout": 60,
+            "statusMessage": "변경 파일의 Secret 검사 중"
+          }
+        ]
+      }
+    ]
+  }
+}

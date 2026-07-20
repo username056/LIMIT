@@ -1,0 +1,50 @@
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Backend
+backend/.gradle/
+backend/build/
+__pycache__/
+*.py[cod]
+infra/state/
+infra/secrets/*
+!infra/secrets/.gitkeep
+!infra/secrets/*.example
+
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+backend.hcl
+!backend.hcl.example
+*.tfplan
+tfplan
+$planFile
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db

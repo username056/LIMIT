@@ -1,0 +1,32 @@
+server:
+  port: ${BACKEND_PORT:18080}
+
+spring:
+  datasource:
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/limit}
+    username: ${MYSQL_USER}
+    password: ${MYSQL_PASSWORD}
+  mongodb:
+    uri: ${MONGODB_URI:mongodb://localhost:27017/limit}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
+management:
+  endpoint:
+    health:
+      group:
+        readiness:
+          include: readinessState,db,mongo,redis
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html

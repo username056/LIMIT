@@ -1,0 +1,274 @@
+workflow:
+  auto_cancel:
+    on_new_commit: interruptible
+    on_job_failure: all
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "dev"'
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
+    - when: never
+
+stages: [guard, test, quality, package, deploy, verify]
+
+default:
+  interruptible: true
+  retry:
+    max: 1
+    when: [runner_system_failure, stuck_or_timeout_failure]
+
+variables:
+  GIT_DEPTH: "0"
+  GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
+
+.backend_change_template:
+  rules:
+    - changes: &backend_changes
+        - backend/**/*
+        - scripts/ci-test.sh
+        - scripts/build-image.sh
+        - .gitlab-ci.yml
+
+.frontend_change_template:
+  rules:
+    - changes: &frontend_changes
+        - frontend/**/*
+        - scripts/ci-test.sh
+        - scripts/deploy-frontend.sh
+        - infra/terraform/frontend/**/*
+        - .gitlab-ci.yml
+
+secret_guard:
+  stage: guard
+  image:
+    name: zricethezav/gitleaks:v8.27.2
+    entrypoint: [""]
+  script: ["sh scripts/secret-scan.sh"]
+
+backend_verify:
+  stage: test
+  image: gradle:9-jdk21-jammy
+  services:
+    - name: docker:28.3.2-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  cache:
+    key:
+      files: [backend/gradle/wrapper/gradle-wrapper.properties]
+    paths: [.gradle/caches, .gradle/wrapper]
+  script: ["sh scripts/ci-test.sh backend"]
+  artifacts:
+    when: always
+    expire_in: 7 days
+    reports:
+      junit: backend/build/test-results/**/TEST-*.xml
+    paths:
+      - backend/build/classes
+      - backend/build/reports/jacoco/test/jacocoTestReport.xml
+      - backend/build/libs/*.jar
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *backend_changes
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - sonar-project.properties
+    - if: '$CI_COMMIT_BRANCH == "dev"'
+      changes: *backend_changes
+
+frontend_verify:
+  stage: test
+  image: node:24-alpine
+  cache:
+    key:
+      files: [frontend/package-lock.json]
+    paths: [frontend/.npm]
+  variables:
+    npm_config_cache: "$CI_PROJECT_DIR/frontend/.npm"
+  script: ["sh scripts/ci-test.sh frontend"]
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths: [frontend/dist]
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *frontend_changes
+    - if: '$CI_COMMIT_BRANCH == "dev"'
+      changes: *frontend_changes
+
+terraform_frontend_validate:
+  stage: test
+  image:
+    name: hashicorp/terraform:1.13.5
+    entrypoint: [""]
+  variables:
+    TF_IN_AUTOMATION: "true"
+  script:
+    - terraform -chdir=infra/terraform/frontend fmt -check -diff
+    - terraform -chdir=infra/terraform/frontend init -backend=false
+    - terraform -chdir=infra/terraform/frontend validate
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - infra/terraform/frontend/**/*
+        - .gitlab-ci.yml
+
+sonarqube:
+  stage: quality
+  image:
+    name: sonarsource/sonar-scanner-cli:11
+    entrypoint: [""]
+  needs:
+    - job: backend_verify
+      artifacts: true
+      optional: true
+  cache:
+    key: sonar
+    paths: [.sonar/cache]
+  variables:
+    SONAR_USER_HOME: "$CI_PROJECT_DIR/.sonar"
+  script: ["sh scripts/ci-quality.sh"]
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - backend/**/*
+        - sonar-project.properties
+
+backend_image:
+  stage: package
+  image: docker:28.3.2-cli
+  services:
+    - name: docker:28.3.2-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+    IMAGE_REPOSITORY: "$CI_REGISTRY_IMAGE/backend"
+    IMAGE_TAG: "$CI_COMMIT_SHA"
+    IMAGE_ENV_FILE: image.env
+    PUSH_IMAGE: "true"
+  before_script:
+    - printf '%s' "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - docker buildx create --use --name limit-builder
+  script: ["sh scripts/build-image.sh"]
+  artifacts:
+    reports:
+      dotenv: image.env
+    expire_in: 7 days
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "dev"'
+      changes: *backend_changes
+
+deploy_dev:
+  stage: deploy
+  image: alpine:3.22
+  interruptible: false
+  resource_group: limit-dev
+  needs: [backend_image]
+  environment:
+    name: dev
+  before_script:
+    - apk add --no-cache openssh-client
+    - install -d -m 700 ~/.ssh
+    - install -m 644 "$SSH_KNOWN_HOSTS" ~/.ssh/known_hosts
+    - install -m 600 "$DEPLOY_SSH_PRIVATE_KEY" /tmp/limit-deploy-key
+    - export DEPLOY_SSH_KEY_FILE=/tmp/limit-deploy-key
+  script: ["sh scripts/deploy-remote.sh dev \"$DEPLOY_IMAGE\""]
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "dev" && $CI_COMMIT_REF_PROTECTED == "true"'
+      changes: *backend_changes
+
+deploy_prod:
+  stage: deploy
+  image: alpine:3.22
+  interruptible: false
+  resource_group: limit-prod
+  environment:
+    name: production
+  before_script:
+    - apk add --no-cache openssh-client
+    - install -d -m 700 ~/.ssh
+    - install -m 644 "$SSH_KNOWN_HOSTS" ~/.ssh/known_hosts
+    - install -m 600 "$DEPLOY_SSH_PRIVATE_KEY" /tmp/limit-deploy-key
+    - export DEPLOY_SSH_KEY_FILE=/tmp/limit-deploy-key
+    - printf '%s' "$PRODUCTION_IMAGE" | grep -Eq '@sha256:[a-f0-9]{64}$'
+  script: ["sh scripts/deploy-remote.sh prod \"$PRODUCTION_IMAGE\""]
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/ && $CI_COMMIT_REF_PROTECTED == "true"'
+      when: manual
+      allow_failure: false
+
+.frontend_aws_auth:
+  image:
+    name: public.ecr.aws/aws-cli/aws-cli:2.31.13
+    entrypoint: [""]
+  id_tokens:
+    GITLAB_OIDC_TOKEN:
+      aud: sts.amazonaws.com
+  before_script:
+    - >
+      aws_sts_output=$(aws sts assume-role-with-web-identity
+      --role-arn "$AWS_DEPLOY_ROLE_ARN"
+      --role-session-name "GitLab-${CI_PROJECT_ID}-${CI_PIPELINE_ID}"
+      --web-identity-token "$GITLAB_OIDC_TOKEN"
+      --duration-seconds 3600
+      --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]'
+      --output text)
+    - set -- $aws_sts_output
+    - export AWS_ACCESS_KEY_ID="$1" AWS_SECRET_ACCESS_KEY="$2" AWS_SESSION_TOKEN="$3"
+    - aws sts get-caller-identity --query Arn --output text
+
+frontend_deploy_prod:
+  extends: .frontend_aws_auth
+  stage: deploy
+  interruptible: false
+  resource_group: limit-frontend-prod
+  needs:
+    - job: frontend_verify
+      artifacts: true
+  environment:
+    name: production/frontend
+    url: $FRONTEND_PUBLIC_URL
+  script:
+    - sh scripts/deploy-frontend.sh deploy frontend/dist "$CI_COMMIT_SHA" "$FRONTEND_BUCKET_NAME" "$CLOUDFRONT_DISTRIBUTION_ID"
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/ && $CI_COMMIT_REF_PROTECTED == "true"'
+      when: manual
+      allow_failure: false
+
+frontend_rollback_prod:
+  extends: .frontend_aws_auth
+  stage: deploy
+  interruptible: false
+  resource_group: limit-frontend-prod
+  environment:
+    name: production/frontend
+    url: $FRONTEND_PUBLIC_URL
+  script:
+    - test -n "$FRONTEND_ROLLBACK_RELEASE"
+    - sh scripts/deploy-frontend.sh rollback "$FRONTEND_ROLLBACK_RELEASE" "$FRONTEND_BUCKET_NAME" "$CLOUDFRONT_DISTRIBUTION_ID"
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/ && $CI_COMMIT_REF_PROTECTED == "true"'
+      when: manual
+      allow_failure: false
+
+frontend_smoke_prod:
+  stage: verify
+  image:
+    name: curlimages/curl:8.16.0
+    entrypoint: [""]
+  interruptible: false
+  needs: [frontend_deploy_prod]
+  environment:
+    name: production/frontend
+    action: verify
+  script:
+    - test -n "$FRONTEND_PUBLIC_URL"
+    - test -n "$VITE_API_BASE_URL"
+    - curl --fail --silent --show-error --retry 5 --retry-all-errors --retry-delay 5 "$FRONTEND_PUBLIC_URL/" > /dev/null
+    - curl --fail --silent --show-error --retry 5 --retry-all-errors --retry-delay 5 "$VITE_API_BASE_URL/hello" > /dev/null
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/ && $CI_COMMIT_REF_PROTECTED == "true"'

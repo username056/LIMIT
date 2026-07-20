@@ -1,0 +1,5 @@
+interface:
+  display_name: "Frontend Issue Workflow"
+  short_description: "Implement and verify frontend issues consistently"
+  default_prompt: "Use $frontend-issue-workflow to implement and verify a frontend issue."
+

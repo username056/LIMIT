@@ -1,0 +1,23 @@
+#!/usr/bin/env sh
+set -eu
+
+root="$(git rev-parse --show-toplevel)"
+
+if [ -f "$root/frontend/package.json" ]; then
+  [ -d "$root/frontend/node_modules" ] || {
+    echo "검증 실패: frontend에서 npm install을 먼저 실행하세요." >&2
+    exit 1
+  }
+  (cd "$root/frontend" && npm run lint && npm run test && npm run build)
+fi
+
+if [ -f "$root/backend/build.gradle" ]; then
+  if [ -f "$root/backend/gradlew" ]; then
+    (cd "$root/backend" && ./gradlew test bootJar)
+  elif command -v gradle >/dev/null 2>&1; then
+    (cd "$root/backend" && gradle test bootJar)
+  else
+    echo "검증 실패: backend Gradle Wrapper 또는 Gradle 9가 필요합니다." >&2
+    exit 1
+  fi
+fi
