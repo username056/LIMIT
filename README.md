@@ -10,7 +10,7 @@
 - `docs/`: API 계약, ADR, 운영 Runbook
 - `scripts/`: CI, 빌드, 배포, 점검 스크립트
 
-백엔드는 `com.c203.limit.<domain>` 아래에 도메인별 `controller`, `service`, `domain`, `repository`, `dto` 계층을 둡니다. 공통 응답·예외·로깅은 `global`에서 관리합니다.
+백엔드는 `com.c203.limit.domain.<domain>` 아래에 도메인별 `controller`, `service`, `domain`, `repository`, `dto` 계층을 둡니다. 공통 API·설정·응답·예외·로깅은 `global`에서 관리합니다.
 
 ## 요구 환경
 

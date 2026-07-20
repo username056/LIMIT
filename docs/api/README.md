@@ -36,7 +36,7 @@
 }
 ```
 
-공통 성공·실패 응답은 `com.c203.limit.global.response`를 사용합니다. 페이징 응답은 `common.dto.response.PageResponse<T>`를 사용하며 제네릭 타입을 유지합니다.
+공통 성공·실패 응답과 페이징 응답은 `com.c203.limit.global.response`를 사용합니다. `PageResponse<T>`는 제네릭 타입을 유지합니다.
 검증 실패 응답에는 민감 정보가 포함될 수 있는 거절값을 담지 않고 필드명과 사유만 제공합니다.
 비즈니스 예외와 Spring MVC 공통 예외는 모두 위 실패 응답 형태로 변환하며, 도메인별 오류 코드는 기능 구현 시 `ErrorCode`에 추가합니다.
 
@@ -51,11 +51,11 @@
 
 ## Swagger 계약
 
-- API 계약: `backend/src/main/java/com/c203/limit/<domain>/controller/*Api.java`
-- Controller: `backend/src/main/java/com/c203/limit/<domain>/controller/*Controller.java`
-- DTO: `backend/src/main/java/com/c203/limit/<domain>/dto/{request,response,event}/*.java`
+- API 계약: `backend/src/main/java/com/c203/limit/domain/<domain>/controller/*Api.java`
+- Controller: `backend/src/main/java/com/c203/limit/domain/<domain>/controller/*Controller.java`
+- DTO: `backend/src/main/java/com/c203/limit/domain/<domain>/dto/{request,response,event}/*.java`
 - 공통 응답: `backend/src/main/java/com/c203/limit/global/response`
-- Swagger 설정: `backend/src/main/java/com/c203/limit/swagger/config`
+- Swagger 설정: `backend/src/main/java/com/c203/limit/global/config/swagger`
 - 생성기: `scripts/generate-openapi-stubs.py`
 
 API/DTO 내보내기 파일에서 106개 고유 operation을 생성합니다. 동일 method/path로 정의된 상품 action 2개는 하나의 operation으로 병합됩니다. 생성기는 공통 응답 DTO를 다시 만들지 않으며 기존 `*Controller` 구현을 덮어쓰지 않습니다.

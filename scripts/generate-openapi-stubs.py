@@ -99,6 +99,7 @@ JAVA_SCALARS = {
 
 GLOBAL_RESPONSE_DTOS = {
     "ApiResponse",
+    "PageResponse",
     "ApiErrorResponse",
     "ApiErrorDetailResponse",
     "FieldErrorResponse",
@@ -415,7 +416,7 @@ def resolve_java_type(
         owner_sub = dto_subpackage(type_name)
         if owner_domain == current_domain and owner_sub == current_sub:
             return type_name
-        return f"com.c203.limit.{owner_domain}.dto.{owner_sub}.{type_name}"
+        return f"com.c203.limit.domain.{owner_domain}.dto.{owner_sub}.{type_name}"
     # Enum definitions were not included in the export. Keep them open as strings.
     return "String"
 
@@ -466,7 +467,7 @@ def dto_class_file(
         body = f"{class_annotation}\npublic class {name}{generic} {{}}"
 
     java_imports = [statement for token, statement in DTO_IMPORT_RULES if token in body]
-    sections = [f"package com.c203.limit.{domain}.dto.{sub};", ""]
+    sections = [f"package com.c203.limit.domain.{domain}.dto.{sub};", ""]
     if java_imports:
         sections.extend(java_imports)
         sections.append("")
@@ -703,7 +704,7 @@ def api_interface(
         )
         method_signatures.append((method_name(code), simple_params))
 
-    return f"""package com.c203.limit.{domain}.controller;
+    return f"""package com.c203.limit.domain.{domain}.controller;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -763,7 +764,7 @@ def domain_controller(
             "    }"
         )
     return (
-        f"package com.c203.limit.{domain}.controller;\n\n"
+        f"package com.c203.limit.domain.{domain}.controller;\n\n"
         + "\n".join(imports)
         + "\n\n/** Domain controller. Unimplemented methods return null until real implementations are added. */\n"
         + "@RestController\n"
@@ -776,13 +777,14 @@ def domain_controller(
 def schema_config(schema_classes: list[tuple[str, str, str]]) -> str:
     class_refs = ",\n            ".join([
         "com.c203.limit.global.response.ApiResponse.class",
+        "com.c203.limit.global.response.PageResponse.class",
         "com.c203.limit.global.response.ApiErrorResponse.class",
         *(
-            f"com.c203.limit.{domain}.dto.{sub}.{name}.class"
+            f"com.c203.limit.domain.{domain}.dto.{sub}.{name}.class"
             for domain, sub, name in schema_classes
         ),
     ])
-    return f"""package com.c203.limit.swagger.config;
+    return f"""package com.c203.limit.global.config.swagger;
 
 import java.util.List;
 import java.util.Map;
@@ -859,7 +861,7 @@ def main() -> None:
         for row in dto_rows
     }
 
-    config_dir = args.output / "swagger" / "config"
+    config_dir = args.output / "global" / "config" / "swagger"
     config_dir.mkdir(parents=True, exist_ok=True)
 
     grouped_dtos = defaultdict(list)
@@ -870,7 +872,7 @@ def main() -> None:
     for domain, rows in sorted(grouped_dtos.items()):
         for row in rows:
             name, sub, source = dto_class_file(domain, row, dto_locations)
-            dto_dir = args.output / domain / "dto" / sub
+            dto_dir = args.output / "domain" / domain / "dto" / sub
             dto_dir.mkdir(parents=True, exist_ok=True)
             (dto_dir / f"{name}.java").write_text(source, encoding="utf-8")
             schema_classes.append((domain, sub, name))
@@ -910,10 +912,10 @@ def main() -> None:
         grouped_apis[api_group(operation["code"])].append(operation)
     for group, operations in sorted(grouped_apis.items()):
         domain, interface_name, tag_name = API_GROUPS[group]
-        controller_dir = args.output / domain / "controller"
+        controller_dir = args.output / "domain" / domain / "controller"
         controller_dir.mkdir(parents=True, exist_ok=True)
         for layer in ("service", "domain", "repository"):
-            layer_dir = args.output / domain / layer
+            layer_dir = args.output / "domain" / domain / layer
             layer_dir.mkdir(parents=True, exist_ok=True)
             if not any(layer_dir.iterdir()):
                 (layer_dir / ".gitkeep").touch()
