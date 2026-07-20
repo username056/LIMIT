@@ -5,7 +5,7 @@ workflow:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "dev"'
-    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
+    - if: '$CI_COMMIT_BRANCH == "main"'
     - when: never
 
 stages: [guard, test, quality, package, deploy, verify]
@@ -78,11 +78,11 @@ backend_unit_test:
       junit: backend/build/test-results/test/TEST-*.xml
     paths: [backend/build/jacoco/test.exec]
   rules:
-    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes: *backend_changes
     - if: '$CI_COMMIT_BRANCH == "dev"'
+      changes: *backend_changes
+    - if: '$CI_COMMIT_BRANCH == "main"'
       changes: *backend_changes
 
 backend_integration_test:
@@ -103,11 +103,24 @@ backend_integration_test:
       junit: backend/build/test-results/integrationTest/TEST-*.xml
     paths: [backend/build/jacoco/integrationTest.exec]
   rules:
-    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes: *backend_changes
     - if: '$CI_COMMIT_BRANCH == "dev"'
+      changes: *backend_changes
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes: *backend_changes
+
+backend_scripts_test:
+  stage: test
+  needs: []
+  image: bash:5.2
+  script: ["sh scripts/ci-test.sh backend-scripts"]
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *backend_changes
+    - if: '$CI_COMMIT_BRANCH == "dev"'
+      changes: *backend_changes
+    - if: '$CI_COMMIT_BRANCH == "main"'
       changes: *backend_changes
 
 openapi_export:
@@ -137,11 +150,11 @@ backend_coverage:
       - backend/build/reports/jacoco/test/jacocoTestReport.xml
       - backend/build/libs/*.jar
   rules:
-    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes: *backend_changes
     - if: '$CI_COMMIT_BRANCH == "dev"'
+      changes: *backend_changes
+    - if: '$CI_COMMIT_BRANCH == "main"'
       changes: *backend_changes
 
 frontend_verify:
@@ -160,11 +173,11 @@ frontend_verify:
     expire_in: 7 days
     paths: [frontend/dist]
   rules:
-    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes: *frontend_changes
     - if: '$CI_COMMIT_BRANCH == "dev"'
+      changes: *frontend_changes
+    - if: '$CI_COMMIT_BRANCH == "main"'
       changes: *frontend_changes
 
 terraform_frontend_validate:
@@ -247,6 +260,8 @@ backend_image:
       artifacts: false
     - job: backend_integration_test
       artifacts: false
+    - job: backend_scripts_test
+      artifacts: false
     - job: backend_coverage
       artifacts: true
   services:
@@ -272,8 +287,9 @@ backend_image:
       dotenv: image.env
     expire_in: 7 days
   rules:
-    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/ && $CI_COMMIT_REF_PROTECTED == "true"'
     - if: '$CI_COMMIT_BRANCH == "dev"'
+      changes: *backend_changes
+    - if: '$CI_COMMIT_BRANCH == "main"'
       changes: *backend_changes
 
 container_scan:
@@ -300,8 +316,9 @@ container_scan:
     expire_in: 7 days
     paths: [trivy-report.json]
   rules:
-    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/ && $CI_COMMIT_REF_PROTECTED == "true"'
     - if: '$CI_COMMIT_BRANCH == "dev"'
+      changes: *backend_changes
+    - if: '$CI_COMMIT_BRANCH == "main"'
       changes: *backend_changes
 
 deploy_prod:
@@ -327,11 +344,12 @@ deploy_prod:
     - sh scripts/sync-deploy-files.sh
     - sh scripts/deploy-remote.sh prod "$DEPLOY_IMAGE"
   rules:
-    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/ && $CI_COMMIT_REF_PROTECTED == "true"'
-      when: manual
-      allow_failure: false
+    - if: '$CI_COMMIT_BRANCH == "dev"'
+      changes: *backend_changes
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes: *backend_changes
 
-deploy_rollback_prod:
+rollback_prod:
   stage: deploy
   image: alpine:3.22
   interruptible: false
@@ -349,9 +367,11 @@ deploy_rollback_prod:
     - sh scripts/sync-deploy-files.sh
     - sh scripts/rollback-remote.sh
   rules:
-    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/ && $CI_COMMIT_REF_PROTECTED == "true"'
+    - if: '$CI_COMMIT_BRANCH == "dev"'
       when: manual
-      allow_failure: false
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+  allow_failure: true
 
 .frontend_aws_auth:
   image:
@@ -387,9 +407,10 @@ frontend_deploy_prod:
   script:
     - sh scripts/deploy-frontend.sh deploy frontend/dist "$CI_COMMIT_SHA" "$FRONTEND_BUCKET_NAME" "$CLOUDFRONT_DISTRIBUTION_ID"
   rules:
-    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/ && $CI_COMMIT_REF_PROTECTED == "true"'
-      when: manual
-      allow_failure: false
+    - if: '$CI_COMMIT_BRANCH == "dev"'
+      changes: *frontend_changes
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes: *frontend_changes
 
 frontend_rollback_prod:
   extends: .frontend_aws_auth
@@ -403,9 +424,11 @@ frontend_rollback_prod:
     - test -n "$FRONTEND_ROLLBACK_RELEASE"
     - sh scripts/deploy-frontend.sh rollback "$FRONTEND_ROLLBACK_RELEASE" "$FRONTEND_BUCKET_NAME" "$CLOUDFRONT_DISTRIBUTION_ID"
   rules:
-    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/ && $CI_COMMIT_REF_PROTECTED == "true"'
+    - if: '$CI_COMMIT_BRANCH == "dev"'
       when: manual
-      allow_failure: false
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+  allow_failure: true
 
 frontend_smoke_prod:
   stage: verify
@@ -423,4 +446,7 @@ frontend_smoke_prod:
     - curl --fail --silent --show-error --retry 5 --retry-all-errors --retry-delay 5 "$FRONTEND_PUBLIC_URL/" > /dev/null
     - curl --fail --silent --show-error --retry 5 --retry-all-errors --retry-delay 5 "$VITE_API_BASE_URL/hello" > /dev/null
   rules:
-    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/ && $CI_COMMIT_REF_PROTECTED == "true"'
+    - if: '$CI_COMMIT_BRANCH == "dev"'
+      changes: *frontend_changes
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes: *frontend_changes
