@@ -17,8 +17,9 @@ if (-not (Get-Command ssh -ErrorAction SilentlyContinue)) {
 }
 
 $resolvedKeyPath = (Resolve-Path -LiteralPath $KeyPath -ErrorAction Stop).Path
+$runningOnWindows = [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
 
-if ($IsWindows) {
+if ($runningOnWindows) {
     $currentIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
     & icacls $resolvedKeyPath '/inheritance:r' '/grant:r' "${currentIdentity}:(R)" | Out-Null
     if ($LASTEXITCODE -ne 0) {

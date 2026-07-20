@@ -66,3 +66,11 @@ API/DTO 내보내기 파일에서 106개 고유 operation을 생성합니다. �
 
 - Swagger UI: `/swagger-ui.html`
 - OpenAPI JSON: `/v3/api-docs`
+
+## OpenAPI baseline 검증
+
+- 기준 계약은 `docs/api/openapi.json`에서 버전 관리한다.
+- Merge Request에서는 실제 SpringDoc `/v3/api-docs` 결과를 추출하고 oasdiff로 기준 계약과 비교한다.
+- endpoint, operation, response field 등 호환성을 깨는 변경이 발견되면 `openapi_contract` job이 실패한다.
+- 의도한 계약 변경은 API 문서와 테스트를 먼저 수정한 뒤 `sh scripts/export-openapi.sh docs/api/openapi.json`을 실행한다.
+- 생성된 baseline diff를 검토하고 호환 기간 또는 migration 계획과 함께 같은 MR에 포함한다.

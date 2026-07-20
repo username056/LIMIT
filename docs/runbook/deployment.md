@@ -2,10 +2,10 @@
 
 ## 1. 안전 원칙
 
-- 서버 변경, 패키지 설치, 재부팅, UFW, Docker, Swap, Nginx/Apache, 배포 실행은 사용자 승인 후 수행한다.
+- 서버 변경, 패키지 설치, 재부팅, UFW, Docker, Swap, Nginx/Apache 변경과 수동 배포 실행은 사용자 승인 후 수행한다. 보호된 `dev`, `main` 브랜치의 애플리케이션 자동 배포는 승인된 CI 정책에 따라 실행한다.
 - Gerrit 3.13.1과 Apache HTTPS 8989를 변경하거나 중지하지 않는다.
 - 실제 Secret, PEM, `.env`, 인증서는 저장소와 CI 로그에 남기지 않는다.
-- 운영 배포는 보호된 SemVer 태그의 수동 job에서 검증된 image digest만 승격한다.
+- 애플리케이션 배포는 보호된 `dev`, `main` 브랜치 push에서 검증된 image digest만 자동 승격한다.
 
 ## 2. 확인된 환경과 적용 전 재확인
 
@@ -33,13 +33,13 @@ test -f /var/run/reboot-required && cat /var/run/reboot-required
 
 권장 배치 경로는 `/opt/limit`이다. 배포 사용자는 이 경로와 Docker에 필요한 최소 권한만 갖고, `sudo -n install`, `nginx -t`, `systemctl reload nginx`만 제한적으로 허용한다. Docker socket 권한은 사실상 root 권한이므로 GitLab project runner/배포 사용자 범위를 protected branch/tag로 제한한다.
 
-서버의 배포 사용자로 GitLab Container Registry에 로그인해 private image pull을 확인한다. 가능하면 장기 개인 토큰 대신 read-registry 범위의 project deploy token을 사용하고 서버 전용 Docker credential store에 보관한다.
+서버의 배포 사용자로 Docker Hub private repository에 로그인해 image pull을 확인한다. CI에는 read/write 범위의 전용 Personal Access Token을 사용하고, 서버에는 별도로 발급한 read-only token을 서버 전용 Docker credential store에 보관한다. 개인 비밀번호나 하나의 token을 CI와 서버에서 공유하지 않는다.
 
 `infra/.env`는 서버에서 600 권한으로 생성하고 `.env.example`의 변수 이름만 참고한다. Mongo URI에는 사용자명·비밀번호와 `authSource=admin`을 포함한다. exporter용 MySQL client 파일과 Qdrant API key 파일도 서버 전용 경로에 600 권한으로 만들고 다음 변수로 연결한다.
 
-Spring profile은 `local`, `prod`만 사용한다. Compose도 `compose.yml` base와 `compose.local.yml`, `compose.prod.yml`만 유지한다. dev 배포는 운영 설정과의 차이를 줄이기 위해 `compose.prod.yml`과 `prod` profile을 그대로 사용하고 Compose project/state만 `limit-dev`로 분리한다. Testcontainers 테스트는 별도 profile 없이 동적 접속 정보를 주입한다.
+Spring profile은 `local`, `prod`만 사용한다. Compose도 `compose.yml` base와 `compose.local.yml`, `compose.prod.yml`만 유지한다. Testcontainers 테스트는 별도 profile 없이 동적 접속 정보를 주입한다.
 
-Blue/Green host port가 8081/8082로 고정되어 있으므로 dev와 prod를 같은 EC2에서 동시에 실행할 수 없다. 자동 dev 배포와 운영 배포를 병행하려면 별도 dev 호스트를 사용해야 하며, 단일 EC2만 사용할 때는 운영 전환 시 dev stack을 중지하는 별도 승인 절차가 필요하다.
+`dev`와 `main`은 별도 서버 환경 이름이 아니라 동일한 운영 EC2를 갱신하는 배포 트리거다. 두 브랜치 모두 검증과 이미지 취약점 검사를 통과한 immutable digest를 `limit-prod` Blue/Green 스택에 자동 배포하며 `infra/state/prod.active`를 공유한다. `main`은 프로젝트 종료 시점의 최종 병합에만 사용한다.
 
 ```text
 MYSQL_EXPORTER_CONFIG_FILE=/opt/limit-secrets/mysql-exporter.my.cnf
@@ -105,15 +105,22 @@ Spring Boot 4의 MongoDB 연결 속성은 `spring.mongodb.uri`를 사용한다. 
 
 ## 6. Blue-Green 배포와 rollback
 
-```bash
-bash scripts/deploy-blue-green.sh prod \
-  registry.example/limit/backend@sha256:<64-hex-digest> \
-  https://api.example.com
-```
+`dev` 또는 `main`에 변경이 병합되어 push pipeline이 생성되면 관련 영역의 검증 잡 이후 배포 잡이 자동 실행된다. 백엔드는 `backend_image`와 `container_scan`을 통과한 digest를 `deploy_prod`가 동일한 `limit-prod` 스택에 배포하고, 프론트엔드는 `frontend_verify` 산출물을 `frontend_deploy_prod`가 배포한다.
 
 스크립트는 비활성 색상을 기동하고 `/actuator/health/readiness`를 반복 확인한 다음 upstream을 전환한다. `/api/v1/hello`까지 smoke test가 성공해야 이전 색상을 중지한다. readiness 실패 시 신규 색상만 제거한다. 전환 후 smoke 실패 시 이전 upstream을 복원·reload하고 신규 색상을 제거한다.
 
-수동 rollback은 이전 digest로 같은 명령을 실행한다. destructive DB migration은 이미지 rollback으로 복구되지 않으므로 Flyway migration은 expand-and-contract 방식으로 작성하고 운영 migration은 별도 승인을 받는다.
+수동 rollback은 보호된 `dev`, `main` 브랜치 파이프라인의 선택적 `rollback_prod` job으로만 실행한다. 실행하지 않은 rollback job은 자동배포 파이프라인 완료를 막지 않는다. 운영자가 이미지 문자열을 입력하지 않으며, job은 `infra/state/prod.active`의 반대 색상에 남은 중지 컨테이너에서 이전 image digest를 자동으로 읽는다. 활성 컨테이너가 실행 중이고 반대 색상 컨테이너가 중지 상태이며 이전 이미지가 `@sha256:<64-hex>` 형식일 때만 기존 Blue/Green 배포 로직을 호출한다.
+
+```bash
+# 운영 서버에서의 직접 실행도 이미지 인자를 받지 않는다.
+bash scripts/rollback-blue-green.sh https://api.example.com
+```
+
+`deploy_prod`와 `rollback_prod`는 모두 `resource_group: limit-prod`와 `interruptible: false`를 사용하므로 동시에 실행되지 않는다. 이전 컨테이너나 digest가 없으면 전환 전에 실패한다. readiness 실패 시 이전 컨테이너만 정리하고 기존 upstream을 유지하며, upstream 전환 후 smoke 실패 시 기존 upstream을 복구한다. 성공한 경우에만 `prod.active`를 이전 색상으로 갱신하고 기존 활성 컨테이너를 중지한다.
+
+이미지 rollback은 애플리케이션 컨테이너만 복구한다. destructive DB migration은 되돌리지 않으므로 Flyway migration은 expand-and-contract 방식으로 작성하고 병합 전 코드리뷰에서 승인받는다.
+
+Flyway 마이그레이션이 포함된 MR은 병합 즉시 운영 DB에 적용되므로 리뷰어는 마이그레이션 파일을 반드시 확인한 뒤 승인한다. 별도 사후 배포 승인 단계는 없다.
 
 ## 7. 장애 확인과 로그
 
@@ -142,12 +149,25 @@ MySQL exporter 전용 최소권한 계정 생성도 운영 DB 변경 승인 후 
 
 ## 9. GitLab 설정 체크리스트
 
-- `dev`, `main`, `v*`를 protected로 설정하고 직접 push를 금지한다.
-- shared runner/Container Registry 사용 가능 여부를 확인한다. 불가하면 EC2 project runner를 `concurrent = 1`로 시작한다.
+- `dev`, `main`을 protected로 설정하고 직접 push를 금지한다.
+- shared runner 사용 가능 여부를 확인한다. 불가하면 EC2 project runner를 우선 `concurrent = 1`로 등록하고 서버 자원을 확인한다.
+- 단일 EC2에서는 Runner `concurrent = 2`와 job/service 각각 CPU 1개, memory 3 GiB 제한을 사용한다. `sudo bash scripts/configure-gitlab-runner.sh apply`로 적용하고 이상 시 `rollback`한다.
+- Docker Hub에 private backend repository를 만들고 `DOCKERHUB_IMAGE=<namespace>/<repository>`를 protected variable로 등록한다.
+- `DOCKERHUB_USERNAME`은 protected variable, read/write 권한의 `DOCKERHUB_TOKEN`은 masked/protected variable로 등록한다.
+- EC2 배포 사용자는 CI token과 분리된 read-only Docker Hub token으로 `docker login`을 완료한다.
+- `backend_unit_test`와 `backend_integration_test`를 병렬 실행하고 각각의 JaCoCo execution data를 artifact로 전달한다.
+- `backend_coverage`가 두 execution data를 합산해 coverage report와 검증 완료 JAR을 생성하고, `backend/Dockerfile.ci`가 해당 JAR을 이미지에 넣는다. CI 이미지 단계에서 Gradle 빌드를 다시 실행하지 않는다.
+- `backend_image`는 unit, integration, coverage 작업이 모두 성공해야 시작하며 SonarQube 완료는 기다리지 않는다.
+- `dependency_check`는 Merge Request에서는 실행되지 않으며 오직 GitLab Pipeline Schedule(예: 매주 1회)로만 동작하므로 프로젝트 설정에서 Schedule을 등록해야 한다. 새 의존성의 취약점은 다음 스케줄 실행 시 발견되어 최대 1주 지연될 수 있다. NVD 캐시(`.gradle/dependency-check-data`)는 최초 실행 시에만 느리고 이후에는 변경분만 받는다.
+- 2026-07-20 로컬 `--rerun-tasks` 기준 기존 직렬 test+integration+coverage는 81초였다. 분리 후 unit 48초와 integration 53초를 병렬 실행하고 coverage/JAR 12초를 이어 실행해 예상 critical path는 약 65초로, 약 20% 단축됐다. 실제 Runner 시간은 Merge Request pipeline에서 계속 기록한다.
+- `sonar-project.properties`만 변경되면 전체 테스트 대신 Sonar 분석에 필요한 `classes`만 생성한다. Secret guard는 생략하지 않고 테스트 job과 병렬로 실행한다.
+- 배포 job은 원격 실행 전에 `scripts/sync-deploy-files.sh`로 배포 스크립트, Compose 정의와 모니터링 설정을 동기화한다. 서버 전용 `infra/.env`, `infra/secrets`, `infra/state`는 전송하거나 덮어쓰지 않는다.
+- 데이터, 활성 백엔드와 관측 컨테이너는 `restart: unless-stopped`로 Docker 재시작 이후 복구한다. Blue/Green 전환 중 명시적으로 중지된 이전 색상은 자동 재시작하지 않는다.
 - protected/file variables: `DEPLOY_SSH_PRIVATE_KEY`, `SSH_KNOWN_HOSTS`.
 - protected variables: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PATH`, `SMOKE_BASE_URL`, `SONAR_HOST_URL`, `SONAR_TOKEN`.
 - 프론트 protected variables: `AWS_DEPLOY_ROLE_ARN`, `FRONTEND_BUCKET_NAME`, `CLOUDFRONT_DISTRIBUTION_ID`, `FRONTEND_PUBLIC_URL`, `VITE_API_BASE_URL`.
-- 운영 수동 job에는 dev에서 검증된 `PRODUCTION_IMAGE=...@sha256:...`를 제공한다.
+- `deploy_prod`는 보호된 `dev`, `main` push에서 검증·생성된 `DEPLOY_IMAGE=...@sha256:...` artifact만 자동 배포한다. 운영자가 별도 image 문자열을 입력하지 않는다.
+- `rollback_prod`는 보호된 `dev`, `main` 파이프라인에서 수동으로 노출하며 서버에 남아 있는 반대 색상 컨테이너의 immutable digest를 자동 선택한다. 운영자가 rollback image 변수를 입력하지 않는다.
 - CodeRabbit GitLab app을 연결하고 `review-ready` label을 만든다. `.coderabbit.yaml`이 Draft/WIP를 제외하고 해당 label만 opt-in한다.
 - 프론트엔드는 개발 기간 동안 ESLint·build로 검증하고, SonarQube와 Quality Gate는 백엔드만 대상으로 한다. 필수 CI와 승인자 리뷰를 merge 조건으로 지정하고 redundant pipeline auto-cancel을 활성화한다.
 - GitLab과 GitHub 중 하나만 배포 권한을 갖게 하며 public 전환 전 전체 Git history를 gitleaks로 검사한다.
@@ -177,10 +197,10 @@ terraform apply tfplan
 
 도메인을 구매하기 전에는 `cloudfront_domain_name` output으로 검증한다. custom domain을 연결할 때는 `us-east-1`의 ACM 인증서 ARN을 함께 설정하고 사용하는 DNS provider에서 CloudFront domain으로 CNAME 또는 alias를 연결한다.
 
-GitLab은 장기 access key 대신 OIDC ID token으로 `AWS_DEPLOY_ROLE_ARN`을 assume한다. IAM trust의 `sub`는 해당 프로젝트의 보호된 `v*` 태그만 허용하고 audience는 CI와 동일한 `sts.amazonaws.com`으로 설정한다. Terraform output의 bucket·distribution·role 값을 protected variable로 등록한다. `VITE_API_BASE_URL`은 브라우저에서 접근 가능한 운영 API의 `/api/v1` 주소이며 Secret이 아니다.
+GitLab은 장기 access key 대신 OIDC ID token으로 `AWS_DEPLOY_ROLE_ARN`을 assume한다. IAM trust의 `sub`는 해당 프로젝트의 보호된 `dev`, `main` 브랜치만 허용하고 audience는 CI와 동일한 `sts.amazonaws.com`으로 설정한다. Terraform output의 bucket·distribution·role 값을 protected variable로 등록한다. `VITE_API_BASE_URL`은 브라우저에서 접근 가능한 운영 API의 `/api/v1` 주소이며 Secret이 아니다. 실제 IAM trust 변경은 별도 승인 후 수행한다.
 
-보호된 SemVer 태그에서 `frontend_verify`가 만든 `frontend/dist`만 `frontend_deploy_prod`로 수동 배포한다. `scripts/deploy-frontend.sh`는 먼저 `releases/<commit-sha>/`에 복구본을 보존하고 해시 asset을 1년 immutable로 올린 다음 `index.html`을 no-store로 마지막에 교체한다. CloudFront invalidation은 `/`와 `/index.html`만 수행한다. 사용 중인 이전 해시 asset은 즉시 삭제하지 않으며 S3 versioning과 lifecycle을 함께 사용한다.
+보호된 `dev`, `main` push에서 `frontend_verify`가 만든 `frontend/dist`만 `frontend_deploy_prod`로 자동 배포한다. `scripts/deploy-frontend.sh`는 먼저 `releases/<commit-sha>/`에 복구본을 보존하고 해시 asset을 1년 immutable로 올린 다음 `index.html`을 no-store로 마지막에 교체한다. CloudFront invalidation은 `/`와 `/index.html`만 수행한다. 사용 중인 이전 해시 asset은 즉시 삭제하지 않으며 S3 versioning과 lifecycle을 함께 사용한다.
 
 배포 job은 invalidation 완료까지 기다리고 `frontend_smoke_prod`가 실제 프론트 URL과 `${VITE_API_BASE_URL}/hello`의 HTTP 성공을 확인한다. 주요 라우트와 사용자 흐름은 별도로 확인한다. 실패하면 GitLab manual job에 이전 commit SHA를 `FRONTEND_ROLLBACK_RELEASE`로 입력해 `frontend_rollback_prod`를 실행한다. release 기본 보존 기간은 30일이며 CloudFront에서는 `/releases/` 직접 접근을 차단한다.
 
-현재 `l1mit.shop`과 `www.l1mit.shop`은 private S3 + CloudFront OAC 구조로 적용됐고 ACM 인증서와 HTTPS 연결까지 확인했다. GitLab OIDC provider와 배포 role은 아직 생성하지 않았으므로 프론트 자동 배포는 AWS 로그인 세션이 아니라 OIDC 구성을 완료한 뒤 활성화한다.
+현재 `l1mit.shop`과 `www.l1mit.shop`은 private S3 + CloudFront OAC 구조로 적용됐고 ACM 인증서와 HTTPS 연결까지 확인했다. GitLab OIDC provider와 배포 role은 아직 생성하지 않았으므로 승인된 OIDC 구성을 완료하기 전까지 프론트 자동 배포 job은 AWS 인증 단계에서 실패한다.
