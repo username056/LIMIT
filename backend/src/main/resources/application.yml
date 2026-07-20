@@ -70,6 +70,7 @@ springdoc:
       packages-to-scan: com.c203.limit.domain.admin.controller
   swagger-ui:
     enabled: false
+    disable-swagger-default-url: true
     doc-expansion: none
     filter: true
     tags-sorter: alpha
