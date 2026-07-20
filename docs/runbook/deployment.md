@@ -203,6 +203,6 @@ GitLab은 장기 access key 대신 OIDC ID token으로 `AWS_DEPLOY_ROLE_ARN`을 
 
 보호된 `dev`, `main` push에서 `frontend_verify`가 만든 `frontend/dist`만 `frontend_deploy_prod`로 자동 배포한다. `scripts/deploy-frontend.sh`는 먼저 `releases/<commit-sha>/`에 복구본을 보존하고 해시 asset을 1년 immutable로 올린 다음 `index.html`을 no-store로 마지막에 교체한다. CloudFront invalidation은 `/`와 `/index.html`만 수행한다. 사용 중인 이전 해시 asset은 즉시 삭제하지 않으며 S3 versioning과 lifecycle을 함께 사용한다.
 
-배포 job은 invalidation 완료까지 기다리고 `frontend_smoke_prod`가 실제 프론트 URL과 `${VITE_API_BASE_URL}/hello`의 HTTP 성공을 확인한다. 주요 라우트와 사용자 흐름은 별도로 확인한다. 실패하면 GitLab manual job에 이전 commit SHA를 `FRONTEND_ROLLBACK_RELEASE`로 입력해 `frontend_rollback_prod`를 실행한다. release 기본 보존 기간은 30일이며 CloudFront에서는 `/releases/` 직접 접근을 차단한다.
+배포 job은 invalidation 완료까지 기다리고 `frontend_smoke_prod`가 실제 프론트 URL과 API origin의 `/health` 응답 성공을 확인한다. 주요 라우트와 사용자 흐름은 별도로 확인한다. 실패하면 GitLab manual job에 이전 commit SHA를 `FRONTEND_ROLLBACK_RELEASE`로 입력해 `frontend_rollback_prod`를 실행한다. release 기본 보존 기간은 30일이며 CloudFront에서는 `/releases/` 직접 접근을 차단한다.
 
 현재 `l1mit.shop`과 `www.l1mit.shop`은 private S3 + CloudFront OAC 구조로 적용됐고 ACM 인증서와 HTTPS 연결까지 확인했다. GitLab OIDC provider와 배포 role은 아직 생성하지 않았으므로 승인된 OIDC 구성을 완료하기 전까지 프론트 자동 배포 job은 AWS 인증 단계에서 실패한다.

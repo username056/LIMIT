@@ -461,7 +461,8 @@ frontend_smoke_prod:
     - test -n "$FRONTEND_PUBLIC_URL"
     - test -n "$VITE_API_BASE_URL"
     - curl --fail --silent --show-error --retry 5 --retry-all-errors --retry-delay 5 "$FRONTEND_PUBLIC_URL/" > /dev/null
-    - curl --fail --silent --show-error --retry 5 --retry-all-errors --retry-delay 5 "$VITE_API_BASE_URL/hello" > /dev/null
+    - api_health_url="${VITE_API_BASE_URL%/api/v1}/health"
+    - curl --fail --silent --show-error --retry 5 --retry-all-errors --retry-delay 5 "$api_health_url" > /dev/null
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
       changes: *frontend_changes

@@ -46,7 +46,6 @@
 
 | Method | Path | 설명 |
 | --- | --- | --- |
-| GET | `/api/v1/hello` | 프론트·백엔드 연결 확인 |
 | GET | `/api/v1/health` | 애플리케이션 상태 확인 |
 | GET | `/actuator/health/readiness` | 배포 Readiness 확인 |
 | GET | `/actuator/prometheus` | Prometheus 메트릭 |
