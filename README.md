@@ -24,7 +24,15 @@ Gradle Wrapper가 포함되어 있어 Gradle을 별도로 설치할 필요는 �
 
 ### 전체 인프라와 백엔드
 
-`.env.example`을 참고해 추적되지 않는 `infra/.env`를 작성한 뒤 실행합니다.
+가장 간단한 방법은 `scripts/open-platform-tools.ps1`을 실행하는 것입니다. `infra/.env`가 없으면 랜덤 값으로 자동 생성하고, Docker Desktop이 꺼져 있으면 실행한 뒤 대기하고, 컨테이너를 띄우고, Swagger·Grafana가 준비되면 브라우저로 자동으로 엽니다.
+
+```powershell
+.\scripts\open-platform-tools.ps1
+```
+
+옵션: `-NoStart`(컨테이너 기동 생략, 헬스체크·오픈만), `-NoOpen`(브라우저 자동 오픈 생략), `-Environment prod`(로컬 대신 운영 URL 기준 헬스체크).
+
+수동으로 띄우려면 `.env.example`을 참고해 추적되지 않는 `infra/.env`를 직접 작성한 뒤 실행합니다.
 
 ```powershell
 docker compose --env-file infra/.env -p limit-local `
