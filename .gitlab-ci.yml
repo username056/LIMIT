@@ -103,21 +103,6 @@ backend_integration:
     - if: '$CI_COMMIT_BRANCH == "dev"'
       changes: *backend_changes
 
-backend_sonar_compile:
-  extends: .backend_gradle_job
-  stage: test
-  needs: []
-  script: ["sh scripts/ci-test.sh backend-compile"]
-  artifacts:
-    expire_in: 1 day
-    paths: [backend/build/classes]
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes: *backend_changes
-      when: never
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes: [sonar-project.properties]
-
 openapi_export:
   extends: .backend_gradle_job
   stage: test
@@ -178,9 +163,6 @@ sonarqube:
     entrypoint: [""]
   needs:
     - job: backend_verify
-      artifacts: true
-      optional: true
-    - job: backend_sonar_compile
       artifacts: true
       optional: true
   cache:
