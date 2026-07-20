@@ -73,7 +73,11 @@ tasks.named('test') {
 }
 
 tasks.named('jacocoTestReport') {
-    dependsOn tasks.named('test')
+    dependsOn tasks.named('test'), tasks.named('integrationTest')
+    executionData(
+            layout.buildDirectory.file('jacoco/test.exec'),
+            layout.buildDirectory.file('jacoco/integrationTest.exec')
+    )
     reports {
         xml.required = true
         html.required = true
