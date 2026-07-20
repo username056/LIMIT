@@ -3,6 +3,7 @@ workflow:
     on_new_commit: interruptible
     on_job_failure: all
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "dev"'
     - if: '$CI_COMMIT_BRANCH == "main"'
@@ -65,6 +66,10 @@ secret_guard:
     name: zricethezav/gitleaks:v8.27.2
     entrypoint: [""]
   script: ["sh scripts/secret-scan.sh"]
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: never
+    - when: on_success
 
 backend_unit_test:
   extends: .backend_gradle_job
@@ -80,9 +85,9 @@ backend_unit_test:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes: *backend_changes
-    - if: '$CI_COMMIT_BRANCH == "dev"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
       changes: *backend_changes
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
       changes: *backend_changes
 
 backend_integration_test:
@@ -105,9 +110,9 @@ backend_integration_test:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes: *backend_changes
-    - if: '$CI_COMMIT_BRANCH == "dev"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
       changes: *backend_changes
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
       changes: *backend_changes
 
 backend_scripts_test:
@@ -118,9 +123,9 @@ backend_scripts_test:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes: *backend_changes
-    - if: '$CI_COMMIT_BRANCH == "dev"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
       changes: *backend_changes
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
       changes: *backend_changes
 
 openapi_export:
@@ -152,9 +157,9 @@ backend_coverage:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes: *backend_changes
-    - if: '$CI_COMMIT_BRANCH == "dev"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
       changes: *backend_changes
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
       changes: *backend_changes
 
 frontend_verify:
@@ -175,9 +180,9 @@ frontend_verify:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes: *frontend_changes
-    - if: '$CI_COMMIT_BRANCH == "dev"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
       changes: *frontend_changes
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
       changes: *frontend_changes
 
 terraform_frontend_validate:
@@ -222,6 +227,18 @@ sonarqube:
 dependency_check:
   extends: .backend_gradle_job
   stage: quality
+  cache:
+    - key:
+        files:
+          - backend/gradle/wrapper/gradle-wrapper.properties
+          - backend/gradle.properties
+      paths:
+        - .gradle/caches
+        - .gradle/caches/build-cache-1
+        - .gradle/wrapper
+    - key: dependency-check-nvd
+      paths:
+        - .gradle/dependency-check-data
   script:
     - test -n "$NVD_API_KEY"
     - cd backend
@@ -233,8 +250,10 @@ dependency_check:
       - backend/build/reports/dependency-check-report.html
       - backend/build/reports/dependency-check-report.json
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes: *backend_changes
+      changes:
+        - backend/build.gradle
 
 openapi_contract:
   stage: quality
@@ -287,9 +306,9 @@ backend_image:
       dotenv: image.env
     expire_in: 7 days
   rules:
-    - if: '$CI_COMMIT_BRANCH == "dev"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
       changes: *backend_changes
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
       changes: *backend_changes
 
 container_scan:
@@ -316,9 +335,9 @@ container_scan:
     expire_in: 7 days
     paths: [trivy-report.json]
   rules:
-    - if: '$CI_COMMIT_BRANCH == "dev"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
       changes: *backend_changes
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
       changes: *backend_changes
 
 deploy_prod:
@@ -344,9 +363,9 @@ deploy_prod:
     - sh scripts/sync-deploy-files.sh
     - sh scripts/deploy-remote.sh prod "$DEPLOY_IMAGE"
   rules:
-    - if: '$CI_COMMIT_BRANCH == "dev"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
       changes: *backend_changes
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
       changes: *backend_changes
 
 rollback_prod:
@@ -367,9 +386,9 @@ rollback_prod:
     - sh scripts/sync-deploy-files.sh
     - sh scripts/rollback-remote.sh
   rules:
-    - if: '$CI_COMMIT_BRANCH == "dev"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
       when: manual
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
       when: manual
   allow_failure: true
 
@@ -407,9 +426,9 @@ frontend_deploy_prod:
   script:
     - sh scripts/deploy-frontend.sh deploy frontend/dist "$CI_COMMIT_SHA" "$FRONTEND_BUCKET_NAME" "$CLOUDFRONT_DISTRIBUTION_ID"
   rules:
-    - if: '$CI_COMMIT_BRANCH == "dev"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
       changes: *frontend_changes
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
       changes: *frontend_changes
 
 frontend_rollback_prod:
@@ -424,9 +443,9 @@ frontend_rollback_prod:
     - test -n "$FRONTEND_ROLLBACK_RELEASE"
     - sh scripts/deploy-frontend.sh rollback "$FRONTEND_ROLLBACK_RELEASE" "$FRONTEND_BUCKET_NAME" "$CLOUDFRONT_DISTRIBUTION_ID"
   rules:
-    - if: '$CI_COMMIT_BRANCH == "dev"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
       when: manual
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
       when: manual
   allow_failure: true
 
@@ -446,7 +465,7 @@ frontend_smoke_prod:
     - curl --fail --silent --show-error --retry 5 --retry-all-errors --retry-delay 5 "$FRONTEND_PUBLIC_URL/" > /dev/null
     - curl --fail --silent --show-error --retry 5 --retry-all-errors --retry-delay 5 "$VITE_API_BASE_URL/hello" > /dev/null
   rules:
-    - if: '$CI_COMMIT_BRANCH == "dev"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
       changes: *frontend_changes
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
       changes: *frontend_changes
