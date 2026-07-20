@@ -15,6 +15,7 @@ cd "$root_dir"
 
 tar -czf - \
   scripts/deploy-blue-green.sh \
+  scripts/rollback-blue-green.sh \
   scripts/smoke-test.sh \
   infra/compose.yml \
   infra/compose.prod.yml \
