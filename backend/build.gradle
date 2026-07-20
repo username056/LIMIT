@@ -81,7 +81,6 @@ tasks.register('integrationTest', Test) {
 
 tasks.named('test') {
     useJUnitPlatform()
-    finalizedBy tasks.named('jacocoTestReport')
 }
 
 tasks.named('jacocoTestReport') {

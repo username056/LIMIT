@@ -57,7 +57,7 @@ secret_guard:
     entrypoint: [""]
   script: ["sh scripts/secret-scan.sh"]
 
-backend_verify:
+backend_unit_test:
   extends: .backend_gradle_job
   stage: test
   needs: []
@@ -67,10 +67,7 @@ backend_verify:
     expire_in: 7 days
     reports:
       junit: backend/build/test-results/test/TEST-*.xml
-    paths:
-      - backend/build/classes
-      - backend/build/reports/jacoco/test/jacocoTestReport.xml
-      - backend/build/libs/*.jar
+    paths: [backend/build/jacoco/test.exec]
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
@@ -79,7 +76,7 @@ backend_verify:
     - if: '$CI_COMMIT_BRANCH == "dev"'
       changes: *backend_changes
 
-backend_integration:
+backend_integration_test:
   extends: .backend_gradle_job
   stage: test
   needs: []
@@ -95,6 +92,7 @@ backend_integration:
     expire_in: 7 days
     reports:
       junit: backend/build/test-results/integrationTest/TEST-*.xml
+    paths: [backend/build/jacoco/integrationTest.exec]
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
@@ -113,6 +111,28 @@ openapi_export:
     paths: [backend/build/openapi/current.json]
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *backend_changes
+
+backend_coverage:
+  extends: .backend_gradle_job
+  stage: quality
+  needs:
+    - job: backend_unit_test
+      artifacts: true
+    - job: backend_integration_test
+      artifacts: true
+  script: ["sh scripts/ci-test.sh backend-coverage"]
+  artifacts:
+    expire_in: 7 days
+    paths:
+      - backend/build/reports/jacoco/test/jacocoTestReport.xml
+      - backend/build/libs/*.jar
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *backend_changes
+    - if: '$CI_COMMIT_BRANCH == "dev"'
       changes: *backend_changes
 
 frontend_verify:
@@ -162,7 +182,7 @@ sonarqube:
     name: sonarsource/sonar-scanner-cli:11
     entrypoint: [""]
   needs:
-    - job: backend_verify
+    - job: backend_coverage
       artifacts: true
       optional: true
   cache:
@@ -214,10 +234,12 @@ backend_image:
   needs:
     - job: secret_guard
       artifacts: false
-    - job: backend_verify
-      artifacts: true
-    - job: backend_integration
+    - job: backend_unit_test
       artifacts: false
+    - job: backend_integration_test
+      artifacts: false
+    - job: backend_coverage
+      artifacts: true
   services:
     - name: docker:28.3.2-dind
       alias: docker

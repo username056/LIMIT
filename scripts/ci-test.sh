@@ -11,12 +11,17 @@ run_backend_compile() {
 
 run_backend_unit() {
   cd "$root_dir/backend"
-  ./gradlew test jacocoTestReport bootJar --no-daemon
+  ./gradlew test --no-daemon
 }
 
 run_backend_integration() {
   cd "$root_dir/backend"
   ./gradlew integrationTest --no-daemon
+}
+
+run_backend_coverage() {
+  cd "$root_dir/backend"
+  ./gradlew jacocoTestReport bootJar -x test -x integrationTest --no-daemon
 }
 
 run_backend() {
@@ -36,6 +41,7 @@ case "$scope" in
   backend-compile) run_backend_compile ;;
   backend-unit) run_backend_unit ;;
   backend-integration) run_backend_integration ;;
+  backend-coverage) run_backend_coverage ;;
   backend) run_backend ;;
   frontend) run_frontend ;;
   all)
@@ -43,7 +49,7 @@ case "$scope" in
     run_frontend
     ;;
   *)
-    echo "usage: $0 [backend-compile|backend-unit|backend-integration|backend|frontend|all]" >&2
+    echo "usage: $0 [backend-compile|backend-unit|backend-integration|backend-coverage|backend|frontend|all]" >&2
     exit 64
     ;;
 esac
