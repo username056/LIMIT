@@ -1,6 +1,7 @@
 plugins {
     id 'java'
     id 'jacoco'
+    id 'org.owasp.dependencycheck' version '12.2.2'
     id 'org.springframework.boot' version '4.0.7'
     id 'io.spring.dependency-management' version '1.1.7'
 }
@@ -17,6 +18,17 @@ java {
 
 repositories {
     mavenCentral()
+}
+
+dependencyCheck {
+    failBuildOnCVSS = 7.0
+    formats = ['HTML', 'JSON']
+    data.directory = "${gradle.gradleUserHomeDir}/dependency-check-data"
+
+    def nvdApiKey = System.getenv('NVD_API_KEY')
+    if (nvdApiKey) {
+        nvd.apiKey = nvdApiKey
+    }
 }
 
 dependencies {

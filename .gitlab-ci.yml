@@ -48,7 +48,7 @@ variables:
   cache:
     key:
       files: [backend/gradle/wrapper/gradle-wrapper.properties]
-    paths: [.gradle/caches, .gradle/wrapper]
+    paths: [.gradle/caches, .gradle/wrapper, .gradle/dependency-check-data]
 
 secret_guard:
   stage: guard
@@ -182,6 +182,23 @@ sonarqube:
       changes:
         - backend/**/*
         - sonar-project.properties
+
+dependency_check:
+  extends: .backend_gradle_job
+  stage: quality
+  script:
+    - test -n "$NVD_API_KEY"
+    - cd backend
+    - ./gradlew dependencyCheckAnalyze --no-daemon
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths:
+      - backend/build/reports/dependency-check-report.html
+      - backend/build/reports/dependency-check-report.json
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *backend_changes
 
 backend_image:
   stage: package
