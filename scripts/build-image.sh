@@ -21,7 +21,14 @@ if [ "${PUSH_IMAGE:-false}" = "true" ]; then
     --cache-to "type=registry,ref=${IMAGE_REPOSITORY}:buildcache,mode=max" \
     "$root_dir/backend"
 
-  digest=$(docker buildx imagetools inspect "$image_ref" --format '{{.Manifest.Digest}}')
+  digest=$(
+    docker buildx imagetools inspect "$image_ref" |
+      awk '$1 == "Digest:" { print $2; exit }'
+  )
+  printf '%s' "$digest" | grep -Eq '^sha256:[a-f0-9]{64}$' || {
+    echo "invalid image digest: $digest" >&2
+    exit 65
+  }
   deploy_image="${IMAGE_REPOSITORY}@${digest}"
 else
   docker buildx build --load --file "$dockerfile" --tag "$image_ref" "$root_dir/backend"
