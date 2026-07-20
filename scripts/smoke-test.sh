@@ -8,7 +8,7 @@ if [ -z "$base_url" ]; then
 fi
 
 curl_flags="--fail --silent --show-error --connect-timeout 5 --max-time 15"
-readiness=$(curl $curl_flags "${base_url%/}/actuator/health/readiness")
+readiness=$(curl $curl_flags "${base_url%/}/health")
 hello=$(curl $curl_flags "${base_url%/}/api/v1/hello")
 
 printf '%s' "$readiness" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"UP"'
