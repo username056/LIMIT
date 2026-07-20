@@ -86,7 +86,13 @@ class OpenApiContractTests {
         mockMvc.perform(get("/v3/api-docs/04-product"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.paths['/api/v1/products']").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/payments']").doesNotExist())
                 .andExpect(jsonPath("$.paths['/api/v1/hello']").doesNotExist());
+
+        mockMvc.perform(get("/v3/api-docs/08-payment"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['/api/v1/payments']").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/products']").doesNotExist());
 
         mockMvc.perform(get("/v3/api-docs/swagger-config"))
                 .andExpect(status().isOk())

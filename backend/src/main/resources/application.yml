@@ -30,7 +30,6 @@ limit:
     api-key: ${QDRANT_API_KEY:}
 
 springdoc:
-  packages-to-scan: com.c203.limit.domain
   api-docs:
     enabled: false
   group-configs:
