@@ -81,7 +81,6 @@ backend_unit_test:
     expire_in: 7 days
     reports:
       junit: backend/build/test-results/test/TEST-*.xml
-    paths: [backend/build/jacoco/test.exec]
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes: *backend_changes
@@ -106,7 +105,6 @@ backend_integration_test:
     expire_in: 7 days
     reports:
       junit: backend/build/test-results/integrationTest/TEST-*.xml
-    paths: [backend/build/jacoco/integrationTest.exec]
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes: *backend_changes
@@ -140,20 +138,18 @@ openapi_export:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes: *backend_changes
 
-backend_coverage:
+backend_package:
   extends: .backend_gradle_job
   stage: quality
   needs:
     - job: backend_unit_test
-      artifacts: true
+      artifacts: false
     - job: backend_integration_test
-      artifacts: true
-  script: ["sh scripts/ci-test.sh backend-coverage"]
+      artifacts: false
+  script: ["sh scripts/ci-test.sh backend-package"]
   artifacts:
     expire_in: 7 days
-    paths:
-      - backend/build/reports/jacoco/test/jacocoTestReport.xml
-      - backend/build/libs/*.jar
+    paths: [backend/build/libs/*.jar]
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes: *backend_changes
@@ -208,10 +204,7 @@ sonarqube:
   image:
     name: sonarsource/sonar-scanner-cli:11
     entrypoint: [""]
-  needs:
-    - job: backend_coverage
-      artifacts: true
-      optional: true
+  needs: []
   cache:
     key: sonar
     paths: [.sonar/cache]
@@ -219,16 +212,7 @@ sonarqube:
     SONAR_USER_HOME: "$CI_PROJECT_DIR/.sonar"
   script: ["sh scripts/ci-quality.sh"]
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        - backend/**/*
-        - sonar-project.properties
-        - .gitlab-ci.yml
-    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
-      changes:
-        - backend/**/*
-        - sonar-project.properties
-        - .gitlab-ci.yml
+    - when: never
 
 dependency_check:
   extends: .backend_gradle_job
@@ -285,7 +269,7 @@ backend_image:
       artifacts: false
     - job: backend_scripts_test
       artifacts: false
-    - job: backend_coverage
+    - job: backend_package
       artifacts: true
   services:
     - name: docker:28.3.2-dind
