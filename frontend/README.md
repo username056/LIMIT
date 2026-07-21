@@ -46,6 +46,8 @@ src/
 │   └── index.js              # 경로 목록 - 새 페이지는 여기에 등록
 ├── styles/
 │   └── tokens.css            # 색상/radius/spacing 값
+├── utils/
+│   └── demoLinks.js          # 환경별 운영 도구(Swagger/Grafana/Sonar) URL 계산
 ├── components/
 │   ├── AppHeader.vue          # 공통 헤더 (로고 LIMIT + 네비 + 검색/장바구니/유저)
 │   ├── AppFooter.vue          # 공통 푸터
@@ -77,7 +79,8 @@ src/
     ├── SellerDashboardPage.vue # 판매자 정산/통계 대시보드
     ├── MyOrdersPage.vue        # 마이페이지 주문내역
     ├── SellerApplyPage.vue     # 셀러 신청하기
-    └── ProductManagePage.vue   # 상품 등록/관리 (토글, 기간선택, 실시간 로그 포함)
+    ├── ProductManagePage.vue   # 상품 등록/관리 (토글, 기간선택, 실시간 로그 포함)
+    └── AdminPage.vue           # 운영 도구(Swagger/Grafana/Sonar) 바로가기 (`/admin`)
 ```
 
 ## 실행 방법
@@ -145,6 +148,13 @@ npm run test
 
 새 컴포넌트 만들 때는 `src/components/__tests__/BaseButton.spec.js`처럼 간단한 렌더링 테스트를 하나씩 추가하는 걸 권장합니다.
 
+## 운영 도구(Swagger/Grafana/Sonar) 바로가기 - `/admin`
+
+Swagger, Grafana, SonarCloud로 이동하는 링크는 `/admin` 페이지(`src/pages/AdminPage.vue`)에 모여 있습니다.
+화면에서는 **footer 오른쪽 하단의 "관리자 페이지" 링크**로 들어갈 수 있습니다 (`src/components/AppFooter.vue`).
+
+> ⚠️ 지금은 별도 인증 없이 누구나 `/admin`에 접근할 수 있습니다. 여유가 되면 관리자로 로그인해야만 접속할 수 있도록 막을 예정입니다.
+
 ## GitLab 저장소에 반영하는 법
 
 이 폴더 내용을 저장소의 `frontend/` 폴더에 그대로 덮어쓴 뒤, MR을 올리면 됩니다.
@@ -175,3 +185,4 @@ const sidebarItems = [
 - [ ] 실제 백엔드 API 스펙 나오면 `src/api/`에 도메인별 함수 추가 (주문, 대기열, 정산 등)
 - [ ] 각자 담당 MVP 화면 만들 때 이 컴포넌트들 적용
 - [ ] 로딩/빈 결과/오류 상태 UI (API 연동 시작하면 필요, 팀 컨벤션에 명시된 항목)
+- [ ] `/admin` 관리자 로그인 인증 적용 (현재는 누구나 접근 가능)
