@@ -223,6 +223,12 @@ sonarqube:
       changes:
         - backend/**/*
         - sonar-project.properties
+        - .gitlab-ci.yml
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
+      changes:
+        - backend/**/*
+        - sonar-project.properties
+        - .gitlab-ci.yml
 
 dependency_check:
   extends: .backend_gradle_job
