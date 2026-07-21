@@ -1,22 +1,17 @@
-import js from '@eslint/js'
 import pluginVue from 'eslint-plugin-vue'
-import globals from 'globals'
 
 export default [
-  { ignores: ['dist/**', 'coverage/**'] },
-  js.configs.recommended,
   ...pluginVue.configs['flat/recommended'],
   {
-    files: ['**/*.{js,mjs,cjs,vue}'],
     languageOptions: {
-      globals: {
-        ...globals.browser,
-        ...globals.node,
-      },
+      ecmaVersion: 2022,
+      sourceType: 'module',
     },
     rules: {
       'vue/multi-word-component-names': 'off',
     },
   },
+  {
+    ignores: ['dist/**', 'node_modules/**'],
+  },
 ]
-

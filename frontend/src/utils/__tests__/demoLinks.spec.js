@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { resolveDemoUrl } from './demoLinks'
+import { resolveDemoUrl } from '../demoLinks'
 
 describe('resolveDemoUrl', () => {
   it('로컬에서는 로컬 운영 도구 주소를 사용한다', () => {
