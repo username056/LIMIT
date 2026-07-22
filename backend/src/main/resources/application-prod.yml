@@ -12,9 +12,25 @@ spring:
       password: ${REDIS_PASSWORD}
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
 
 limit:
+  auth:
+    cookie:
+      secure: true
+    oauth-attempt:
+      store: redis
+    social-signup:
+      store: redis
+    email-verification:
+      store: redis
+      delivery-enabled: ${EMAIL_VERIFICATION_DELIVERY_ENABLED:false}
+      verify-url: ${FRONTEND_EMAIL_VERIFICATION_URL}
+      from: ${MAIL_FROM}
+  security:
+    refresh-store: redis
+    jwt:
+      secret: ${JWT_SECRET}
   qdrant:
     url: ${QDRANT_URL:http://qdrant:6333}
 

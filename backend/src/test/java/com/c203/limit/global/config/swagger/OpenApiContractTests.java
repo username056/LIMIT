@@ -21,12 +21,15 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import com.c203.limit.domain.auth.repository.SocialAccountRepository;
 import com.c203.limit.domain.member.repository.MemberRepository;
+import com.c203.limit.domain.member.repository.MemberTermsAgreementRepository;
+import com.c203.limit.domain.admin.repository.AdminAccountRepository;
+import com.c203.limit.domain.admin.repository.AdminActionLogRepository;
+import com.c203.limit.domain.admin.repository.MemberRestrictionRepository;
 
 @SpringBootTest(properties = {
         "management.endpoint.health.validate-group-membership=false",
         "spring.autoconfigure.exclude="
                 + "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration,"
-                + "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration,"
                 + "org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration,"
                 + "org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration,"
                 + "org.springframework.boot.mongodb.autoconfigure.MongoAutoConfiguration,"
@@ -42,7 +45,19 @@ class OpenApiContractTests {
     MemberRepository memberRepository;
 
     @MockitoBean
+    MemberTermsAgreementRepository memberTermsAgreementRepository;
+
+    @MockitoBean
     SocialAccountRepository socialAccountRepository;
+
+    @MockitoBean
+    AdminAccountRepository adminAccountRepository;
+
+    @MockitoBean
+    AdminActionLogRepository adminActionLogRepository;
+
+    @MockitoBean
+    MemberRestrictionRepository memberRestrictionRepository;
 
     @Autowired
     MockMvc mockMvc;
@@ -61,7 +76,13 @@ class OpenApiContractTests {
                 .andExpect(jsonPath("$.paths['/api/v1/members'].post.operationId").value("auth03"))
                 .andExpect(jsonPath("$.paths['/api/v1/members/me'].get.operationId").value("member01"))
                 .andExpect(jsonPath("$.components.schemas.SignupRequest").exists())
+                .andExpect(jsonPath("$.components.schemas.CompleteSocialSignupRequest").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/auth/social-authorizations/{provider}']").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/auth/social-signups']").exists())
+                .andExpect(jsonPath("$.components.schemas.EmailVerificationRequest").exists())
+                .andExpect(jsonPath("$.components.schemas.AdminLoginRequest").exists())
                 .andExpect(jsonPath("$.components.schemas.MemberProfileResponse").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/admin/members']").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/products']").doesNotExist());
     }
 
@@ -77,9 +98,21 @@ class OpenApiContractTests {
                 .andExpect(jsonPath("$.paths['/api/v1/members/me'].get").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/auth/sessions']").doesNotExist());
 
+        mockMvc.perform(get("/v3/api-docs/03-admin"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['/api/v1/admin/members']").exists())
+                .andExpect(
+                        jsonPath(
+                                        "$.paths['/api/v1/admin/members'].get.security[0].bearerAuth")
+                                .exists())
+                .andExpect(
+                        jsonPath("$.paths['/api/v1/admin/sessions'].post.security")
+                                .doesNotExist())
+                .andExpect(jsonPath("$.paths['/api/v1/members/me'].get").doesNotExist());
+
         mockMvc.perform(get("/v3/api-docs/swagger-config"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.urls.length()").value(2))
+                .andExpect(jsonPath("$.urls.length()").value(3))
                 .andExpect(jsonPath("$['urls.primaryName']").value("01-auth"))
                 .andExpect(jsonPath("$.operationsSorter", containsString("post: 0")))
                 .andExpect(jsonPath("$.operationsSorter", containsString("delete: 4")));

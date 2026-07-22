@@ -4,6 +4,7 @@ param(
     [string]$Environment = 'local',
     [switch]$NoStart,
     [switch]$NoOpen,
+    [string]$EnvFile = 'infra/.env.local',
     [ValidateRange(10, 600)]
     [int]$TimeoutSeconds = 180
 )
@@ -12,7 +13,11 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-$environmentFile = Join-Path $repositoryRoot 'infra/.env'
+$environmentFile = if ([IO.Path]::IsPathRooted($EnvFile)) {
+    [IO.Path]::GetFullPath($EnvFile)
+} else {
+    [IO.Path]::GetFullPath((Join-Path $repositoryRoot $EnvFile))
+}
 $composeBase = Join-Path $repositoryRoot 'infra/compose.yml'
 $composeLocal = Join-Path $repositoryRoot 'infra/compose.local.yml'
 
@@ -48,6 +53,29 @@ function Initialize-LocalEnvironment {
         "MONGODB_URI=mongodb://root:${mongodbPassword}@mongodb:27017/limit?authSource=admin"
         "REDIS_PASSWORD=$redisPassword"
         "QDRANT_API_KEY=$qdrantApiKey"
+        "JWT_SECRET=$(New-RandomValue)$(New-RandomValue)"
+        'REFRESH_TOKEN_STORE=redis'
+        'EMAIL_VERIFICATION_STORE=redis'
+        'EMAIL_VERIFICATION_DELIVERY_ENABLED=false'
+        'FRONTEND_EMAIL_VERIFICATION_URL=http://localhost:5173/verify-email'
+        'MAIL_HOST='
+        'MAIL_PORT=587'
+        'MAIL_USERNAME='
+        'MAIL_PASSWORD='
+        'MAIL_FROM='
+        'INITIAL_ADMIN_ENABLED=false'
+        'GOOGLE_OAUTH_ENABLED=false'
+        'GOOGLE_OAUTH_CLIENT_ID='
+        'GOOGLE_OAUTH_CLIENT_SECRET='
+        'GOOGLE_OAUTH_REDIRECT_URIS=http://localhost:5173/auth/callback/google'
+        'KAKAO_OAUTH_ENABLED=false'
+        'KAKAO_OAUTH_CLIENT_ID='
+        'KAKAO_OAUTH_CLIENT_SECRET='
+        'KAKAO_OAUTH_REDIRECT_URIS=http://localhost:5173/auth/callback/kakao'
+        'NAVER_OAUTH_ENABLED=false'
+        'NAVER_OAUTH_CLIENT_ID='
+        'NAVER_OAUTH_CLIENT_SECRET='
+        'NAVER_OAUTH_REDIRECT_URIS=http://localhost:5173/auth/callback/naver'
     )
 
     [IO.File]::WriteAllLines($environmentFile, $lines, [Text.UTF8Encoding]::new($false))

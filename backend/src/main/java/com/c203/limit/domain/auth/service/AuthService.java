@@ -1,13 +1,5 @@
 package com.c203.limit.domain.auth.service;
 
-import java.util.Locale;
-import java.util.Set;
-import java.util.regex.Pattern;
-
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.c203.limit.domain.auth.dto.request.LoginRequest;
 import com.c203.limit.domain.auth.dto.request.SignupRequest;
 import com.c203.limit.domain.auth.dto.response.EmailAvailabilityResponse;
@@ -22,6 +14,12 @@ import com.c203.limit.domain.member.repository.MemberRepository;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import com.c203.limit.global.security.JwtTokenProvider;
+import java.util.Locale;
+import java.util.Set;
+import java.util.regex.Pattern;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AuthService {
@@ -32,25 +30,33 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
     private final RefreshTokenStore refreshTokenStore;
+    private final TermsAgreementService termsAgreementService;
 
-    public AuthService(MemberRepository memberRepository, PasswordEncoder passwordEncoder,
-            JwtTokenProvider tokenProvider, RefreshTokenStore refreshTokenStore) {
+    public AuthService(
+            MemberRepository memberRepository,
+            PasswordEncoder passwordEncoder,
+            JwtTokenProvider tokenProvider,
+            RefreshTokenStore refreshTokenStore,
+            TermsAgreementService termsAgreementService) {
         this.memberRepository = memberRepository;
         this.passwordEncoder = passwordEncoder;
         this.tokenProvider = tokenProvider;
         this.refreshTokenStore = refreshTokenStore;
+        this.termsAgreementService = termsAgreementService;
     }
 
     @Transactional(readOnly = true)
     public EmailAvailabilityResponse emailAvailability(String email) {
         String normalized = normalizeEmail(email);
-        return new EmailAvailabilityResponse(normalized, !memberRepository.existsByEmailIgnoreCase(normalized));
+        return new EmailAvailabilityResponse(
+                normalized, !memberRepository.existsByEmailIgnoreCase(normalized));
     }
 
     @Transactional(readOnly = true)
     public NicknameAvailabilityResponse nicknameAvailability(String nickname) {
         validateNickname(nickname);
-        return new NicknameAvailabilityResponse(nickname, !memberRepository.existsByNickname(nickname));
+        return new NicknameAvailabilityResponse(
+                nickname, !memberRepository.existsByNickname(nickname));
     }
 
     @Transactional
@@ -58,40 +64,78 @@ public class AuthService {
         String email = normalizeEmail(request.getEmail());
         validateNickname(request.getNickname());
         validatePassword(request.getPassword());
-        if (memberRepository.existsByEmailIgnoreCase(email)) throw new BusinessException(ErrorCode.EMAIL_DUPLICATED);
-        if (memberRepository.existsByNickname(request.getNickname())) throw new BusinessException(ErrorCode.NICKNAME_DUPLICATED);
-        Member member = memberRepository.save(Member.createLocal(email, passwordEncoder.encode(request.getPassword()),
-                request.getNickname(), request.getPhone()));
-        return new SignupResponse(member.getId(), member.getEmail(), member.getNickname(), member.getStatus().name(),
-                Set.of(member.getRole().name()), member.getCreatedAt());
+        TermsAgreementService.TermsConsent consent = consent(request);
+        termsAgreementService.validate(consent);
+        if (memberRepository.existsByEmailIgnoreCase(email)) {
+            throw new BusinessException(ErrorCode.EMAIL_DUPLICATED);
+        }
+        if (memberRepository.existsByNickname(request.getNickname())) {
+            throw new BusinessException(ErrorCode.NICKNAME_DUPLICATED);
+        }
+        Member member =
+                memberRepository.save(
+                        Member.createLocal(
+                                email,
+                                passwordEncoder.encode(request.getPassword()),
+                                request.getNickname(),
+                                request.getPhone(),
+                                request.isMarketingAccepted()));
+        termsAgreementService.record(member, consent);
+        return new SignupResponse(
+                member.getId(),
+                member.getEmail(),
+                member.getNickname(),
+                member.getStatus().name(),
+                Set.of("MEMBER"),
+                member.getCreatedAt());
     }
 
     @Transactional
-    public LoginResponse login(LoginRequest request) {
-        Member member = memberRepository.findByEmailIgnoreCase(normalizeEmail(request.getEmail()))
-                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_CREDENTIALS));
-        if (member.getPassword() == null || !passwordEncoder.matches(request.getPassword(), member.getPassword())) {
+    public SessionResult<LoginResponse> login(LoginRequest request) {
+        Member member =
+                memberRepository
+                        .findByEmailIgnoreCase(normalizeEmail(request.getEmail()))
+                        .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_CREDENTIALS));
+        if (member.getPassword() == null
+                || !passwordEncoder.matches(request.getPassword(), member.getPassword())) {
             throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
         }
-        if (member.getStatus() != MemberStatus.ACTIVE) throw new BusinessException(ErrorCode.MEMBER_NOT_ACTIVE);
+        validateActiveMember(member);
+        if (member.getEmailVerifiedAt() == null) {
+            throw new BusinessException(ErrorCode.EMAIL_NOT_VERIFIED);
+        }
         member.recordLogin();
         TokenPair pair = issue(member);
-        return new LoginResponse(pair.accessToken(), pair.refreshToken(), "Bearer", tokenProvider.accessTtl().toSeconds(),
-                new MemberSummaryResponse(member.getId(), member.getNickname(), Set.of(member.getRole().name())));
+        return new SessionResult<>(
+                new LoginResponse(
+                        pair.accessToken(),
+                        "Bearer",
+                        tokenProvider.accessTtl().toSeconds(),
+                        summary(member)),
+                pair.refreshToken());
     }
 
-    @Transactional(readOnly = true)
-    public TokenResponse refresh(String refreshToken) {
+    @Transactional
+    public SessionResult<TokenResponse> refresh(String refreshToken) {
         JwtTokenProvider.TokenClaims claims = tokenProvider.parse(refreshToken, "refresh");
-        if (!refreshTokenStore.isValid(claims.tokenId(), claims.subjectId())) {
+        if (!"MEMBER".equals(claims.accountType())) {
+            throw new BusinessException(ErrorCode.INVALID_TOKEN);
+        }
+        if (!refreshTokenStore.isValid(
+                claims.tokenId(), claims.subjectId(), claims.accountType())) {
             throw new BusinessException(ErrorCode.REVOKED_TOKEN);
         }
-        Member member = memberRepository.findById(claims.subjectId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
-        if (member.getStatus() != MemberStatus.ACTIVE) throw new BusinessException(ErrorCode.MEMBER_NOT_ACTIVE);
+        Member member =
+                memberRepository
+                        .findById(claims.subjectId())
+                        .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
+        validateActiveMember(member);
         refreshTokenStore.revoke(claims.tokenId());
         TokenPair pair = issue(member);
-        return new TokenResponse(pair.accessToken(), pair.refreshToken(), "Bearer", tokenProvider.accessTtl().toSeconds());
+        return new SessionResult<>(
+                new TokenResponse(
+                        pair.accessToken(), "Bearer", tokenProvider.accessTtl().toSeconds()),
+                pair.refreshToken());
     }
 
     public void logout(String refreshToken) {
@@ -99,29 +143,63 @@ public class AuthService {
         refreshTokenStore.revoke(claims.tokenId());
     }
 
-    public void revokeAll(Long memberId) { refreshTokenStore.revokeAll(memberId); }
+    public void revokeAll(Long memberId) {
+        refreshTokenStore.revokeAll(memberId, "MEMBER");
+    }
 
-    public TokenResponse issueTokens(Member member) {
+    public SessionResult<TokenResponse> issueTokens(Member member) {
         TokenPair pair = issue(member);
-        return new TokenResponse(pair.accessToken(), pair.refreshToken(), "Bearer", tokenProvider.accessTtl().toSeconds());
+        return new SessionResult<>(
+                new TokenResponse(
+                        pair.accessToken(), "Bearer", tokenProvider.accessTtl().toSeconds()),
+                pair.refreshToken());
+    }
+
+    public String normalizeEmail(String email) {
+        if (email == null || !EMAIL.matcher(email.trim()).matches()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+        return email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    public void validateNickname(String nickname) {
+        if (nickname == null || !NICKNAME.matcher(nickname).matches()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+    }
+
+    public void validatePassword(String password) {
+        if (password == null || !PASSWORD.matcher(password).matches()) {
+            throw new BusinessException(ErrorCode.INVALID_PASSWORD_FORMAT);
+        }
+    }
+
+    private void validateActiveMember(Member member) {
+        if (member.getStatus() != MemberStatus.ACTIVE) {
+            throw new BusinessException(ErrorCode.MEMBER_NOT_ACTIVE);
+        }
+    }
+
+    private MemberSummaryResponse summary(Member member) {
+        return new MemberSummaryResponse(member.getId(), member.getNickname(), Set.of("MEMBER"));
+    }
+
+    private TermsAgreementService.TermsConsent consent(SignupRequest request) {
+        return new TermsAgreementService.TermsConsent(
+                request.isServiceTermsAccepted(),
+                request.isPrivacyTermsAccepted(),
+                request.isAgeRequirementAccepted(),
+                request.isMarketingAccepted());
     }
 
     private TokenPair issue(Member member) {
-        Set<String> roles = Set.of(member.getRole().name());
+        Set<String> roles = Set.of("MEMBER");
         var access = tokenProvider.issueAccess(member.getId(), "MEMBER", roles);
         var refresh = tokenProvider.issueRefresh(member.getId(), "MEMBER", roles);
-        refreshTokenStore.save(refresh.tokenId(), member.getId(), tokenProvider.refreshTtl());
+        refreshTokenStore.save(
+                refresh.tokenId(), member.getId(), "MEMBER", tokenProvider.refreshTtl());
         return new TokenPair(access.value(), refresh.value());
     }
-    private String normalizeEmail(String email) {
-        if (email == null || !EMAIL.matcher(email.trim()).matches()) throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
-        return email.trim().toLowerCase(Locale.ROOT);
-    }
-    private void validateNickname(String nickname) {
-        if (nickname == null || !NICKNAME.matcher(nickname).matches()) throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
-    }
-    public void validatePassword(String password) {
-        if (password == null || !PASSWORD.matcher(password).matches()) throw new BusinessException(ErrorCode.INVALID_PASSWORD_FORMAT);
-    }
+
     private record TokenPair(String accessToken, String refreshToken) {}
 }

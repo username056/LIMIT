@@ -23,6 +23,7 @@ if [[ ! -f "$env_file" ]]; then
   redis_password=$(generate_secret)
   qdrant_api_key=$(generate_secret)
   grafana_admin_password=$(generate_secret)
+  jwt_secret=$(openssl rand -base64 48 | tr -d '\n')
 
   umask 077
   {
@@ -35,6 +36,29 @@ if [[ ! -f "$env_file" ]]; then
     printf 'MONGODB_ROOT_PASSWORD=%s\n' "$mongodb_password"
     printf 'MONGODB_URI=mongodb://limit:%s@mongodb:27017/limit?authSource=admin\n' "$mongodb_password"
     printf 'REDIS_PASSWORD=%s\n' "$redis_password"
+    printf 'REFRESH_TOKEN_STORE=redis\n'
+    printf 'JWT_SECRET=%s\n' "$jwt_secret"
+    printf 'EMAIL_VERIFICATION_STORE=redis\n'
+    printf 'EMAIL_VERIFICATION_DELIVERY_ENABLED=false\n'
+    printf 'FRONTEND_EMAIL_VERIFICATION_URL=https://l1mit.shop/verify-email\n'
+    printf 'MAIL_HOST=\n'
+    printf 'MAIL_PORT=587\n'
+    printf 'MAIL_USERNAME=\n'
+    printf 'MAIL_PASSWORD=\n'
+    printf 'MAIL_FROM=\n'
+    printf 'INITIAL_ADMIN_ENABLED=false\n'
+    printf 'GOOGLE_OAUTH_ENABLED=false\n'
+    printf 'GOOGLE_OAUTH_CLIENT_ID=\n'
+    printf 'GOOGLE_OAUTH_CLIENT_SECRET=\n'
+    printf 'GOOGLE_OAUTH_REDIRECT_URIS=https://l1mit.shop/auth/callback/google\n'
+    printf 'KAKAO_OAUTH_ENABLED=false\n'
+    printf 'KAKAO_OAUTH_CLIENT_ID=\n'
+    printf 'KAKAO_OAUTH_CLIENT_SECRET=\n'
+    printf 'KAKAO_OAUTH_REDIRECT_URIS=https://l1mit.shop/auth/callback/kakao\n'
+    printf 'NAVER_OAUTH_ENABLED=false\n'
+    printf 'NAVER_OAUTH_CLIENT_ID=\n'
+    printf 'NAVER_OAUTH_CLIENT_SECRET=\n'
+    printf 'NAVER_OAUTH_REDIRECT_URIS=https://l1mit.shop/auth/callback/naver\n'
     printf 'QDRANT_API_KEY=%s\n' "$qdrant_api_key"
     printf 'GRAFANA_ADMIN_USER=admin\n'
     printf 'GRAFANA_ADMIN_PASSWORD=%s\n' "$grafana_admin_password"

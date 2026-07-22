@@ -6,11 +6,14 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.c203.limit.domain.auth.repository.SocialAccountRepository;
 import com.c203.limit.domain.member.repository.MemberRepository;
+import com.c203.limit.domain.member.repository.MemberTermsAgreementRepository;
+import com.c203.limit.domain.admin.repository.AdminAccountRepository;
+import com.c203.limit.domain.admin.repository.AdminActionLogRepository;
+import com.c203.limit.domain.admin.repository.MemberRestrictionRepository;
 
 @SpringBootTest(properties = {
         "spring.autoconfigure.exclude="
                 + "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration,"
-                + "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration,"
                 + "org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration,"
                 + "org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration,"
                 + "org.springframework.boot.mongodb.autoconfigure.MongoAutoConfiguration,"
@@ -24,7 +27,19 @@ class BackendApplicationTests {
     MemberRepository memberRepository;
 
     @MockitoBean
+    MemberTermsAgreementRepository memberTermsAgreementRepository;
+
+    @MockitoBean
     SocialAccountRepository socialAccountRepository;
+
+    @MockitoBean
+    AdminAccountRepository adminAccountRepository;
+
+    @MockitoBean
+    AdminActionLogRepository adminActionLogRepository;
+
+    @MockitoBean
+    MemberRestrictionRepository memberRestrictionRepository;
 
     @Test
     void contextLoads() {
