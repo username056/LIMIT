@@ -15,6 +15,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 import com.c203.limit.domain.auth.service.AuthService;
 import com.c203.limit.domain.auth.service.InMemoryRefreshTokenStore;
+import com.c203.limit.domain.auth.service.TermsAgreementService;
 import com.c203.limit.domain.member.dto.request.UpdateMemberRequest;
 import com.c203.limit.domain.member.entity.Member;
 import com.c203.limit.domain.member.repository.MemberRepository;
@@ -26,13 +27,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @ExtendWith(MockitoExtension.class)
 class MemberServiceTests {
     @Mock MemberRepository repository;
+    @Mock TermsAgreementService termsAgreementService;
     MemberService service;
 
     @BeforeEach void setUp() {
         var encoder = new BCryptPasswordEncoder(4);
         var auth = new AuthService(repository, encoder,
                 new JwtTokenProvider(new ObjectMapper(), "unit-test-secret-with-at-least-32-bytes", Duration.ofMinutes(30), Duration.ofDays(14)),
-                new InMemoryRefreshTokenStore());
+                new InMemoryRefreshTokenStore(),
+                termsAgreementService);
         service = new MemberService(repository, encoder, auth);
     }
 

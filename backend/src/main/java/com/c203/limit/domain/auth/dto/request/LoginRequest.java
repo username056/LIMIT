@@ -10,9 +10,15 @@ import lombok.RequiredArgsConstructor;
 @Schema(name = "LoginRequest", description = "일반 회원 로그인 요청")
 public class LoginRequest {
 
-    @Schema(description = "로그인 이메일", example = "user@example.com", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "로그인 이메일",
+            example = "user@example.com",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private final String email;
 
-    @Schema(description = "비밀번호", example = "Password123!", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "비밀번호",
+            example = "Password123!",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private final String password;
 }

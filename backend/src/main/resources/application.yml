@@ -1,10 +1,16 @@
 spring:
   application:
     name: backend
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:25}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${MAIL_SMTP_AUTH:true}
+      mail.smtp.starttls.enable: ${MAIL_STARTTLS_ENABLED:true}
   jpa:
     open-in-view: false
-  flyway:
-    enabled: true
 
 server:
   port: 8080
@@ -25,6 +31,66 @@ logging:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{traceId:-no-trace}] %logger{36} - %msg%n"
 
 limit:
+  auth:
+    cookie:
+      secure: ${AUTH_COOKIE_SECURE:false}
+      same-site: ${AUTH_COOKIE_SAME_SITE:Lax}
+      social-signup-ttl: ${SOCIAL_SIGNUP_TTL:15m}
+      oauth-state-ttl: ${OAUTH_STATE_TTL:10m}
+    oauth-attempt:
+      store: ${OAUTH_ATTEMPT_STORE:memory}
+    social-signup:
+      store: ${SOCIAL_SIGNUP_STORE:memory}
+    terms:
+      service-version: ${TERMS_SERVICE_VERSION:2026-07-22}
+      privacy-version: ${TERMS_PRIVACY_VERSION:2026-07-22}
+      age-version: ${TERMS_AGE_VERSION:2026-07-22}
+      marketing-version: ${TERMS_MARKETING_VERSION:2026-07-22}
+    oauth:
+      google:
+        enabled: ${GOOGLE_OAUTH_ENABLED:false}
+        client-id: ${GOOGLE_OAUTH_CLIENT_ID:}
+        client-secret: ${GOOGLE_OAUTH_CLIENT_SECRET:}
+        redirect-uris: ${GOOGLE_OAUTH_REDIRECT_URIS:http://localhost:5173/auth/callback/google}
+      kakao:
+        enabled: ${KAKAO_OAUTH_ENABLED:false}
+        client-id: ${KAKAO_OAUTH_CLIENT_ID:}
+        client-secret: ${KAKAO_OAUTH_CLIENT_SECRET:}
+        redirect-uris: ${KAKAO_OAUTH_REDIRECT_URIS:http://localhost:5173/auth/callback/kakao}
+      naver:
+        enabled: ${NAVER_OAUTH_ENABLED:false}
+        client-id: ${NAVER_OAUTH_CLIENT_ID:}
+        client-secret: ${NAVER_OAUTH_CLIENT_SECRET:}
+        redirect-uris: ${NAVER_OAUTH_REDIRECT_URIS:http://localhost:5173/auth/callback/naver}
+    email-verification:
+      store: ${EMAIL_VERIFICATION_STORE:memory}
+      delivery-enabled: ${EMAIL_VERIFICATION_DELIVERY_ENABLED:false}
+      ttl: ${EMAIL_VERIFICATION_TTL:15m}
+      verify-url: ${FRONTEND_EMAIL_VERIFICATION_URL:http://localhost:5173/verify-email}
+      from: ${MAIL_FROM:no-reply@limit.local}
+  bootstrap:
+    admin:
+      enabled: ${INITIAL_ADMIN_ENABLED:false}
+      email: ${INITIAL_ADMIN_EMAIL:}
+      password: ${INITIAL_ADMIN_PASSWORD:}
+      name: ${INITIAL_ADMIN_NAME:}
+      role: ${INITIAL_ADMIN_ROLE:SUPER_ADMIN}
+    base-init:
+      enabled: ${BASE_INIT_ENABLED:false}
+      member:
+        enabled: ${BASE_INIT_MEMBER_ENABLED:true}
+        email: ${BASE_INIT_MEMBER_EMAIL:}
+        password: ${BASE_INIT_MEMBER_PASSWORD:}
+        nickname: ${BASE_INIT_MEMBER_NICKNAME:}
+        phone: ${BASE_INIT_MEMBER_PHONE:}
+      admin:
+        enabled: ${BASE_INIT_ADMIN_ENABLED:true}
+        email: ${BASE_INIT_ADMIN_EMAIL:}
+        password: ${BASE_INIT_ADMIN_PASSWORD:}
+        name: ${BASE_INIT_ADMIN_NAME:}
+  security:
+    jwt:
+      secret: ${JWT_SECRET:local-only-change-this-jwt-secret-32bytes}
   qdrant:
     url: ${QDRANT_URL:http://localhost:6333}
     api-key: ${QDRANT_API_KEY:}
@@ -37,6 +103,8 @@ springdoc:
       packages-to-scan: com.c203.limit.domain.auth.controller
     - group: 02-member
       packages-to-scan: com.c203.limit.domain.member.controller
+    - group: 03-admin
+      packages-to-scan: com.c203.limit.domain.admin.controller
   swagger-ui:
     enabled: false
     disable-swagger-default-url: true

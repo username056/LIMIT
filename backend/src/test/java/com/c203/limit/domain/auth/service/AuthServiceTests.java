@@ -25,13 +25,23 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTests {
     @Mock MemberRepository memberRepository;
+    @Mock TermsAgreementService termsAgreementService;
     AuthService authService;
     BCryptPasswordEncoder encoder;
+    JwtTokenProvider provider;
+    InMemoryRefreshTokenStore refreshTokens;
 
     @BeforeEach void setUp() {
         encoder = new BCryptPasswordEncoder(4);
-        var provider = new JwtTokenProvider(new ObjectMapper(), "unit-test-secret-with-at-least-32-bytes", java.time.Duration.ofMinutes(30), java.time.Duration.ofDays(14));
-        authService = new AuthService(memberRepository, encoder, provider, new InMemoryRefreshTokenStore());
+        provider = new JwtTokenProvider(new ObjectMapper(), "unit-test-secret-with-at-least-32-bytes", java.time.Duration.ofMinutes(30), java.time.Duration.ofDays(14));
+        refreshTokens = new InMemoryRefreshTokenStore();
+        authService =
+                new AuthService(
+                        memberRepository,
+                        encoder,
+                        provider,
+                        refreshTokens,
+                        termsAgreementService);
     }
 
     @Test void signsUpWithNormalizedEmailAndEncodedPassword() {
@@ -54,11 +64,12 @@ class AuthServiceTests {
 
     @Test void loginIssuesTokenForActiveMember() {
         Member member = Member.createLocal("user@example.com", encoder.encode("Password123"), "openrunner", null);
+        member.verifyEmail();
         ReflectionTestUtils.setField(member, "id", 1L);
         when(memberRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(member));
         var response = authService.login(new LoginRequest("user@example.com", "Password123"));
-        assertThat(response.getAccessToken()).isNotBlank();
-        assertThat(response.getRefreshToken()).isNotBlank();
+        assertThat(response.body().getAccessToken()).isNotBlank();
+        assertThat(response.refreshToken()).isNotBlank();
     }
 
     @Test void rejectsWrongPasswordWithoutLeakingAccountDetails() {
@@ -67,5 +78,27 @@ class AuthServiceTests {
         assertThatThrownBy(() -> authService.login(new LoginRequest("user@example.com", "wrong")))
                 .isInstanceOfSatisfying(BusinessException.class,
                         exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_CREDENTIALS));
+    }
+
+    @Test void rejectsLoginBeforeEmailVerification() {
+        Member member = Member.createLocal("user@example.com", encoder.encode("Password123"), "openrunner", null);
+        when(memberRepository.findByEmailIgnoreCase("user@example.com")).thenReturn(Optional.of(member));
+
+        assertThatThrownBy(() -> authService.login(new LoginRequest("user@example.com", "Password123")))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.EMAIL_NOT_VERIFIED));
+    }
+
+    @Test void rejectsAdminRefreshTokenOnMemberRefreshEndpoint() {
+        var token = provider.issueRefresh(1L, "ADMIN", java.util.Set.of("SUPER_ADMIN"));
+        refreshTokens.save(token.tokenId(), 1L, "ADMIN", java.time.Duration.ofDays(1));
+        assertThatThrownBy(() -> authService.refresh(token.value()))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_TOKEN));
+    }
+
+    @Test void requiresAtLeast32ByteJwtSecret() {
+        assertThatThrownBy(() -> new JwtTokenProvider(new ObjectMapper(), "too-short", java.time.Duration.ofMinutes(1), java.time.Duration.ofDays(1)))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

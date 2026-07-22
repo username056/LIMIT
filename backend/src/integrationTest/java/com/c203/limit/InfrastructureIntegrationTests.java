@@ -2,6 +2,8 @@ package com.c203.limit;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.GenericContainer;
@@ -17,11 +19,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 class InfrastructureIntegrationTests {
 
+    @Autowired
+    JdbcTemplate jdbcTemplate;
+
     @Container
     static final MySQLContainer MYSQL = new MySQLContainer(DockerImageName.parse("mysql:8.4"))
             .withDatabaseName("limit")
             .withUsername("limit")
-            .withPassword("test-only-password");
+            .withPassword("test-only-password")
+            .withInitScript("db/schema/member-admin-schema.sql");
 
     @Container
     static final MongoDBContainer MONGODB = new MongoDBContainer(DockerImageName.parse("mongo:8.0"));
@@ -39,6 +45,7 @@ class InfrastructureIntegrationTests {
         registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
         registry.add("spring.datasource.username", MYSQL::getUsername);
         registry.add("spring.datasource.password", MYSQL::getPassword);
+        registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
         registry.add("spring.data.mongodb.uri", MONGODB::getReplicaSetUrl);
         registry.add("spring.data.redis.host", REDIS::getHost);
         registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
@@ -51,5 +58,20 @@ class InfrastructureIntegrationTests {
         assertThat(MONGODB.isRunning()).isTrue();
         assertThat(REDIS.isRunning()).isTrue();
         assertThat(QDRANT.isRunning()).isTrue();
+        assertThat(tableExists("user_account")).isTrue();
+        assertThat(tableExists("social_account")).isTrue();
+        assertThat(tableExists("member_terms_agreement")).isTrue();
+        assertThat(tableExists("admin_account")).isTrue();
+        assertThat(tableExists("member_sanction")).isTrue();
+        assertThat(tableExists("admin_action_log")).isTrue();
+    }
+
+    private boolean tableExists(String tableName) {
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables "
+                        + "WHERE table_schema = DATABASE() AND table_name = ?",
+                Integer.class,
+                tableName);
+        return count != null && count == 1;
     }
 }

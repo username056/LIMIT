@@ -10,7 +10,10 @@ import lombok.RequiredArgsConstructor;
 @Schema(name = "NicknameAvailabilityResponse", description = "닉네임 중복 확인 결과")
 public class NicknameAvailabilityResponse {
 
-    @Schema(description = "확인한 닉네임", example = "openrunner", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "확인한 닉네임",
+            example = "openrunner",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private final String nickname;
 
     @Schema(description = "사용 가능 여부", example = "true", requiredMode = Schema.RequiredMode.REQUIRED)

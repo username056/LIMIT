@@ -28,7 +28,7 @@ Gradle Wrapper가 포함되어 있어 Gradle을 별도로 설치할 필요는 �
 .\scripts\open-platform-tools.ps1
 ```
 
-`infra/.env`를 자동 생성하고 Docker Desktop과 컨테이너를 띄운 뒤 Swagger·Grafana를 브라우저로 엽니다. 옵션과 수동 실행 방법은 스크립트 자체 도움말(`-?`)을 참고합니다.
+`infra/.env.local`을 자동 생성하고 Docker Desktop과 컨테이너를 띄운 뒤 Swagger·Grafana를 브라우저로 엽니다. 다른 파일을 쓰려면 `-EnvFile`로 지정합니다. 운영용 `infra/.env`와 로컬 설정을 분리하며 두 파일 모두 Git에서 제외됩니다.
 
 - Backend: `http://localhost:18080`
 - Swagger: `http://localhost:18080/swagger-ui.html`
@@ -79,4 +79,5 @@ GitLab CI가 Secret 검사, 테스트, JaCoCo, SonarQube, 이미지 빌드와 �
 - [모노레포 ADR](docs/adr/0001-monorepo.md)
 - [배포 아키텍처 ADR](docs/adr/0002-single-ec2-blue-green.md)
 - [운영 Runbook](docs/runbook/deployment.md)
+- [테스트 계정 BaseInit 가이드](docs/integration/base-init-data.md)
 - [프로젝트 작업 규칙](AGENTS.md)

@@ -1,8 +1,7 @@
 package com.c203.limit.domain.auth.dto.response;
 
-import java.time.OffsetDateTime;
-
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.time.OffsetDateTime;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
@@ -18,9 +17,15 @@ public class SocialAccountResponse {
     @Schema(description = "소셜 제공자", example = "GOOGLE", requiredMode = Schema.RequiredMode.REQUIRED)
     private final String provider;
 
-    @Schema(description = "마스킹된 소셜 이메일", example = "u***@gmail.com", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "마스킹된 소셜 이메일",
+            example = "u***@gmail.com",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private final String providerEmail;
 
-    @Schema(description = "연동 시각", example = "2026-07-01T10:00:00+09:00", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "연동 시각",
+            example = "2026-07-01T10:00:00+09:00",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private final OffsetDateTime connectedAt;
 }
