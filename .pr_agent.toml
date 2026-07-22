@@ -1,6 +1,6 @@
 [config]
 model = "gpt-5-mini"
-fallback_models = ["gpt-5-mini"]
+fallback_models = []
 reasoning_effort = "low"
 
 [pr_reviewer]

@@ -226,9 +226,10 @@ pr_agent_review:
   variables:
     CONFIG__GIT_PROVIDER: "gitlab"
     CONFIG__MODEL: "gpt-5-mini"
-    CONFIG__FALLBACK_MODELS: '["gpt-5-mini"]'
+    CONFIG__FALLBACK_MODELS: '[]'
     CONFIG__REASONING_EFFORT: "low"
     GITLAB__URL: "$CI_SERVER_URL"
+    OPENAI__API_BASE: "https://gms.ssafy.io/gmsapi/api.openai.com/v1"
   script:
     - test -n "$GITLAB_PERSONAL_ACCESS_TOKEN"
     - test -n "$OPENAI_KEY"
@@ -236,7 +237,11 @@ pr_agent_review:
     - export GITLAB__PERSONAL_ACCESS_TOKEN="$GITLAB_PERSONAL_ACCESS_TOKEN"
     - export OPENAI__KEY="$OPENAI_KEY"
     - export MR_URL="$CI_MERGE_REQUEST_PROJECT_URL/merge_requests/$CI_MERGE_REQUEST_IID"
-    - python -m pr_agent.cli --pr_url="$MR_URL" review
+    - |
+      python -m pr_agent.cli --pr_url="$MR_URL" review 2>&1 | tee /tmp/pr-agent.log
+      if grep -q "Failed to review PR" /tmp/pr-agent.log; then
+        exit 1
+      fi
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_SOURCE_PROJECT_ID == $CI_PROJECT_ID && ($CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "dev" || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main")'
 
