@@ -1,0 +1,9 @@
+package com.c203.limit.domain.payment.entity;
+
+public enum PaymentStatus {
+    REQUESTED,
+    APPROVED,
+    FAILED,
+    REFUND_REQUESTED,
+    REFUNDED
+}

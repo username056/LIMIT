@@ -21,6 +21,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import com.c203.limit.domain.auth.repository.SocialAccountRepository;
+import com.c203.limit.domain.chat.repository.ChatRoomParticipantRepository;
+import com.c203.limit.domain.chat.repository.ChatRoomRepository;
+import com.c203.limit.domain.chat.repository.ListingChatReader;
 import com.c203.limit.domain.member.repository.MemberRepository;
 import com.c203.limit.domain.admin.repository.AdminAccountRepository;
 import com.c203.limit.domain.admin.repository.AdminActionLogRepository;
@@ -58,6 +61,15 @@ class OpenApiContractTests {
 
     @MockitoBean
     MemberRestrictionRepository memberRestrictionRepository;
+
+    @MockitoBean
+    ChatRoomRepository chatRoomRepository;
+
+    @MockitoBean
+    ChatRoomParticipantRepository chatRoomParticipantRepository;
+
+    @MockitoBean
+    ListingChatReader listingChatReader;
 
     @Autowired
     MockMvc mockMvc;
@@ -109,10 +121,21 @@ class OpenApiContractTests {
                         jsonPath("$.paths['/api/v1/admin/sessions'].post.security")
                                 .doesNotExist())
                 .andExpect(jsonPath("$.paths['/api/v1/members/me'].get").doesNotExist());
+        mockMvc.perform(get("/v3/api-docs/04-chat"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['/api/v1/listings/{listingId}/chat-rooms'].post.operationId")
+                        .value("chatBe01"))
+                .andExpect(jsonPath("$.paths['/api/v1/listings/{listingId}/chat-rooms'].post.security[0].bearerAuth")
+                        .isArray())
+                .andExpect(jsonPath("$.paths['/api/v1/chat-rooms'].get.operationId")
+                        .value("chatBe07"))
+                .andExpect(jsonPath("$.paths['/api/v1/chat-rooms'].get.security[0].bearerAuth")
+                        .isArray())
+                .andExpect(jsonPath("$.paths['/api/v1/auth/sessions']").doesNotExist());
 
         mockMvc.perform(get("/v3/api-docs/swagger-config"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.urls.length()").value(3))
+                .andExpect(jsonPath("$.urls.length()").value(4))
                 .andExpect(jsonPath("$['urls.primaryName']").value("01-auth"))
                 .andExpect(jsonPath("$.operationsSorter", containsString("post: 0")))
                 .andExpect(jsonPath("$.operationsSorter", containsString("delete: 4")));
