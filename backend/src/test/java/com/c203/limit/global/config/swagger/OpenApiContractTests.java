@@ -15,8 +15,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+
+import com.c203.limit.domain.auth.repository.SocialAccountRepository;
+import com.c203.limit.domain.member.repository.MemberRepository;
 
 @SpringBootTest(properties = {
         "management.endpoint.health.validate-group-membership=false",
@@ -34,6 +38,12 @@ import org.springframework.test.web.servlet.MvcResult;
 @ActiveProfiles("local")
 class OpenApiContractTests {
 
+    @MockitoBean
+    MemberRepository memberRepository;
+
+    @MockitoBean
+    SocialAccountRepository socialAccountRepository;
+
     @Autowired
     MockMvc mockMvc;
 
@@ -47,13 +57,30 @@ class OpenApiContractTests {
                 .andExpect(jsonPath("$.components.securitySchemes.bearerAuth").exists())
                 .andExpect(jsonPath("$.components.securitySchemes.internalApiKey").exists())
                 .andExpect(jsonPath("$.components.schemas.ApiResponse").exists())
-                .andExpect(jsonPath("$.paths['/api/v1/health']").exists());
+                .andExpect(jsonPath("$.paths['/api/v1/health']").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/members'].post.operationId").value("auth03"))
+                .andExpect(jsonPath("$.paths['/api/v1/members/me'].get.operationId").value("member01"))
+                .andExpect(jsonPath("$.components.schemas.SignupRequest").exists())
+                .andExpect(jsonPath("$.components.schemas.MemberProfileResponse").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/products']").doesNotExist());
     }
 
     @Test
     void exposesSwaggerUiConfiguration() throws Exception {
+        mockMvc.perform(get("/v3/api-docs/01-auth"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['/api/v1/auth/sessions']").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/members/me'].get").doesNotExist());
+
+        mockMvc.perform(get("/v3/api-docs/02-member"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['/api/v1/members/me'].get").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/auth/sessions']").doesNotExist());
+
         mockMvc.perform(get("/v3/api-docs/swagger-config"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.urls.length()").value(2))
+                .andExpect(jsonPath("$['urls.primaryName']").value("01-auth"))
                 .andExpect(jsonPath("$.operationsSorter", containsString("post: 0")))
                 .andExpect(jsonPath("$.operationsSorter", containsString("delete: 4")));
     }

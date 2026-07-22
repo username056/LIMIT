@@ -32,6 +32,11 @@ limit:
 springdoc:
   api-docs:
     enabled: false
+  group-configs:
+    - group: 01-auth
+      packages-to-scan: com.c203.limit.domain.auth.controller
+    - group: 02-member
+      packages-to-scan: com.c203.limit.domain.member.controller
   swagger-ui:
     enabled: false
     disable-swagger-default-url: true
@@ -40,4 +45,5 @@ springdoc:
     tags-sorter: alpha
     operations-sorter: >-
       function (a, b) { const order = { post: 0, get: 1, patch: 2, put: 3, delete: 4 }; return (order[a.get('method')] ?? 99) - (order[b.get('method')] ?? 99); }
+    urls-primary-name: 01-auth
     display-request-duration: true

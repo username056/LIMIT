@@ -1,15 +1,43 @@
 package com.c203.limit.global.config.swagger;
 
+import java.util.List;
+import java.util.Map;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import io.swagger.v3.core.converter.ModelConverters;
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 
 @Configuration
 public class OpenApiConfig {
+
+    private static final List<Class<?>> SCHEMA_TYPES = List.of(
+            com.c203.limit.domain.auth.dto.request.LoginRequest.class,
+            com.c203.limit.domain.auth.dto.request.LogoutRequest.class,
+            com.c203.limit.domain.auth.dto.request.SignupRequest.class,
+            com.c203.limit.domain.auth.dto.request.SocialLoginRequest.class,
+            com.c203.limit.domain.auth.dto.request.TokenRefreshRequest.class,
+            com.c203.limit.domain.auth.dto.response.EmailAvailabilityResponse.class,
+            com.c203.limit.domain.auth.dto.response.LoginResponse.class,
+            com.c203.limit.domain.auth.dto.response.NicknameAvailabilityResponse.class,
+            com.c203.limit.domain.auth.dto.response.SignupResponse.class,
+            com.c203.limit.domain.auth.dto.response.SocialAccountResponse.class,
+            com.c203.limit.domain.auth.dto.response.SocialLoginResponse.class,
+            com.c203.limit.domain.auth.dto.response.TokenResponse.class,
+            com.c203.limit.domain.member.dto.request.ChangePasswordRequest.class,
+            com.c203.limit.domain.member.dto.request.UpdateMemberRequest.class,
+            com.c203.limit.domain.member.dto.response.MemberProfileResponse.class,
+            com.c203.limit.domain.member.dto.response.MemberSummaryResponse.class,
+            com.c203.limit.domain.member.dto.response.UpdateMemberResponse.class,
+            com.c203.limit.global.response.ApiResponse.class,
+            com.c203.limit.global.response.PageResponse.class,
+            com.c203.limit.global.response.ApiErrorResponse.class
+    );
 
     @Bean
     OpenAPI limitOpenApi() {
@@ -22,6 +50,11 @@ public class OpenApiConfig {
                         .type(SecurityScheme.Type.APIKEY)
                         .in(SecurityScheme.In.HEADER)
                         .name("X-Internal-Api-Key"));
+
+        for (Class<?> schemaType : SCHEMA_TYPES) {
+            Map<String, Schema> schemas = ModelConverters.getInstance().readAll(schemaType);
+            schemas.forEach(components::addSchemas);
+        }
 
         return new OpenAPI()
                 .info(new Info()
