@@ -46,8 +46,11 @@ public class OpenApiConfig {
                     com.c203.limit.domain.admin.dto.request.ReleaseMemberRestrictionRequest.class,
                     com.c203.limit.domain.admin.dto.request.UpdateAdminAccountAccessRequest.class,
                     com.c203.limit.domain.admin.dto.response.AdminAccountResponse.class,
+                    com.c203.limit.domain.chat.dto.response.ChatRoomResponse.class,
+                    com.c203.limit.domain.chat.dto.response.ChatRoomSummaryResponse.class,
                     com.c203.limit.global.response.ApiResponse.class,
                     com.c203.limit.global.response.PageResponse.class,
+                    com.c203.limit.global.response.CursorResponse.class,
                     com.c203.limit.global.response.ApiErrorResponse.class);
 
     @Bean
