@@ -92,12 +92,12 @@ trap cleanup_target ERR
 "${compose[@]}" up -d --no-deps "$target_service"
 
 ready=false
-for _ in $(seq 1 "${READINESS_ATTEMPTS:-30}"); do
+for _ in $(seq 1 "${READINESS_ATTEMPTS:-120}"); do
   if readiness_up "$target_port"; then
     ready=true
     break
   fi
-  sleep "${READINESS_INTERVAL_SECONDS:-5}"
+  sleep "${READINESS_INTERVAL_SECONDS:-1}"
 done
 if [[ "$ready" != "true" ]]; then
   echo "$target_service did not become ready" >&2

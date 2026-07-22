@@ -13,13 +13,17 @@ if [ ! -f "$dockerfile" ]; then
 fi
 
 if [ "${PUSH_IMAGE:-false}" = "true" ]; then
-  docker buildx build \
+  set -- \
     --push \
     --file "$dockerfile" \
     --tag "$image_ref" \
-    --cache-from "type=registry,ref=${IMAGE_REPOSITORY}:buildcache" \
-    --cache-to "type=registry,ref=${IMAGE_REPOSITORY}:buildcache,mode=max" \
-    "$root_dir/backend"
+    --cache-from "type=registry,ref=${IMAGE_REPOSITORY}:buildcache"
+  # 애플리케이션 JAR는 매 커밋 달라지므로 일반 빌드에서 registry cache를 다시
+  # 내보내도 재사용 이득이 없다. Dockerfile이 바뀐 파이프라인에서만 갱신한다.
+  if [ "${UPDATE_BUILD_CACHE:-false}" = "true" ]; then
+    set -- "$@" --cache-to "type=registry,ref=${IMAGE_REPOSITORY}:buildcache,mode=max"
+  fi
+  docker buildx build "$@" "$root_dir/backend"
 
   digest=$(
     docker buildx imagetools inspect "$image_ref" |
