@@ -5,9 +5,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
 
 import com.c203.limit.domain.chat.dto.response.ChatRoomResponse;
+import com.c203.limit.domain.chat.dto.response.ChatRoomSummaryResponse;
 import com.c203.limit.global.response.ApiResponse;
+import com.c203.limit.global.response.CursorResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -32,4 +35,14 @@ public interface ChatRoomApi {
     @RequestMapping(method = RequestMethod.POST, path = "/api/v1/listings/{listingId}/chat-rooms",
             produces = MediaType.APPLICATION_JSON_VALUE)
     ResponseEntity<ApiResponse<ChatRoomResponse>> createOrGet(@PathVariable Long listingId);
+
+    @Operation(operationId = "chatBe07", summary = "내 채팅방 목록 조회",
+            description = "회원이 참여 중인 채팅방을 최신 생성 순으로 커서 조회합니다.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "채팅방 목록 반환")
+    @RequestMapping(method = RequestMethod.GET, path = "/api/v1/chat-rooms",
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    ResponseEntity<ApiResponse<CursorResponse<ChatRoomSummaryResponse>>> findRooms(
+            @RequestParam(required = false) Long cursor,
+            @RequestParam(defaultValue = "20") int size);
 }

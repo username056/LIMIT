@@ -1,9 +1,12 @@
 package com.c203.limit.domain.chat.controller;
 
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,9 +17,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.c203.limit.domain.chat.dto.response.ChatRoomResponse;
+import com.c203.limit.domain.chat.dto.response.ChatRoomSummaryResponse;
 import com.c203.limit.domain.chat.service.ChatRoomCreateResult;
 import com.c203.limit.domain.chat.service.ChatRoomService;
 import com.c203.limit.global.security.CurrentUser;
+import com.c203.limit.global.response.CursorResponse;
 
 @ExtendWith(MockitoExtension.class)
 class ChatRoomControllerTests {
@@ -66,6 +71,25 @@ class ChatRoomControllerTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.roomId").value(ROOM_ID))
                 .andExpect(jsonPath("$.data.listingId").value(LISTING_ID));
+    }
+
+    @Test
+    void returnsCurrentMembersChatRooms() throws Exception {
+        ChatRoomSummaryResponse summary = new ChatRoomSummaryResponse(
+                ROOM_ID, LISTING_ID, SELLER_ID, "ACTIVE", 50L, 7L, null, 2L, null);
+        when(currentUser.memberId()).thenReturn(BUYER_ID);
+        when(chatRoomService.findRooms(BUYER_ID, 100L, 10))
+                .thenReturn(new CursorResponse<>(List.of(summary), "40", true));
+
+        mockMvc.perform(get("/api/v1/chat-rooms")
+                        .param("cursor", "100")
+                        .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].roomId").value(ROOM_ID))
+                .andExpect(jsonPath("$.data.content[0].counterpartId").value(SELLER_ID))
+                .andExpect(jsonPath("$.data.content[0].unreadCount").value(2))
+                .andExpect(jsonPath("$.data.nextCursor").value("40"))
+                .andExpect(jsonPath("$.data.hasNext").value(true));
     }
 
     private ChatRoomResponse response() {

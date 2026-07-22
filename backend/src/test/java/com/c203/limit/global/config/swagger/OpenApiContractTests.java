@@ -95,6 +95,10 @@ class OpenApiContractTests {
                         .value("chatBe01"))
                 .andExpect(jsonPath("$.paths['/api/v1/listings/{listingId}/chat-rooms'].post.security[0].bearerAuth")
                         .isArray())
+                .andExpect(jsonPath("$.paths['/api/v1/chat-rooms'].get.operationId")
+                        .value("chatBe07"))
+                .andExpect(jsonPath("$.paths['/api/v1/chat-rooms'].get.security[0].bearerAuth")
+                        .isArray())
                 .andExpect(jsonPath("$.paths['/api/v1/auth/sessions']").doesNotExist());
 
         mockMvc.perform(get("/v3/api-docs/swagger-config"))

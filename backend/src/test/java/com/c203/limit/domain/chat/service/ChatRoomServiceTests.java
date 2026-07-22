@@ -5,7 +5,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -14,14 +19,19 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.c203.limit.domain.chat.entity.ChatRoom;
+import com.c203.limit.domain.chat.domain.ChatRoomStatus;
 import com.c203.limit.domain.chat.repository.ChatRoomRepository;
+import com.c203.limit.domain.chat.repository.ChatRoomSummaryProjection;
 import com.c203.limit.domain.chat.repository.ListingChatReader;
 import com.c203.limit.domain.chat.repository.ListingChatReader.ListingChatInfo;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
+import com.c203.limit.global.response.CursorResponse;
+import com.c203.limit.domain.chat.dto.response.ChatRoomSummaryResponse;
 
 @ExtendWith(MockitoExtension.class)
 class ChatRoomServiceTests {
@@ -104,6 +114,46 @@ class ChatRoomServiceTests {
                 .isInstanceOfSatisfying(BusinessException.class,
                         exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.LISTING_NOT_FOUND));
         verifyNoInteractions(chatRoomRepository, creator);
+    }
+
+    @Test
+    void returnsMemberRoomsWithUnreadCountAndNextCursor() {
+        ChatRoomSummaryProjection first = summary(100L, BUYER_ID, SELLER_ID, 8L, 3L);
+        ChatRoomSummaryProjection second = summary(90L, BUYER_ID, SELLER_ID, 4L, 4L);
+        when(chatRoomRepository.findSummariesByMemberId(
+                eq(BUYER_ID), isNull(), any(Pageable.class))).thenReturn(List.of(first, second));
+
+        CursorResponse<ChatRoomSummaryResponse> result = service.findRooms(BUYER_ID, null, 1);
+
+        assertThat(result.content()).hasSize(1);
+        assertThat(result.content().get(0).counterpartId()).isEqualTo(SELLER_ID);
+        assertThat(result.content().get(0).unreadCount()).isEqualTo(5L);
+        assertThat(result.nextCursor()).isEqualTo("100");
+        assertThat(result.hasNext()).isTrue();
+    }
+
+    @Test
+    void rejectsInvalidChatRoomPageSize() {
+        assertThatThrownBy(() -> service.findRooms(BUYER_ID, null, 0))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+        verifyNoInteractions(chatRoomRepository);
+    }
+
+    private ChatRoomSummaryProjection summary(
+            Long roomId, Long buyerId, Long sellerId, long lastMessageSeq, long lastReadSeq) {
+        return new ChatRoomSummaryProjection() {
+            public Long getRoomId() { return roomId; }
+            public Long getListingId() { return LISTING_ID; }
+            public Long getBuyerId() { return buyerId; }
+            public Long getSellerId() { return sellerId; }
+            public ChatRoomStatus getStatus() { return ChatRoomStatus.ACTIVE; }
+            public Long getLastMessageId() { return 50L; }
+            public long getLastMessageSeq() { return lastMessageSeq; }
+            public LocalDateTime getLastMessageAt() { return null; }
+            public long getLastReadSeq() { return lastReadSeq; }
+            public LocalDateTime getCreatedAt() { return LocalDateTime.of(2026, 7, 22, 12, 0); }
+        };
     }
 
     private ChatRoom room(Long id) {

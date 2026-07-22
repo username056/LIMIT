@@ -1,18 +1,26 @@
 package com.c203.limit.domain.chat.service;
 
+import java.util.List;
+
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import com.c203.limit.domain.chat.dto.response.ChatRoomResponse;
+import com.c203.limit.domain.chat.dto.response.ChatRoomSummaryResponse;
 import com.c203.limit.domain.chat.entity.ChatRoom;
 import com.c203.limit.domain.chat.repository.ChatRoomRepository;
+import com.c203.limit.domain.chat.repository.ChatRoomSummaryProjection;
 import com.c203.limit.domain.chat.repository.ListingChatReader;
 import com.c203.limit.domain.chat.repository.ListingChatReader.ListingChatInfo;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
+import com.c203.limit.global.response.CursorResponse;
 
 @Service
 public class ChatRoomService {
     private static final String CHAT_CREATABLE_LISTING_STATUS = "ON_SALE";
+    private static final int MAX_PAGE_SIZE = 100;
 
     private final ListingChatReader listingReader;
     private final ChatRoomRepository chatRoomRepository;
@@ -33,6 +41,32 @@ public class ChatRoomService {
                         listingId, buyerId, listing.sellerId())
                 .map(room -> ChatRoomCreateResult.existing(ChatRoomResponse.from(room)))
                 .orElseGet(() -> create(listing, buyerId));
+    }
+
+    @Transactional(readOnly = true)
+    public CursorResponse<ChatRoomSummaryResponse> findRooms(Long memberId, Long cursor, int size) {
+        if (size < 1 || size > MAX_PAGE_SIZE) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+
+        List<ChatRoomSummaryProjection> rows = chatRoomRepository.findSummariesByMemberId(
+                memberId, cursor, PageRequest.of(0, size + 1));
+        boolean hasNext = rows.size() > size;
+        List<ChatRoomSummaryResponse> content = rows.stream()
+                .limit(size)
+                .map(row -> toSummary(row, memberId))
+                .toList();
+        String nextCursor = hasNext ? content.get(content.size() - 1).roomId().toString() : null;
+        return new CursorResponse<>(content, nextCursor, hasNext);
+    }
+
+    private ChatRoomSummaryResponse toSummary(ChatRoomSummaryProjection row, Long memberId) {
+        Long counterpartId = memberId.equals(row.getBuyerId()) ? row.getSellerId() : row.getBuyerId();
+        long unreadCount = Math.max(0L, row.getLastMessageSeq() - row.getLastReadSeq());
+        return new ChatRoomSummaryResponse(
+                row.getRoomId(), row.getListingId(), counterpartId, row.getStatus().name(),
+                row.getLastMessageId(), row.getLastMessageSeq(), row.getLastMessageAt(),
+                unreadCount, row.getCreatedAt());
     }
 
     private ChatRoomCreateResult create(ListingChatInfo listing, Long buyerId) {
