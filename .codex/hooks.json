@@ -27,6 +27,19 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "root=\"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\"; sh \"$root/.codex/hooks/run-related-tests.sh\"",
+            "commandWindows": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$root = (git rev-parse --show-toplevel 2>$null); if (-not $root) { $root = (Get-Location).Path }; & (Join-Path $root '.codex/hooks/run-related-tests.ps1')\"",
+            "timeout": 900,
+            "statusMessage": "변경 영역 lint/test/build 실행 중"
+          }
+        ]
+      }
     ]
   }
 }
