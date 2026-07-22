@@ -5,6 +5,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.c203.limit.domain.auth.repository.SocialAccountRepository;
+import com.c203.limit.domain.chat.repository.ChatRoomParticipantRepository;
+import com.c203.limit.domain.chat.repository.ChatRoomRepository;
+import com.c203.limit.domain.chat.repository.ListingChatReader;
 import com.c203.limit.domain.member.repository.MemberRepository;
 
 @SpringBootTest(properties = {
@@ -25,6 +28,15 @@ class BackendApplicationTests {
 
     @MockitoBean
     SocialAccountRepository socialAccountRepository;
+
+    @MockitoBean
+    ChatRoomRepository chatRoomRepository;
+
+    @MockitoBean
+    ChatRoomParticipantRepository chatRoomParticipantRepository;
+
+    @MockitoBean
+    ListingChatReader listingChatReader;
 
     @Test
     void contextLoads() {

@@ -37,6 +37,8 @@ springdoc:
       packages-to-scan: com.c203.limit.domain.auth.controller
     - group: 02-member
       packages-to-scan: com.c203.limit.domain.member.controller
+    - group: 03-chat
+      packages-to-scan: com.c203.limit.domain.chat.controller
   swagger-ui:
     enabled: false
     disable-swagger-default-url: true
