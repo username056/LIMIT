@@ -10,6 +10,7 @@ import com.c203.limit.domain.admin.repository.AdminAccountRepository;
 import com.c203.limit.domain.admin.repository.AdminActionLogRepository;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
+import jakarta.persistence.Transient;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -75,5 +76,17 @@ class AdminAccountManagementServiceTests {
                 new UpdateAdminAccountAccessRequest("OPERATOR", "ACTIVE"));
 
         assertThat(target.getRole()).isEqualTo("OPERATOR");
+    }
+
+    @Test
+    void ignoresUnmigratedAdminAuditColumnsInJpaMapping() throws NoSuchFieldException {
+        for (String fieldName : List.of("updatedAt", "lastLoginAt", "passwordChangedAt")) {
+            assertThat(
+                            AdminAccount.class
+                                    .getDeclaredField(fieldName)
+                                    .isAnnotationPresent(Transient.class))
+                    .as(fieldName)
+                    .isTrue();
+        }
     }
 }

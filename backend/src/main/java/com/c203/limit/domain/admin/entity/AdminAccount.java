@@ -29,14 +29,12 @@ public class AdminAccount {
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
-    @Column(name = "updated_at", nullable = false)
-    private OffsetDateTime updatedAt;
+    // 운영 스키마에 감사시각 컬럼이 반영되기 전까지 런타임 메타데이터로만 유지한다.
+    @Transient private OffsetDateTime updatedAt;
 
-    @Column(name = "last_login_at")
-    private OffsetDateTime lastLoginAt;
+    @Transient private OffsetDateTime lastLoginAt;
 
-    @Column(name = "password_changed_at")
-    private OffsetDateTime passwordChangedAt;
+    @Transient private OffsetDateTime passwordChangedAt;
 
     protected AdminAccount() {}
 
