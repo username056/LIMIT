@@ -32,41 +32,6 @@ limit:
 springdoc:
   api-docs:
     enabled: false
-  group-configs:
-    - group: 01-auth
-      packages-to-scan: com.c203.limit.domain.auth.controller
-    - group: 02-member
-      packages-to-scan: com.c203.limit.domain.member.controller
-    - group: 03-address
-      packages-to-scan: com.c203.limit.domain.address.controller
-    - group: 04-product
-      packages-to-scan: com.c203.limit.domain.product.controller
-    - group: 05-cart
-      packages-to-scan: com.c203.limit.domain.cart.controller
-    - group: 06-favorite
-      packages-to-scan: com.c203.limit.domain.favorite.controller
-    - group: 07-order
-      packages-to-scan: com.c203.limit.domain.order.controller
-    - group: 08-payment
-      packages-to-scan: com.c203.limit.domain.payment.controller
-    - group: 09-refund
-      packages-to-scan: com.c203.limit.domain.refund.controller
-    - group: 10-stock
-      packages-to-scan: com.c203.limit.domain.stock.controller
-    - group: 11-queue
-      packages-to-scan: com.c203.limit.domain.queue.controller
-    - group: 12-seller
-      packages-to-scan: com.c203.limit.domain.seller.controller
-    - group: 13-notification
-      packages-to-scan: com.c203.limit.domain.notification.controller
-    - group: 14-inquiry
-      packages-to-scan: com.c203.limit.domain.inquiry.controller
-    - group: 15-statistics
-      packages-to-scan: com.c203.limit.domain.statistics.controller
-    - group: 16-withdrawal
-      packages-to-scan: com.c203.limit.domain.withdrawal.controller
-    - group: 17-admin
-      packages-to-scan: com.c203.limit.domain.admin.controller
   swagger-ui:
     enabled: false
     disable-swagger-default-url: true
@@ -75,5 +40,4 @@ springdoc:
     tags-sorter: alpha
     operations-sorter: >-
       function (a, b) { const order = { post: 0, get: 1, patch: 2, put: 3, delete: 4 }; return (order[a.get('method')] ?? 99) - (order[b.get('method')] ?? 99); }
-    urls-primary-name: 01-auth
     display-request-duration: true
