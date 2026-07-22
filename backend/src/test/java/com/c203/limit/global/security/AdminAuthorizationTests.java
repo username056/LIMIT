@@ -18,6 +18,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 import org.springframework.test.util.ReflectionTestUtils;
 import com.c203.limit.domain.admin.repository.*;
 import com.c203.limit.domain.auth.repository.SocialAccountRepository;
@@ -41,6 +42,7 @@ import com.c203.limit.domain.member.entity.Member;
 class AdminAuthorizationTests {
     @Autowired MockMvc mockMvc;
     @Autowired JwtTokenProvider tokens;
+    @MockitoBean JpaMetamodelMappingContext jpaMetamodelMappingContext;
     @MockitoBean MemberRepository members;
     @MockitoBean MemberTermsAgreementRepository termsAgreements;
     @MockitoBean SocialAccountRepository socialAccounts;

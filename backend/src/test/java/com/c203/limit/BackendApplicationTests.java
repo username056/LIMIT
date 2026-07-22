@@ -2,6 +2,7 @@ package com.c203.limit;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.c203.limit.domain.auth.repository.SocialAccountRepository;
@@ -22,6 +23,9 @@ import com.c203.limit.domain.admin.repository.MemberRestrictionRepository;
                 + "org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration"
 })
 class BackendApplicationTests {
+
+    @MockitoBean
+    JpaMetamodelMappingContext jpaMetamodelMappingContext;
 
     @MockitoBean
     MemberRepository memberRepository;
