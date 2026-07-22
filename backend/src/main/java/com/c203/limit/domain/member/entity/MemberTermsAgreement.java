@@ -1,48 +1,21 @@
 package com.c203.limit.domain.member.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import java.time.OffsetDateTime;
 
-@Entity
-@Table(
-        name = "member_terms_agreement",
-        uniqueConstraints =
-                @UniqueConstraint(columnNames = {"user_id", "terms_code", "terms_version"}))
+/** 운영 스키마 migration 전까지 JPA 영속 대상에서 제외한 약관 동의 값 객체다. */
 public class MemberTermsAgreement {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "agreement_id")
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id")
     private Member member;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "terms_code", nullable = false, length = 30)
     private TermsCode termsCode;
 
-    @Column(name = "terms_version", nullable = false, length = 30)
     private String termsVersion;
 
-    @Column(name = "is_agreed", nullable = false)
     private boolean isAgreed;
 
-    @Column(name = "agreed_at")
     private OffsetDateTime agreedAt;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
     protected MemberTermsAgreement() {}
