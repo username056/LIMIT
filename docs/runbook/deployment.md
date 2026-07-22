@@ -173,8 +173,8 @@ MySQL exporter 전용 최소권한 계정 생성도 운영 DB 변경 승인 후 
 - PR-Agent는 Merge Request 파이프라인의 `pr_agent_review` job에서 `pragent/pr-agent:0.35.0` 컨테이너로 1회 실행한다. 같은 프로젝트에서 `dev` 또는 `main`으로 향하는 MR만 검토하며 실패해도 필수 CI를 차단하지 않는다.
 - GitLab CI/CD 변수에 MR 조회·댓글 작성에 필요한 최소 `api` 권한의 전용 Bot 또는 Project Access Token을 `GITLAB_PERSONAL_ACCESS_TOKEN`으로, SSAFY GMS Key를 `OPENAI_KEY`로 등록한다. 두 값은 masked/hidden으로 관리하며 저장소 파일이나 job 로그에 출력하지 않는다.
 - OpenAI 호환 API는 GMS Base URL `https://gms.ssafy.io/gmsapi/api.openai.com/v1`을 사용한다. 기본 리뷰 모델은 비용 효율을 위해 `gpt-5-mini`, reasoning effort는 `low`로 고정하고 불필요한 중복 호출을 막기 위해 fallback model은 사용하지 않는다.
-- 파이프라인은 `review`와 `improve`를 순차 실행하고, 아직 기본 브랜치에 병합되지 않은 MR에서도 동일하게 동작하도록 PR-Agent 0.35.0이 지원하는 CLI 설정 옵션을 명시한다. 전체 리뷰는 최대 6개 finding을 반환하고, 개선 제안은 chunk당 최대 5개·호출 1회로 제한하며 중요도 7 이상만 인라인 댓글로 함께 게시한다.
-- 모델 변경 시 `.pr_agent.toml`과 `.gitlab-ci.yml`의 `CONFIG__MODEL`, `CONFIG__FALLBACK_MODELS`를 함께 수정한다. Python 종료 코드와 PR-Agent의 구조화된 `ERROR` 로그를 함께 검사하고, 임시 로그는 소유자 전용 권한으로 생성한 뒤 즉시 삭제한다.
+- 파이프라인은 `review`와 `improve`를 순차 실행하고, 아직 기본 브랜치에 병합되지 않은 MR에서도 동일하게 동작하도록 PR-Agent 0.35.0이 지원하는 CLI 설정 옵션을 명시한다. 전체 리뷰는 최대 6개 finding을 반환하고, 개선 제안은 chunk당 최대 5개·호출 1회로 제한하며 중요도 7 이상만 인라인 댓글로 함께 게시한다. 제안 제목은 점수 8~10에 🔴, 7에 🟡, 5~6에 🟢 신호등을 붙인다.
+- 모델 변경 시 `.pr_agent.toml`과 `.gitlab-ci.yml`의 `CONFIG__MODEL`, `CONFIG__FALLBACK_MODELS`를 함께 수정한다. Python 종료 코드와 PR-Agent의 구조화된 `ERROR` 로그를 함께 검사하고, 임시 로그는 소유자 전용 권한으로 생성한다. 성공 시 로그를 삭제하고, 실패 시 장문 토큰 패턴을 마스킹해 출력한 뒤 삭제한다.
 - 프론트엔드는 개발 기간 동안 ESLint·build로 검증하고, SonarQube와 Quality Gate는 백엔드만 대상으로 한다. 필수 CI와 승인자 리뷰를 merge 조건으로 지정하고 redundant pipeline auto-cancel을 활성화한다.
 - GitLab과 GitHub 중 하나만 배포 권한을 갖게 하며 public 전환 전 전체 Git history를 gitleaks로 검사한다.
 

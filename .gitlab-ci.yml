@@ -233,6 +233,8 @@ pr_agent_review:
   script:
     - test -n "$GITLAB_PERSONAL_ACCESS_TOKEN"
     - test -n "$OPENAI_KEY"
+    - test -n "$CI_MERGE_REQUEST_PROJECT_URL"
+    - test -n "$CI_MERGE_REQUEST_IID"
     - cd /app
     - export GITLAB__PERSONAL_ACCESS_TOKEN="$GITLAB_PERSONAL_ACCESS_TOKEN"
     - export OPENAI__KEY="$OPENAI_KEY"
@@ -250,12 +252,13 @@ pr_agent_review:
         else
           pr_agent_status=$?
         fi
-        cat "$log_file"
         if [ "$pr_agent_status" -ne 0 ] || grep -qE '\| ERROR[[:space:]]+\|' "$log_file"; then
+          sed -E 's/[A-Za-z0-9_-]{20,}/[REDACTED]/g' "$log_file" || true
           rm -f "$log_file"
           return 1
         fi
         rm -f "$log_file"
+        echo "PR-Agent ${tool} completed successfully."
       }
       run_pr_agent review \
         --config.response_language=ko-KR \
@@ -273,7 +276,8 @@ pr_agent_review:
         --pr_code_suggestions.max_number_of_calls=1 \
         --pr_code_suggestions.suggestions_score_threshold=5 \
         --pr_code_suggestions.dual_publishing_score_threshold=7 \
-        --pr_code_suggestions.publish_output_no_suggestions=false
+        --pr_code_suggestions.publish_output_no_suggestions=false \
+        --pr_code_suggestions.extra_instructions="제안 제목 맨 앞에 중요도 점수에 따라 8~10은 🔴, 7은 🟡, 5~6은 🟢 신호등을 표시한다."
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_SOURCE_PROJECT_ID == $CI_PROJECT_ID && ($CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "dev" || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main")'
 

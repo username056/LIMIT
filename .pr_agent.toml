@@ -29,6 +29,7 @@ dual_publishing_score_threshold = 7
 publish_output_no_suggestions = false
 extra_instructions = """
 한국어로 짧고 실행 가능한 제안을 작성한다.
+제안 제목 맨 앞에 중요도 점수에 따라 8~10은 🔴, 7은 🟡, 5~6은 🟢 신호등을 표시한다.
 스타일 취향보다 오류, 보안, 권한, 동시성, API 계약과 사용자 흐름 회귀를 우선한다.
 중요도가 낮거나 기존 lint와 정적 분석으로 충분한 제안은 생략한다.
 """
