@@ -1,1 +1,0 @@
-package com.c203.limit.domain.admin.repository;import org.springframework.data.jpa.repository.JpaRepository;import com.c203.limit.domain.admin.entity.MemberRoleAssignment;public interface MemberRoleAssignmentRepository extends JpaRepository<MemberRoleAssignment,Long>{boolean existsByMemberIdAndRoleCode(Long memberId,String roleCode);}
