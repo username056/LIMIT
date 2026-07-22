@@ -21,6 +21,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 import org.springframework.test.util.ReflectionTestUtils;
 import com.c203.limit.domain.admin.repository.*;
+import com.c203.limit.domain.chat.repository.ChatRoomParticipantRepository;
+import com.c203.limit.domain.chat.repository.ChatRoomRepository;
+import com.c203.limit.domain.chat.repository.ListingChatReader;
 import com.c203.limit.domain.auth.repository.SocialAccountRepository;
 import com.c203.limit.domain.member.repository.MemberRepository;
 import com.c203.limit.domain.member.entity.Member;
@@ -47,6 +50,9 @@ class AdminAuthorizationTests {
     @MockitoBean AdminAccountRepository admins;
     @MockitoBean MemberRestrictionRepository restrictions;
     @MockitoBean AdminActionLogRepository logs;
+    @MockitoBean ChatRoomRepository chatRoomRepository;
+    @MockitoBean ChatRoomParticipantRepository chatRoomParticipantRepository;
+    @MockitoBean ListingChatReader listingChatReader;
 
     @Test
     void memberCannotReadAdminApi() throws Exception {

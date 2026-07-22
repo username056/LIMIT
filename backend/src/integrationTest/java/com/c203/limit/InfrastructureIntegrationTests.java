@@ -26,8 +26,7 @@ class InfrastructureIntegrationTests {
     static final MySQLContainer MYSQL = new MySQLContainer(DockerImageName.parse("mysql:8.4"))
             .withDatabaseName("limit")
             .withUsername("limit")
-            .withPassword("test-only-password")
-            .withInitScript("db/schema/member-admin-schema.sql");
+            .withPassword("test-only-password");
 
     @Container
     static final MongoDBContainer MONGODB = new MongoDBContainer(DockerImageName.parse("mongo:8.0"));

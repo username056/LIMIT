@@ -1,10 +1,12 @@
 # 회원·관리자 DB 스키마 적용 Runbook
 
-이 프로젝트는 Flyway를 자동 실행하지 않고 모든 환경에서 Hibernate `ddl-auto=validate`를 사용한다. 애플리케이션 시작 전에 검토된 SQL을 사람이 적용해야 한다.
+이 프로젝트는 `db/migration/`에 있는 파일을 앱 기동 시 Flyway가 자동 적용하고(`spring.flyway.enabled=true`), 그 위에서 Hibernate `ddl-auto=validate`로 Entity-스키마 매핑을 검증한다. Flyway 도입 경위와 새 도메인(chat/rtc/call, inspection, payment/refund/settlement) 마이그레이션 구조는 `docs/integration/flyway-adoption-plan.md`를 참고한다.
+
+이 문서가 다루는 `db/manual/*.sql`은 Flyway가 자동 적용하지 않는 예외로, **구 ERD(comm_v3)로 이미 운영 중이던 기존 DB**를 정렬할 때만 쓰는 1회성 수동 스크립트다. 빈 로컬/CI DB는 `db/migration/V1__create_base_schema.sql`이 이미 정렬된 최종 스키마를 담고 있어 이 수동 스크립트가 필요 없다.
 
 ## SQL 구분
 
-- `backend/src/main/resources/db/schema/member-admin-schema.sql`: 빈 로컬·테스트 DB의 기준 스키마
+- `backend/src/main/resources/db/migration/V1__create_base_schema.sql`: 빈 로컬·테스트 DB의 기준 스키마(Flyway가 자동 적용)
 - `backend/src/main/resources/db/manual/V20260721__member_admin_alignment.sql`: 기존 회원·관리자 스키마 정렬
 - `backend/src/main/resources/db/manual/V20260722__member_terms_agreement.sql`: 약관 동의 이력 테이블 추가
 

@@ -6,6 +6,9 @@ import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.c203.limit.domain.auth.repository.SocialAccountRepository;
+import com.c203.limit.domain.chat.repository.ChatRoomParticipantRepository;
+import com.c203.limit.domain.chat.repository.ChatRoomRepository;
+import com.c203.limit.domain.chat.repository.ListingChatReader;
 import com.c203.limit.domain.member.repository.MemberRepository;
 import com.c203.limit.domain.admin.repository.AdminAccountRepository;
 import com.c203.limit.domain.admin.repository.AdminActionLogRepository;
@@ -40,6 +43,15 @@ class BackendApplicationTests {
 
     @MockitoBean
     MemberRestrictionRepository memberRestrictionRepository;
+
+    @MockitoBean
+    ChatRoomRepository chatRoomRepository;
+
+    @MockitoBean
+    ChatRoomParticipantRepository chatRoomParticipantRepository;
+
+    @MockitoBean
+    ListingChatReader listingChatReader;
 
     @Test
     void contextLoads() {

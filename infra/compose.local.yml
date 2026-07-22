@@ -94,7 +94,7 @@ services:
 
   mysql:
     volumes:
-      - ../backend/src/main/resources/db/schema/member-admin-schema.sql:/docker-entrypoint-initdb.d/001-member-admin-schema.sql:ro
+      - ../backend/src/main/resources/db/migration/V1__create_base_schema.sql:/docker-entrypoint-initdb.d/001-base-schema.sql:ro
     ports: ["127.0.0.1:${MYSQL_PORT:-13306}:3306"]
   mongodb:
     ports: ["127.0.0.1:${MONGODB_PORT:-17017}:27017"]
