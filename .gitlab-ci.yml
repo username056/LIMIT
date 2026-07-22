@@ -214,6 +214,32 @@ sonarqube:
   rules:
     - when: never
 
+pr_agent_review:
+  stage: quality
+  image:
+    name: pragent/pr-agent:0.35.0
+    entrypoint: [""]
+  needs: []
+  timeout: 15m
+  retry: 0
+  allow_failure: true
+  variables:
+    CONFIG__GIT_PROVIDER: "gitlab"
+    CONFIG__MODEL: "gpt-5-mini"
+    CONFIG__FALLBACK_MODELS: '["gpt-5-mini"]'
+    CONFIG__REASONING_EFFORT: "low"
+    GITLAB__URL: "$CI_SERVER_URL"
+  script:
+    - test -n "$GITLAB_PERSONAL_ACCESS_TOKEN"
+    - test -n "$OPENAI_KEY"
+    - cd /app
+    - export GITLAB__PERSONAL_ACCESS_TOKEN="$GITLAB_PERSONAL_ACCESS_TOKEN"
+    - export OPENAI__KEY="$OPENAI_KEY"
+    - export MR_URL="$CI_MERGE_REQUEST_PROJECT_URL/merge_requests/$CI_MERGE_REQUEST_IID"
+    - python -m pr_agent.cli --pr_url="$MR_URL" review
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_SOURCE_PROJECT_ID == $CI_PROJECT_ID && ($CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "dev" || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main")'
+
 dependency_check:
   extends: .backend_gradle_job
   stage: quality

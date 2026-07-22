@@ -170,7 +170,9 @@ MySQL exporter 전용 최소권한 계정 생성도 운영 DB 변경 승인 후 
 - 프론트 protected variables: `AWS_DEPLOY_ROLE_ARN`, `FRONTEND_BUCKET_NAME`, `CLOUDFRONT_DISTRIBUTION_ID`, `FRONTEND_PUBLIC_URL`, `VITE_API_BASE_URL`.
 - `deploy_prod`는 보호된 `dev`, `main` push에서 검증·생성된 `DEPLOY_IMAGE=...@sha256:...` artifact만 자동 배포한다. 운영자가 별도 image 문자열을 입력하지 않는다.
 - `rollback_prod`는 보호된 `dev`, `main` 파이프라인에서 수동으로 노출하며 서버에 남아 있는 반대 색상 컨테이너의 immutable digest를 자동 선택한다. 운영자가 rollback image 변수를 입력하지 않는다.
-- CodeRabbit GitLab app을 연결하고 `review-ready` label을 만든다. `.coderabbit.yaml`이 Draft/WIP를 제외하고 해당 label만 opt-in한다.
+- PR-Agent는 Merge Request 파이프라인의 `pr_agent_review` job에서 `pragent/pr-agent:0.35.0` 컨테이너로 1회 실행한다. 같은 프로젝트에서 `dev` 또는 `main`으로 향하는 MR만 검토하며 실패해도 필수 CI를 차단하지 않는다.
+- GitLab CI/CD 변수에 MR 조회·댓글 작성에 필요한 최소 `api` 권한의 전용 Bot 또는 Project Access Token을 `GITLAB_PERSONAL_ACCESS_TOKEN`으로, OpenAI API key를 `OPENAI_KEY`로 등록한다. 두 값은 masked/hidden으로 관리하며 저장소 파일이나 job 로그에 출력하지 않는다.
+- 기본 리뷰 모델은 비용 효율을 위해 `gpt-5-mini`, reasoning effort는 `low`로 고정한다. 모델 변경 시 `.pr_agent.toml`과 `.gitlab-ci.yml`의 `CONFIG__MODEL`, `CONFIG__FALLBACK_MODELS`를 함께 수정한다.
 - 프론트엔드는 개발 기간 동안 ESLint·build로 검증하고, SonarQube와 Quality Gate는 백엔드만 대상으로 한다. 필수 CI와 승인자 리뷰를 merge 조건으로 지정하고 redundant pipeline auto-cancel을 활성화한다.
 - GitLab과 GitHub 중 하나만 배포 권한을 갖게 하며 public 전환 전 전체 Git history를 gitleaks로 검사한다.
 

@@ -1,0 +1,13 @@
+[config]
+model = "gpt-5-mini"
+fallback_models = ["gpt-5-mini"]
+reasoning_effort = "low"
+
+[pr_reviewer]
+extra_instructions = """
+리뷰는 한국어로 작성한다.
+오류 가능성, 보안, 인증·권한, 동시성, API 계약 위반과 누락된 실패 경로를 우선 확인한다.
+백엔드는 도메인 경계와 트랜잭션 경계를 확인하고, 프론트엔드는 Vue 상태 흐름과 로딩·빈 결과·오류 상태를 확인한다.
+API는 /api/v1 prefix, 복수 자원명, kebab-case 경로와 공통 성공·실패 응답 형식을 확인한다.
+스타일 취향보다 실제 동작과 유지보수 위험에 집중하고, 수정 가능한 근거와 파일 위치를 함께 제시한다.
+"""
