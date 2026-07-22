@@ -242,12 +242,20 @@ pr_agent_review:
         tool="$1"
         shift
         log_file="/tmp/pr-agent-${tool}.log"
-        python -m pr_agent.cli \
+        umask 0077
+        if python -m pr_agent.cli \
           --pr_url="$MR_URL" \
-          "$tool" "$@" 2>&1 | tee "$log_file"
-        if grep -qE '\| ERROR[[:space:]]+\|' "$log_file"; then
-          exit 1
+          "$tool" "$@" >"$log_file" 2>&1; then
+          pr_agent_status=0
+        else
+          pr_agent_status=$?
         fi
+        cat "$log_file"
+        if [ "$pr_agent_status" -ne 0 ] || grep -qE '\| ERROR[[:space:]]+\|' "$log_file"; then
+          rm -f "$log_file"
+          return 1
+        fi
+        rm -f "$log_file"
       }
       run_pr_agent review \
         --config.response_language=ko-KR \
