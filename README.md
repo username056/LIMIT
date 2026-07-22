@@ -20,6 +20,16 @@
 
 Gradle Wrapper가 포함되어 있어 Gradle을 별도로 설치할 필요는 없습니다.
 
+## 최초 설정
+
+저장소를 처음 클론했다면 한 번만 실행합니다.
+
+```powershell
+git config core.hooksPath .githooks
+```
+
+이 설정 없이는 `.githooks/`(pre-commit Secret 검사, commit-msg 컨벤션 검사, pre-push lint/test/build)가 켜지지 않습니다. AI Hook(`.claude/settings.json`, `.codex/hooks.json`)과는 별개로 로컬 git 설정에서 직접 켜야 합니다. 자세한 내용은 [AI 활용 가이드](가이드.md#4-hook-사용법)를 참고합니다.
+
 ## 로컬 실행
 
 ### 전체 인프라와 백엔드
