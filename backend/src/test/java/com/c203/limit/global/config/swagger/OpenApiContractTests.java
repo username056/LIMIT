@@ -22,7 +22,6 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import com.c203.limit.domain.auth.repository.SocialAccountRepository;
 import com.c203.limit.domain.member.repository.MemberRepository;
-import com.c203.limit.domain.member.repository.MemberTermsAgreementRepository;
 import com.c203.limit.domain.admin.repository.AdminAccountRepository;
 import com.c203.limit.domain.admin.repository.AdminActionLogRepository;
 import com.c203.limit.domain.admin.repository.MemberRestrictionRepository;
@@ -47,9 +46,6 @@ class OpenApiContractTests {
 
     @MockitoBean
     MemberRepository memberRepository;
-
-    @MockitoBean
-    MemberTermsAgreementRepository memberTermsAgreementRepository;
 
     @MockitoBean
     SocialAccountRepository socialAccountRepository;
