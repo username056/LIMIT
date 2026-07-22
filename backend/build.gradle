@@ -96,7 +96,20 @@ tasks.register('integrationTest', Test) {
     testClassesDirs = sourceSets.integrationTest.output.classesDirs
     classpath = sourceSets.integrationTest.runtimeClasspath
     shouldRunAfter tasks.named('test')
-    useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags 'full-infrastructure'
+    }
+}
+
+tasks.register('infrastructureTest', Test) {
+    description = 'Runs the full external-engine smoke test with Testcontainers.'
+    group = 'verification'
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    shouldRunAfter tasks.named('integrationTest')
+    useJUnitPlatform {
+        includeTags 'full-infrastructure'
+    }
 }
 
 tasks.named('test') {
