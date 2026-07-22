@@ -2,12 +2,33 @@
 model = "gpt-5-mini"
 fallback_models = []
 reasoning_effort = "low"
+response_language = "ko-KR"
 
 [pr_reviewer]
+persistent_comment = true
+num_max_findings = 6
+require_score_review = true
+require_tests_review = true
+require_security_review = true
+require_todo_scan = true
 extra_instructions = """
 리뷰는 한국어로 작성한다.
 오류 가능성, 보안, 인증·권한, 동시성, API 계약 위반과 누락된 실패 경로를 우선 확인한다.
 백엔드는 도메인 경계와 트랜잭션 경계를 확인하고, 프론트엔드는 Vue 상태 흐름과 로딩·빈 결과·오류 상태를 확인한다.
 API는 /api/v1 prefix, 복수 자원명, kebab-case 경로와 공통 성공·실패 응답 형식을 확인한다.
 스타일 취향보다 실제 동작과 유지보수 위험에 집중하고, 수정 가능한 근거와 파일 위치를 함께 제시한다.
+"""
+
+[pr_code_suggestions]
+persistent_comment = true
+focus_only_on_problems = true
+num_code_suggestions_per_chunk = 5
+max_number_of_calls = 1
+suggestions_score_threshold = 5
+dual_publishing_score_threshold = 7
+publish_output_no_suggestions = false
+extra_instructions = """
+한국어로 짧고 실행 가능한 제안을 작성한다.
+스타일 취향보다 오류, 보안, 권한, 동시성, API 계약과 사용자 흐름 회귀를 우선한다.
+중요도가 낮거나 기존 lint와 정적 분석으로 충분한 제안은 생략한다.
 """
