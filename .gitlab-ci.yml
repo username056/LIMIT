@@ -214,6 +214,73 @@ sonarqube:
   rules:
     - when: never
 
+pr_agent_review:
+  stage: quality
+  image:
+    name: pragent/pr-agent:0.35.0
+    entrypoint: [""]
+  needs: []
+  timeout: 15m
+  retry: 0
+  allow_failure: true
+  variables:
+    CONFIG__GIT_PROVIDER: "gitlab"
+    CONFIG__MODEL: "gpt-5-mini"
+    CONFIG__FALLBACK_MODELS: '[]'
+    CONFIG__REASONING_EFFORT: "low"
+    GITLAB__URL: "$CI_SERVER_URL"
+    OPENAI__API_BASE: "https://gms.ssafy.io/gmsapi/api.openai.com/v1"
+  script:
+    - test -n "$GITLAB_PERSONAL_ACCESS_TOKEN"
+    - test -n "$OPENAI_KEY"
+    - test -n "$CI_MERGE_REQUEST_PROJECT_URL"
+    - test -n "$CI_MERGE_REQUEST_IID"
+    - cd /app
+    - export GITLAB__PERSONAL_ACCESS_TOKEN="$GITLAB_PERSONAL_ACCESS_TOKEN"
+    - export OPENAI__KEY="$OPENAI_KEY"
+    - export MR_URL="$CI_MERGE_REQUEST_PROJECT_URL/merge_requests/$CI_MERGE_REQUEST_IID"
+    - |
+      run_pr_agent() {
+        tool="$1"
+        shift
+        log_file="/tmp/pr-agent-${tool}.log"
+        umask 0077
+        if python -m pr_agent.cli \
+          --pr_url="$MR_URL" \
+          "$tool" "$@" >"$log_file" 2>&1; then
+          pr_agent_status=0
+        else
+          pr_agent_status=$?
+        fi
+        if [ "$pr_agent_status" -ne 0 ] || grep -qE '\| ERROR[[:space:]]+\|' "$log_file"; then
+          sed -E 's/[A-Za-z0-9_-]{20,}/[REDACTED]/g' "$log_file" || true
+          rm -f "$log_file"
+          return 1
+        fi
+        rm -f "$log_file"
+        echo "PR-Agent ${tool} completed successfully."
+      }
+      run_pr_agent review \
+        --config.response_language=ko-KR \
+        --pr_reviewer.persistent_comment=true \
+        --pr_reviewer.num_max_findings=6 \
+        --pr_reviewer.require_score_review=true \
+        --pr_reviewer.require_tests_review=true \
+        --pr_reviewer.require_security_review=true \
+        --pr_reviewer.require_todo_scan=true
+      run_pr_agent improve \
+        --config.response_language=ko-KR \
+        --pr_code_suggestions.persistent_comment=true \
+        --pr_code_suggestions.focus_only_on_problems=true \
+        --pr_code_suggestions.num_code_suggestions_per_chunk=5 \
+        --pr_code_suggestions.max_number_of_calls=1 \
+        --pr_code_suggestions.suggestions_score_threshold=5 \
+        --pr_code_suggestions.dual_publishing_score_threshold=7 \
+        --pr_code_suggestions.publish_output_no_suggestions=false \
+        --pr_code_suggestions.extra_instructions="제안 제목 맨 앞에 중요도 점수에 따라 8~10은 🔴, 7은 🟡, 5~6은 🟢 신호등을 표시한다."
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_SOURCE_PROJECT_ID == $CI_PROJECT_ID && ($CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "dev" || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main")'
+
 dependency_check:
   extends: .backend_gradle_job
   stage: quality
