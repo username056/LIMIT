@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 import com.c203.limit.domain.chat.dto.response.ChatRoomResponse;
 import com.c203.limit.domain.chat.dto.response.ChatRoomSummaryResponse;
+import com.c203.limit.domain.chat.dto.response.ChatMessageResponse;
 import com.c203.limit.global.response.ApiResponse;
 import com.c203.limit.global.response.CursorResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,7 +19,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
-@Tag(name = "03. 채팅")
+@Tag(name = "04. 채팅")
 public interface ChatRoomApi {
     @Operation(operationId = "chatBe01", summary = "1:1 채팅방 생성 또는 기존 방 반환",
             description = "권한: MEMBER\n구매자는 JWT, 판매자는 매물 정보에서 결정",
@@ -45,5 +46,22 @@ public interface ChatRoomApi {
             produces = MediaType.APPLICATION_JSON_VALUE)
     ResponseEntity<ApiResponse<CursorResponse<ChatRoomSummaryResponse>>> findRooms(
             @RequestParam(required = false) Long cursor,
+            @RequestParam(defaultValue = "20") int size);
+
+    @Operation(operationId = "chatBe06", summary = "이전 메시지 조회 및 누락 복구",
+            description = "beforeSeq는 과거 메시지를, afterSeq는 재접속 이후 누락 메시지를 조회하며 동시에 사용할 수 없습니다.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "메시지 목록 반환",
+                    content = @Content(schema = @Schema(implementation = CursorResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "INVALID_INPUT_VALUE"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "CHAT_ROOM_ACCESS_DENIED")
+    })
+    @RequestMapping(method = RequestMethod.GET, path = "/api/v1/chat-rooms/{roomId}/messages",
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    ResponseEntity<ApiResponse<CursorResponse<ChatMessageResponse>>> findMessages(
+            @PathVariable Long roomId,
+            @RequestParam(required = false) Long beforeSeq,
+            @RequestParam(required = false) Long afterSeq,
             @RequestParam(defaultValue = "20") int size);
 }

@@ -12,6 +12,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,6 +26,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 import com.c203.limit.domain.chat.entity.ChatRoom;
 import com.c203.limit.domain.chat.domain.ChatRoomStatus;
 import com.c203.limit.domain.chat.repository.ChatRoomRepository;
+import com.c203.limit.domain.chat.repository.ChatRoomParticipantRepository;
+import com.c203.limit.domain.chat.repository.ChatMessageProjection;
+import com.c203.limit.domain.chat.repository.ChatMessageRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomSummaryProjection;
 import com.c203.limit.domain.chat.repository.ListingChatReader;
 import com.c203.limit.domain.chat.repository.ListingChatReader.ListingChatInfo;
@@ -32,6 +36,8 @@ import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import com.c203.limit.global.response.CursorResponse;
 import com.c203.limit.domain.chat.dto.response.ChatRoomSummaryResponse;
+import com.c203.limit.domain.chat.domain.MessageStatus;
+import com.c203.limit.domain.chat.domain.MessageType;
 
 @ExtendWith(MockitoExtension.class)
 class ChatRoomServiceTests {
@@ -41,12 +47,15 @@ class ChatRoomServiceTests {
 
     @Mock ListingChatReader listingReader;
     @Mock ChatRoomRepository chatRoomRepository;
+    @Mock ChatRoomParticipantRepository participantRepository;
+    @Mock ChatMessageRepository chatMessageRepository;
     @Mock ChatRoomCreator creator;
     ChatRoomService service;
 
     @BeforeEach
     void setUp() {
-        service = new ChatRoomService(listingReader, chatRoomRepository, creator);
+        service = new ChatRoomService(
+                listingReader, chatRoomRepository, participantRepository, chatMessageRepository, creator);
     }
 
     @Test
@@ -140,6 +149,54 @@ class ChatRoomServiceTests {
         verifyNoInteractions(chatRoomRepository);
     }
 
+    @Test
+    void returnsOlderMessagesWithSequenceCursor() {
+        when(participantRepository.existsByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID)).thenReturn(true);
+        when(chatMessageRepository.findBeforeSequence(eq(100L), eq(10L), any(Pageable.class)))
+                .thenReturn(List.of(message(9L), message(8L), message(7L)));
+
+        CursorResponse<com.c203.limit.domain.chat.dto.response.ChatMessageResponse> result =
+                service.findMessages(100L, BUYER_ID, 10L, null, 2);
+
+        assertThat(result.content().stream().map(message -> message.roomSequence()).toList())
+                .containsExactly(9L, 8L);
+        assertThat(result.nextCursor()).isEqualTo("8");
+        assertThat(result.hasNext()).isTrue();
+    }
+
+    @Test
+    void returnsMissingMessagesAfterLastReceivedSequence() {
+        when(participantRepository.existsByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID)).thenReturn(true);
+        when(chatMessageRepository.findAfterSequence(eq(100L), eq(7L), any(Pageable.class)))
+                .thenReturn(List.of(message(8L), message(9L)));
+
+        CursorResponse<com.c203.limit.domain.chat.dto.response.ChatMessageResponse> result =
+                service.findMessages(100L, BUYER_ID, null, 7L, 10);
+
+        assertThat(result.content().stream().map(message -> message.roomSequence()).toList())
+                .containsExactly(8L, 9L);
+        assertThat(result.nextCursor()).isNull();
+        assertThat(result.hasNext()).isFalse();
+    }
+
+    @Test
+    void rejectsUsingBeforeAndAfterSequenceTogether() {
+        assertThatThrownBy(() -> service.findMessages(100L, BUYER_ID, 10L, 5L, 20))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+        verifyNoInteractions(participantRepository, chatMessageRepository);
+    }
+
+    @Test
+    void rejectsMessageLookupByNonParticipant() {
+        when(participantRepository.existsByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.findMessages(100L, BUYER_ID, null, null, 20))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.CHAT_ROOM_ACCESS_DENIED));
+        verifyNoInteractions(chatMessageRepository);
+    }
+
     private ChatRoomSummaryProjection summary(
             Long roomId, Long buyerId, Long sellerId, long lastMessageSeq, long lastReadSeq) {
         return new ChatRoomSummaryProjection() {
@@ -160,5 +217,18 @@ class ChatRoomServiceTests {
         ChatRoom room = ChatRoom.create(LISTING_ID, BUYER_ID, SELLER_ID);
         ReflectionTestUtils.setField(room, "id", id);
         return room;
+    }
+
+    private ChatMessageProjection message(Long sequence) {
+        return new ChatMessageProjection() {
+            public Long getMessageId() { return sequence + 100L; }
+            public Long getRoomSequence() { return sequence; }
+            public Long getSenderId() { return SELLER_ID; }
+            public UUID getClientMessageId() { return new UUID(0L, sequence); }
+            public MessageType getType() { return MessageType.TEXT; }
+            public String getContent() { return "message-" + sequence; }
+            public MessageStatus getStatus() { return MessageStatus.SENT; }
+            public LocalDateTime getSentAt() { return LocalDateTime.of(2026, 7, 23, 12, 0); }
+        };
     }
 }

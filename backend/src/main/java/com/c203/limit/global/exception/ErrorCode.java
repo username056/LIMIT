@@ -54,6 +54,7 @@ public enum ErrorCode {
     LISTING_NOT_FOUND("CHT001", HttpStatus.NOT_FOUND, "매물을 찾을 수 없습니다."),
     SELF_CHAT_NOT_ALLOWED("CHT002", HttpStatus.BAD_REQUEST, "본인의 매물에는 채팅방을 생성할 수 없습니다."),
     CHAT_ROOM_CREATION_NOT_ALLOWED("CHT003", HttpStatus.CONFLICT, "현재 상태의 매물에는 채팅방을 생성할 수 없습니다."),
+    CHAT_ROOM_ACCESS_DENIED("CHT004", HttpStatus.FORBIDDEN, "채팅방에 접근할 권한이 없습니다."),
 
     SELLER_APPLICATION_NOT_FOUND("SEL001", HttpStatus.NOT_FOUND, "판매자 신청서를 찾을 수 없습니다."),
     ACTIVE_SELLER_APPLICATION_EXISTS("SEL002", HttpStatus.CONFLICT, "처리 중인 판매자 신청서가 있습니다."),
