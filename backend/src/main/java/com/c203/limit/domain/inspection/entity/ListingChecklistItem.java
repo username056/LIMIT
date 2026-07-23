@@ -35,8 +35,7 @@ public class ListingChecklistItem {
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Lob
-    @Column(name = "capture_guide", nullable = false)
+    @Column(name = "capture_guide", nullable = false, columnDefinition = "TEXT")
     private String captureGuide;
 
     @Enumerated(EnumType.STRING)

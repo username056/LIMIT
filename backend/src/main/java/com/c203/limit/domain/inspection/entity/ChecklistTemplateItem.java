@@ -34,8 +34,7 @@ public class ChecklistTemplateItem {
     @Column(nullable = false, length = 200)
     private String purpose;
 
-    @Lob
-    @Column(name = "capture_guide", nullable = false)
+    @Column(name = "capture_guide", nullable = false, columnDefinition = "TEXT")
     private String captureGuide;
 
     @Enumerated(EnumType.STRING)
