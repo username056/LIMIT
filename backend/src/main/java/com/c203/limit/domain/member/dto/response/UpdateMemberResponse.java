@@ -1,7 +1,7 @@
 package com.c203.limit.domain.member.dto.response;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import java.time.OffsetDateTime;
+import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
@@ -28,7 +28,7 @@ public class UpdateMemberResponse {
 
     @Schema(
             description = "수정 시각",
-            example = "2026-07-16T11:10:00+09:00",
+            example = "2026-07-16T11:10:00",
             requiredMode = Schema.RequiredMode.REQUIRED)
-    private final OffsetDateTime updatedAt;
+    private final LocalDateTime updatedAt;
 }

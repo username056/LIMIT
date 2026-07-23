@@ -2,6 +2,8 @@
 
 관리자 인증은 일반 회원과 분리한다. 일반 회원 권한은 `MEMBER`로 고정하고 관리자는 별도 `admin_account`에서 `OPERATOR` 또는 `SUPER_ADMIN` 권한을 가진다.
 
+관리자 API의 날짜·시간 값은 DB `DATETIME(6)` 및 공통 `BaseTimeEntity`와 동일하게 오프셋 없는 ISO-8601 `LocalDateTime` 형식을 사용한다. `createdAt`과 `updatedAt`은 JPA Auditing으로 기록된다.
+
 ## API 범위
 
 | Method | Path | 권한 | 설명 |

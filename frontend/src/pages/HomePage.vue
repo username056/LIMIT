@@ -45,30 +45,41 @@ const rankings = [
         <p class="mb-6 max-w-md text-sm text-text-sub">
           꼼꼼한 검수를 거친 인기 중고 전자기기를 지금 만나보세요.
         </p>
-        <BaseButton>지금 둘러보기</BaseButton>
+        <BaseButton to="/#products">
+          지금 둘러보기
+        </BaseButton>
       </div>
     </section>
 
     <!-- Products + Ranking -->
-    <section class="mx-auto max-w-6xl px-6 py-10">
+    <section
+      id="products"
+      class="mx-auto max-w-6xl scroll-mt-20 px-6 py-10"
+    >
       <div class="grid grid-cols-1 gap-6 lg:grid-cols-12">
         <!-- Product cards -->
         <div class="grid grid-cols-1 gap-6 sm:grid-cols-3 lg:col-span-9">
-          <a
+          <RouterLink
             v-for="product in products"
             :key="product.name"
-            href="#"
+            :to="{ name: 'coming-soon', params: { feature: 'product-detail' }, query: { name: product.name } }"
             class="group overflow-hidden rounded-lg border border-border bg-surface transition-shadow hover:shadow-elevated"
           >
             <div class="flex aspect-square items-center justify-center bg-bg text-xs text-text-sub">
               상품 이미지
             </div>
             <div class="p-4">
-              <p class="text-xs text-text-sub">{{ product.brand }} · {{ product.category }}</p>
-              <p class="mt-1 text-sm font-semibold text-text-main">{{ product.name }}</p>
-              <p class="mt-1 text-sm font-bold text-text-main">{{ product.price }} KRW</p>
+              <p class="text-xs text-text-sub">
+                {{ product.brand }} · {{ product.category }}
+              </p>
+              <p class="mt-1 text-sm font-semibold text-text-main">
+                {{ product.name }}
+              </p>
+              <p class="mt-1 text-sm font-bold text-text-main">
+                {{ product.price }} KRW
+              </p>
             </div>
-          </a>
+          </RouterLink>
         </div>
 
         <!-- Ranking sidebar -->
@@ -110,9 +121,14 @@ const rankings = [
             </li>
           </ul>
 
-          <button class="mt-5 w-full rounded-md border border-border py-2 text-xs font-semibold text-text-main hover:border-primary hover:text-primary">
+          <BaseButton
+            block
+            to="/coming-soon/ranking"
+            variant="outline"
+            class="mt-5 py-2 text-xs"
+          >
             전체 랭킹 보기
-          </button>
+          </BaseButton>
         </aside>
       </div>
     </section>
