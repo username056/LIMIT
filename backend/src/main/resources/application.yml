@@ -114,6 +114,8 @@ springdoc:
       packages-to-scan: com.c203.limit.domain.admin.controller
     - group: 04-chat
       packages-to-scan: com.c203.limit.domain.chat.controller
+    - group: 05-product
+      packages-to-scan: com.c203.limit.domain.product.controller
   swagger-ui:
     enabled: false
     disable-swagger-default-url: true

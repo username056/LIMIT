@@ -8,12 +8,20 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.c203.limit.domain.admin.repository.AdminAccountRepository;
+import com.c203.limit.domain.admin.repository.AdminActionLogRepository;
+import com.c203.limit.domain.admin.repository.MemberRestrictionRepository;
 import com.c203.limit.domain.auth.repository.SocialAccountRepository;
+import com.c203.limit.domain.chat.repository.ChatRoomParticipantRepository;
+import com.c203.limit.domain.chat.repository.ChatRoomRepository;
+import com.c203.limit.domain.chat.repository.ListingChatReader;
 import com.c203.limit.domain.member.repository.MemberRepository;
+import com.c203.limit.domain.member.repository.MemberTermsAgreementRepository;
 
 @SpringBootTest(properties = {
         "management.endpoint.health.validate-group-membership=false",
@@ -32,10 +40,34 @@ import com.c203.limit.domain.member.repository.MemberRepository;
 class ProductMockControllerTests {
 
     @MockitoBean
+    JpaMetamodelMappingContext jpaMetamodelMappingContext;
+
+    @MockitoBean
     MemberRepository memberRepository;
 
     @MockitoBean
+    MemberTermsAgreementRepository memberTermsAgreementRepository;
+
+    @MockitoBean
     SocialAccountRepository socialAccountRepository;
+
+    @MockitoBean
+    AdminAccountRepository adminAccountRepository;
+
+    @MockitoBean
+    AdminActionLogRepository adminActionLogRepository;
+
+    @MockitoBean
+    MemberRestrictionRepository memberRestrictionRepository;
+
+    @MockitoBean
+    ChatRoomRepository chatRoomRepository;
+
+    @MockitoBean
+    ChatRoomParticipantRepository chatRoomParticipantRepository;
+
+    @MockitoBean
+    ListingChatReader listingChatReader;
 
     @Autowired
     MockMvc mockMvc;
@@ -68,5 +100,11 @@ class ProductMockControllerTests {
                 .andExpect(jsonPath("$.data.deviceModelId").value(101))
                 .andExpect(jsonPath("$.data.version").value(1))
                 .andExpect(jsonPath("$.data.items[0].itemCode").value("SP-EXT-001"));
+    }
+
+    @Test
+    void requiresAuthenticationForMyProducts() throws Exception {
+        mockMvc.perform(get("/api/v1/members/me/products"))
+                .andExpect(status().isUnauthorized());
     }
 }
