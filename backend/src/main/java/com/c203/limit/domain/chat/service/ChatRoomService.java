@@ -8,7 +8,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.c203.limit.domain.chat.dto.response.ChatRoomResponse;
 import com.c203.limit.domain.chat.dto.response.ChatRoomSummaryResponse;
+import com.c203.limit.domain.chat.dto.response.ChatMessageResponse;
 import com.c203.limit.domain.chat.entity.ChatRoom;
+import com.c203.limit.domain.chat.repository.ChatMessageProjection;
+import com.c203.limit.domain.chat.repository.ChatMessageRepository;
+import com.c203.limit.domain.chat.repository.ChatRoomParticipantRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomSummaryProjection;
 import com.c203.limit.domain.chat.repository.ListingChatReader;
@@ -24,12 +28,17 @@ public class ChatRoomService {
 
     private final ListingChatReader listingReader;
     private final ChatRoomRepository chatRoomRepository;
+    private final ChatRoomParticipantRepository participantRepository;
+    private final ChatMessageRepository chatMessageRepository;
     private final ChatRoomCreator creator;
 
     public ChatRoomService(ListingChatReader listingReader, ChatRoomRepository chatRoomRepository,
+            ChatRoomParticipantRepository participantRepository, ChatMessageRepository chatMessageRepository,
             ChatRoomCreator creator) {
         this.listingReader = listingReader;
         this.chatRoomRepository = chatRoomRepository;
+        this.participantRepository = participantRepository;
+        this.chatMessageRepository = chatMessageRepository;
         this.creator = creator;
     }
 
@@ -58,6 +67,33 @@ public class ChatRoomService {
                 .toList();
         String nextCursor = hasNext ? content.get(content.size() - 1).roomId().toString() : null;
         return new CursorResponse<>(content, nextCursor, hasNext);
+    }
+
+    @Transactional(readOnly = true)
+    public CursorResponse<ChatMessageResponse> findMessages(
+            Long roomId, Long memberId, Long beforeSeq, Long afterSeq, int size) {
+        validateMessageCursor(beforeSeq, afterSeq, size);
+        if (!participantRepository.existsByChatRoomIdAndUserIdAndLeftAtIsNull(roomId, memberId)) {
+            throw new BusinessException(ErrorCode.CHAT_ROOM_ACCESS_DENIED);
+        }
+
+        PageRequest page = PageRequest.of(0, size + 1);
+        List<ChatMessageProjection> rows = afterSeq == null
+                ? chatMessageRepository.findBeforeSequence(roomId, beforeSeq, page)
+                : chatMessageRepository.findAfterSequence(roomId, afterSeq, page);
+        boolean hasNext = rows.size() > size;
+        List<ChatMessageResponse> content = rows.stream().limit(size).map(ChatMessageResponse::from).toList();
+        String nextCursor = hasNext ? content.get(content.size() - 1).roomSequence().toString() : null;
+        return new CursorResponse<>(content, nextCursor, hasNext);
+    }
+
+    private void validateMessageCursor(Long beforeSeq, Long afterSeq, int size) {
+        if (size < 1 || size > MAX_PAGE_SIZE
+                || beforeSeq != null && beforeSeq < 1
+                || afterSeq != null && afterSeq < 0
+                || beforeSeq != null && afterSeq != null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
     }
 
     private ChatRoomSummaryResponse toSummary(ChatRoomSummaryProjection row, Long memberId) {

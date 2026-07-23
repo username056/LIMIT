@@ -22,6 +22,7 @@ import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 import org.springframework.test.util.ReflectionTestUtils;
 import com.c203.limit.domain.admin.repository.*;
 import com.c203.limit.domain.chat.repository.ChatRoomParticipantRepository;
+import com.c203.limit.domain.chat.repository.ChatMessageRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomRepository;
 import com.c203.limit.domain.chat.repository.ListingChatReader;
 import com.c203.limit.domain.auth.repository.SocialAccountRepository;
@@ -54,6 +55,7 @@ class AdminAuthorizationTests {
     @MockitoBean AdminActionLogRepository logs;
     @MockitoBean ChatRoomRepository chatRoomRepository;
     @MockitoBean ChatRoomParticipantRepository chatRoomParticipantRepository;
+    @MockitoBean ChatMessageRepository chatMessageRepository;
     @MockitoBean ListingChatReader listingChatReader;
 
     @Test
