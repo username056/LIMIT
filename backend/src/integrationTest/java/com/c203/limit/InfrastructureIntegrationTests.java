@@ -1,6 +1,7 @@
 package com.c203.limit;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -17,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @Testcontainers(disabledWithoutDocker = true)
 @SpringBootTest
+@Tag("full-infrastructure")
 class InfrastructureIntegrationTests {
 
     @Autowired
@@ -26,8 +28,7 @@ class InfrastructureIntegrationTests {
     static final MySQLContainer MYSQL = new MySQLContainer(DockerImageName.parse("mysql:8.4"))
             .withDatabaseName("limit")
             .withUsername("limit")
-            .withPassword("test-only-password")
-            .withInitScript("db/schema/member-admin-schema.sql");
+            .withPassword("test-only-password");
 
     @Container
     static final MongoDBContainer MONGODB = new MongoDBContainer(DockerImageName.parse("mongo:8.0"));
@@ -64,6 +65,7 @@ class InfrastructureIntegrationTests {
         assertThat(tableExists("admin_account")).isTrue();
         assertThat(tableExists("member_sanction")).isTrue();
         assertThat(tableExists("admin_action_log")).isTrue();
+        assertThat(tableExists("flyway_schema_history")).isTrue();
     }
 
     private boolean tableExists(String tableName) {

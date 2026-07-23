@@ -43,4 +43,4 @@ BASE_INIT_ADMIN_NAME=
 5. 즉시 `BASE_INIT_ENABLED=false`로 되돌려 다시 배포한다.
 6. 공유가 끝난 임시 비밀번호는 노출된 것으로 간주하고 계정을 삭제하거나 비밀번호 변경 API로 교체한다.
 
-BaseInit은 스키마를 만들지 않는다. `ddl-auto=validate` 검증 전에 필요한 수동 SQL이 적용되어 있어야 한다.
+BaseInit은 스키마를 만들지 않는다. Flyway migration과 `ddl-auto=validate`가 모두 성공한 뒤에만 실행된다.

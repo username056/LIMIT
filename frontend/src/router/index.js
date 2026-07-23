@@ -12,6 +12,8 @@ import SocialSignupPage from '../pages/SocialSignupPage.vue'
 import VerifyEmailPage from '../pages/VerifyEmailPage.vue'
 import EmailVerificationRequestedPage from '../pages/EmailVerificationRequestedPage.vue'
 import SocialAccountsPage from '../pages/SocialAccountsPage.vue'
+import TermsPage from '../pages/TermsPage.vue'
+import PrivacyPage from '../pages/PrivacyPage.vue'
 
 const routes = [
   { path: '/', name: 'home', component: HomePage },
@@ -22,6 +24,8 @@ const routes = [
   { path: '/verify-email/requested', name: 'verify-email-requested', component: EmailVerificationRequestedPage },
   { path: '/mypage/social-accounts', name: 'social-accounts', component: SocialAccountsPage },
   { path: '/auth/callback/:provider', name: 'oauth-callback', component: OAuthCallbackPage },
+  { path: '/terms/service', name: 'terms-service', component: TermsPage },
+  { path: '/terms/privacy', name: 'terms-privacy', component: PrivacyPage },
   { path: '/seller/dashboard', name: 'seller-dashboard', component: SellerDashboardPage },
   { path: '/mypage/orders', name: 'my-orders', component: MyOrdersPage },
   { path: '/seller/apply', name: 'seller-apply', component: SellerApplyPage },

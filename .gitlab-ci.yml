@@ -18,7 +18,8 @@ default:
     when: [runner_system_failure, stuck_or_timeout_failure]
 
 variables:
-  GIT_DEPTH: "0"
+  # 전체 히스토리가 필요한 job(secret_guard)만 job 단위에서 GIT_DEPTH: "0"으로 되돌린다.
+  GIT_DEPTH: "1"
   GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
 
 .backend_change_template:
@@ -38,6 +39,80 @@ variables:
         - infra/compose.prod.yml
         - .gitlab-ci.yml
 
+# 목적별로 좁힌 변경 감지 anchor. backend_image/container_scan/deploy_prod는
+# 여전히 위 backend_changes(넓은 범위)를 그대로 사용하므로 배포 안전성에는 영향이 없다.
+.backend_unit_change_template:
+  rules:
+    - changes: &backend_unit_changes
+        - backend/src/main/**/*
+        - backend/src/test/**/*
+        - backend/build.gradle
+        - backend/settings.gradle
+        - backend/gradle.properties
+        - backend/gradle/wrapper/**/*
+        - backend/gradlew
+        - scripts/ci-test.sh
+        - .gitlab-ci.yml
+
+.backend_integration_change_template:
+  rules:
+    - changes: &backend_integration_changes
+        - backend/src/main/**/*
+        - backend/src/integrationTest/**/*
+        - backend/src/main/resources/db/**/*
+        - backend/build.gradle
+        - backend/settings.gradle
+        - backend/gradle.properties
+        - backend/gradle/wrapper/**/*
+        - backend/gradlew
+        - scripts/ci-test.sh
+        - .gitlab-ci.yml
+
+.backend_package_change_template:
+  rules:
+    - changes: &backend_package_changes
+        - backend/src/main/**/*
+        - backend/build.gradle
+        - backend/settings.gradle
+        - backend/gradle.properties
+        - backend/gradle/wrapper/**/*
+        - backend/gradlew
+        - backend/Dockerfile.ci
+        - scripts/ci-test.sh
+        - scripts/build-image.sh
+        - .gitlab-ci.yml
+
+.backend_scripts_change_template:
+  rules:
+    - changes: &backend_scripts_changes
+        - scripts/ci-test.sh
+        - scripts/build-image.sh
+        - scripts/sync-deploy-files.sh
+        - scripts/deploy-remote.sh
+        - scripts/deploy-blue-green.sh
+        - scripts/rollback-remote.sh
+        - scripts/rollback-blue-green.sh
+        - scripts/rollback-blue-green.test.sh
+        - scripts/smoke-test.sh
+        - infra/compose.yml
+        - infra/compose.prod.yml
+        - .gitlab-ci.yml
+
+.openapi_change_template:
+  rules:
+    - changes: &openapi_changes
+        - backend/src/main/java/com/c203/limit/domain/**/controller/**/*
+        - backend/src/main/java/com/c203/limit/domain/**/dto/**/*
+        - backend/src/main/java/com/c203/limit/global/config/swagger/**/*
+        - backend/src/main/java/com/c203/limit/global/response/**/*
+        - backend/src/main/java/com/c203/limit/global/exception/**/*
+        - backend/src/main/resources/application*.yml
+        - backend/src/test/java/com/c203/limit/global/config/swagger/OpenApiContractTests.java
+        - backend/build.gradle
+        - docs/api/openapi.json
+        - scripts/export-openapi.sh
+        - .gitlab-ci.yml
+
 .frontend_change_template:
   rules:
     - changes: &frontend_changes
@@ -47,24 +122,36 @@ variables:
         - infra/terraform/frontend/**/*
         - .gitlab-ci.yml
 
+.backend_gradle_cache: &backend_gradle_cache
+  key:
+    files:
+      - backend/gradle/wrapper/gradle-wrapper.properties
+      - backend/gradle.properties
+  paths:
+    - .gradle/caches
+    - .gradle/caches/build-cache-1
+    - .gradle/wrapper
+    - .gradle/dependency-check-data
+
 .backend_gradle_job:
   image: gradle:9-jdk21-jammy
   cache:
-    key:
-      files:
-        - backend/gradle/wrapper/gradle-wrapper.properties
-        - backend/gradle.properties
-    paths:
-      - .gradle/caches
-      - .gradle/caches/build-cache-1
-      - .gradle/wrapper
-      - .gradle/dependency-check-data
+    <<: *backend_gradle_cache
+
+# 한 job만 캐시를 갱신하고 나머지는 읽기 전용으로 사용해 병렬 저장 경쟁을 막는다.
+.backend_gradle_job_pull:
+  image: gradle:9-jdk21-jammy
+  cache:
+    <<: *backend_gradle_cache
+    policy: pull
 
 secret_guard:
   stage: guard
   image:
     name: zricethezav/gitleaks:v8.27.2
     entrypoint: [""]
+  variables:
+    GIT_DEPTH: "0" # 커밋 이력 전체를 스캔해야 하므로 전역 shallow clone에서 제외
   script: ["sh scripts/secret-scan.sh"]
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
@@ -83,14 +170,14 @@ backend_unit_test:
       junit: backend/build/test-results/test/TEST-*.xml
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes: *backend_changes
+      changes: *backend_unit_changes
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
-      changes: *backend_changes
+      changes: *backend_unit_changes
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
-      changes: *backend_changes
+      changes: *backend_unit_changes
 
 backend_integration_test:
-  extends: .backend_gradle_job
+  extends: .backend_gradle_job_pull
   stage: test
   needs: []
   services:
@@ -99,6 +186,10 @@ backend_integration_test:
   variables:
     DOCKER_HOST: tcp://docker:2375
     DOCKER_TLS_CERTDIR: ""
+    # DinD 자체가 job 종료 시 폐기되므로 별도 정리 컨테이너와 환경 사전 검사를
+    # 생략한다. 실제 엔진 연결/스키마 검증은 테스트 본문에서 그대로 수행한다.
+    TESTCONTAINERS_RYUK_DISABLED: "true"
+    TESTCONTAINERS_CHECKS_DISABLE: "true"
   script: ["sh scripts/ci-test.sh backend-integration"]
   artifacts:
     when: always
@@ -107,11 +198,34 @@ backend_integration_test:
       junit: backend/build/test-results/integrationTest/TEST-*.xml
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes: *backend_changes
+      changes: *backend_integration_changes
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
-      changes: *backend_changes
+      changes: *backend_integration_changes
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
-      changes: *backend_changes
+      changes: *backend_integration_changes
+
+# MongoDB/Redis/Qdrant까지 포함한 전체 인프라 기동 검사는 일반 MR/배포의
+# critical path에서 제외하고 정기 보안/의존성 검사와 함께 실행한다.
+backend_infrastructure_test:
+  extends: .backend_gradle_job_pull
+  stage: test
+  needs: []
+  services:
+    - name: docker:28.3.2-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+    TESTCONTAINERS_RYUK_DISABLED: "true"
+    TESTCONTAINERS_CHECKS_DISABLE: "true"
+  script: ["sh scripts/ci-test.sh backend-infrastructure"]
+  artifacts:
+    when: always
+    expire_in: 7 days
+    reports:
+      junit: backend/build/test-results/infrastructureTest/TEST-*.xml
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
 
 backend_scripts_test:
   stage: test
@@ -120,14 +234,14 @@ backend_scripts_test:
   script: ["sh scripts/ci-test.sh backend-scripts"]
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes: *backend_changes
+      changes: *backend_scripts_changes
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
-      changes: *backend_changes
+      changes: *backend_scripts_changes
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
-      changes: *backend_changes
+      changes: *backend_scripts_changes
 
 openapi_export:
-  extends: .backend_gradle_job
+  extends: .backend_gradle_job_pull
   stage: test
   needs: []
   script: ["sh scripts/export-openapi.sh backend/build/openapi/current.json"]
@@ -136,23 +250,25 @@ openapi_export:
     paths: [backend/build/openapi/current.json]
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes: *backend_changes
+      changes: *openapi_changes
 
+# needs를 비워 unit/integration test와 병렬로 시작한다. bootJar는 -x test -x
+# integrationTest로 테스트를 다시 돌리지 않으므로 기술적으로 두 job의 결과물이
+# 필요 없다. dev/main 배포 안전성은 backend_image 자체의 needs 목록이 unit/
+# integration/scripts_test 통과를 별도로 요구하므로 그대로 유지된다.
+# MR에서는 패키징 입력이 바뀐 경우만 실행한다. dev/main push에서는 backend_image와
+# 동일한 backend_changes를 유지해 이미지 job이 요구하는 jar 아티팩트를 보장한다.
 backend_package:
-  extends: .backend_gradle_job
+  extends: .backend_gradle_job_pull
   stage: quality
-  needs:
-    - job: backend_unit_test
-      artifacts: false
-    - job: backend_integration_test
-      artifacts: false
+  needs: []
   script: ["sh scripts/ci-test.sh backend-package"]
   artifacts:
     expire_in: 7 days
     paths: [backend/build/libs/*.jar]
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes: *backend_changes
+      changes: *backend_package_changes
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
       changes: *backend_changes
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
@@ -216,69 +332,17 @@ sonarqube:
 
 pr_agent_review:
   stage: quality
-  image:
-    name: pragent/pr-agent:0.35.0
-    entrypoint: [""]
   needs: []
-  timeout: 15m
-  retry: 0
   allow_failure: true
   variables:
-    CONFIG__GIT_PROVIDER: "gitlab"
-    CONFIG__MODEL: "gpt-5-mini"
-    CONFIG__FALLBACK_MODELS: '[]'
-    CONFIG__REASONING_EFFORT: "low"
-    GITLAB__URL: "$CI_SERVER_URL"
-    OPENAI__API_BASE: "https://gms.ssafy.io/gmsapi/api.openai.com/v1"
-  script:
-    - test -n "$GITLAB_PERSONAL_ACCESS_TOKEN"
-    - test -n "$OPENAI_KEY"
-    - test -n "$CI_MERGE_REQUEST_PROJECT_URL"
-    - test -n "$CI_MERGE_REQUEST_IID"
-    - cd /app
-    - export GITLAB__PERSONAL_ACCESS_TOKEN="$GITLAB_PERSONAL_ACCESS_TOKEN"
-    - export OPENAI__KEY="$OPENAI_KEY"
-    - export MR_URL="$CI_MERGE_REQUEST_PROJECT_URL/merge_requests/$CI_MERGE_REQUEST_IID"
-    - |
-      run_pr_agent() {
-        tool="$1"
-        shift
-        log_file="/tmp/pr-agent-${tool}.log"
-        umask 0077
-        if python -m pr_agent.cli \
-          --pr_url="$MR_URL" \
-          "$tool" "$@" >"$log_file" 2>&1; then
-          pr_agent_status=0
-        else
-          pr_agent_status=$?
-        fi
-        if [ "$pr_agent_status" -ne 0 ] || grep -qE '\| ERROR[[:space:]]+\|' "$log_file"; then
-          sed -E 's/[A-Za-z0-9_-]{20,}/[REDACTED]/g' "$log_file" || true
-          rm -f "$log_file"
-          return 1
-        fi
-        rm -f "$log_file"
-        echo "PR-Agent ${tool} completed successfully."
-      }
-      run_pr_agent review \
-        --config.response_language=ko-KR \
-        --pr_reviewer.persistent_comment=true \
-        --pr_reviewer.num_max_findings=6 \
-        --pr_reviewer.require_score_review=true \
-        --pr_reviewer.require_tests_review=true \
-        --pr_reviewer.require_security_review=true \
-        --pr_reviewer.require_todo_scan=true
-      run_pr_agent improve \
-        --config.response_language=ko-KR \
-        --pr_code_suggestions.persistent_comment=true \
-        --pr_code_suggestions.focus_only_on_problems=true \
-        --pr_code_suggestions.num_code_suggestions_per_chunk=5 \
-        --pr_code_suggestions.max_number_of_calls=1 \
-        --pr_code_suggestions.suggestions_score_threshold=5 \
-        --pr_code_suggestions.dual_publishing_score_threshold=7 \
-        --pr_code_suggestions.publish_output_no_suggestions=false \
-        --pr_code_suggestions.extra_instructions="제안 제목 맨 앞에 중요도 점수에 따라 8~10은 🔴, 7은 🟡, 5~6은 🟢 신호등을 표시한다."
+    PARENT_MR_PROJECT_URL: "$CI_MERGE_REQUEST_PROJECT_URL"
+    PARENT_MR_IID: "$CI_MERGE_REQUEST_IID"
+  trigger:
+    include:
+      - local: .gitlab/ci/pr-agent.yml
   rules:
+    - if: '$SKIP_PR_AGENT == "true"'
+      when: never
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_SOURCE_PROJECT_ID == $CI_PROJECT_ID && ($CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "dev" || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main")'
 
 dependency_check:
@@ -322,20 +386,14 @@ openapi_contract:
     - oasdiff breaking --fail-on ERR docs/api/openapi.json backend/build/openapi/current.json
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes: *backend_changes
+      changes: *openapi_changes
 
 backend_image:
   stage: package
   image: docker:28.3.2-cli
   needs:
-    - job: secret_guard
-      artifacts: false
-    - job: backend_unit_test
-      artifacts: false
-    - job: backend_integration_test
-      artifacts: false
-    - job: backend_scripts_test
-      artifacts: false
+    # 이미지는 테스트와 독립적으로 만들 수 있다. 테스트/secret/scan 결과는
+    # deploy_prod가 모두 다시 요구하므로 실패한 이미지는 운영에 배포되지 않는다.
     - job: backend_package
       artifacts: true
   services:
@@ -362,6 +420,14 @@ backend_image:
     expire_in: 7 days
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
+      changes: [backend/Dockerfile.ci]
+      variables:
+        UPDATE_BUILD_CACHE: "true"
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
+      changes: [backend/Dockerfile.ci]
+      variables:
+        UPDATE_BUILD_CACHE: "true"
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
       changes: *backend_changes
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
       changes: *backend_changes
@@ -374,11 +440,11 @@ container_scan:
   needs:
     - job: backend_image
       artifacts: true
-  cache:
-    key: trivy-db
-    paths: [.trivycache]
   variables:
-    TRIVY_CACHE_DIR: "$CI_PROJECT_DIR/.trivycache"
+    GIT_STRATEGY: none
+    # Gradle과 같은 runner 영속 볼륨을 직접 사용해 Trivy DB의 24초 복원과
+    # 75초 재압축을 모두 제거한다.
+    TRIVY_CACHE_DIR: "/cache/trivy-$CI_PROJECT_ID"
     TRIVY_NO_PROGRESS: "true"
     TRIVY_USERNAME: "$DOCKERHUB_USERNAME"
     TRIVY_PASSWORD: "$DOCKERHUB_TOKEN"
@@ -401,6 +467,17 @@ deploy_prod:
   interruptible: false
   resource_group: limit-prod
   needs:
+    - job: secret_guard
+      artifacts: false
+    - job: backend_unit_test
+      artifacts: false
+      optional: true
+    - job: backend_integration_test
+      artifacts: false
+      optional: true
+    - job: backend_scripts_test
+      artifacts: false
+      optional: true
     - job: backend_image
       artifacts: true
     - job: container_scan
