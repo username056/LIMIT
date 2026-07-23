@@ -30,6 +30,8 @@ import com.c203.limit.domain.member.repository.MemberTermsAgreementRepository;
 import com.c203.limit.domain.admin.repository.AdminAccountRepository;
 import com.c203.limit.domain.admin.repository.AdminActionLogRepository;
 import com.c203.limit.domain.admin.repository.MemberRestrictionRepository;
+import com.c203.limit.domain.product.repository.ListingRepository;
+import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
 
 @SpringBootTest(properties = {
         "management.endpoint.health.validate-group-membership=false",
@@ -78,6 +80,12 @@ class OpenApiContractTests {
 
     @MockitoBean
     ListingChatReader listingChatReader;
+
+    @MockitoBean
+    ListingRepository listingRepository;
+
+    @MockitoBean
+    ListingStatusHistoryRepository listingStatusHistoryRepository;
 
     @Autowired
     MockMvc mockMvc;
