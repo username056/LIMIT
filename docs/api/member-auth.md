@@ -10,6 +10,17 @@
 - Access Token 발급과 HttpOnly Refresh Token 쿠키 회전
 - 서비스·개인정보·만 14세 이상 필수 동의 및 마케팅 선택 동의 이력 저장
 
+## 날짜·시간 계약
+
+회원·인증 API의 날짜·시간 값은 DB `DATETIME(6)` 및 공통 `BaseTimeEntity`와 동일하게 오프셋 없는 ISO-8601 `LocalDateTime` 형식을 사용한다.
+
+```text
+2026-07-23T10:30:00
+2026-07-23T10:30:00.123456
+```
+
+`createdAt`과 `updatedAt`은 JPA Auditing으로 기록하며, 프로필 변경·비밀번호 변경·로그인·이메일 인증 같은 엔티티 변경 시 `updatedAt`도 갱신된다.
+
 ## 회원가입 계약
 
 이메일 회원가입은 `POST /api/v1/members`를 사용한다. `email`, `password`, `nickname`은 필수이고 `phone`은 선택이다.

@@ -1,11 +1,12 @@
 package com.c203.limit.domain.member.entity;
 
+import com.c203.limit.global.common.BaseTimeEntity;
 import jakarta.persistence.*;
-import java.time.OffsetDateTime;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "user_account")
-public class Member {
+public class Member extends BaseTimeEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "user_id")
@@ -31,19 +32,13 @@ public class Member {
     private boolean isMarketingOptIn;
 
     @Column(name = "email_verified_at")
-    private OffsetDateTime emailVerifiedAt;
+    private LocalDateTime emailVerifiedAt;
 
     @Column(name = "last_login_at")
-    private OffsetDateTime lastLoginAt;
+    private LocalDateTime lastLoginAt;
 
     @Column(name = "password_changed_at")
-    private OffsetDateTime passwordChangedAt;
-
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private OffsetDateTime createdAt;
-
-    @Column(name = "updated_at", nullable = false)
-    private OffsetDateTime updatedAt;
+    private LocalDateTime passwordChangedAt;
 
     protected Member() {}
 
@@ -65,8 +60,6 @@ public class Member {
         member.phone = phone;
         member.isMarketingOptIn = isMarketingOptIn;
         member.status = MemberStatus.ACTIVE;
-        member.createdAt = OffsetDateTime.now();
-        member.updatedAt = member.createdAt;
         return member;
     }
 
@@ -84,39 +77,33 @@ public class Member {
     public void updateProfile(String nickname, String phone) {
         if (nickname != null) this.nickname = nickname;
         if (phone != null) this.phone = phone;
-        this.updatedAt = OffsetDateTime.now();
     }
 
     public void changePassword(String encodedPassword) {
         this.password = encodedPassword;
-        this.passwordChangedAt = OffsetDateTime.now();
-        this.updatedAt = this.passwordChangedAt;
+        this.passwordChangedAt = LocalDateTime.now();
     }
 
     public void recordLogin() {
-        this.lastLoginAt = OffsetDateTime.now();
+        this.lastLoginAt = LocalDateTime.now();
     }
 
     public void verifyEmail() {
         if (this.emailVerifiedAt == null) {
-            this.emailVerifiedAt = OffsetDateTime.now();
-            this.updatedAt = this.emailVerifiedAt;
+            this.emailVerifiedAt = LocalDateTime.now();
         }
     }
 
     public void markWithdrawalPending() {
         this.status = MemberStatus.WITHDRAWAL_PENDING;
-        this.updatedAt = OffsetDateTime.now();
     }
 
     public void completeWithdrawal() {
         this.status = MemberStatus.WITHDRAWN;
-        this.updatedAt = OffsetDateTime.now();
     }
 
     public void reactivate() {
         this.status = MemberStatus.ACTIVE;
-        this.updatedAt = OffsetDateTime.now();
     }
 
     public Long getId() {
@@ -147,19 +134,11 @@ public class Member {
         return isMarketingOptIn;
     }
 
-    public OffsetDateTime getEmailVerifiedAt() {
+    public LocalDateTime getEmailVerifiedAt() {
         return emailVerifiedAt;
     }
 
-    public OffsetDateTime getLastLoginAt() {
+    public LocalDateTime getLastLoginAt() {
         return lastLoginAt;
-    }
-
-    public OffsetDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public OffsetDateTime getUpdatedAt() {
-        return updatedAt;
     }
 }

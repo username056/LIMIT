@@ -1,11 +1,12 @@
 package com.c203.limit.domain.admin.entity;
 
+import com.c203.limit.global.common.BaseTimeEntity;
 import jakarta.persistence.*;
-import java.time.OffsetDateTime;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "admin_account")
-public class AdminAccount {
+public class AdminAccount extends BaseTimeEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "admin_id")
@@ -26,17 +27,11 @@ public class AdminAccount {
     @Column(nullable = false)
     private String status;
 
-    @Column(name = "created_at", nullable = false)
-    private OffsetDateTime createdAt;
-
-    @Column(name = "updated_at", nullable = false)
-    private OffsetDateTime updatedAt;
-
     @Column(name = "last_login_at")
-    private OffsetDateTime lastLoginAt;
+    private LocalDateTime lastLoginAt;
 
     @Column(name = "password_changed_at")
-    private OffsetDateTime passwordChangedAt;
+    private LocalDateTime passwordChangedAt;
 
     protected AdminAccount() {}
 
@@ -48,21 +43,17 @@ public class AdminAccount {
         account.name = name;
         account.role = role;
         account.status = "ACTIVE";
-        account.createdAt = OffsetDateTime.now();
-        account.updatedAt = account.createdAt;
-        account.passwordChangedAt = account.createdAt;
+        account.passwordChangedAt = LocalDateTime.now();
         return account;
     }
 
     public void recordLogin() {
-        this.lastLoginAt = OffsetDateTime.now();
-        this.updatedAt = this.lastLoginAt;
+        this.lastLoginAt = LocalDateTime.now();
     }
 
     public void updateAccess(String role, String status) {
         if (role != null) this.role = role;
         if (status != null) this.status = status;
-        this.updatedAt = OffsetDateTime.now();
     }
 
     public Long getId() {
@@ -89,15 +80,7 @@ public class AdminAccount {
         return status;
     }
 
-    public OffsetDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public OffsetDateTime getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public OffsetDateTime getLastLoginAt() {
+    public LocalDateTime getLastLoginAt() {
         return lastLoginAt;
     }
 }

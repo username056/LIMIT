@@ -94,6 +94,7 @@ public class AdminAccountManagementService {
             throw new BusinessException(ErrorCode.LAST_SUPER_ADMIN);
         }
         account.updateAccess(role, status);
+        accounts.flush();
         audit(actorId, "ADMIN_ACCOUNT_ACCESS_CHANGE", adminId, role + ":" + status);
         return response(account);
     }

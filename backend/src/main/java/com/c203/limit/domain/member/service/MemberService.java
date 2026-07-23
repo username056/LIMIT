@@ -53,6 +53,7 @@ public class MemberService {
             throw new BusinessException(ErrorCode.NICKNAME_DUPLICATED);
         }
         member.updateProfile(request.getNickname(), request.getPhone());
+        memberRepository.flush();
         return new UpdateMemberResponse(
                 member.getId(),
                 member.getNickname(),
