@@ -1,6 +1,8 @@
 package com.c203.limit.domain.product.entity;
 
 import com.c203.limit.global.common.BaseTimeEntity;
+import com.c203.limit.global.exception.BusinessException;
+import com.c203.limit.global.exception.ErrorCode;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
@@ -97,23 +99,52 @@ public class Listing extends BaseTimeEntity {
         this.price = price;
     }
 
+    /** ON_SALE 매물을 구매자에게 예약 처리한다. */
     public void reserve(Long buyerId) {
+        requireStatus(ListingStatus.ON_SALE, ErrorCode.LISTING_NOT_ON_SALE);
         this.buyerId = buyerId;
         this.status = ListingStatus.RESERVED;
         this.reservedAt = LocalDateTime.now();
     }
 
+    /** 구매자/판매자 요청으로 예약을 취소하고 다시 판매중 상태로 되돌린다. */
+    public void cancelReservation() {
+        requireStatus(ListingStatus.RESERVED, ErrorCode.LISTING_NOT_RESERVED);
+        releaseReservation();
+    }
+
+    /** 결제 기한 만료 등 시스템 처리로 예약을 롤백하고 다시 판매중 상태로 되돌린다. */
+    public void expireReservation() {
+        requireStatus(ListingStatus.RESERVED, ErrorCode.LISTING_NOT_RESERVED);
+        releaseReservation();
+    }
+
+    private void releaseReservation() {
+        this.buyerId = null;
+        this.reservedAt = null;
+        this.status = ListingStatus.ON_SALE;
+    }
+
     public void markPaid() {
+        requireStatus(ListingStatus.RESERVED, ErrorCode.LISTING_NOT_RESERVED);
         this.status = ListingStatus.PAID;
         this.paidAt = LocalDateTime.now();
     }
 
+    /** 결제 완료된 매물을 검수 단계로 전환한다. */
+    public void markInspecting() {
+        requireStatus(ListingStatus.PAID, ErrorCode.LISTING_NOT_PAID);
+        this.status = ListingStatus.INSPECTING;
+    }
+
     public void confirm() {
+        requireStatus(ListingStatus.INSPECTING, ErrorCode.LISTING_NOT_INSPECTING);
         this.status = ListingStatus.CONFIRMED;
         this.confirmedAt = LocalDateTime.now();
     }
 
     public void settle() {
+        requireStatus(ListingStatus.CONFIRMED, ErrorCode.LISTING_NOT_CONFIRMED);
         this.status = ListingStatus.SETTLED;
         this.settledAt = LocalDateTime.now();
     }
@@ -125,5 +156,15 @@ public class Listing extends BaseTimeEntity {
 
     public void softDelete() {
         this.deletedAt = LocalDateTime.now();
+    }
+
+    /**
+     * 현재 상태가 기대 상태와 다르면 거부한다. 각 전이 메서드의 사전조건 역할을 하며, 동일 전이를 중복
+     * 호출하거나 순서를 건너뛴 호출을 함께 막는다.
+     */
+    private void requireStatus(ListingStatus expected, ErrorCode errorCode) {
+        if (this.status != expected) {
+            throw new BusinessException(errorCode);
+        }
     }
 }

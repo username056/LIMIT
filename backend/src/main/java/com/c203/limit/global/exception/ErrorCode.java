@@ -77,7 +77,14 @@ public enum ErrorCode {
     ADMIN_EMAIL_DUPLICATED("ADM010", HttpStatus.CONFLICT, "이미 사용 중인 관리자 이메일입니다."),
     LAST_SUPER_ADMIN("ADM011", HttpStatus.CONFLICT, "마지막 활성 최고 관리자는 변경할 수 없습니다."),
     INVALID_ADMIN_ROLE("ADM012", HttpStatus.BAD_REQUEST, "관리자 권한은 OPERATOR 또는 SUPER_ADMIN이어야 합니다."),
-    INVALID_ADMIN_STATUS("ADM013", HttpStatus.BAD_REQUEST, "관리자 상태가 올바르지 않습니다.");
+    INVALID_ADMIN_STATUS("ADM013", HttpStatus.BAD_REQUEST, "관리자 상태가 올바르지 않습니다."),
+
+    // ========== 매물(상품) 에러 ==========
+    LISTING_NOT_ON_SALE("PRD001", HttpStatus.CONFLICT, "판매중 상태의 매물만 예약할 수 있습니다."),
+    LISTING_NOT_RESERVED("PRD002", HttpStatus.CONFLICT, "예약중 상태의 매물에만 적용할 수 있는 작업입니다."),
+    LISTING_NOT_PAID("PRD003", HttpStatus.CONFLICT, "결제완료 상태의 매물만 검수를 시작할 수 있습니다."),
+    LISTING_NOT_INSPECTING("PRD004", HttpStatus.CONFLICT, "검수중 상태의 매물만 확정할 수 있습니다."),
+    LISTING_NOT_CONFIRMED("PRD005", HttpStatus.CONFLICT, "확정 상태의 매물만 정산할 수 있습니다.");
 
     private final String code;
     private final HttpStatus status;

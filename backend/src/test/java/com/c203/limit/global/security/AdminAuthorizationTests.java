@@ -29,6 +29,8 @@ import com.c203.limit.domain.auth.repository.SocialAccountRepository;
 import com.c203.limit.domain.member.repository.MemberRepository;
 import com.c203.limit.domain.member.repository.MemberTermsAgreementRepository;
 import com.c203.limit.domain.member.entity.Member;
+import com.c203.limit.domain.product.repository.ListingRepository;
+import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
 
 @SpringBootTest(properties = {
         "management.endpoint.health.validate-group-membership=false",
@@ -57,6 +59,8 @@ class AdminAuthorizationTests {
     @MockitoBean ChatRoomParticipantRepository chatRoomParticipantRepository;
     @MockitoBean ChatMessageRepository chatMessageRepository;
     @MockitoBean ListingChatReader listingChatReader;
+    @MockitoBean ListingRepository listingRepository;
+    @MockitoBean ListingStatusHistoryRepository listingStatusHistoryRepository;
 
     @Test
     void publicHealthEndpointDoesNotRequireAuthentication() throws Exception {

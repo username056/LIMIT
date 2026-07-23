@@ -23,6 +23,8 @@ import com.c203.limit.domain.chat.repository.ChatRoomRepository;
 import com.c203.limit.domain.chat.repository.ListingChatReader;
 import com.c203.limit.domain.member.repository.MemberRepository;
 import com.c203.limit.domain.member.repository.MemberTermsAgreementRepository;
+import com.c203.limit.domain.product.repository.ListingRepository;
+import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
 
 @SpringBootTest(properties = {
         "management.endpoint.health.validate-group-membership=false",
@@ -72,6 +74,12 @@ class ProductMockControllerTests {
 
     @MockitoBean
     ListingChatReader listingChatReader;
+
+    @MockitoBean
+    ListingRepository listingRepository;
+
+    @MockitoBean
+    ListingStatusHistoryRepository listingStatusHistoryRepository;
 
     @Autowired
     MockMvc mockMvc;
