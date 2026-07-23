@@ -49,6 +49,13 @@ public enum ErrorCode {
             "AUTH011", HttpStatus.SERVICE_UNAVAILABLE, "이메일 인증 발송 설정을 확인해 주세요."),
     SOCIAL_AUTH_FAILED("AUTH012", HttpStatus.UNAUTHORIZED, "소셜 로그인 인증에 실패했습니다."),
     SOCIAL_ACCOUNT_CONFLICT("AUTH013", HttpStatus.CONFLICT, "이미 다른 소셜 계정이 연결되어 있습니다."),
+
+    // ========== 채팅 에러 ==========
+    LISTING_NOT_FOUND("CHT001", HttpStatus.NOT_FOUND, "매물을 찾을 수 없습니다."),
+    SELF_CHAT_NOT_ALLOWED("CHT002", HttpStatus.BAD_REQUEST, "본인의 매물에는 채팅방을 생성할 수 없습니다."),
+    CHAT_ROOM_CREATION_NOT_ALLOWED("CHT003", HttpStatus.CONFLICT, "현재 상태의 매물에는 채팅방을 생성할 수 없습니다."),
+    CHAT_ROOM_ACCESS_DENIED("CHT004", HttpStatus.FORBIDDEN, "채팅방에 접근할 권한이 없습니다."),
+
     SELLER_APPLICATION_NOT_FOUND("SEL001", HttpStatus.NOT_FOUND, "판매자 신청서를 찾을 수 없습니다."),
     ACTIVE_SELLER_APPLICATION_EXISTS("SEL002", HttpStatus.CONFLICT, "처리 중인 판매자 신청서가 있습니다."),
     ALREADY_SELLER("SEL003", HttpStatus.CONFLICT, "이미 판매자 권한을 가진 회원입니다."),

@@ -1,5 +1,6 @@
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import SidebarLayout from '../layouts/SidebarLayout.vue'
 import BaseSelect from '../components/BaseSelect.vue'
 import BaseDateRange from '../components/BaseDateRange.vue'
@@ -10,18 +11,21 @@ import BaseTable from '../components/BaseTable.vue'
 import BasePagination from '../components/BasePagination.vue'
 
 const sidebarItems = [
-  { label: '대시보드', active: false },
-  { label: '상품 등록', active: true },
-  { label: '판매 내역', active: false },
-  { label: '정산', active: false },
-  { label: '설정', active: false },
+  { label: '대시보드', href: '/seller/dashboard', active: false },
+  { label: '상품 등록', href: '/seller/products', active: true },
+  { label: '판매 내역', href: '/coming-soon/seller-orders', active: false },
+  { label: '정산', href: '/seller/dashboard', active: false },
+  { label: '설정', href: '/coming-soon/seller-settings', active: false },
 ]
 
+const router = useRouter()
 const productStatus = ref('')
 const progressStatus = ref('')
 const startDate = ref('')
 const endDate = ref('')
 const currentPage = ref(1)
+const appliedProductStatus = ref('')
+const filterMessage = ref('')
 
 // 예시 데이터입니다. 실제 연동 시 API 응답으로 교체하세요.
 const products = ref([
@@ -35,6 +39,25 @@ const logs = [
   { title: '가격 인상 - New Balance 990v6', meta: '판매자 B · 2025-06-08 08:52', amount: '+289,000' },
   { title: '배송 시작 - Yeezy Boost 350 V2', meta: '', amount: '' },
 ]
+
+const filteredProducts = computed(() => {
+  if (!appliedProductStatus.value || appliedProductStatus.value === '전체') return products.value
+  return products.value.filter((product) => product.status === appliedProductStatus.value)
+})
+
+function applyFilters() {
+  appliedProductStatus.value = productStatus.value
+  currentPage.value = 1
+  filterMessage.value = `${filteredProducts.value.length}개의 목업 상품을 조회했습니다.`
+}
+
+function openFeature(feature, product) {
+  router.push({
+    name: 'coming-soon',
+    params: { feature },
+    query: product ? { name: product.name } : {},
+  })
+}
 </script>
 
 <template>
@@ -63,16 +86,26 @@ const logs = [
         class="sm:col-span-1"
       />
       <div class="flex items-end">
-        <BaseButton block>
+        <BaseButton
+          block
+          @click="applyFilters"
+        >
           상품 조회 적용하기
         </BaseButton>
       </div>
     </div>
+    <p
+      v-if="filterMessage"
+      class="mb-4 rounded-md bg-accent px-4 py-3 text-sm text-primary"
+      role="status"
+    >
+      {{ filterMessage }}
+    </p>
 
     <!-- Table -->
     <BaseTable :columns="['상품 정보', '판매 변형', '가격', '게시 상태', '노출 여부', '관리']">
       <tr
-        v-for="p in products"
+        v-for="p in filteredProducts"
         :key="p.code"
       >
         <td class="flex items-center gap-3 px-4 py-3">
@@ -102,14 +135,28 @@ const logs = [
         </td>
         <td class="px-4 py-3 text-text-sub">
           <button
+            type="button"
             class="mr-2"
             aria-label="이력 보기"
+            @click="openFeature('product-history', p)"
           >
             ↺
           </button>
-          <button aria-label="수정">
+          <button
+            type="button"
+            aria-label="수정"
+            @click="openFeature('product-edit', p)"
+          >
             ✎
           </button>
+        </td>
+      </tr>
+      <tr v-if="!filteredProducts.length">
+        <td
+          colspan="6"
+          class="px-4 py-12 text-center text-sm text-text-sub"
+        >
+          조건에 맞는 목업 상품이 없습니다.
         </td>
       </tr>
     </BaseTable>
@@ -161,7 +208,11 @@ const logs = [
             ₩4,210,000
           </p>
         </div>
-        <button class="mt-4 rounded-md bg-white/20 py-2 text-sm font-semibold hover:bg-white/30">
+        <button
+          type="button"
+          class="mt-4 rounded-md bg-white/20 py-2 text-sm font-semibold hover:bg-white/30"
+          @click="openFeature('settlement')"
+        >
           정산 정보 확인
         </button>
       </div>

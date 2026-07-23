@@ -12,6 +12,12 @@ import SocialSignupPage from '../pages/SocialSignupPage.vue'
 import VerifyEmailPage from '../pages/VerifyEmailPage.vue'
 import EmailVerificationRequestedPage from '../pages/EmailVerificationRequestedPage.vue'
 import SocialAccountsPage from '../pages/SocialAccountsPage.vue'
+import TermsPage from '../pages/TermsPage.vue'
+import PrivacyPage from '../pages/PrivacyPage.vue'
+import ComingSoonPage from '../pages/ComingSoonPage.vue'
+import MyFavoritesPage from '../pages/MyFavoritesPage.vue'
+import MyProfilePage from '../pages/MyProfilePage.vue'
+import { getAccessToken } from '../auth/session'
 
 const routes = [
   { path: '/', name: 'home', component: HomePage },
@@ -20,13 +26,39 @@ const routes = [
   { path: '/signup/social', name: 'social-signup', component: SocialSignupPage },
   { path: '/verify-email', name: 'verify-email', component: VerifyEmailPage },
   { path: '/verify-email/requested', name: 'verify-email-requested', component: EmailVerificationRequestedPage },
-  { path: '/mypage/social-accounts', name: 'social-accounts', component: SocialAccountsPage },
+  {
+    path: '/mypage/profile',
+    name: 'my-profile',
+    component: MyProfilePage,
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/mypage/favorites',
+    name: 'my-favorites',
+    component: MyFavoritesPage,
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/mypage/social-accounts',
+    name: 'social-accounts',
+    component: SocialAccountsPage,
+    meta: { requiresAuth: true },
+  },
   { path: '/auth/callback/:provider', name: 'oauth-callback', component: OAuthCallbackPage },
+  { path: '/terms/service', name: 'terms-service', component: TermsPage },
+  { path: '/terms/privacy', name: 'terms-privacy', component: PrivacyPage },
   { path: '/seller/dashboard', name: 'seller-dashboard', component: SellerDashboardPage },
-  { path: '/mypage/orders', name: 'my-orders', component: MyOrdersPage },
+  {
+    path: '/mypage/orders',
+    name: 'my-orders',
+    component: MyOrdersPage,
+    meta: { requiresAuth: true },
+  },
   { path: '/seller/apply', name: 'seller-apply', component: SellerApplyPage },
   { path: '/seller/products', name: 'seller-products', component: ProductManagePage },
   { path: '/admin', name: 'admin', component: AdminPage },
+  { path: '/coming-soon/:feature', name: 'coming-soon', component: ComingSoonPage },
+  { path: '/:pathMatch(.*)*', redirect: '/coming-soon/not-found' },
 
   // 각자 담당 페이지는 여기에 이렇게 추가하면 됩니다:
   // { path: '/checkout', name: 'checkout', component: () => import('../pages/CheckoutPage.vue') },
@@ -35,6 +67,18 @@ const routes = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
+  scrollBehavior(to) {
+    if (to.hash) return { el: to.hash, behavior: 'smooth' }
+    return { top: 0 }
+  },
+})
+
+router.beforeEach((to) => {
+  if (!to.meta.requiresAuth || getAccessToken()) return true
+  return {
+    name: 'login',
+    query: { redirect: to.fullPath },
+  }
 })
 
 export default router

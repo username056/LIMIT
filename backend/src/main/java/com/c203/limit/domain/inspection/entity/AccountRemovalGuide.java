@@ -37,7 +37,7 @@ public class AccountRemovalGuide {
     private List<String> steps;
 
     @Lob
-    @Column(name = "disclaimer_text", nullable = false)
+    @Column(name = "disclaimer_text", nullable = false, columnDefinition = "LONGTEXT")
     private String disclaimerText;
 
     @Column(name = "created_at", nullable = false)

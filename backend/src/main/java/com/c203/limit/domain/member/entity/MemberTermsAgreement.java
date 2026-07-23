@@ -12,7 +12,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
-import java.time.OffsetDateTime;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(
@@ -40,10 +40,10 @@ public class MemberTermsAgreement {
     private boolean isAgreed;
 
     @Column(name = "agreed_at")
-    private OffsetDateTime agreedAt;
+    private LocalDateTime agreedAt;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    private OffsetDateTime createdAt;
+    private LocalDateTime createdAt;
 
     protected MemberTermsAgreement() {}
 
@@ -54,7 +54,7 @@ public class MemberTermsAgreement {
         agreement.termsCode = termsCode;
         agreement.termsVersion = termsVersion;
         agreement.isAgreed = isAgreed;
-        agreement.createdAt = OffsetDateTime.now();
+        agreement.createdAt = LocalDateTime.now();
         agreement.agreedAt = isAgreed ? agreement.createdAt : null;
         return agreement;
     }
@@ -75,7 +75,7 @@ public class MemberTermsAgreement {
         return isAgreed;
     }
 
-    public OffsetDateTime getAgreedAt() {
+    public LocalDateTime getAgreedAt() {
         return agreedAt;
     }
 }

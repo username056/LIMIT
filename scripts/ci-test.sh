@@ -19,6 +19,11 @@ run_backend_integration() {
   ./gradlew integrationTest --no-daemon
 }
 
+run_backend_infrastructure() {
+  cd "$root_dir/backend"
+  ./gradlew infrastructureTest --no-daemon
+}
+
 run_backend_package() {
   cd "$root_dir/backend"
   ./gradlew bootJar -x test -x integrationTest --no-daemon
@@ -52,6 +57,7 @@ case "$scope" in
   backend-compile) run_backend_compile ;;
   backend-unit) run_backend_unit ;;
   backend-integration) run_backend_integration ;;
+  backend-infrastructure) run_backend_infrastructure ;;
   backend-package) run_backend_package ;;
   backend-scripts) run_backend_scripts ;;
   backend) run_backend ;;
@@ -61,7 +67,7 @@ case "$scope" in
     run_frontend
     ;;
   *)
-    echo "usage: $0 [backend-compile|backend-unit|backend-integration|backend-package|backend-scripts|backend|frontend|all]" >&2
+    echo "usage: $0 [backend-compile|backend-unit|backend-integration|backend-infrastructure|backend-package|backend-scripts|backend|frontend|all]" >&2
     exit 64
     ;;
 esac

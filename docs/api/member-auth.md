@@ -10,6 +10,17 @@
 - Access Token 발급과 HttpOnly Refresh Token 쿠키 회전
 - 서비스·개인정보·만 14세 이상 필수 동의 및 마케팅 선택 동의 이력 저장
 
+## 날짜·시간 계약
+
+회원·인증 API의 날짜·시간 값은 DB `DATETIME(6)` 및 공통 `BaseTimeEntity`와 동일하게 오프셋 없는 ISO-8601 `LocalDateTime` 형식을 사용한다.
+
+```text
+2026-07-23T10:30:00
+2026-07-23T10:30:00.123456
+```
+
+`createdAt`과 `updatedAt`은 JPA Auditing으로 기록하며, 프로필 변경·비밀번호 변경·로그인·이메일 인증 같은 엔티티 변경 시 `updatedAt`도 갱신된다.
+
 ## 회원가입 계약
 
 이메일 회원가입은 `POST /api/v1/members`를 사용한다. `email`, `password`, `nickname`은 필수이고 `phone`은 선택이다.
@@ -69,4 +80,4 @@ Access Token은 성공 응답의 `data.accessToken`으로 반환하며 API 요�
 
 ## DB 반영
 
-기존 DB에는 `backend/src/main/resources/db/manual/V20260722__member_terms_agreement.sql`을 검토 후 수동 적용한다. 전체 절차는 `docs/integration/database-schema-runbook.md`를 따른다.
+약관 동의 이력 테이블은 Flyway `V20260722__member_terms_agreement.sql`이 적용한다. 기존 운영 DB의 최초 baseline 절차는 `docs/integration/database-schema-runbook.md`를 따른다.

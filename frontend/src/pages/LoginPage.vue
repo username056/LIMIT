@@ -1,20 +1,31 @@
 <script setup>
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
+import AuthShell from '../components/AuthShell.vue'
 import BaseInput from '../components/BaseInput.vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseCard from '../components/BaseCard.vue'
+import SocialProviderButton from '../components/SocialProviderButton.vue'
 import { loginWithEmail } from '../api/auth'
 import { setAuthSession } from '../auth/session'
 import { startOAuthLogin } from '../auth/oauth'
 
 const router = useRouter()
+const route = useRoute()
 const email = ref('')
 const password = ref('')
 const isLoading = ref(false)
 const socialLoading = ref('')
 const errorMessage = ref('')
+const successMessage = ref(route.query.passwordChanged ? '비밀번호가 변경되었습니다. 다시 로그인해 주세요.' : '')
+
+function safeRedirectPath() {
+  const redirect = route.query.redirect
+  return typeof redirect === 'string' && redirect.startsWith('/') && !redirect.startsWith('//')
+    ? redirect
+    : '/'
+}
 
 async function submitEmailLogin() {
   if (isLoading.value) return
@@ -23,7 +34,7 @@ async function submitEmailLogin() {
   try {
     const result = await loginWithEmail(email.value, password.value)
     setAuthSession(result)
-    await router.push('/')
+    await router.push(safeRedirectPath())
   } catch (error) {
     errorMessage.value = error.message || '로그인에 실패했습니다.'
   } finally {
@@ -44,31 +55,31 @@ async function socialLogin(provider) {
 }
 
 const providers = [
-  { id: 'google', label: 'Google로 계속하기', className: 'border-border bg-white' },
-  { id: 'kakao', label: '카카오로 계속하기', className: 'border-[#FEE500] bg-[#FEE500]' },
-  { id: 'naver', label: '네이버로 계속하기', className: 'border-[#03C75A] bg-[#03C75A] text-white' },
+  { id: 'google', label: 'Google' },
+  { id: 'naver', label: '네이버' },
+  { id: 'kakao', label: '카카오' },
 ]
 </script>
 
 <template>
   <DefaultLayout>
-    <section class="mx-auto max-w-md px-6 py-16 text-center">
-      <p class="mb-2 text-sm font-semibold text-primary">
-        Limit
-      </p>
-      <h1 class="mb-2 text-2xl font-bold text-text-main">
-        다시 만나서 반가워요
-      </h1>
-      <p class="mb-8 text-sm text-text-sub">
-        이메일 또는 소셜 계정으로 로그인해 주세요.
-      </p>
-
-      <BaseCard class="text-left">
+    <AuthShell
+      title="로그인"
+      description="이메일 또는 자주 사용하는 소셜 계정으로 안전하게 시작하세요."
+    >
+      <BaseCard class="p-7 sm:p-8">
+        <p
+          v-if="successMessage"
+          class="mb-5 rounded-md bg-green-50 px-4 py-3 text-sm text-green-700"
+          role="status"
+        >
+          {{ successMessage }}
+        </p>
         <form @submit.prevent="submitEmailLogin">
-          <div class="space-y-4">
+          <div class="space-y-5">
             <BaseInput
               v-model="email"
-              label="이메일 주소"
+              label="이메일"
               type="email"
               placeholder="name@example.com"
             />
@@ -78,6 +89,9 @@ const providers = [
               type="password"
               placeholder="비밀번호를 입력해 주세요"
             />
+          </div>
+          <div class="mt-3 text-right">
+            <span class="text-xs text-text-sub">비밀번호 찾기는 준비 중입니다.</span>
           </div>
           <BaseButton
             block
@@ -89,44 +103,41 @@ const providers = [
           </BaseButton>
         </form>
 
-        <p class="mt-4 text-center text-sm text-text-sub">
+        <p class="mt-5 text-center text-sm text-text-sub">
           아직 회원이 아닌가요?
           <RouterLink
-            class="font-semibold text-primary"
+            class="ml-1 font-semibold text-primary"
             to="/signup"
           >
             회원가입
           </RouterLink>
         </p>
 
-        <div class="my-6 flex items-center gap-3 text-xs text-text-sub">
+        <div class="my-7 flex items-center gap-3 text-xs text-text-sub">
           <span class="h-px flex-1 bg-border" />
-          <span>또는</span>
+          <span>소셜 계정으로 계속하기</span>
           <span class="h-px flex-1 bg-border" />
         </div>
 
-        <div class="grid gap-3">
-          <button
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <SocialProviderButton
             v-for="provider in providers"
             :key="provider.id"
-            class="rounded-lg border px-4 py-3 text-center text-sm font-semibold text-text-main transition hover:brightness-95 disabled:opacity-60"
-            :class="provider.className"
-            type="button"
-            :disabled="Boolean(socialLoading)"
+            :provider="provider.id"
+            :label="provider.label"
+            :loading="socialLoading === provider.id"
             @click="socialLogin(provider.id)"
-          >
-            {{ socialLoading === provider.id ? '연결 중...' : provider.label }}
-          </button>
+          />
         </div>
 
         <p
           v-if="errorMessage"
-          class="mt-4 text-sm text-red-500"
+          class="mt-5 rounded-md bg-red-50 px-4 py-3 text-sm text-red-600"
           role="alert"
         >
           {{ errorMessage }}
         </p>
       </BaseCard>
-    </section>
+    </AuthShell>
   </DefaultLayout>
 </template>

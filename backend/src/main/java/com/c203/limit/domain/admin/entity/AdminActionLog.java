@@ -1,7 +1,7 @@
 package com.c203.limit.domain.admin.entity;
 
 import jakarta.persistence.*;
-import java.time.OffsetDateTime;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "admin_action_log")
@@ -36,7 +36,7 @@ public class AdminActionLog {
     private String ipAddress;
 
     @Column(name = "created_at", nullable = false)
-    private OffsetDateTime createdAt;
+    private LocalDateTime createdAt;
 
     protected AdminActionLog() {}
 
@@ -48,7 +48,7 @@ public class AdminActionLog {
         l.targetType = target;
         l.targetId = targetId;
         l.reason = reason;
-        l.createdAt = OffsetDateTime.now();
+        l.createdAt = LocalDateTime.now();
         return l;
     }
 
@@ -88,7 +88,7 @@ public class AdminActionLog {
         return ipAddress;
     }
 
-    public OffsetDateTime getCreatedAt() {
+    public LocalDateTime getCreatedAt() {
         return createdAt;
     }
 }

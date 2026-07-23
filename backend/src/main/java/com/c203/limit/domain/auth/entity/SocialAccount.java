@@ -2,7 +2,7 @@ package com.c203.limit.domain.auth.entity;
 
 import com.c203.limit.domain.member.entity.Member;
 import jakarta.persistence.*;
-import java.time.OffsetDateTime;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(
@@ -29,7 +29,7 @@ public class SocialAccount {
     private String providerEmail;
 
     @Column(name = "linked_at", nullable = false)
-    private OffsetDateTime linkedAt;
+    private LocalDateTime linkedAt;
 
     protected SocialAccount() {}
 
@@ -40,7 +40,7 @@ public class SocialAccount {
         account.provider = provider;
         account.providerUserId = providerUserId;
         account.providerEmail = providerEmail;
-        account.linkedAt = OffsetDateTime.now();
+        account.linkedAt = LocalDateTime.now();
         return account;
     }
 
@@ -60,7 +60,7 @@ public class SocialAccount {
         return providerEmail;
     }
 
-    public OffsetDateTime getLinkedAt() {
+    public LocalDateTime getLinkedAt() {
         return linkedAt;
     }
 }

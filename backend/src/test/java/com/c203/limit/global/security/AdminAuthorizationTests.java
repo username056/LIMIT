@@ -18,8 +18,13 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 import org.springframework.test.util.ReflectionTestUtils;
 import com.c203.limit.domain.admin.repository.*;
+import com.c203.limit.domain.chat.repository.ChatRoomParticipantRepository;
+import com.c203.limit.domain.chat.repository.ChatMessageRepository;
+import com.c203.limit.domain.chat.repository.ChatRoomRepository;
+import com.c203.limit.domain.chat.repository.ListingChatReader;
 import com.c203.limit.domain.auth.repository.SocialAccountRepository;
 import com.c203.limit.domain.member.repository.MemberRepository;
 import com.c203.limit.domain.member.repository.MemberTermsAgreementRepository;
@@ -41,12 +46,24 @@ import com.c203.limit.domain.member.entity.Member;
 class AdminAuthorizationTests {
     @Autowired MockMvc mockMvc;
     @Autowired JwtTokenProvider tokens;
+    @MockitoBean JpaMetamodelMappingContext jpaMetamodelMappingContext;
     @MockitoBean MemberRepository members;
-    @MockitoBean MemberTermsAgreementRepository termsAgreements;
+    @MockitoBean MemberTermsAgreementRepository memberTermsAgreements;
     @MockitoBean SocialAccountRepository socialAccounts;
     @MockitoBean AdminAccountRepository admins;
     @MockitoBean MemberRestrictionRepository restrictions;
     @MockitoBean AdminActionLogRepository logs;
+    @MockitoBean ChatRoomRepository chatRoomRepository;
+    @MockitoBean ChatRoomParticipantRepository chatRoomParticipantRepository;
+    @MockitoBean ChatMessageRepository chatMessageRepository;
+    @MockitoBean ListingChatReader listingChatReader;
+
+    @Test
+    void publicHealthEndpointDoesNotRequireAuthentication() throws Exception {
+        mockMvc.perform(get("/api/v1/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("UP"));
+    }
 
     @Test
     void memberCannotReadAdminApi() throws Exception {

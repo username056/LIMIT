@@ -32,7 +32,7 @@ public class OcrResult {
     private OcrFieldType fieldType;
 
     @Lob
-    @Column(name = "raw_text")
+    @Column(name = "raw_text", columnDefinition = "LONGTEXT")
     private String rawText;
 
     @Column(name = "parsed_value", length = 200)

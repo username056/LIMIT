@@ -38,6 +38,8 @@ if [[ ! -f "$env_file" ]]; then
     printf 'REDIS_PASSWORD=%s\n' "$redis_password"
     printf 'REFRESH_TOKEN_STORE=redis\n'
     printf 'JWT_SECRET=%s\n' "$jwt_secret"
+    printf 'FLYWAY_BASELINE_ON_MIGRATE=false\n'
+    printf 'FLYWAY_BASELINE_VERSION=1\n'
     printf 'EMAIL_VERIFICATION_STORE=redis\n'
     printf 'EMAIL_VERIFICATION_DELIVERY_ENABLED=false\n'
     printf 'FRONTEND_EMAIL_VERIFICATION_URL=https://l1mit.shop/verify-email\n'
