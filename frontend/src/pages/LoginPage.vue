@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import AuthShell from '../components/AuthShell.vue'
 import BaseInput from '../components/BaseInput.vue'
@@ -12,11 +12,20 @@ import { setAuthSession } from '../auth/session'
 import { startOAuthLogin } from '../auth/oauth'
 
 const router = useRouter()
+const route = useRoute()
 const email = ref('')
 const password = ref('')
 const isLoading = ref(false)
 const socialLoading = ref('')
 const errorMessage = ref('')
+const successMessage = ref(route.query.passwordChanged ? '비밀번호가 변경되었습니다. 다시 로그인해 주세요.' : '')
+
+function safeRedirectPath() {
+  const redirect = route.query.redirect
+  return typeof redirect === 'string' && redirect.startsWith('/') && !redirect.startsWith('//')
+    ? redirect
+    : '/'
+}
 
 async function submitEmailLogin() {
   if (isLoading.value) return
@@ -25,7 +34,7 @@ async function submitEmailLogin() {
   try {
     const result = await loginWithEmail(email.value, password.value)
     setAuthSession(result)
-    await router.push('/')
+    await router.push(safeRedirectPath())
   } catch (error) {
     errorMessage.value = error.message || '로그인에 실패했습니다.'
   } finally {
@@ -59,6 +68,13 @@ const providers = [
       description="이메일 또는 자주 사용하는 소셜 계정으로 안전하게 시작하세요."
     >
       <BaseCard class="p-7 sm:p-8">
+        <p
+          v-if="successMessage"
+          class="mb-5 rounded-md bg-green-50 px-4 py-3 text-sm text-green-700"
+          role="status"
+        >
+          {{ successMessage }}
+        </p>
         <form @submit.prevent="submitEmailLogin">
           <div class="space-y-5">
             <BaseInput
