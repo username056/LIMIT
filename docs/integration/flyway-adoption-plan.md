@@ -45,12 +45,14 @@ db/migration/
 ├─ V3__create_inspection_tables.sql
 ├─ V4__create_payment_refund_settlement_tables.sql
 ├─ V20260721__member_admin_alignment.sql
-└─ V20260722__member_terms_agreement.sql
+├─ V20260722__member_terms_agreement.sql
+└─ V20260723__create_product_checklist_tables.sql
 ```
 
 - V1은 빈 DB의 회원·인증·관리자 기준 스키마다.
 - V2~V4는 chat/rtc/call, inspection, payment/refund/settlement 도메인을 추가한다.
 - V20260721과 V20260722는 기존 운영 DB도 자동 전환할 수 있도록 비파괴·반복 안전 방식으로 보정했다.
+- V20260723은 이미 V20260722까지 적용된 운영 DB에서도 순서대로 실행되도록 상품·체크리스트 스키마를 추가한다.
 - 과거 `db/manual` SQL은 자동 적용 대상에서 제외했던 초안이다. 최종 통합에서는 삭제·데이터 유실 구문을 제거한 뒤 versioned migration으로 편입했다.
 - Docker init SQL 마운트는 사용하지 않는다. 스키마 적용 주체를 Flyway 하나로 유지한다.
 

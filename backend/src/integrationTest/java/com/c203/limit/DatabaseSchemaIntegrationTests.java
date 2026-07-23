@@ -54,6 +54,8 @@ class DatabaseSchemaIntegrationTests {
         assertThat(tableExists("admin_account")).isTrue();
         assertThat(tableExists("member_sanction")).isTrue();
         assertThat(tableExists("admin_action_log")).isTrue();
+        assertThat(tableExists("listing")).isTrue();
+        assertThat(tableExists("checklist_template_item")).isTrue();
     }
 
     @Test

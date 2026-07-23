@@ -101,12 +101,19 @@ class FlywayMigrationIntegrationTests {
         assertThat(tableExists("chat_room")).isTrue();
         assertThat(tableExists("ocr_result")).isTrue();
         assertThat(tableExists("payment")).isTrue();
+        assertThat(tableExists("listing")).isTrue();
+        assertThat(tableExists("checklist_template_item")).isTrue();
         assertThat(tableExists("member_role")).isTrue();
         assertThat(tableExists("user_sanction")).isTrue();
         assertThat(singleString("SELECT member_type FROM user_account WHERE email = 'legacy@example.com'"))
                 .isEqualTo("SELLER");
         assertThat(singleLong("SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1"))
-                .isGreaterThanOrEqualTo(6L);
+                .isGreaterThanOrEqualTo(7L);
+        assertThat(singleString(
+                        "SELECT version FROM flyway_schema_history "
+                                + "WHERE success = 1 AND version IS NOT NULL "
+                                + "ORDER BY installed_rank DESC LIMIT 1"))
+                .isEqualTo("20260723");
     }
 
     private static boolean tableExists(String tableName) throws SQLException {

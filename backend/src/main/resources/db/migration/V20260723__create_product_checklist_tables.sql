@@ -1,4 +1,4 @@
--- product 도메인(매물/카테고리/찜) + inspection 도메인(체크리스트/증거/재검수) 테이블
+-- 2026-07-23 product 도메인(매물/카테고리/찜) + inspection 도메인(체크리스트/증거/재검수) 테이블
 -- 근거: com.c203.limit.domain.product, com.c203.limit.domain.inspection 패키지 Entity
 --
 -- FK 정책: AGENTS.md의 "도메인 간 Entity를 직접 공유하지 않고 Service, ID, 이벤트 또는 명시적인
