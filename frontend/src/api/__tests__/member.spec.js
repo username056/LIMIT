@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { changeMyPassword, getMyProfile, updateMyProfile } from '../member'
 import { clearAuthSession, setAuthSession } from '../../auth/session'
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
+
 function ok(data) {
   return {
     ok: true,
@@ -21,7 +23,7 @@ describe('member api', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(getMyProfile()).resolves.toMatchObject({ memberId: 1 })
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/members/me', expect.objectContaining({
+    expect(fetchMock).toHaveBeenCalledWith(`${API_BASE_URL}/members/me`, expect.objectContaining({
       method: 'GET',
       headers: expect.objectContaining({ Authorization: 'Bearer member-token' }),
     }))
@@ -36,11 +38,11 @@ describe('member api', () => {
     await updateMyProfile({ nickname: 'new-name' })
     await changeMyPassword('Password123!', 'NewPassword456!')
 
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/v1/members/me', expect.objectContaining({
+    expect(fetchMock).toHaveBeenNthCalledWith(1, `${API_BASE_URL}/members/me`, expect.objectContaining({
       method: 'PATCH',
       body: JSON.stringify({ nickname: 'new-name' }),
     }))
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/v1/members/me/password', expect.objectContaining({
+    expect(fetchMock).toHaveBeenNthCalledWith(2, `${API_BASE_URL}/members/me/password`, expect.objectContaining({
       method: 'PATCH',
       body: JSON.stringify({
         currentPassword: 'Password123!',
