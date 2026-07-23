@@ -17,6 +17,7 @@ import com.c203.limit.domain.admin.repository.AdminAccountRepository;
 import com.c203.limit.domain.admin.repository.AdminActionLogRepository;
 import com.c203.limit.domain.admin.repository.MemberRestrictionRepository;
 import com.c203.limit.domain.auth.repository.SocialAccountRepository;
+import com.c203.limit.domain.chat.repository.ChatMessageRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomParticipantRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomRepository;
 import com.c203.limit.domain.chat.repository.ListingChatReader;
@@ -65,6 +66,9 @@ class ProductMockControllerTests {
 
     @MockitoBean
     ChatRoomParticipantRepository chatRoomParticipantRepository;
+
+    @MockitoBean
+    ChatMessageRepository chatMessageRepository;
 
     @MockitoBean
     ListingChatReader listingChatReader;

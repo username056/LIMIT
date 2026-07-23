@@ -7,6 +7,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.List;
+import java.time.LocalDateTime;
+import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,6 +20,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.c203.limit.domain.chat.dto.response.ChatRoomResponse;
 import com.c203.limit.domain.chat.dto.response.ChatRoomSummaryResponse;
+import com.c203.limit.domain.chat.dto.response.ChatMessageResponse;
 import com.c203.limit.domain.chat.service.ChatRoomCreateResult;
 import com.c203.limit.domain.chat.service.ChatRoomService;
 import com.c203.limit.global.security.CurrentUser;
@@ -90,6 +93,25 @@ class ChatRoomControllerTests {
                 .andExpect(jsonPath("$.data.content[0].unreadCount").value(2))
                 .andExpect(jsonPath("$.data.nextCursor").value("40"))
                 .andExpect(jsonPath("$.data.hasNext").value(true));
+    }
+
+    @Test
+    void returnsMessagesAfterLastReceivedSequence() throws Exception {
+        ChatMessageResponse message = new ChatMessageResponse(
+                101L, 8L, SELLER_ID, new UUID(0L, 1L), "TEXT", "안녕하세요", "SENT",
+                LocalDateTime.of(2026, 7, 23, 12, 0));
+        when(currentUser.memberId()).thenReturn(BUYER_ID);
+        when(chatRoomService.findMessages(ROOM_ID, BUYER_ID, null, 7L, 10))
+                .thenReturn(new CursorResponse<>(List.of(message), null, false));
+
+        mockMvc.perform(get("/api/v1/chat-rooms/{roomId}/messages", ROOM_ID)
+                        .param("afterSeq", "7")
+                        .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].messageId").value(101L))
+                .andExpect(jsonPath("$.data.content[0].roomSequence").value(8L))
+                .andExpect(jsonPath("$.data.content[0].type").value("TEXT"))
+                .andExpect(jsonPath("$.data.hasNext").value(false));
     }
 
     private ChatRoomResponse response() {

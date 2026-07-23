@@ -22,6 +22,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import com.c203.limit.domain.auth.repository.SocialAccountRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomParticipantRepository;
+import com.c203.limit.domain.chat.repository.ChatMessageRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomRepository;
 import com.c203.limit.domain.chat.repository.ListingChatReader;
 import com.c203.limit.domain.member.repository.MemberRepository;
@@ -73,6 +74,9 @@ class OpenApiContractTests {
     ChatRoomParticipantRepository chatRoomParticipantRepository;
 
     @MockitoBean
+    ChatMessageRepository chatMessageRepository;
+
+    @MockitoBean
     ListingChatReader listingChatReader;
 
     @Autowired
@@ -92,6 +96,8 @@ class OpenApiContractTests {
                 .andExpect(jsonPath("$.paths['/api/v1/health'].get.summary").value("애플리케이션 상태 확인"))
                 .andExpect(jsonPath("$.components.schemas.ChatRoomResponse").exists())
                 .andExpect(jsonPath("$.components.schemas.CursorResponse").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/chat-rooms/{roomId}/messages'].get.operationId")
+                        .value("chatBe06"))
                 .andExpect(jsonPath("$.paths['/api/v1/members'].post.operationId").value("auth03"))
                 .andExpect(jsonPath("$.paths['/api/v1/members/me'].get.operationId").value("member01"))
                 .andExpect(jsonPath("$.components.schemas.SignupRequest").exists())
@@ -139,6 +145,8 @@ class OpenApiContractTests {
                         .isArray())
                 .andExpect(jsonPath("$.paths['/api/v1/chat-rooms'].get.operationId")
                         .value("chatBe07"))
+                .andExpect(jsonPath("$.paths['/api/v1/chat-rooms/{roomId}/messages'].get.operationId")
+                        .value("chatBe06"))
                 .andExpect(jsonPath("$.paths['/api/v1/chat-rooms'].get.security[0].bearerAuth")
                         .isArray())
                 .andExpect(jsonPath("$.paths['/api/v1/auth/sessions']").doesNotExist());
