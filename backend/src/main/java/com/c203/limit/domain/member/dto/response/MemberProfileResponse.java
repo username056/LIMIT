@@ -1,7 +1,7 @@
 package com.c203.limit.domain.member.dto.response;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import java.time.OffsetDateTime;
+import java.time.LocalDateTime;
 import java.util.Set;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -49,17 +49,17 @@ public class MemberProfileResponse {
             description = "이메일 인증 시각",
             example = "null",
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-    private final OffsetDateTime emailVerifiedAt;
+    private final LocalDateTime emailVerifiedAt;
 
     @Schema(
             description = "최근 로그인 시각",
-            example = "2026-07-16T10:50:00+09:00",
+            example = "2026-07-16T10:50:00",
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-    private final OffsetDateTime lastLoginAt;
+    private final LocalDateTime lastLoginAt;
 
     @Schema(
             description = "가입 시각",
-            example = "2026-07-01T10:00:00+09:00",
+            example = "2026-07-01T10:00:00",
             requiredMode = Schema.RequiredMode.REQUIRED)
-    private final OffsetDateTime createdAt;
+    private final LocalDateTime createdAt;
 }

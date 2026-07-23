@@ -3,7 +3,7 @@ package com.c203.limit.domain.admin.entity;
 import com.c203.limit.domain.member.entity.Member;
 import com.c203.limit.global.exception.*;
 import jakarta.persistence.*;
-import java.time.OffsetDateTime;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "member_sanction")
@@ -30,16 +30,16 @@ public class MemberRestriction {
     private String status;
 
     @Column(name = "start_at", nullable = false)
-    private OffsetDateTime startsAt;
+    private LocalDateTime startsAt;
 
     @Column(name = "end_at", nullable = false)
-    private OffsetDateTime endsAt;
+    private LocalDateTime endsAt;
 
     @Column(name = "admin_id", nullable = false)
     private Long createdBy;
 
     @Column(name = "released_at")
-    private OffsetDateTime releasedAt;
+    private LocalDateTime releasedAt;
 
     @Column(name = "release_admin_id")
     private Long releasedBy;
@@ -48,7 +48,7 @@ public class MemberRestriction {
     private String releaseReason;
 
     @Column(name = "created_at", nullable = false)
-    private OffsetDateTime createdAt;
+    private LocalDateTime createdAt;
 
     protected MemberRestriction() {}
 
@@ -57,8 +57,8 @@ public class MemberRestriction {
             String type,
             String code,
             String detail,
-            OffsetDateTime start,
-            OffsetDateTime end,
+            LocalDateTime start,
+            LocalDateTime end,
             Long admin) {
         if (start == null || end == null || !end.isAfter(start))
             throw new BusinessException(ErrorCode.INVALID_RESTRICTION_PERIOD);
@@ -71,7 +71,7 @@ public class MemberRestriction {
         r.startsAt = start;
         r.endsAt = end;
         r.createdBy = admin;
-        r.createdAt = OffsetDateTime.now();
+        r.createdAt = LocalDateTime.now();
         return r;
     }
 
@@ -80,7 +80,7 @@ public class MemberRestriction {
         status = "RELEASED";
         releasedBy = admin;
         releaseReason = reason;
-        releasedAt = OffsetDateTime.now();
+        releasedAt = LocalDateTime.now();
     }
 
     public Long getId() {
@@ -107,11 +107,11 @@ public class MemberRestriction {
         return status;
     }
 
-    public OffsetDateTime getStartsAt() {
+    public LocalDateTime getStartsAt() {
         return startsAt;
     }
 
-    public OffsetDateTime getEndsAt() {
+    public LocalDateTime getEndsAt() {
         return endsAt;
     }
 
@@ -119,7 +119,7 @@ public class MemberRestriction {
         return createdBy;
     }
 
-    public OffsetDateTime getReleasedAt() {
+    public LocalDateTime getReleasedAt() {
         return releasedAt;
     }
 
@@ -131,7 +131,7 @@ public class MemberRestriction {
         return releaseReason;
     }
 
-    public OffsetDateTime getCreatedAt() {
+    public LocalDateTime getCreatedAt() {
         return createdAt;
     }
 }

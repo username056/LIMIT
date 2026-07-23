@@ -1,7 +1,7 @@
 package com.c203.limit.domain.auth.dto.response;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import java.time.OffsetDateTime;
+import java.time.LocalDateTime;
 import java.util.Set;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -38,7 +38,7 @@ public class SignupResponse {
 
     @Schema(
             description = "가입 시각",
-            example = "2026-07-16T11:00:00+09:00",
+            example = "2026-07-16T11:00:00",
             requiredMode = Schema.RequiredMode.REQUIRED)
-    private final OffsetDateTime createdAt;
+    private final LocalDateTime createdAt;
 }
