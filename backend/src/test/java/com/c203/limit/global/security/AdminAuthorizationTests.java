@@ -57,6 +57,13 @@ class AdminAuthorizationTests {
     @MockitoBean ListingChatReader listingChatReader;
 
     @Test
+    void publicHealthEndpointDoesNotRequireAuthentication() throws Exception {
+        mockMvc.perform(get("/api/v1/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("UP"));
+    }
+
+    @Test
     void memberCannotReadAdminApi() throws Exception {
         mockMvc.perform(get("/api/v1/admin/members").header("Authorization", memberBearer()))
                 .andExpect(status().isForbidden());
