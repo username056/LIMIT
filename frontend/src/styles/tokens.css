@@ -11,15 +11,15 @@
   --color-primary: #6C8DFF;         /* 밝은 블루 (텍스트/강조, 버튼 아닌 일반 텍스트용) */
   --color-primary-dark: #5B7FFF;    /* hover 등 보조용 */
   --color-gradient-start: #6366F1;  /* 그라데이션 왼쪽 (인디고) */
-  --color-gradient-end: #7FB4F5;    /* 그라데이션 오른쪽 (하늘색) */
-  --color-primary-gradient: linear-gradient(90deg, #6366F1 0%, #7FB4F5 100%);
+  --color-gradient-end: #93C5FD;    /* 그라데이션 오른쪽 (하늘색) */
+  --color-primary-gradient: linear-gradient(90deg, #6366F1 0%, #93C5FD 100%);
 
   --color-accent-bg: #EFF5FF;       /* 라이트 스카이블루 배경 (뱃지, 알림바) */
   --color-border: #E2E8F5;          /* 카드/인풋 테두리 */
   --color-border-focus: #6C8DFF;
 
   --color-text-main: #1F2937;       /* 순검정 대신 부드러운 다크 그레이 */
-  --color-text-sub: #8A94A6;
+  --color-text-sub: #64748B;
   --color-text-link: #6C8DFF;
 
   --color-success: #16A34A;
