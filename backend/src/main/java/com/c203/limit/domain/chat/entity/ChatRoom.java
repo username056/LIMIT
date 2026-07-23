@@ -3,6 +3,7 @@ package com.c203.limit.domain.chat.entity;
 import java.time.LocalDateTime;
 
 import com.c203.limit.domain.chat.domain.ChatRoomStatus;
+import com.c203.limit.global.common.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -17,7 +18,7 @@ import jakarta.persistence.UniqueConstraint;
 @Table(name = "chat_room", uniqueConstraints = @UniqueConstraint(
         name = "UK_CHAT_ROOM_LISTING_USERS",
         columnNames = {"listing_id", "buyer_id", "seller_id"}))
-public class ChatRoom {
+public class ChatRoom extends BaseTimeEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -47,12 +48,6 @@ public class ChatRoom {
     @Column(name = "last_message_at")
     private LocalDateTime lastMessageAt;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
-
     @Column(name = "closed_at")
     private LocalDateTime closedAt;
 
@@ -65,8 +60,6 @@ public class ChatRoom {
         room.sellerId = sellerId;
         room.status = ChatRoomStatus.ACTIVE;
         room.lastMessageSeq = 0L;
-        room.createdAt = LocalDateTime.now();
-        room.updatedAt = room.createdAt;
         return room;
     }
 
@@ -75,5 +68,4 @@ public class ChatRoom {
     public Long getBuyerId() { return buyerId; }
     public Long getSellerId() { return sellerId; }
     public ChatRoomStatus getStatus() { return status; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
 }

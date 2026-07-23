@@ -3,6 +3,7 @@ package com.c203.limit.domain.chat.entity;
 import java.time.LocalDateTime;
 
 import com.c203.limit.domain.chat.domain.ParticipantRole;
+import com.c203.limit.global.common.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -18,7 +19,7 @@ import jakarta.persistence.UniqueConstraint;
         @UniqueConstraint(name = "UK_CHAT_ROOM_PARTICIPANT_USER", columnNames = {"chat_room_id", "user_id"}),
         @UniqueConstraint(name = "UK_CHAT_ROOM_PARTICIPANT_ROLE", columnNames = {"chat_room_id", "participant_role"})
 })
-public class ChatRoomParticipant {
+public class ChatRoomParticipant extends BaseTimeEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -42,12 +43,6 @@ public class ChatRoomParticipant {
     @Column(name = "left_at")
     private LocalDateTime leftAt;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
-
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
-
     protected ChatRoomParticipant() {}
 
     public static ChatRoomParticipant create(Long chatRoomId, Long userId, ParticipantRole role) {
@@ -57,8 +52,6 @@ public class ChatRoomParticipant {
         participant.role = role;
         participant.lastReadSeq = 0L;
         participant.joinedAt = LocalDateTime.now();
-        participant.createdAt = participant.joinedAt;
-        participant.updatedAt = participant.joinedAt;
         return participant;
     }
 }
