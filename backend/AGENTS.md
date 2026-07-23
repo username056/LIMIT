@@ -6,7 +6,6 @@
 - Controller는 요청·응답 변환, Service는 유스케이스, Domain은 비즈니스 규칙을 담당한다.
 - 도메인 간 Entity를 직접 공유하지 않고 Service, ID, 이벤트 또는 명시적인 인터페이스를 사용한다.
 - Entity를 API에 직접 노출하지 않고 Request/Response DTO를 분리한다.
-- 단순 불변 DTO는 Java `record`를 우선한다.
 - API prefix는 `/api/v1`, 성공 응답은 공통 `ApiResponse`를 사용한다.
 - 읽기 작업에는 `@Transactional(readOnly = true)`를 사용하고 트랜잭션 안에서 외부 API 호출을 오래 유지하지 않는다.
 - JPA 연관관계는 단방향과 `LAZY`를 우선하며 생명주기가 완전히 같을 때만 cascade와 orphan removal을 사용한다.
