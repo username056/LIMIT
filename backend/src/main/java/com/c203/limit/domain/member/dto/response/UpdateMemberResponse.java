@@ -1,8 +1,7 @@
 package com.c203.limit.domain.member.dto.response;
 
-import java.time.OffsetDateTime;
-
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.time.OffsetDateTime;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
@@ -15,12 +14,21 @@ public class UpdateMemberResponse {
     @Schema(description = "회원 ID", example = "1", requiredMode = Schema.RequiredMode.REQUIRED)
     private final Long memberId;
 
-    @Schema(description = "수정된 닉네임", example = "newNickname", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "수정된 닉네임",
+            example = "newNickname",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private final String nickname;
 
-    @Schema(description = "마스킹된 연락처", example = "010****5432", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "마스킹된 연락처",
+            example = "010****5432",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private final String phone;
 
-    @Schema(description = "수정 시각", example = "2026-07-16T11:10:00+09:00", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "수정 시각",
+            example = "2026-07-16T11:10:00+09:00",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private final OffsetDateTime updatedAt;
 }

@@ -10,7 +10,10 @@ import lombok.RequiredArgsConstructor;
 @Schema(name = "EmailAvailabilityResponse", description = "이메일 중복 확인 결과")
 public class EmailAvailabilityResponse {
 
-    @Schema(description = "확인한 이메일", example = "user@example.com", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "확인한 이메일",
+            example = "user@example.com",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private final String email;
 
     @Schema(description = "사용 가능 여부", example = "true", requiredMode = Schema.RequiredMode.REQUIRED)

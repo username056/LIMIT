@@ -1,12 +1,17 @@
 package com.c203.limit.global.exception;
 
-import org.springframework.http.HttpStatus;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 
 @Getter
 @RequiredArgsConstructor
 public enum ErrorCode {
+    SOCIAL_ACCOUNT_REAUTH_REQUIRED(
+            "AUTH014", HttpStatus.CONFLICT, "이미 가입된 이메일입니다. 기존 계정 로그인 후 연동해 주세요."),
+    SOCIAL_SIGNUP_SESSION_INVALID(
+            "AUTH015", HttpStatus.UNAUTHORIZED, "소셜 회원가입 세션이 만료되었거나 유효하지 않습니다."),
+    REQUIRED_TERMS_NOT_ACCEPTED("AUTH016", HttpStatus.BAD_REQUEST, "필수 약관에 모두 동의해야 합니다."),
     // ========== 공통 에러 ==========
     VALIDATION_FAILED("CMN001", HttpStatus.BAD_REQUEST, "입력값 검증에 실패했습니다."),
     INTERNAL_ERROR("CMN002", HttpStatus.INTERNAL_SERVER_ERROR, "서버 내부 오류가 발생했습니다."),
@@ -31,10 +36,19 @@ public enum ErrorCode {
     INVALID_PASSWORD_FORMAT("MEM005", HttpStatus.BAD_REQUEST, "비밀번호 형식이 올바르지 않습니다."),
     CURRENT_PASSWORD_MISMATCH("MEM006", HttpStatus.UNAUTHORIZED, "현재 비밀번호가 일치하지 않습니다."),
     SAME_AS_OLD_PASSWORD("MEM007", HttpStatus.CONFLICT, "기존 비밀번호와 다른 비밀번호를 입력해 주세요."),
-    SOCIAL_MEMBER_PASSWORD_UNAVAILABLE("MEM008", HttpStatus.UNPROCESSABLE_ENTITY, "소셜 전용 회원은 비밀번호를 변경할 수 없습니다."),
-    UNSUPPORTED_SOCIAL_PROVIDER("AUTH006", HttpStatus.BAD_REQUEST, "지원하지 않거나 구성되지 않은 소셜 로그인 공급자입니다."),
+    SOCIAL_MEMBER_PASSWORD_UNAVAILABLE(
+            "MEM008", HttpStatus.UNPROCESSABLE_ENTITY, "소셜 전용 회원은 비밀번호를 변경할 수 없습니다."),
+    UNSUPPORTED_SOCIAL_PROVIDER(
+            "AUTH006", HttpStatus.BAD_REQUEST, "지원하지 않거나 구성되지 않은 소셜 로그인 공급자입니다."),
     SOCIAL_ACCOUNT_NOT_FOUND("AUTH007", HttpStatus.NOT_FOUND, "연동된 소셜 계정을 찾을 수 없습니다."),
     LAST_LOGIN_METHOD("AUTH008", HttpStatus.CONFLICT, "마지막 로그인 수단은 해제할 수 없습니다."),
+    EMAIL_NOT_VERIFIED("AUTH009", HttpStatus.FORBIDDEN, "이메일 인증이 필요합니다."),
+    EMAIL_VERIFICATION_TOKEN_INVALID(
+            "AUTH010", HttpStatus.BAD_REQUEST, "이메일 인증 토큰이 만료되었거나 유효하지 않습니다."),
+    EMAIL_VERIFICATION_UNAVAILABLE(
+            "AUTH011", HttpStatus.SERVICE_UNAVAILABLE, "이메일 인증 발송 설정을 확인해 주세요."),
+    SOCIAL_AUTH_FAILED("AUTH012", HttpStatus.UNAUTHORIZED, "소셜 로그인 인증에 실패했습니다."),
+    SOCIAL_ACCOUNT_CONFLICT("AUTH013", HttpStatus.CONFLICT, "이미 다른 소셜 계정이 연결되어 있습니다."),
 
     // ========== 채팅 에러 ==========
     LISTING_NOT_FOUND("CHT001", HttpStatus.NOT_FOUND, "매물을 찾을 수 없습니다."),
@@ -58,7 +72,11 @@ public enum ErrorCode {
     RESTRICTION_NOT_ACTIVE("ADM006", HttpStatus.CONFLICT, "활성 상태의 이용 제한만 해제할 수 있습니다."),
     ADMIN_ACTION_LOG_NOT_FOUND("ADM007", HttpStatus.NOT_FOUND, "관리자 처리 이력을 찾을 수 없습니다."),
     INQUIRY_NOT_FOUND("ADM008", HttpStatus.NOT_FOUND, "문의를 찾을 수 없습니다."),
-    WITHDRAWAL_REQUEST_NOT_FOUND("ADM009", HttpStatus.NOT_FOUND, "회원 탈퇴 요청을 찾을 수 없습니다.");
+    WITHDRAWAL_REQUEST_NOT_FOUND("ADM009", HttpStatus.NOT_FOUND, "회원 탈퇴 요청을 찾을 수 없습니다."),
+    ADMIN_EMAIL_DUPLICATED("ADM010", HttpStatus.CONFLICT, "이미 사용 중인 관리자 이메일입니다."),
+    LAST_SUPER_ADMIN("ADM011", HttpStatus.CONFLICT, "마지막 활성 최고 관리자는 변경할 수 없습니다."),
+    INVALID_ADMIN_ROLE("ADM012", HttpStatus.BAD_REQUEST, "관리자 권한은 OPERATOR 또는 SUPER_ADMIN이어야 합니다."),
+    INVALID_ADMIN_STATUS("ADM013", HttpStatus.BAD_REQUEST, "관리자 상태가 올바르지 않습니다.");
 
     private final String code;
     private final HttpStatus status;

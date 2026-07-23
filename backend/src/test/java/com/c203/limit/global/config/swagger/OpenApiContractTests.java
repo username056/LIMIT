@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -24,12 +25,14 @@ import com.c203.limit.domain.chat.repository.ChatRoomParticipantRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomRepository;
 import com.c203.limit.domain.chat.repository.ListingChatReader;
 import com.c203.limit.domain.member.repository.MemberRepository;
+import com.c203.limit.domain.admin.repository.AdminAccountRepository;
+import com.c203.limit.domain.admin.repository.AdminActionLogRepository;
+import com.c203.limit.domain.admin.repository.MemberRestrictionRepository;
 
 @SpringBootTest(properties = {
         "management.endpoint.health.validate-group-membership=false",
         "spring.autoconfigure.exclude="
                 + "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration,"
-                + "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration,"
                 + "org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration,"
                 + "org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration,"
                 + "org.springframework.boot.mongodb.autoconfigure.MongoAutoConfiguration,"
@@ -42,10 +45,22 @@ import com.c203.limit.domain.member.repository.MemberRepository;
 class OpenApiContractTests {
 
     @MockitoBean
+    JpaMetamodelMappingContext jpaMetamodelMappingContext;
+
+    @MockitoBean
     MemberRepository memberRepository;
 
     @MockitoBean
     SocialAccountRepository socialAccountRepository;
+
+    @MockitoBean
+    AdminAccountRepository adminAccountRepository;
+
+    @MockitoBean
+    AdminActionLogRepository adminActionLogRepository;
+
+    @MockitoBean
+    MemberRestrictionRepository memberRestrictionRepository;
 
     @MockitoBean
     ChatRoomRepository chatRoomRepository;
@@ -70,10 +85,19 @@ class OpenApiContractTests {
                 .andExpect(jsonPath("$.components.securitySchemes.internalApiKey").exists())
                 .andExpect(jsonPath("$.components.schemas.ApiResponse").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/health']").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/health'].get.summary").value("애플리케이션 상태 확인"))
+                .andExpect(jsonPath("$.components.schemas.ChatRoomResponse").exists())
+                .andExpect(jsonPath("$.components.schemas.CursorResponse").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/members'].post.operationId").value("auth03"))
                 .andExpect(jsonPath("$.paths['/api/v1/members/me'].get.operationId").value("member01"))
                 .andExpect(jsonPath("$.components.schemas.SignupRequest").exists())
+                .andExpect(jsonPath("$.components.schemas.CompleteSocialSignupRequest").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/auth/social-authorizations/{provider}']").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/auth/social-signups']").exists())
+                .andExpect(jsonPath("$.components.schemas.EmailVerificationRequest").exists())
+                .andExpect(jsonPath("$.components.schemas.AdminLoginRequest").exists())
                 .andExpect(jsonPath("$.components.schemas.MemberProfileResponse").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/admin/members']").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/products']").doesNotExist());
     }
 
@@ -89,7 +113,18 @@ class OpenApiContractTests {
                 .andExpect(jsonPath("$.paths['/api/v1/members/me'].get").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/auth/sessions']").doesNotExist());
 
-        mockMvc.perform(get("/v3/api-docs/03-chat"))
+        mockMvc.perform(get("/v3/api-docs/03-admin"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['/api/v1/admin/members']").exists())
+                .andExpect(
+                        jsonPath(
+                                        "$.paths['/api/v1/admin/members'].get.security[0].bearerAuth")
+                                .exists())
+                .andExpect(
+                        jsonPath("$.paths['/api/v1/admin/sessions'].post.security")
+                                .doesNotExist())
+                .andExpect(jsonPath("$.paths['/api/v1/members/me'].get").doesNotExist());
+        mockMvc.perform(get("/v3/api-docs/04-chat"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.paths['/api/v1/listings/{listingId}/chat-rooms'].post.operationId")
                         .value("chatBe01"))
@@ -103,7 +138,7 @@ class OpenApiContractTests {
 
         mockMvc.perform(get("/v3/api-docs/swagger-config"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.urls.length()").value(3))
+                .andExpect(jsonPath("$.urls.length()").value(4))
                 .andExpect(jsonPath("$['urls.primaryName']").value("01-auth"))
                 .andExpect(jsonPath("$.operationsSorter", containsString("post: 0")))
                 .andExpect(jsonPath("$.operationsSorter", containsString("delete: 4")));

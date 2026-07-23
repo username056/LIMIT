@@ -15,7 +15,11 @@ spring:
       password: ${REDIS_PASSWORD}
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
+
+limit:
+  security:
+    refresh-store: ${REFRESH_TOKEN_STORE:memory}
 
 management:
   endpoint:

@@ -20,6 +20,16 @@
 
 Gradle Wrapper가 포함되어 있어 Gradle을 별도로 설치할 필요는 없습니다.
 
+## 최초 설정
+
+저장소를 처음 클론했다면 한 번만 실행합니다.
+
+```powershell
+git config core.hooksPath .githooks
+```
+
+이 설정 없이는 `.githooks/`(pre-commit Secret 검사, commit-msg 컨벤션 검사, pre-push lint/test/build)가 켜지지 않습니다. AI Hook(`.claude/settings.json`, `.codex/hooks.json`)과는 별개로 로컬 git 설정에서 직접 켜야 합니다. 자세한 내용은 [AI 활용 가이드](가이드.md#4-hook-사용법)를 참고합니다.
+
 ## 로컬 실행
 
 ### 전체 인프라와 백엔드
@@ -28,7 +38,7 @@ Gradle Wrapper가 포함되어 있어 Gradle을 별도로 설치할 필요는 �
 .\scripts\open-platform-tools.ps1
 ```
 
-`infra/.env`를 자동 생성하고 Docker Desktop과 컨테이너를 띄운 뒤 Swagger·Grafana를 브라우저로 엽니다. 옵션과 수동 실행 방법은 스크립트 자체 도움말(`-?`)을 참고합니다.
+`infra/.env.local`을 자동 생성하고 Docker Desktop과 컨테이너를 띄운 뒤 Swagger·Grafana를 브라우저로 엽니다. 다른 파일을 쓰려면 `-EnvFile`로 지정합니다. 운영용 `infra/.env`와 로컬 설정을 분리하며 두 파일 모두 Git에서 제외됩니다.
 
 - Backend: `http://localhost:18080`
 - Swagger: `http://localhost:18080/swagger-ui.html`
@@ -79,4 +89,5 @@ GitLab CI가 Secret 검사, 테스트, JaCoCo, SonarQube, 이미지 빌드와 �
 - [모노레포 ADR](docs/adr/0001-monorepo.md)
 - [배포 아키텍처 ADR](docs/adr/0002-single-ec2-blue-green.md)
 - [운영 Runbook](docs/runbook/deployment.md)
+- [테스트 계정 BaseInit 가이드](docs/integration/base-init-data.md)
 - [프로젝트 작업 규칙](AGENTS.md)

@@ -1,21 +1,44 @@
 # 관리자 서비스
 
-관리자 로그인은 일반 회원 인증과 계정 유형을 분리하고 `OPERATOR`, `SUPER_ADMIN` 역할을 JWT에 담는다.
-`/api/v1/admin/**`는 두 관리자 역할만 접근할 수 있다. 회원 제한, 판매자 심사·상태·한도 변경,
-탈퇴 처리, 문의 답변, 역할 부여·회수는 모두 `admin_action_log`에 기록한다.
+관리자 인증은 일반 회원과 분리한다. 일반 회원 권한은 `MEMBER`로 고정하고 관리자는 별도 `admin_account`에서 `OPERATOR` 또는 `SUPER_ADMIN` 권한을 가진다.
 
-## ERD 수정 목록과 이유
+## API 범위
 
-| 테이블 | 변경할 컬럼·제약 | 이유 |
-| --- | --- | --- |
-| `member_sanction` | `restriction_type`, `reason_code`, `reason_detail`, `status`, `release_reason` 추가 | API가 로그인·구매 제한을 구분하고 해제 상태와 사유를 보존해야 함 |
-| `admin_action_log` | `before_data JSON`, `after_data JSON`, `ip_address VARCHAR(45)` 추가 | 변경 전후 감사와 요청 주체 추적을 API가 요구함 |
-| `seller_application` | `processed_admin_id`를 `reviewer_admin_id` 의미로 사용하거나 이름 변경 | 심사 담당자 선점과 처리자 추적을 명확히 하기 위함 |
-| `seller` | 상태값을 `ACTIVE`, `SELLING_RESTRICTED`, `SUSPENDED`, `TERMINATED`로 통일 | 관리자 API의 상태 전이 계약과 ERD ENUM이 다름 |
-| `inquiry` | 상태를 `OPEN`, `IN_PROGRESS`, `ANSWERED`, `CLOSED`로 확장하고 `closed_at` 추가 | 답변 전후 처리 흐름과 종료 시각 보존 필요 |
-| `inquiry_answer` | `version`, `is_current`, `admin_id`, `created_at` 추가 | 답변 수정 이력을 덮어쓰지 않고 버전으로 보존하기 위함 |
-| `withdrawal_request` | 신규 테이블 | 제공된 ERD에 탈퇴 요청·차단·처리자·처리 시각을 저장할 구조가 없음 |
-| `member_role` | 신규 테이블, `(user_id, role_code)` UNIQUE | 한 회원에게 구매자·판매자·관리자 역할을 중복 없이 다중 부여하기 위함 |
+| Method | Path | 권한 | 설명 |
+| --- | --- | --- | --- |
+| `POST` | `/api/v1/admin/sessions` | 공개 | 관리자 로그인 |
+| `GET` | `/api/v1/admin/members` | 관리자 | 회원 목록 |
+| `GET` | `/api/v1/admin/members/{memberId}` | 관리자 | 회원 상세 |
+| `GET` | `/api/v1/admin/members/{memberId}/restrictions` | 관리자 | 이용 제한 목록 |
+| `POST` | `/api/v1/admin/members/{memberId}/restrictions` | 관리자 | 이용 제한 등록 |
+| `PATCH` | `/api/v1/admin/member-restrictions/{restrictionId}` | 관리자 | 이용 제한 해제 |
+| `GET` | `/api/v1/admin/action-logs` | 관리자 | 작업 로그 목록 |
+| `GET` | `/api/v1/admin/action-logs/{actionLogId}` | 관리자 | 작업 로그 상세 |
+| `GET` | `/api/v1/admin/accounts` | `SUPER_ADMIN` | 관리자 계정 목록 |
+| `POST` | `/api/v1/admin/accounts` | `SUPER_ADMIN` | 관리자 계정 생성 |
+| `PATCH` | `/api/v1/admin/accounts/{adminId}` | `SUPER_ADMIN` | 관리자 권한·상태 변경 |
 
-제공된 ERD SQL은 위 변경 외에도 모든 PK에 `AUTO_INCREMENT`, 이메일·닉네임 유니크 제약,
-명시적인 FK와 조회 조건에 맞는 인덱스가 필요하다. 운영 DB 변경은 검토된 Flyway migration으로 별도 적용한다.
+마지막 활성 `SUPER_ADMIN`을 강등하거나 정지하는 요청은 거절한다.
+
+## Swagger 인증
+
+1. `POST /api/v1/admin/sessions`를 실행한다.
+2. 응답의 `data.accessToken`을 복사한다.
+3. Swagger UI의 `Authorize`를 누르고 토큰 값만 입력한다. UI가 `Bearer` 접두어를 붙인다.
+4. 보호 API에 `Authorization: Bearer {accessToken}`이 전송되는지 확인한다.
+
+헤더가 없거나 토큰이 만료되면 401, 인증은 됐지만 권한이 부족하면 403이다. `/api/v1/admin/accounts` 계열은 `SUPER_ADMIN`만 사용할 수 있다.
+
+Refresh Token은 응답 JSON에 노출하지 않고 HttpOnly 쿠키로 발급한다. 재발급과 로그아웃은 회원과 동일하게 `/api/v1/auth/token-refreshes`, `/api/v1/auth/session-revocations`를 사용한다.
+
+## 초기 최고 관리자
+
+```env
+INITIAL_ADMIN_ENABLED=true
+INITIAL_ADMIN_EMAIL=
+INITIAL_ADMIN_PASSWORD=
+INITIAL_ADMIN_NAME=
+INITIAL_ADMIN_ROLE=SUPER_ADMIN
+```
+
+계정 생성을 확인한 즉시 `INITIAL_ADMIN_ENABLED=false`로 되돌린다. 초기 비밀번호는 별도 API가 준비되는 대로 변경해야 하며 실제 값은 저장소에 남기지 않는다.

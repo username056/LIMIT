@@ -4,6 +4,8 @@
 //   성공: { data, meta }
 //   실패: { error: { code, message, fieldErrors }, traceId }
 
+import { getAccessToken } from '../auth/session'
+
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
 export class ApiError extends Error {
@@ -17,10 +19,13 @@ export class ApiError extends Error {
 }
 
 async function request(path, options = {}) {
+  const accessToken = getAccessToken()
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...(options.headers || {}),
     },
   })

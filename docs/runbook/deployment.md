@@ -153,7 +153,7 @@ MySQL exporter 전용 최소권한 계정 생성도 운영 DB 변경 승인 후 
 
 - `dev`, `main`을 protected로 설정하고 직접 push를 금지한다.
 - shared runner 사용 가능 여부를 확인한다. 불가하면 EC2 project runner를 우선 `concurrent = 1`로 등록하고 서버 자원을 확인한다.
-- 단일 EC2에서는 Runner `concurrent = 2`와 job/service 각각 CPU 1개, memory 3 GiB 제한을 사용한다. `sudo bash scripts/configure-gitlab-runner.sh apply`로 적용하고 이상 시 `rollback`한다.
+- 단일 EC2 Runner는 `concurrent = 5`, `request_concurrency = 5`, job CPU 1.25개, Testcontainers·image build용 service CPU 1.5개, 각각 memory 2 GiB, swap 포함 3 GiB 제한을 사용한다. 호스트와 컨테이너 외부 DNS는 Cloudflare `1.1.1.1`을 우선하고 AWS VPC resolver `172.26.0.2`를 보조로 사용하며, CI image는 로컬 cache를 우선한다. 동시 실행 슬롯들이 같은 Gradle cache를 읽도록 host의 `/var/lib/gitlab-runner/cache`를 `/cache`에 bind mount한다. `sudo bash scripts/configure-gitlab-runner.sh apply`로 적용하고 과도한 load·OOM·DNS 이상 시 즉시 `rollback`한다.
 - Docker Hub에 private backend repository를 만들고 `DOCKERHUB_IMAGE=<namespace>/<repository>`를 protected variable로 등록한다.
 - `DOCKERHUB_USERNAME`은 protected variable, read/write 권한의 `DOCKERHUB_TOKEN`은 masked/protected variable로 등록한다.
 - EC2 배포 사용자는 CI token과 분리된 read-only Docker Hub token으로 `docker login`을 완료한다.
@@ -161,6 +161,7 @@ MySQL exporter 전용 최소권한 계정 생성도 운영 DB 변경 승인 후 
 - `backend_coverage`가 두 execution data를 합산해 coverage report와 검증 완료 JAR을 생성하고, `backend/Dockerfile.ci`가 해당 JAR을 이미지에 넣는다. CI 이미지 단계에서 Gradle 빌드를 다시 실행하지 않는다.
 - `backend_image`는 unit, integration, coverage 작업이 모두 성공해야 시작하며 SonarQube 완료는 기다리지 않는다.
 - `dependency_check`는 Merge Request에서는 실행되지 않으며 오직 GitLab Pipeline Schedule(예: 매주 1회)로만 동작하므로 프로젝트 설정에서 Schedule을 등록해야 한다. 새 의존성의 취약점은 다음 스케줄 실행 시 발견되어 최대 1주 지연될 수 있다. NVD 캐시(`.gradle/dependency-check-data`)는 최초 실행 시에만 느리고 이후에는 변경분만 받는다.
+- PR Agent는 strategy가 없는 child pipeline에서 비동기로 실행한다. child 실패·취소는 부모 MR pipeline과 병합을 막지 않으며, 긴급한 경우 pipeline 변수 `SKIP_PR_AGENT=true`로 child 생성을 생략한다.
 - 2026-07-20 로컬 `--rerun-tasks` 기준 기존 직렬 test+integration+coverage는 81초였다. 분리 후 unit 48초와 integration 53초를 병렬 실행하고 coverage/JAR 12초를 이어 실행해 예상 critical path는 약 65초로, 약 20% 단축됐다. 실제 Runner 시간은 Merge Request pipeline에서 계속 기록한다.
 - `sonar-project.properties`만 변경되면 전체 테스트 대신 Sonar 분석에 필요한 `classes`만 생성한다. Secret guard는 생략하지 않고 테스트 job과 병렬로 실행한다.
 - 배포 job은 원격 실행 전에 `scripts/sync-deploy-files.sh`로 배포 스크립트, Compose 정의와 모니터링 설정을 동기화한다. 서버 전용 `infra/.env`, `infra/secrets`, `infra/state`는 전송하거나 덮어쓰지 않는다.

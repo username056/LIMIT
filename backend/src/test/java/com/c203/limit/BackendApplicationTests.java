@@ -2,6 +2,7 @@ package com.c203.limit;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.c203.limit.domain.auth.repository.SocialAccountRepository;
@@ -9,11 +10,13 @@ import com.c203.limit.domain.chat.repository.ChatRoomParticipantRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomRepository;
 import com.c203.limit.domain.chat.repository.ListingChatReader;
 import com.c203.limit.domain.member.repository.MemberRepository;
+import com.c203.limit.domain.admin.repository.AdminAccountRepository;
+import com.c203.limit.domain.admin.repository.AdminActionLogRepository;
+import com.c203.limit.domain.admin.repository.MemberRestrictionRepository;
 
 @SpringBootTest(properties = {
         "spring.autoconfigure.exclude="
                 + "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration,"
-                + "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration,"
                 + "org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration,"
                 + "org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration,"
                 + "org.springframework.boot.mongodb.autoconfigure.MongoAutoConfiguration,"
@@ -24,10 +27,22 @@ import com.c203.limit.domain.member.repository.MemberRepository;
 class BackendApplicationTests {
 
     @MockitoBean
+    JpaMetamodelMappingContext jpaMetamodelMappingContext;
+
+    @MockitoBean
     MemberRepository memberRepository;
 
     @MockitoBean
     SocialAccountRepository socialAccountRepository;
+
+    @MockitoBean
+    AdminAccountRepository adminAccountRepository;
+
+    @MockitoBean
+    AdminActionLogRepository adminActionLogRepository;
+
+    @MockitoBean
+    MemberRestrictionRepository memberRestrictionRepository;
 
     @MockitoBean
     ChatRoomRepository chatRoomRepository;

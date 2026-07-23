@@ -18,7 +18,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
-@Tag(name = "03. 채팅")
+@Tag(name = "04. 채팅")
 public interface ChatRoomApi {
     @Operation(operationId = "chatBe01", summary = "1:1 채팅방 생성 또는 기존 방 반환",
             description = "권한: MEMBER\n구매자는 JWT, 판매자는 매물 정보에서 결정",
@@ -39,7 +39,8 @@ public interface ChatRoomApi {
     @Operation(operationId = "chatBe07", summary = "내 채팅방 목록 조회",
             description = "회원이 참여 중인 채팅방을 최신 생성 순으로 커서 조회합니다.",
             security = @SecurityRequirement(name = "bearerAuth"))
-    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "채팅방 목록 반환")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "채팅방 목록 반환",
+            content = @Content(schema = @Schema(implementation = CursorResponse.class)))
     @RequestMapping(method = RequestMethod.GET, path = "/api/v1/chat-rooms",
             produces = MediaType.APPLICATION_JSON_VALUE)
     ResponseEntity<ApiResponse<CursorResponse<ChatRoomSummaryResponse>>> findRooms(

@@ -10,9 +10,18 @@ import lombok.RequiredArgsConstructor;
 @Schema(name = "SocialLoginRequest", description = "소셜 로그인 요청")
 public class SocialLoginRequest {
 
-    @Schema(description = "OAuth 인가 코드", example = "4/0A...", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "OAuth 인가 코드",
+            example = "4/0A...",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private final String authorizationCode;
 
-    @Schema(description = "OAuth Callback URI", example = "https://.../oauth/callback", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(
+            description = "OAuth Callback URI",
+            example = "https://.../oauth/callback",
+            requiredMode = Schema.RequiredMode.REQUIRED)
     private final String redirectUri;
+
+    @Schema(description = "OAuth state 값(Naver는 필수)", example = "N-4fb3...")
+    private final String state;
 }

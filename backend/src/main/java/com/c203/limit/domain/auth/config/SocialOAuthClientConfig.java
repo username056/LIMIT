@@ -1,0 +1,21 @@
+package com.c203.limit.domain.auth.config;
+
+import java.net.http.HttpClient;
+import java.time.Duration;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.web.client.RestClient;
+
+@Configuration
+public class SocialOAuthClientConfig {
+    @Bean
+    @Qualifier("socialOAuthRestClientBuilder") RestClient.Builder socialOAuthRestClientBuilder() {
+        HttpClient httpClient =
+                HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+        var requestFactory = new JdkClientHttpRequestFactory(httpClient);
+        requestFactory.setReadTimeout(Duration.ofSeconds(10));
+        return RestClient.builder().requestFactory(requestFactory);
+    }
+}
