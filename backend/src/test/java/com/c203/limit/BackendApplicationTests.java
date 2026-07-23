@@ -15,6 +15,10 @@ import com.c203.limit.domain.member.repository.MemberTermsAgreementRepository;
 import com.c203.limit.domain.admin.repository.AdminAccountRepository;
 import com.c203.limit.domain.admin.repository.AdminActionLogRepository;
 import com.c203.limit.domain.admin.repository.MemberRestrictionRepository;
+import com.c203.limit.domain.inspection.repository.BatteryReportResultRepository;
+import com.c203.limit.domain.inspection.repository.DxdiagResultRepository;
+import com.c203.limit.domain.inspection.repository.EvidenceRepository;
+import com.c203.limit.domain.inspection.repository.OcrResultRepository;
 import com.c203.limit.domain.product.repository.ListingRepository;
 import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
 
@@ -68,6 +72,18 @@ class BackendApplicationTests {
 
     @MockitoBean
     ListingStatusHistoryRepository listingStatusHistoryRepository;
+
+    @MockitoBean
+    EvidenceRepository evidenceRepository;
+
+    @MockitoBean
+    OcrResultRepository ocrResultRepository;
+
+    @MockitoBean
+    DxdiagResultRepository dxdiagResultRepository;
+
+    @MockitoBean
+    BatteryReportResultRepository batteryReportResultRepository;
 
     @Test
     void contextLoads() {

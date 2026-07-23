@@ -30,6 +30,10 @@ import com.c203.limit.domain.member.repository.MemberTermsAgreementRepository;
 import com.c203.limit.domain.admin.repository.AdminAccountRepository;
 import com.c203.limit.domain.admin.repository.AdminActionLogRepository;
 import com.c203.limit.domain.admin.repository.MemberRestrictionRepository;
+import com.c203.limit.domain.inspection.repository.BatteryReportResultRepository;
+import com.c203.limit.domain.inspection.repository.DxdiagResultRepository;
+import com.c203.limit.domain.inspection.repository.EvidenceRepository;
+import com.c203.limit.domain.inspection.repository.OcrResultRepository;
 import com.c203.limit.domain.product.repository.ListingRepository;
 import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
 
@@ -86,6 +90,18 @@ class OpenApiContractTests {
 
     @MockitoBean
     ListingStatusHistoryRepository listingStatusHistoryRepository;
+
+    @MockitoBean
+    EvidenceRepository evidenceRepository;
+
+    @MockitoBean
+    OcrResultRepository ocrResultRepository;
+
+    @MockitoBean
+    DxdiagResultRepository dxdiagResultRepository;
+
+    @MockitoBean
+    BatteryReportResultRepository batteryReportResultRepository;
 
     @Autowired
     MockMvc mockMvc;
@@ -169,9 +185,19 @@ class OpenApiContractTests {
                         .value("checklist02"))
                 .andExpect(jsonPath("$.paths['/api/v1/auth/sessions']").doesNotExist());
 
+        mockMvc.perform(get("/v3/api-docs/06-inspection"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['/api/v1/inspections/evidence/{evidenceId}/ocr-results'].post.operationId")
+                        .value("ocr01"))
+                .andExpect(jsonPath("$.paths['/api/v1/inspections/evidence/{evidenceId}/dxdiag-results'].post.operationId")
+                        .value("dxdiag01"))
+                .andExpect(jsonPath("$.paths['/api/v1/inspections/evidence/{evidenceId}/battery-report-results'].post.operationId")
+                        .value("batteryReport01"))
+                .andExpect(jsonPath("$.paths['/api/v1/auth/sessions']").doesNotExist());
+
         mockMvc.perform(get("/v3/api-docs/swagger-config"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.urls.length()").value(5))
+                .andExpect(jsonPath("$.urls.length()").value(6))
                 .andExpect(jsonPath("$['urls.primaryName']").value("01-auth"))
                 .andExpect(jsonPath("$.operationsSorter", containsString("post: 0")))
                 .andExpect(jsonPath("$.operationsSorter", containsString("delete: 4")));
