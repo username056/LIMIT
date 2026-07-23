@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
+import AuthShell from '../components/AuthShell.vue'
 import BaseCard from '../components/BaseCard.vue'
 import BaseButton from '../components/BaseButton.vue'
 import { requestEmailVerification } from '../api/auth'
@@ -30,16 +31,16 @@ async function resend() {
 
 <template>
   <DefaultLayout>
-    <section class="mx-auto max-w-md px-6 py-20 text-center">
-      <BaseCard>
+    <AuthShell
+      title="이메일을 확인해 주세요"
+      description="받은 메일의 인증 버튼을 누르면 이메일 로그인을 시작할 수 있습니다."
+    >
+      <BaseCard class="p-8 text-center">
         <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent text-2xl">
           ✉️
         </div>
-        <h1 class="mt-5 text-2xl font-bold text-text-main">
-          이메일을 확인해 주세요
-        </h1>
-        <p class="mt-3 text-sm leading-6 text-text-sub">
-          회원가입이 완료되었습니다. 받은 메일의 인증 버튼을 누르면 이메일 로그인을 시작할 수 있습니다.
+        <p class="mt-5 text-sm leading-6 text-text-sub">
+          회원가입이 완료되었습니다. 인증 링크는 보안을 위해 한 번만 사용할 수 있습니다.
         </p>
         <p
           v-if="email"
@@ -72,6 +73,6 @@ async function resend() {
           로그인 화면으로 이동
         </RouterLink>
       </BaseCard>
-    </section>
+    </AuthShell>
   </DefaultLayout>
 </template>

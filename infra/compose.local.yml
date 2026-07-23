@@ -4,6 +4,8 @@ x-backend-environment: &backend-environment
   MYSQL_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:?MYSQL_DATABASE is required}
   MYSQL_USER: ${MYSQL_USER:?MYSQL_USER is required}
   MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+  FLYWAY_BASELINE_ON_MIGRATE: ${FLYWAY_BASELINE_ON_MIGRATE:-true}
+  FLYWAY_BASELINE_VERSION: ${FLYWAY_BASELINE_VERSION:-1}
   MONGODB_URI: ${MONGODB_URI:?MONGODB_URI is required}
   REDIS_HOST: redis
   REDIS_PORT: 6379
@@ -93,8 +95,6 @@ services:
         max-file: "5"
 
   mysql:
-    volumes:
-      - ../backend/src/main/resources/db/migration/V1__create_base_schema.sql:/docker-entrypoint-initdb.d/001-base-schema.sql:ro
     ports: ["127.0.0.1:${MYSQL_PORT:-13306}:3306"]
   mongodb:
     ports: ["127.0.0.1:${MONGODB_PORT:-17017}:27017"]

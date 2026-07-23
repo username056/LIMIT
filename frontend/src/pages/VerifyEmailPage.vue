@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
+import AuthShell from '../components/AuthShell.vue'
 import BaseCard from '../components/BaseCard.vue'
 import { verifyEmail } from '../api/auth'
 
@@ -30,14 +31,14 @@ onMounted(async () => {
 
 <template>
   <DefaultLayout>
-    <section class="mx-auto max-w-md px-6 py-20 text-center">
-      <BaseCard>
+    <AuthShell
+      title="이메일 인증"
+      description="링크의 유효성과 일회용 토큰을 안전하게 확인합니다."
+    >
+      <BaseCard class="p-8 text-center">
         <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent text-2xl">
           {{ status === 'VERIFIED' ? '✓' : status === 'FAILED' ? '!' : '…' }}
         </div>
-        <h1 class="mt-5 text-2xl font-bold text-text-main">
-          이메일 인증
-        </h1>
         <p
           class="mt-3 text-sm leading-6"
           :class="status === 'FAILED' ? 'text-red-500' : 'text-text-sub'"
@@ -52,6 +53,6 @@ onMounted(async () => {
           로그인 화면으로 이동
         </RouterLink>
       </BaseCard>
-    </section>
+    </AuthShell>
   </DefaultLayout>
 </template>

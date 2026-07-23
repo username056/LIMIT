@@ -26,6 +26,7 @@ import com.c203.limit.domain.chat.repository.ChatRoomRepository;
 import com.c203.limit.domain.chat.repository.ListingChatReader;
 import com.c203.limit.domain.auth.repository.SocialAccountRepository;
 import com.c203.limit.domain.member.repository.MemberRepository;
+import com.c203.limit.domain.member.repository.MemberTermsAgreementRepository;
 import com.c203.limit.domain.member.entity.Member;
 
 @SpringBootTest(properties = {
@@ -46,6 +47,7 @@ class AdminAuthorizationTests {
     @Autowired JwtTokenProvider tokens;
     @MockitoBean JpaMetamodelMappingContext jpaMetamodelMappingContext;
     @MockitoBean MemberRepository members;
+    @MockitoBean MemberTermsAgreementRepository memberTermsAgreements;
     @MockitoBean SocialAccountRepository socialAccounts;
     @MockitoBean AdminAccountRepository admins;
     @MockitoBean MemberRestrictionRepository restrictions;

@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
+import AuthShell from '../components/AuthShell.vue'
 import BaseCard from '../components/BaseCard.vue'
 import { completeSocialLink, completeSocialLogin } from '../api/auth'
 import { consumeOAuthMode, isSupportedProvider, oauthRedirectUri } from '../auth/oauth'
@@ -50,11 +51,14 @@ onMounted(async () => {
 
 <template>
   <DefaultLayout>
-    <section class="mx-auto max-w-md px-6 py-20 text-center">
-      <BaseCard>
-        <h1 class="text-xl font-bold text-text-main">
-          소셜 로그인
-        </h1>
+    <AuthShell
+      title="소셜 로그인"
+      description="연결된 계정과 로그인 요청을 확인하고 있습니다."
+    >
+      <BaseCard class="p-8 text-center">
+        <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent text-xl font-bold text-primary">
+          {{ isFailed ? '!' : '…' }}
+        </div>
         <p
           class="mt-4 text-sm"
           :class="isFailed ? 'text-red-500' : 'text-text-sub'"
@@ -70,6 +74,6 @@ onMounted(async () => {
           로그인 화면으로 돌아가기
         </RouterLink>
       </BaseCard>
-    </section>
+    </AuthShell>
   </DefaultLayout>
 </template>
