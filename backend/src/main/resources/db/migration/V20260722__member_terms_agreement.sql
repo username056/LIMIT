@@ -1,6 +1,3 @@
--- 운영 적용 전 DB 백업과 현재 스키마를 확인한 뒤 수동 실행한다.
--- 이 파일은 Flyway에서 자동 실행되지 않는다.
-
 CREATE TABLE IF NOT EXISTS member_terms_agreement (
     agreement_id BIGINT NOT NULL AUTO_INCREMENT,
     user_id BIGINT NOT NULL,

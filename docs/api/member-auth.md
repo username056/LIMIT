@@ -69,4 +69,4 @@ Access Token은 성공 응답의 `data.accessToken`으로 반환하며 API 요�
 
 ## DB 반영
 
-기존 DB에는 `backend/src/main/resources/db/manual/V20260722__member_terms_agreement.sql`을 검토 후 수동 적용한다. 전체 절차는 `docs/integration/database-schema-runbook.md`를 따른다.
+약관 동의 이력 테이블은 Flyway `V20260722__member_terms_agreement.sql`이 적용한다. 기존 운영 DB의 최초 baseline 절차는 `docs/integration/database-schema-runbook.md`를 따른다.

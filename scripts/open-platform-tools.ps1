@@ -48,6 +48,8 @@ function Initialize-LocalEnvironment {
         'MYSQL_USER=limit'
         "MYSQL_PASSWORD=$mysqlPassword"
         "MYSQL_ROOT_PASSWORD=$mysqlRootPassword"
+        'FLYWAY_BASELINE_ON_MIGRATE=true'
+        'FLYWAY_BASELINE_VERSION=1'
         'MONGODB_ROOT_USER=root'
         "MONGODB_ROOT_PASSWORD=$mongodbPassword"
         "MONGODB_URI=mongodb://root:${mongodbPassword}@mongodb:27017/limit?authSource=admin"

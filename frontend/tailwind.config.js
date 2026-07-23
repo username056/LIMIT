@@ -17,11 +17,11 @@ export default {
         border: '#E2E8F5',
         text: {
           main: '#1F2937',
-          sub: '#8A94A6',
+          sub: '#64748B',
         },
       },
       backgroundImage: {
-        'primary-gradient': 'linear-gradient(90deg, #6366F1 0%, #7FB4F5 100%)',
+        'primary-gradient': 'linear-gradient(90deg, #6366F1 0%, #93C5FD 100%)',
       },
       borderRadius: {
         sm: '8px',

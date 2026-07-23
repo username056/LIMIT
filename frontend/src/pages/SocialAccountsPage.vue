@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
+import AuthShell from '../components/AuthShell.vue'
 import BaseCard from '../components/BaseCard.vue'
 import BaseButton from '../components/BaseButton.vue'
 import { getSocialAccounts, unlinkSocialAccount } from '../api/auth'
@@ -71,20 +72,13 @@ onMounted(load)
 
 <template>
   <DefaultLayout>
-    <section class="mx-auto max-w-2xl px-6 py-12">
-      <div class="mb-8">
-        <p class="mb-2 text-sm font-semibold text-primary">
-          계정 보안
-        </p>
-        <h1 class="text-2xl font-bold text-text-main">
-          소셜 계정 연결
-        </h1>
-        <p class="mt-2 text-sm text-text-sub">
-          기존 계정으로 로그인한 상태에서만 새 로그인 수단을 연결할 수 있습니다.
-        </p>
-      </div>
-
-      <BaseCard>
+    <AuthShell
+      width="lg"
+      eyebrow="계정 보안"
+      title="소셜 계정 연결"
+      description="로그인 수단을 연결하거나 더 이상 사용하지 않는 연결을 안전하게 해제할 수 있습니다."
+    >
+      <BaseCard class="p-7 sm:p-8">
         <p
           v-if="message"
           class="mb-4 rounded-md bg-green-50 px-4 py-3 text-sm text-green-700"
@@ -112,7 +106,7 @@ onMounted(load)
           <div
             v-for="provider in providers"
             :key="provider.id"
-            class="flex items-center justify-between gap-4 py-4"
+            class="flex items-center justify-between gap-4 py-5"
           >
             <div>
               <p class="font-semibold text-text-main">
@@ -140,6 +134,6 @@ onMounted(load)
           </div>
         </div>
       </BaseCard>
-    </section>
+    </AuthShell>
   </DefaultLayout>
 </template>
