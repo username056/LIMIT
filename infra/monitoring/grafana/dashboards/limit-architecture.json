@@ -318,7 +318,7 @@
         "name": "color", "label": "Blue/Green", "type": "query",
         "datasource": {"type": "prometheus", "uid": "prometheus"},
         "query": {"query": "label_values(up{job=~\"spring-blue|spring-green\"}, color)", "refId": "colorVariable"},
-        "multi": true, "includeAll": true, "current": {"text": "All", "value": "$__all"},
+        "multi": true, "includeAll": true, "allValue": ".*", "current": {"text": "All", "value": "$__all"},
         "refresh": 2, "sort": 1
       }
     ]
