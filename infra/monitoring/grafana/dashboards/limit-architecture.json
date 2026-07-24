@@ -136,6 +136,61 @@
       "gridPos": {"h": 7, "w": 8, "x": 16, "y": 20}, "id": 7,
       "targets": [{"expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket[5m])))", "legendFormat": "p95", "refId": "A"}],
       "title": "API p95 지연", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "bytes"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 27}, "id": 8,
+      "targets": [
+        {"expr": "sum by (area) (jvm_memory_used_bytes{job=~\"spring-blue|spring-green\"})", "legendFormat": "{{area}} used", "refId": "A"},
+        {"expr": "sum by (area) (jvm_memory_committed_bytes{job=~\"spring-blue|spring-green\"})", "legendFormat": "{{area}} committed", "refId": "B"}
+      ],
+      "title": "JVM 메모리 (heap/nonheap)", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 27}, "id": 9,
+      "targets": [
+        {"expr": "sum(hikaricp_connections_active{job=~\"spring-blue|spring-green\"})", "legendFormat": "active", "refId": "A"},
+        {"expr": "sum(hikaricp_connections_idle{job=~\"spring-blue|spring-green\"})", "legendFormat": "idle", "refId": "B"},
+        {"expr": "sum(hikaricp_connections_pending{job=~\"spring-blue|spring-green\"})", "legendFormat": "pending", "refId": "C"},
+        {"expr": "sum(hikaricp_connections_max{job=~\"spring-blue|spring-green\"})", "legendFormat": "max", "refId": "D"}
+      ],
+      "title": "HikariCP 커넥션 풀", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 27}, "id": 10,
+      "targets": [
+        {"expr": "sum(jvm_threads_live_threads{job=~\"spring-blue|spring-green\"})", "legendFormat": "live", "refId": "A"},
+        {"expr": "sum(jvm_threads_daemon_threads{job=~\"spring-blue|spring-green\"})", "legendFormat": "daemon", "refId": "B"},
+        {"expr": "sum(jvm_threads_peak_threads{job=~\"spring-blue|spring-green\"})", "legendFormat": "peak", "refId": "C"}
+      ],
+      "title": "JVM 쓰레드", "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 35}, "id": 11,
+      "targets": [
+        {
+          "expr": "topk(10, sum by (uri) (rate(http_server_requests_seconds_sum{job=~\"spring-blue|spring-green\"}[5m])) / clamp_min(sum by (uri) (rate(http_server_requests_seconds_count{job=~\"spring-blue|spring-green\"}[5m])), 0.001))",
+          "legendFormat": "{{uri}}",
+          "refId": "A"
+        }
+      ],
+      "title": "엔드포인트별 TOP10 응답시간", "type": "bargauge"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 35}, "id": 12,
+      "targets": [
+        {"expr": "sum by (level) (rate(logback_events_total{job=~\"spring-blue|spring-green\"}[5m]))", "legendFormat": "{{level}}", "refId": "A"}
+      ],
+      "title": "Logback 레벨별 로그 카운트", "type": "timeseries"
     }
   ],
   "refresh": "30s",
@@ -146,5 +201,5 @@
   "timezone": "browser",
   "title": "Limit Platform Overview",
   "uid": "limit-platform-overview",
-  "version": 1
+  "version": 2
 }
