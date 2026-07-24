@@ -34,6 +34,10 @@ public class RefundRequest {
     @Column(name = "checklist_item_id")
     private Long checklistItemId;
 
+    // PG 환불 API 호출 전에 미리 생성해 재시도 시 재사용하는 멱등 키. pg_refund_transaction_id(성공 후 저장)와 별개다.
+    @Column(name = "refund_idempotency_key", length = 100)
+    private String refundIdempotencyKey;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     @Builder.Default
