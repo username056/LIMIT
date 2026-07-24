@@ -1,135 +1,179 @@
 <script setup>
 import DefaultLayout from '../layouts/DefaultLayout.vue'
+import BaseBadge from '../components/BaseBadge.vue'
 import BaseButton from '../components/BaseButton.vue'
+import BaseCard from '../components/BaseCard.vue'
 
 // 예시 데이터입니다. 실제 연동 시 API 응답으로 교체하세요.
-const products = [
+const categories = [
+  { label: '노트북 / 랩탑', icon: '💻' },
+  { label: '스마트폰 / 모바일', icon: '📱' },
+  { label: '태블릿 / 패드', icon: '📱' },
+  { label: '카메라', icon: '📷' },
+]
+
+const steps = [
   {
-    category: '휴대폰',
-    brand: 'Apple',
-    name: "iPhone 14 Pro 'Space Black'",
-    price: '890,000',
+    number: '01',
+    title: '자가 검수 체크 리스트',
+    description: '기기별 검증 체크 리스트가 있어 기기 성능 및 외관 검수를 확인할 수 있습니다.',
   },
   {
-    category: '태블릿',
-    brand: 'Samsung',
-    name: "Galaxy Tab S9 'Graphite'",
-    price: '620,000',
-  },
-  {
-    category: '노트북',
-    brand: 'Apple',
-    name: "MacBook Air M2 'Starlight'",
-    price: '1,290,000',
+    number: '02',
+    title: '실시간 채팅 및 WebRTC 화상 연결',
+    description: '판매자 내 사진이랑 영상으로 부족하다면 구매자와 판매자를 연결하는 1대1 채팅과 화상 연결을 이용해보세요!',
   },
 ]
 
-const rankings = [
-  { rank: '01', name: "iPhone 14 Pro 'Space Black'", price: '890,000', trend: 'up' },
-  { rank: '02', name: "MacBook Air M2 'Starlight'", price: '1,290,000', trend: 'up' },
-  { rank: '03', name: "Sony A7 IV 'Black'", price: '1,650,000', trend: 'flat' },
+const products = [
+  {
+    brand: 'Samsung',
+    category: '노트북 / 랩탑',
+    name: 'Galaxy Book4 Pro',
+    price: '1,890,000',
+  },
+  {
+    brand: 'Samsung',
+    category: '스마트폰 / 모바일',
+    name: 'Galaxy S24 Ultra',
+    price: '1,050,000',
+  },
+  {
+    brand: 'Samsung',
+    category: '태블릿 / 패드',
+    name: 'Galaxy Tab S9 Ultra',
+    price: '920,000',
+  },
+  {
+    brand: 'Samsung',
+    category: '이어폰 / 오디오',
+    name: 'Galaxy Buds3 Pro',
+    price: '290,000',
+  },
 ]
 </script>
 
 <template>
   <DefaultLayout>
     <!-- Hero -->
-    <section class="mx-auto max-w-6xl px-6 pt-8">
-      <div class="relative overflow-hidden rounded-lg border border-border bg-bg px-10 py-16">
-        <p class="mb-2 text-xs font-semibold text-primary">
-          단독 한정 상품
-        </p>
-        <h1 class="mb-3 text-3xl font-bold text-text-main">
-          믿을 수 있는 중고 전자기기 마켓
-        </h1>
-        <p class="mb-6 max-w-md text-sm text-text-sub">
-          꼼꼼한 검수를 거친 인기 중고 전자기기를 지금 만나보세요.
-        </p>
-        <BaseButton to="/#products">
-          지금 둘러보기
-        </BaseButton>
+    <section class="mx-auto max-w-[1200px] px-6 pt-8 lg:px-10">
+      <div class="grid items-center gap-10 overflow-hidden rounded-lg bg-accent px-8 py-12 lg:grid-cols-2 lg:px-14 lg:py-16">
+        <div>
+          <BaseBadge class="mb-4">
+            실시간 화상 확인
+          </BaseBadge>
+          <h1 class="mb-4 text-3xl font-bold leading-snug text-text-main lg:text-4xl">
+            검증된 중고 전자기기,<br>
+            실시간 화상으로도 확인하세요!
+          </h1>
+          <p class="mb-8 max-w-md text-sm leading-relaxed text-text-sub">
+            판매자가 올린 체크리스트 자료를 눈으로 직접 검증하고
+            WebRTC 화상 채팅을 통해 제품 작동 상태를 1:1로 확인하는 중고 거래 플랫폼.
+          </p>
+          <BaseButton to="/#products">
+            상품 둘러보기
+          </BaseButton>
+        </div>
+
+        <div class="flex aspect-[4/3] items-center justify-center rounded-lg bg-surface text-text-sub shadow-elevated lg:aspect-[16/11]">
+          실시간 화상 검수 이미지
+        </div>
       </div>
     </section>
 
-    <!-- Products + Ranking -->
+    <!-- Categories -->
+    <section class="mx-auto max-w-[1200px] px-6 py-12 lg:px-10">
+      <h2 class="mb-5 text-lg font-bold text-text-main">
+        인기 전자기기 카테고리
+      </h2>
+      <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <RouterLink
+          v-for="category in categories"
+          :key="category.label"
+          :to="{ name: 'coming-soon', params: { feature: 'category' }, query: { name: category.label } }"
+          class="group overflow-hidden rounded-lg border border-border bg-surface transition-shadow hover:shadow-elevated"
+        >
+          <div class="flex aspect-square items-center justify-center bg-text-main text-3xl">
+            {{ category.icon }}
+          </div>
+          <div class="flex items-center justify-between px-4 py-3">
+            <span class="text-sm font-semibold text-text-main">{{ category.label }}</span>
+          </div>
+        </RouterLink>
+      </div>
+    </section>
+
+    <!-- Verification process -->
+    <section class="mx-auto max-w-[1200px] px-6 pb-12 lg:px-10">
+      <BaseCard class="p-8 lg:p-10">
+        <h2 class="mb-1 text-lg font-bold text-text-main">
+          안전한 L1MIT 검증 프로세스
+        </h2>
+        <p class="mb-8 text-sm text-text-sub">
+          투명하고 안전한 고가 전자기기 구매를 위해 리미트는 해당 서비스를 제공합니다
+        </p>
+
+        <div class="grid gap-8 sm:grid-cols-2">
+          <div
+            v-for="step in steps"
+            :key="step.number"
+          >
+            <p class="mb-2 bg-primary-gradient bg-clip-text text-3xl font-extrabold text-transparent">
+              {{ step.number }}
+            </p>
+            <h3 class="mb-2 text-base font-bold text-text-main">
+              {{ step.title }}
+            </h3>
+            <p class="text-sm leading-relaxed text-text-sub">
+              {{ step.description }}
+            </p>
+          </div>
+        </div>
+      </BaseCard>
+    </section>
+
+    <!-- Products -->
     <section
       id="products"
-      class="mx-auto max-w-6xl scroll-mt-20 px-6 py-10"
+      class="mx-auto max-w-[1200px] scroll-mt-20 px-6 pb-16 lg:px-10"
     >
-      <div class="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        <!-- Product cards -->
-        <div class="grid grid-cols-1 gap-6 sm:grid-cols-3 lg:col-span-9">
-          <RouterLink
-            v-for="product in products"
-            :key="product.name"
-            :to="{ name: 'coming-soon', params: { feature: 'product-detail' }, query: { name: product.name } }"
-            class="group overflow-hidden rounded-lg border border-border bg-surface transition-shadow hover:shadow-elevated"
-          >
-            <div class="flex aspect-square items-center justify-center bg-bg text-xs text-text-sub">
-              상품 이미지
-            </div>
-            <div class="p-4">
-              <p class="text-xs text-text-sub">
-                {{ product.brand }} · {{ product.category }}
-              </p>
-              <p class="mt-1 text-sm font-semibold text-text-main">
-                {{ product.name }}
-              </p>
-              <p class="mt-1 text-sm font-bold text-text-main">
-                {{ product.price }} KRW
-              </p>
-            </div>
-          </RouterLink>
-        </div>
+      <div class="mb-5 flex items-center justify-between">
+        <h2 class="text-lg font-bold text-text-main">
+          최근 올라온 실시간 확인 가능 상품
+        </h2>
+        <RouterLink
+          :to="{ name: 'coming-soon', params: { feature: 'product-list' } }"
+          class="text-sm font-semibold text-primary hover:underline"
+        >
+          전체 상품 보기
+        </RouterLink>
+      </div>
 
-        <!-- Ranking sidebar -->
-        <aside class="rounded-lg border border-border bg-surface p-5 lg:col-span-3">
-          <div class="mb-4 flex items-center justify-between">
-            <h2 class="text-sm font-bold text-text-main">
-              인기 랭킹
-            </h2>
-            <span class="flex items-center gap-1 text-xs text-text-sub">
-              <span class="h-1.5 w-1.5 rounded-full bg-primary" />
-              실시간
+      <div class="grid grid-cols-2 gap-6 lg:grid-cols-4">
+        <RouterLink
+          v-for="product in products"
+          :key="product.name"
+          :to="{ name: 'coming-soon', params: { feature: 'product-detail' }, query: { name: product.name } }"
+          class="group overflow-hidden rounded-lg border border-border bg-surface transition-shadow hover:shadow-elevated"
+        >
+          <div class="flex aspect-square items-center justify-center bg-bg text-xs text-text-sub">
+            상품 이미지
+          </div>
+          <div class="p-4">
+            <p class="text-xs text-text-sub">
+              {{ product.brand }}
+            </p>
+            <p class="mt-1 text-sm font-semibold text-text-main">
+              {{ product.name }}
+            </p>
+            <p class="mt-1 text-sm font-bold text-text-main">
+              ₩{{ product.price }}
+            </p>
+            <span class="mt-2 inline-block text-xs font-semibold text-primary">
+              보러가기 →
             </span>
           </div>
-
-          <ul class="space-y-4">
-            <li
-              v-for="item in rankings"
-              :key="item.rank"
-              class="flex items-center gap-3"
-            >
-              <span class="w-5 text-sm font-bold text-text-sub">{{ item.rank }}</span>
-              <div class="h-10 w-10 shrink-0 rounded-md bg-bg" />
-              <div class="min-w-0 flex-1">
-                <p class="truncate text-xs font-medium text-text-main">
-                  {{ item.name }}
-                </p>
-                <p class="text-xs text-text-sub">
-                  {{ item.price }} KRW
-                </p>
-              </div>
-              <span
-                v-if="item.trend === 'up'"
-                class="text-xs text-primary"
-              >▲</span>
-              <span
-                v-else
-                class="text-xs text-text-sub"
-              >–</span>
-            </li>
-          </ul>
-
-          <BaseButton
-            block
-            to="/coming-soon/ranking"
-            variant="outline"
-            class="mt-5 py-2 text-xs"
-          >
-            전체 랭킹 보기
-          </BaseButton>
-        </aside>
+        </RouterLink>
       </div>
     </section>
   </DefaultLayout>
