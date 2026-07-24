@@ -161,6 +161,7 @@ services:
     restart: unless-stopped
     command: ["--config.file=/etc/alertmanager/config.yml"]
     volumes: ["./monitoring/alertmanager/config.yml:/etc/alertmanager/config.yml:ro"]
+    secrets: [alertmanager-smtp-password]
     networks: [app]
     mem_limit: 128m
     cpus: 0.25
@@ -272,3 +273,5 @@ secrets:
     file: ${MYSQL_EXPORTER_CONFIG_FILE:-./secrets/mysql-exporter.my.cnf.example}
   qdrant-api-key:
     file: ${QDRANT_API_KEY_FILE:-./secrets/qdrant-api-key.example}
+  alertmanager-smtp-password:
+    file: ${ALERTMANAGER_SMTP_PASSWORD_FILE:-./secrets/alertmanager-smtp-password.example}

@@ -83,7 +83,7 @@
       },
       "pluginVersion": "12.0.1",
       "targets": [
-        {"expr": "max(up{job=~\"spring-blue|spring-green\"})", "instant": true, "legendFormat": "Backend", "refId": "Backend"},
+        {"expr": "max(up{job=~\"spring-blue|spring-green\", color=~\"$color\"})", "instant": true, "legendFormat": "Backend", "refId": "Backend"},
         {"expr": "up{job=\"mysql\"}", "instant": true, "legendFormat": "MySQL", "refId": "MySQL"},
         {"expr": "up{job=\"mongodb\"}", "instant": true, "legendFormat": "MongoDB", "refId": "MongoDB"},
         {"expr": "up{job=\"redis\"}", "instant": true, "legendFormat": "Redis", "refId": "Redis"},
@@ -142,8 +142,8 @@
       "fieldConfig": {"defaults": {"unit": "bytes"}, "overrides": []},
       "gridPos": {"h": 8, "w": 8, "x": 0, "y": 27}, "id": 8,
       "targets": [
-        {"expr": "sum by (area) (jvm_memory_used_bytes{job=~\"spring-blue|spring-green\"})", "legendFormat": "{{area}} used", "refId": "A"},
-        {"expr": "sum by (area) (jvm_memory_committed_bytes{job=~\"spring-blue|spring-green\"})", "legendFormat": "{{area}} committed", "refId": "B"}
+        {"expr": "sum by (area) (jvm_memory_used_bytes{job=~\"spring-blue|spring-green\", color=~\"$color\"})", "legendFormat": "{{area}} used", "refId": "A"},
+        {"expr": "sum by (area) (jvm_memory_committed_bytes{job=~\"spring-blue|spring-green\", color=~\"$color\"})", "legendFormat": "{{area}} committed", "refId": "B"}
       ],
       "title": "JVM 메모리 (heap/nonheap)", "type": "timeseries"
     },
@@ -152,10 +152,10 @@
       "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
       "gridPos": {"h": 8, "w": 8, "x": 8, "y": 27}, "id": 9,
       "targets": [
-        {"expr": "sum(hikaricp_connections_active{job=~\"spring-blue|spring-green\"})", "legendFormat": "active", "refId": "A"},
-        {"expr": "sum(hikaricp_connections_idle{job=~\"spring-blue|spring-green\"})", "legendFormat": "idle", "refId": "B"},
-        {"expr": "sum(hikaricp_connections_pending{job=~\"spring-blue|spring-green\"})", "legendFormat": "pending", "refId": "C"},
-        {"expr": "sum(hikaricp_connections_max{job=~\"spring-blue|spring-green\"})", "legendFormat": "max", "refId": "D"}
+        {"expr": "sum(hikaricp_connections_active{job=~\"spring-blue|spring-green\", color=~\"$color\"})", "legendFormat": "active", "refId": "A"},
+        {"expr": "sum(hikaricp_connections_idle{job=~\"spring-blue|spring-green\", color=~\"$color\"})", "legendFormat": "idle", "refId": "B"},
+        {"expr": "sum(hikaricp_connections_pending{job=~\"spring-blue|spring-green\", color=~\"$color\"})", "legendFormat": "pending", "refId": "C"},
+        {"expr": "sum(hikaricp_connections_max{job=~\"spring-blue|spring-green\", color=~\"$color\"})", "legendFormat": "max", "refId": "D"}
       ],
       "title": "HikariCP 커넥션 풀", "type": "timeseries"
     },
@@ -164,9 +164,9 @@
       "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
       "gridPos": {"h": 8, "w": 8, "x": 16, "y": 27}, "id": 10,
       "targets": [
-        {"expr": "sum(jvm_threads_live_threads{job=~\"spring-blue|spring-green\"})", "legendFormat": "live", "refId": "A"},
-        {"expr": "sum(jvm_threads_daemon_threads{job=~\"spring-blue|spring-green\"})", "legendFormat": "daemon", "refId": "B"},
-        {"expr": "sum(jvm_threads_peak_threads{job=~\"spring-blue|spring-green\"})", "legendFormat": "peak", "refId": "C"}
+        {"expr": "sum(jvm_threads_live_threads{job=~\"spring-blue|spring-green\", color=~\"$color\"})", "legendFormat": "live", "refId": "A"},
+        {"expr": "sum(jvm_threads_daemon_threads{job=~\"spring-blue|spring-green\", color=~\"$color\"})", "legendFormat": "daemon", "refId": "B"},
+        {"expr": "sum(jvm_threads_peak_threads{job=~\"spring-blue|spring-green\", color=~\"$color\"})", "legendFormat": "peak", "refId": "C"}
       ],
       "title": "JVM 쓰레드", "type": "timeseries"
     },
@@ -176,7 +176,7 @@
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 35}, "id": 11,
       "targets": [
         {
-          "expr": "topk(10, sum by (uri) (rate(http_server_requests_seconds_sum{job=~\"spring-blue|spring-green\"}[5m])) / clamp_min(sum by (uri) (rate(http_server_requests_seconds_count{job=~\"spring-blue|spring-green\"}[5m])), 0.001))",
+          "expr": "topk(10, sum by (uri) (rate(http_server_requests_seconds_sum{job=~\"spring-blue|spring-green\", color=~\"$color\"}[5m])) / clamp_min(sum by (uri) (rate(http_server_requests_seconds_count{job=~\"spring-blue|spring-green\", color=~\"$color\"}[5m])), 0.001))",
           "legendFormat": "{{uri}}",
           "refId": "A"
         }
@@ -188,7 +188,7 @@
       "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 35}, "id": 12,
       "targets": [
-        {"expr": "sum by (level) (rate(logback_events_total{job=~\"spring-blue|spring-green\"}[5m]))", "legendFormat": "{{level}}", "refId": "A"}
+        {"expr": "sum by (level) (rate(logback_events_total{job=~\"spring-blue|spring-green\", color=~\"$color\"}[5m]))", "legendFormat": "{{level}}", "refId": "A"}
       ],
       "title": "Logback 레벨별 로그 카운트", "type": "timeseries"
     },
@@ -202,8 +202,8 @@
         {"id": "organize", "options": {"excludeByName": {"Time": true}, "renameByName": {"Value #A": "Mean (s)", "Value #B": "Max (s)"}}}
       ],
       "targets": [
-        {"expr": "sum by (uri) (rate(http_server_requests_seconds_sum{job=~\"spring-blue|spring-green\"}[5m])) / clamp_min(sum by (uri) (rate(http_server_requests_seconds_count{job=~\"spring-blue|spring-green\"}[5m])), 0.001)", "format": "table", "instant": true, "refId": "A"},
-        {"expr": "max by (uri) (http_server_requests_seconds_max{job=~\"spring-blue|spring-green\"})", "format": "table", "instant": true, "refId": "B"}
+        {"expr": "sum by (uri) (rate(http_server_requests_seconds_sum{job=~\"spring-blue|spring-green\", color=~\"$color\"}[5m])) / clamp_min(sum by (uri) (rate(http_server_requests_seconds_count{job=~\"spring-blue|spring-green\", color=~\"$color\"}[5m])), 0.001)", "format": "table", "instant": true, "refId": "A"},
+        {"expr": "max by (uri) (http_server_requests_seconds_max{job=~\"spring-blue|spring-green\", color=~\"$color\"})", "format": "table", "instant": true, "refId": "B"}
       ],
       "title": "Response Time (엔드포인트별 Mean / Max — Min은 percentile-histogram 미설정으로 제공 안 됨)", "type": "table"
     },
@@ -216,7 +216,7 @@
       "fieldConfig": {"defaults": {"unit": "short", "color": {"fixed": "#73BF69"}}, "overrides": []},
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 52}, "id": 15,
       "options": {"legend": {"calcs": ["mean", "lastNotNull", "max", "min", "sum"], "displayMode": "table", "placement": "right"}},
-      "targets": [{"expr": "sum(rate(logback_events_total{job=~\"spring-blue|spring-green\", level=\"info\"}[1m]))", "legendFormat": "info", "refId": "A"}],
+      "targets": [{"expr": "sum(rate(logback_events_total{job=~\"spring-blue|spring-green\", color=~\"$color\", level=\"info\"}[1m]))", "legendFormat": "info", "refId": "A"}],
       "title": "INFO logs", "type": "timeseries"
     },
     {
@@ -224,7 +224,7 @@
       "fieldConfig": {"defaults": {"unit": "short", "color": {"fixed": "#F2495C"}}, "overrides": []},
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 52}, "id": 16,
       "options": {"legend": {"calcs": ["mean", "lastNotNull", "max", "min", "sum"], "displayMode": "table", "placement": "right"}},
-      "targets": [{"expr": "sum(rate(logback_events_total{job=~\"spring-blue|spring-green\", level=\"error\"}[1m]))", "legendFormat": "error", "refId": "A"}],
+      "targets": [{"expr": "sum(rate(logback_events_total{job=~\"spring-blue|spring-green\", color=~\"$color\", level=\"error\"}[1m]))", "legendFormat": "error", "refId": "A"}],
       "title": "ERROR logs", "type": "timeseries"
     },
     {
@@ -232,7 +232,7 @@
       "fieldConfig": {"defaults": {"unit": "short", "color": {"fixed": "#FF9830"}}, "overrides": []},
       "gridPos": {"h": 7, "w": 8, "x": 0, "y": 60}, "id": 17,
       "options": {"legend": {"calcs": ["mean", "lastNotNull", "max", "min", "sum"], "displayMode": "table", "placement": "bottom"}},
-      "targets": [{"expr": "sum(rate(logback_events_total{job=~\"spring-blue|spring-green\", level=\"warn\"}[1m]))", "legendFormat": "warn", "refId": "A"}],
+      "targets": [{"expr": "sum(rate(logback_events_total{job=~\"spring-blue|spring-green\", color=~\"$color\", level=\"warn\"}[1m]))", "legendFormat": "warn", "refId": "A"}],
       "title": "WARN logs", "type": "timeseries"
     },
     {
@@ -240,7 +240,7 @@
       "fieldConfig": {"defaults": {"unit": "short", "color": {"fixed": "#5794F2"}}, "overrides": []},
       "gridPos": {"h": 7, "w": 8, "x": 8, "y": 60}, "id": 18,
       "options": {"legend": {"calcs": ["mean", "lastNotNull", "max", "min", "sum"], "displayMode": "table", "placement": "bottom"}},
-      "targets": [{"expr": "sum(rate(logback_events_total{job=~\"spring-blue|spring-green\", level=\"debug\"}[1m]))", "legendFormat": "debug", "refId": "A"}],
+      "targets": [{"expr": "sum(rate(logback_events_total{job=~\"spring-blue|spring-green\", color=~\"$color\", level=\"debug\"}[1m]))", "legendFormat": "debug", "refId": "A"}],
       "title": "DEBUG logs", "type": "timeseries"
     },
     {
@@ -248,7 +248,7 @@
       "fieldConfig": {"defaults": {"unit": "short", "color": {"fixed": "#B877D9"}}, "overrides": []},
       "gridPos": {"h": 7, "w": 8, "x": 16, "y": 60}, "id": 19,
       "options": {"legend": {"calcs": ["mean", "lastNotNull", "max", "min", "sum"], "displayMode": "table", "placement": "bottom"}},
-      "targets": [{"expr": "sum(rate(logback_events_total{job=~\"spring-blue|spring-green\", level=\"trace\"}[1m]))", "legendFormat": "trace", "refId": "A"}],
+      "targets": [{"expr": "sum(rate(logback_events_total{job=~\"spring-blue|spring-green\", color=~\"$color\", level=\"trace\"}[1m]))", "legendFormat": "trace", "refId": "A"}],
       "title": "TRACE logs", "type": "timeseries"
     },
     {
@@ -260,7 +260,7 @@
       "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
       "gridPos": {"h": 6, "w": 6, "x": 0, "y": 68}, "id": 21,
       "options": {"colorMode": "value", "graphMode": "none", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}, "textMode": "value_and_name"},
-      "targets": [{"expr": "max(process_uptime_seconds{job=~\"spring-blue|spring-green\"})", "instant": true, "refId": "A"}],
+      "targets": [{"expr": "max(process_uptime_seconds{job=~\"spring-blue|spring-green\", color=~\"$color\"})", "instant": true, "refId": "A"}],
       "title": "Uptime", "type": "stat"
     },
     {
@@ -268,7 +268,7 @@
       "fieldConfig": {"defaults": {"unit": "dateTimeAsSystem"}, "overrides": []},
       "gridPos": {"h": 6, "w": 6, "x": 6, "y": 68}, "id": 22,
       "options": {"colorMode": "value", "graphMode": "none", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}, "textMode": "value_and_name"},
-      "targets": [{"expr": "max(process_start_time_seconds{job=~\"spring-blue|spring-green\"}) * 1000", "instant": true, "refId": "A"}],
+      "targets": [{"expr": "max(process_start_time_seconds{job=~\"spring-blue|spring-green\", color=~\"$color\"}) * 1000", "instant": true, "refId": "A"}],
       "title": "Start time", "type": "stat"
     },
     {
@@ -276,7 +276,7 @@
       "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 0.75}, {"color": "red", "value": 0.9}]}}, "overrides": []},
       "gridPos": {"h": 6, "w": 6, "x": 12, "y": 68}, "id": 23,
       "options": {"reduceOptions": {"calcs": ["lastNotNull"], "values": false}},
-      "targets": [{"expr": "sum(jvm_memory_used_bytes{job=~\"spring-blue|spring-green\", area=\"heap\"}) / clamp_min(sum(jvm_memory_committed_bytes{job=~\"spring-blue|spring-green\", area=\"heap\"}), 1)", "instant": true, "refId": "A"}],
+      "targets": [{"expr": "sum(jvm_memory_used_bytes{job=~\"spring-blue|spring-green\", color=~\"$color\", area=\"heap\"}) / clamp_min(sum(jvm_memory_committed_bytes{job=~\"spring-blue|spring-green\", color=~\"$color\", area=\"heap\"}), 1)", "instant": true, "refId": "A"}],
       "title": "Heap Used", "type": "gauge"
     },
     {
@@ -284,38 +284,48 @@
       "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 0.75}, {"color": "red", "value": 0.9}]}}, "overrides": []},
       "gridPos": {"h": 6, "w": 6, "x": 18, "y": 68}, "id": 24,
       "options": {"reduceOptions": {"calcs": ["lastNotNull"], "values": false}},
-      "targets": [{"expr": "sum(jvm_memory_used_bytes{job=~\"spring-blue|spring-green\", area=\"nonheap\"}) / clamp_min(sum(jvm_memory_committed_bytes{job=~\"spring-blue|spring-green\", area=\"nonheap\"}), 1)", "instant": true, "refId": "A"}],
+      "targets": [{"expr": "sum(jvm_memory_used_bytes{job=~\"spring-blue|spring-green\", color=~\"$color\", area=\"nonheap\"}) / clamp_min(sum(jvm_memory_committed_bytes{job=~\"spring-blue|spring-green\", color=~\"$color\", area=\"nonheap\"}), 1)", "instant": true, "refId": "A"}],
       "title": "Non-Heap Used", "type": "gauge"
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
       "gridPos": {"h": 7, "w": 8, "x": 0, "y": 74}, "id": 25,
-      "targets": [{"expr": "sum(process_files_open_files{job=~\"spring-blue|spring-green\"})", "legendFormat": "open files", "refId": "A"}],
+      "targets": [{"expr": "sum(process_files_open_files{job=~\"spring-blue|spring-green\", color=~\"$color\"})", "legendFormat": "open files", "refId": "A"}],
       "title": "Process Open Files", "type": "timeseries"
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "fieldConfig": {"defaults": {"unit": "percentunit"}, "overrides": []},
       "gridPos": {"h": 7, "w": 8, "x": 8, "y": 74}, "id": 26,
-      "targets": [{"expr": "avg(process_cpu_usage{job=~\"spring-blue|spring-green\"})", "legendFormat": "process cpu", "refId": "A"}],
+      "targets": [{"expr": "avg(process_cpu_usage{job=~\"spring-blue|spring-green\", color=~\"$color\"})", "legendFormat": "process cpu", "refId": "A"}],
       "title": "CPU Usage", "type": "timeseries"
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
       "gridPos": {"h": 7, "w": 8, "x": 16, "y": 74}, "id": 27,
-      "targets": [{"expr": "avg(system_load_average_1m{job=~\"spring-blue|spring-green\"})", "legendFormat": "load avg 1m", "refId": "A"}],
+      "targets": [{"expr": "avg(system_load_average_1m{job=~\"spring-blue|spring-green\", color=~\"$color\"})", "legendFormat": "load avg 1m", "refId": "A"}],
       "title": "Load Average", "type": "timeseries"
     }
   ],
   "refresh": "30s",
   "schemaVersion": 41,
   "tags": ["limit", "production"],
-  "templating": {"list": []},
+  "templating": {
+    "list": [
+      {
+        "name": "color", "label": "Blue/Green", "type": "query",
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "query": {"query": "label_values(up{job=~\"spring-blue|spring-green\"}, color)", "refId": "colorVariable"},
+        "multi": true, "includeAll": true, "current": {"text": "All", "value": "$__all"},
+        "refresh": 2, "sort": 1
+      }
+    ]
+  },
   "time": {"from": "now-6h", "to": "now"},
   "timezone": "browser",
   "title": "Limit Platform Overview",
   "uid": "limit-platform-overview",
-  "version": 3
+  "version": 4
 }
