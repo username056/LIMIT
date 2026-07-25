@@ -33,6 +33,7 @@ run_backend_scripts() {
   cd "$root_dir"
   bash -n scripts/deploy-blue-green.sh
   bash -n scripts/deploy-remote.sh
+  bash -n scripts/provision-ec2-entrypoints.sh
   bash -n scripts/rollback-blue-green.sh
   bash -n scripts/rollback-remote.sh
   bash -n scripts/sync-deploy-files.sh

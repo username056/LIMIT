@@ -26,4 +26,4 @@ tar -czf - \
       -o IdentitiesOnly=yes \
       -o StrictHostKeyChecking=yes \
       "$DEPLOY_USER@$DEPLOY_HOST" \
-      "install -d -m 0755 '$DEPLOY_PATH/scripts' '$DEPLOY_PATH/infra' && tar -xzf - -C '$DEPLOY_PATH' && sudo -n install -d -m 0755 /var/www/limit-admin && sudo -n install -m 0644 '$DEPLOY_PATH/infra/admin/index.html' '$DEPLOY_PATH/infra/admin/admin.css' '$DEPLOY_PATH/infra/admin/admin.js' /var/www/limit-admin/"
+      "install -d -m 0755 '$DEPLOY_PATH/scripts' '$DEPLOY_PATH/infra' && tar -xzf - -C '$DEPLOY_PATH' && sudo -n install -d -m 0755 /var/www/limit-admin /var/www/limit-grafana-assets && sudo -n install -m 0644 '$DEPLOY_PATH/infra/admin/index.html' '$DEPLOY_PATH/infra/admin/admin.css' '$DEPLOY_PATH/infra/admin/admin.js' /var/www/limit-admin/ && asset_dir='$DEPLOY_PATH/infra/monitoring/grafana/assets' && find \"\$asset_dir\" -maxdepth 1 -type f -name '*.svg' -print -quit | grep -q . && find \"\$asset_dir\" -maxdepth 1 -type f -name '*.svg' -exec sudo -n install -m 0644 '{}' /var/www/limit-grafana-assets/ ';'"
