@@ -86,6 +86,8 @@ variables:
   rules:
     - changes: &backend_scripts_changes
         - scripts/ci-test.sh
+        - scripts/check-backend-logging.sh
+        - scripts/check-backend-logging.test.sh
         - scripts/build-image.sh
         - scripts/sync-deploy-files.sh
         - scripts/sync-deploy-files.test.sh
@@ -99,6 +101,15 @@ variables:
         - scripts/smoke-test.sh
         - infra/compose.yml
         - infra/compose.prod.yml
+        - .gitlab-ci.yml
+
+.backend_logging_change_template:
+  rules:
+    - changes: &backend_logging_changes
+        - backend/src/main/java/**/*
+        - scripts/check-backend-logging.sh
+        - scripts/check-backend-logging.test.sh
+        - docs/runbook/backend-logging.md
         - .gitlab-ci.yml
 
 .monitoring_change_template:
@@ -173,6 +184,23 @@ secret_guard:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
       when: never
     - when: on_success
+
+backend_logging_guard:
+  stage: guard
+  image: alpine:3.22
+  variables:
+    # MR 기준 SHA와 dev push 직전 SHA를 로컬에서 비교해야 한다.
+    GIT_DEPTH: "0"
+  before_script:
+    - apk add --no-cache git
+  script:
+    - sh scripts/check-backend-logging.test.sh
+    - sh scripts/check-backend-logging.sh
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "dev"'
+      changes: *backend_logging_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
+      changes: *backend_logging_changes
 
 backend_unit_test:
   extends: .backend_gradle_job
