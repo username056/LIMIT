@@ -49,6 +49,8 @@ MONITORING_SECRET_GID=1000
 
 `infra/monitoring/**/*` 또는 `infra/nginx/limit.conf` 변경은 `monitoring_deploy_prod`가 백엔드 이미지를 다시 빌드하지 않고 모니터링 파일만 동기화한다. 원격 `deploy-monitoring.sh`는 Compose 유효성을 검사하고 관측 컨테이너만 기동·재시작하며, Nginx 설정은 기존 파일을 백업한 뒤 `nginx -t`를 통과해야 reload한다. 검증 실패 시 백업 파일을 즉시 복원하고, Grafana·Prometheus·Loki readiness는 제한된 횟수만큼 재시도한다. `infra/compose*.yml`처럼 앱과 관측 스택이 함께 참조하는 파일은 기존 백엔드 배포와 모니터링 배포가 모두 직렬화된 `limit-prod` resource group에서 처리한다.
 
+`monitoring_deploy_prod`의 GitLab environment 이름은 기존 배포 job과 동일한 `production`을 사용한다. `SSH_KNOWN_HOSTS`, `DEPLOY_SSH_PRIVATE_KEY` 등 protected file variable이 `production` scope로 제한되어 있으므로 별도 하위 environment 이름으로 변경하지 않는다.
+
 `/actuator/prometheus`는 애플리케이션 보안 필터에서는 인증 없이 허용하지만 외부 공개 엔드포인트가 아니다. 운영 백엔드 포트는 `127.0.0.1`에만 publish하고, Nginx는 `/api/v1/`과 제한된 health 경로만 프록시하며 그 밖의 `/actuator/**` 요청은 404로 차단한다. Prometheus만 Docker `app` 네트워크에서 백엔드 컨테이너 주소로 scrape한다.
 
 Nginx 설정 원복에서 `CRITICAL` 오류가 나더라도 reload 전이므로 기존 worker는 마지막 정상 설정으로 계속 서비스한다. 운영자는 `infra/state/limit.conf.monitoring.previous`를 활성 include 경로인 `/etc/nginx/conf.d/limit.conf`에 다시 설치하고 `sudo nginx -t`를 통과한 뒤에만 `sudo systemctl reload nginx`를 실행한다.
