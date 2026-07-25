@@ -32,6 +32,8 @@ run_backend_package() {
 run_backend_scripts() {
   cd "$root_dir"
   bash -n scripts/deploy-blue-green.sh
+  sh -n scripts/check-backend-logging.sh
+  sh -n scripts/check-backend-logging.test.sh
   bash -n scripts/deploy-monitoring.sh
   bash -n scripts/deploy-monitoring-remote.sh
   bash -n scripts/deploy-remote.sh
