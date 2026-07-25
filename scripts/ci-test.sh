@@ -32,12 +32,23 @@ run_backend_package() {
 run_backend_scripts() {
   cd "$root_dir"
   bash -n scripts/deploy-blue-green.sh
+  bash -n scripts/deploy-monitoring.sh
+  bash -n scripts/deploy-monitoring-remote.sh
   bash -n scripts/deploy-remote.sh
   bash -n scripts/provision-ec2-entrypoints.sh
   bash -n scripts/rollback-blue-green.sh
   bash -n scripts/rollback-remote.sh
   bash -n scripts/sync-deploy-files.sh
+  bash -n scripts/sync-deploy-files.test.sh
   bash -n scripts/smoke-test.sh
+  grep -Fq 'ports: ["127.0.0.1:8081:8080"]' infra/compose.prod.yml
+  grep -Fq 'ports: ["127.0.0.1:8082:8080"]' infra/compose.prod.yml
+  grep -Fq 'nginx_target="/etc/nginx/conf.d/limit.conf"' scripts/deploy-monitoring.sh
+  if grep -Fq '/actuator/prometheus' infra/nginx/limit.conf; then
+    echo "Prometheus actuator endpoint must not be exposed through Nginx" >&2
+    exit 1
+  fi
+  bash scripts/sync-deploy-files.test.sh
   bash scripts/rollback-blue-green.test.sh
 }
 

@@ -35,7 +35,7 @@ test -f /var/run/reboot-required && cat /var/run/reboot-required
 
 서버의 배포 사용자로 Docker Hub private repository에 로그인해 image pull을 확인한다. CI에는 read/write 범위의 전용 Personal Access Token을 사용하고, 서버에는 별도로 발급한 read-only token을 서버 전용 Docker credential store에 보관한다. 개인 비밀번호나 하나의 token을 CI와 서버에서 공유하지 않는다.
 
-`infra/.env`는 서버에서 600 권한으로 생성하고 `.env.example`의 변수 이름만 참고한다. Mongo URI에는 사용자명·비밀번호와 `authSource=admin`을 포함한다. exporter용 MySQL client 파일과 Qdrant API key 파일도 서버 전용 경로에 600 권한으로 만들고 다음 변수로 연결한다.
+`infra/.env`는 서버에서 600 권한으로 생성하고 `.env.example`의 변수 이름만 참고한다. Mongo URI에는 사용자명·비밀번호와 `authSource=admin`을 포함한다. exporter용 MySQL client 파일과 Qdrant API key 파일은 서버 전용 경로에 640 권한으로 만들고, 소유 그룹 ID를 `MONITORING_SECRET_GID`로 지정한다. Prometheus와 MySQL exporter에만 이 보조 그룹을 부여해 다른 사용자와 컨테이너의 읽기를 막는다.
 
 Spring profile은 `local`, `prod`만 사용한다. Compose도 `compose.yml` base와 `compose.local.yml`, `compose.prod.yml`만 유지한다. Testcontainers 테스트는 별도 profile 없이 동적 접속 정보를 주입한다.
 
@@ -44,7 +44,16 @@ Spring profile은 `local`, `prod`만 사용한다. Compose도 `compose.yml` base
 ```text
 MYSQL_EXPORTER_CONFIG_FILE=/opt/limit-secrets/mysql-exporter.my.cnf
 QDRANT_API_KEY_FILE=/opt/limit-secrets/qdrant-api-key
+MONITORING_SECRET_GID=1000
 ```
+
+`infra/monitoring/**/*` 또는 `infra/nginx/limit.conf` 변경은 `monitoring_deploy_prod`가 백엔드 이미지를 다시 빌드하지 않고 모니터링 파일만 동기화한다. 원격 `deploy-monitoring.sh`는 Compose 유효성을 검사하고 관측 컨테이너만 기동·재시작하며, Nginx 설정은 기존 파일을 백업한 뒤 `nginx -t`를 통과해야 reload한다. 검증 실패 시 백업 파일을 즉시 복원하고, Grafana·Prometheus·Loki readiness는 제한된 횟수만큼 재시도한다. `infra/compose*.yml`처럼 앱과 관측 스택이 함께 참조하는 파일은 기존 백엔드 배포와 모니터링 배포가 모두 직렬화된 `limit-prod` resource group에서 처리한다.
+
+`/actuator/prometheus`는 애플리케이션 보안 필터에서는 인증 없이 허용하지만 외부 공개 엔드포인트가 아니다. 운영 백엔드 포트는 `127.0.0.1`에만 publish하고, Nginx는 `/api/v1/`과 제한된 health 경로만 프록시하며 그 밖의 `/actuator/**` 요청은 404로 차단한다. Prometheus만 Docker `app` 네트워크에서 백엔드 컨테이너 주소로 scrape한다.
+
+Nginx 설정 원복에서 `CRITICAL` 오류가 나더라도 reload 전이므로 기존 worker는 마지막 정상 설정으로 계속 서비스한다. 운영자는 `infra/state/limit.conf.monitoring.previous`를 활성 include 경로인 `/etc/nginx/conf.d/limit.conf`에 다시 설치하고 `sudo nginx -t`를 통과한 뒤에만 `sudo systemctl reload nginx`를 실행한다.
+
+아키텍처 대시보드 아이콘은 Grafana와 같은 origin의 `https://grafana.l1mit.shop/limit-assets/*.svg`를 사용한다. 이 URL은 Nginx에서 정적 자산으로 제공하며 배포 후 HTTP 200을 확인한다. 아이콘 로딩 실패는 시각화에만 영향을 주고 메트릭 수집에는 영향을 주지 않는다.
 
 ## 4. Compose 기동
 
@@ -67,7 +76,7 @@ docker compose --env-file infra/.env -p limit-prod \
   -f infra/compose.yml -f infra/compose.prod.yml --profile observability up -d
 ```
 
-최초 EC2 bootstrap에서는 실제 비밀값을 저장소에 넣지 않고 서버에서 생성한 뒤 데이터 계층, 첫 blue 백엔드와 핵심 관측 서비스를 기동한다. MySQL exporter는 별도 최소권한 계정이 승인·생성되기 전에는 시작하지 않는다.
+최초 EC2 bootstrap에서는 실제 비밀값을 저장소에 넣지 않고 서버에서 생성한 뒤 데이터 계층, 첫 blue 백엔드와 핵심 관측 서비스를 기동한다. MongoDB·Redis exporter는 함께 기동하고, MySQL exporter는 별도 최소권한 계정이 승인·생성되기 전에는 시작하지 않는다.
 
 ```bash
 bash scripts/bootstrap-ec2-stack.sh

@@ -68,13 +68,15 @@ if [[ ! -f "$env_file" ]]; then
     printf 'BACKEND_GREEN_IMAGE=%s\n' "$image_ref"
     printf 'QDRANT_API_KEY_FILE=%s/qdrant-api-key\n' "$secret_dir"
     printf 'MYSQL_EXPORTER_CONFIG_FILE=%s/mysql-exporter.my.cnf\n' "$secret_dir"
+    printf 'MONITORING_SECRET_GID=%s\n' "$(id -g)"
   } > "$env_file"
   chmod 0600 "$env_file"
 
   printf '%s\n' "$qdrant_api_key" > "$secret_dir/qdrant-api-key"
   printf '[client]\nuser=disabled_exporter\npassword=%s\nhost=mysql\n' "$(generate_secret)" \
     > "$secret_dir/mysql-exporter.my.cnf"
-  chmod 0600 "$secret_dir/qdrant-api-key" "$secret_dir/mysql-exporter.my.cnf"
+  chgrp "$(id -g)" "$secret_dir/qdrant-api-key" "$secret_dir/mysql-exporter.my.cnf"
+  chmod 0640 "$secret_dir/qdrant-api-key" "$secret_dir/mysql-exporter.my.cnf"
 fi
 
 compose=(
@@ -106,5 +108,7 @@ if [[ "$ready" != true ]]; then
   exit 1
 fi
 
-"${compose[@]}" up -d prometheus loki grafana alertmanager node-exporter cadvisor alloy nginx-exporter
+"${compose[@]}" up -d \
+  prometheus loki grafana alertmanager node-exporter cadvisor alloy \
+  mongodb-exporter redis-exporter nginx-exporter
 echo "Limit backend and observability stack are running."
