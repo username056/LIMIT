@@ -88,6 +88,9 @@ variables:
         - scripts/ci-test.sh
         - scripts/build-image.sh
         - scripts/sync-deploy-files.sh
+        - scripts/sync-deploy-files.test.sh
+        - scripts/deploy-monitoring.sh
+        - scripts/deploy-monitoring-remote.sh
         - scripts/deploy-remote.sh
         - scripts/deploy-blue-green.sh
         - scripts/rollback-remote.sh
@@ -96,6 +99,19 @@ variables:
         - scripts/smoke-test.sh
         - infra/compose.yml
         - infra/compose.prod.yml
+        - .gitlab-ci.yml
+
+.monitoring_change_template:
+  rules:
+    - changes: &monitoring_changes
+        - infra/monitoring/**/*
+        - infra/nginx/limit.conf
+        - infra/compose.yml
+        - infra/compose.prod.yml
+        - scripts/deploy-monitoring.sh
+        - scripts/deploy-monitoring-remote.sh
+        - scripts/sync-deploy-files.sh
+        - scripts/sync-deploy-files.test.sh
         - .gitlab-ci.yml
 
 .openapi_change_template:
@@ -499,6 +515,35 @@ deploy_prod:
       changes: *backend_changes
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
       changes: *backend_changes
+
+monitoring_deploy_prod:
+  stage: deploy
+  image: alpine:3.22
+  interruptible: false
+  resource_group: limit-prod
+  needs:
+    - job: secret_guard
+      artifacts: false
+    - job: backend_scripts_test
+      artifacts: false
+      optional: true
+  environment:
+    name: production/monitoring
+    url: https://grafana.l1mit.shop/
+  before_script:
+    - apk add --no-cache openssh-client
+    - install -d -m 700 ~/.ssh
+    - install -m 644 "$SSH_KNOWN_HOSTS" ~/.ssh/known_hosts
+    - install -m 600 "$DEPLOY_SSH_PRIVATE_KEY" /tmp/limit-deploy-key
+    - export DEPLOY_SSH_KEY_FILE=/tmp/limit-deploy-key
+  script:
+    - sh scripts/sync-deploy-files.sh monitoring
+    - sh scripts/deploy-monitoring-remote.sh
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
+      changes: *monitoring_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
+      changes: *monitoring_changes
 
 rollback_prod:
   stage: deploy

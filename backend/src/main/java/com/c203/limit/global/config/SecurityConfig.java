@@ -51,6 +51,8 @@ public class SecurityConfig {
                                                 "/swagger-ui.html",
                                                 "/swagger-ui/**")
                                         .permitAll()
+                                        .requestMatchers(HttpMethod.GET, "/actuator/prometheus")
+                                        .permitAll()
                                         .requestMatchers(
                                                 HttpMethod.GET,
                                                 "/api/v1/products",
