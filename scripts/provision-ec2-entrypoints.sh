@@ -11,6 +11,7 @@ mode=${1:-full}
 http_config="$root_dir/infra/nginx/limit-http.conf"
 https_config="$root_dir/infra/nginx/limit.conf"
 admin_dir="$root_dir/infra/admin"
+grafana_assets_dir="$root_dir/infra/monitoring/grafana/assets"
 nginx_config=/etc/nginx/conf.d/limit.conf
 upstream_config=/etc/nginx/conf.d/limit-upstream.conf
 cert_name=limit-admin
@@ -21,20 +22,31 @@ if [[ "$mode" != full && "$mode" != prepare ]]; then
   exit 64
 fi
 
-for path in "$http_config" "$https_config" "$admin_dir/index.html"; do
+for path in "$http_config" "$https_config" "$admin_dir/index.html" "$grafana_assets_dir"; do
   if [[ ! -e "$path" ]]; then
     echo "required file not found: $path" >&2
     exit 66
   fi
 done
 
+shopt -s nullglob
+grafana_asset_files=("$grafana_assets_dir"/*.svg)
+shopt -u nullglob
+if (( ${#grafana_asset_files[@]} == 0 )); then
+  echo "required Grafana SVG assets not found: $grafana_assets_dir" >&2
+  exit 66
+fi
+
 export DEBIAN_FRONTEND=noninteractive
 apt-get install -y nginx certbot
 
-install -d -m 0755 /var/www/limit-certbot /var/www/limit-admin
+install -d -m 0755 /var/www/limit-certbot /var/www/limit-admin /var/www/limit-grafana-assets
 install -m 0644 "$admin_dir/index.html" /var/www/limit-admin/index.html
 install -m 0644 "$admin_dir/admin.css" /var/www/limit-admin/admin.css
 install -m 0644 "$admin_dir/admin.js" /var/www/limit-admin/admin.js
+for grafana_asset_file in "${grafana_asset_files[@]}"; do
+  install -m 0644 "$grafana_asset_file" /var/www/limit-grafana-assets/
+done
 install -m 0644 "$http_config" "$nginx_config"
 
 if [[ ! -f "$upstream_config" ]]; then
