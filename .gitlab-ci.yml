@@ -500,6 +500,7 @@ deploy_prod:
       artifacts: false
   environment:
     name: production
+    url: https://grafana.l1mit.shop/
   before_script:
     - apk add --no-cache openssh-client
     - install -d -m 700 ~/.ssh
@@ -528,8 +529,7 @@ monitoring_deploy_prod:
       artifacts: false
       optional: true
   environment:
-    name: production/monitoring
-    url: https://grafana.l1mit.shop/
+    name: production
   before_script:
     - apk add --no-cache openssh-client
     - install -d -m 700 ~/.ssh
