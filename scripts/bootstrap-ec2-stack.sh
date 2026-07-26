@@ -73,6 +73,10 @@ if [[ ! -f "$env_file" ]]; then
     > "$secret_dir/mysql-exporter.my.cnf"
   chgrp "$(id -g)" "$secret_dir/mysql-exporter.my.cnf"
   chmod 0640 "$secret_dir/mysql-exporter.my.cnf"
+  if [[ -f "$secret_dir/alertmanager-smtp-password" ]]; then
+    chgrp "$(id -g)" "$secret_dir/alertmanager-smtp-password"
+    chmod 0640 "$secret_dir/alertmanager-smtp-password"
+  fi
 fi
 
 compose=(

@@ -19,6 +19,7 @@ compose=(
   -f "$root_dir/infra/compose.yml"
   -f "$root_dir/infra/compose.prod.yml"
 )
+install -d -m 0755 "$root_dir/infra/state/node-exporter"
 services=(
   prometheus loki grafana alertmanager node-exporter cadvisor alloy
   mongodb-exporter redis-exporter nginx-exporter
@@ -50,6 +51,24 @@ if [[ -f "$mysql_exporter_config" ]] \
 else
   echo "mysql-exporter skipped: provision its least-privilege account first" >&2
 fi
+
+monitoring_secret_gid=$(sed -n 's/^MONITORING_SECRET_GID=//p' "$env_file" | tail -n 1)
+monitoring_secret_gid=${monitoring_secret_gid:-1000}
+alertmanager_smtp_password=$(sed -n 's/^ALERTMANAGER_SMTP_PASSWORD_FILE=//p' "$env_file" | tail -n 1)
+alertmanager_smtp_password=${alertmanager_smtp_password:-$root_dir/infra/secrets/alertmanager-smtp-password.example}
+if [[ "$alertmanager_smtp_password" != /* ]]; then
+  alertmanager_smtp_password="$root_dir/infra/${alertmanager_smtp_password#./}"
+fi
+if ! [[ "$monitoring_secret_gid" =~ ^[0-9]+$ ]]; then
+  echo "MONITORING_SECRET_GID must be numeric" >&2
+  exit 64
+fi
+if [[ ! -f "$alertmanager_smtp_password" ]]; then
+  echo "Alertmanager SMTP password file not found" >&2
+  exit 66
+fi
+chgrp "$monitoring_secret_gid" "$alertmanager_smtp_password"
+chmod 0640 "$alertmanager_smtp_password"
 
 "${compose[@]}" config --quiet
 
@@ -87,5 +106,10 @@ wait_until_ready Prometheus \
 wait_until_ready Loki \
   "${compose[@]}" exec -T loki \
     wget -qO- http://localhost:3100/ready
+wait_until_ready Alertmanager \
+  "${compose[@]}" exec -T alertmanager \
+    wget -qO- http://localhost:9093/-/ready
+
+bash "$root_dir/scripts/install-backup-cron.sh"
 
 echo "monitoring configuration deployed"

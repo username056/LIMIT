@@ -165,6 +165,8 @@ Grafana는 `https://grafana.l1mit.shop`에서 로그인하거나 장애 시 SSH 
 
 ## 8. 백업과 복구 훈련
 
+자동 백업, 격리 복구 훈련, Alertmanager 전송 테스트와 Route 53 외부 uptime 구성은 [DB 백업·복구·알림·외부 uptime Runbook](./backup-alert-uptime.md)을 따른다.
+
 - MySQL: 일관성 옵션을 적용한 `mysqldump`를 압축한다.
 - MongoDB: `mongodump --archive --gzip`을 사용한다.
 - Redis: 영속 데이터가 재생성 불가능한 경우 RDB/AOF 사본을 포함한다.
