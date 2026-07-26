@@ -152,6 +152,10 @@ Flyway 마이그레이션이 포함된 MR은 병합 즉시 운영 DB에 적용�
 
 ## 7. 장애 확인과 로그
 
+브라우저 JavaScript·Vue 오류는 [프론트엔드 Sentry 오류 모니터링](frontend-sentry.md)에
+따라 Sentry Issues에서 확인한다. Nginx 접근 로그는 아래 Grafana Loki 절차를
+사용한다.
+
 ```bash
 docker compose --env-file infra/.env -p limit-prod \
   -f infra/compose.yml -f infra/compose.prod.yml ps
