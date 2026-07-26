@@ -4,6 +4,7 @@ import { initializeSentry } from '../sentry'
 
 vi.mock('@sentry/vue', () => ({
   init: vi.fn(),
+  consoleLoggingIntegration: vi.fn(() => ({ name: 'ConsoleLogs' })),
 }))
 
 describe('initializeSentry', () => {
@@ -35,8 +36,12 @@ describe('initializeSentry', () => {
         environment: 'production',
         release: 'commit-sha',
         sendDefaultPii: false,
+        enableLogs: true,
       }),
     )
+    expect(Sentry.consoleLoggingIntegration).toHaveBeenCalledWith({
+      levels: ['log', 'info', 'warn', 'error'],
+    })
   })
 
   it('전송 전에 URL의 query와 hash 및 요청 쿠키를 제거한다', () => {
@@ -93,5 +98,58 @@ describe('initializeSentry', () => {
     )
 
     expect(options.beforeSend({ request: invalidRequest })).toBeNull()
+  })
+
+  it('콘솔 로그의 인증정보, 개인정보와 URL query/hash를 제거한다', () => {
+    initializeSentry({}, { VITE_SENTRY_DSN: 'https://public@example.ingest.sentry.io/1' })
+    const options = Sentry.init.mock.calls[0][0]
+    const log = {
+      message:
+        'request https://l1mit.shop/listings?email=user@example.com#detail authorization=Bearer secret-token',
+      attributes: {
+        email: 'user@example.com',
+        accessToken: 'secret-token',
+        'refresh-token': 'secret-refresh-token',
+        api_key: 'secret-api-key',
+        accessibility: 'enabled',
+        path: '/listings?owner=private#detail',
+        nested: {
+          phone: '010-1234-5678',
+          detail: 'contact user@example.com',
+        },
+      },
+    }
+
+    expect(options.beforeSendLog(log)).toEqual({
+      message: 'request https://l1mit.shop/listings authorization=[Filtered]',
+      attributes: {
+        email: '[Filtered]',
+        accessToken: '[Filtered]',
+        'refresh-token': '[Filtered]',
+        api_key: '[Filtered]',
+        accessibility: 'enabled',
+        path: '/listings',
+        nested: {
+          phone: '[Filtered]',
+          detail: 'contact [Filtered email]',
+        },
+      },
+    })
+    expect(log.attributes.email).toBe('user@example.com')
+  })
+
+  it('로그 개인정보 정제에 실패하면 로그를 전송하지 않는다', () => {
+    initializeSentry({}, { VITE_SENTRY_DSN: 'https://public@example.ingest.sentry.io/1' })
+    const options = Sentry.init.mock.calls[0][0]
+    const invalidAttributes = new Proxy(
+      {},
+      {
+        ownKeys() {
+          throw new Error('cannot enumerate attributes')
+        },
+      },
+    )
+
+    expect(options.beforeSendLog({ message: 'safe', attributes: invalidAttributes })).toBeNull()
   })
 })
