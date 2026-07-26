@@ -32,11 +32,17 @@ run_backend_package() {
 run_backend_scripts() {
   cd "$root_dir"
   bash -n scripts/deploy-blue-green.sh
+  bash -n scripts/bootstrap-ec2-stack.sh
   sh -n scripts/apply-ec2-env-remote.sh
   sh -n scripts/apply-ec2-env-remote.test.sh
   sh -n scripts/check-backend-logging.sh
   sh -n scripts/check-backend-logging.test.sh
   bash -n scripts/deploy-monitoring.sh
+  bash -n scripts/backup-datastores.sh
+  bash -n scripts/restore-backup-drill.sh
+  bash -n scripts/install-backup-cron.sh
+  bash -n scripts/test-alertmanager-notification.sh
+  bash -n scripts/operational-readiness.test.sh
   bash -n scripts/deploy-monitoring-remote.sh
   bash -n scripts/deploy-remote.sh
   bash -n scripts/provision-ec2-entrypoints.sh
@@ -54,6 +60,7 @@ run_backend_scripts() {
   fi
   bash scripts/sync-deploy-files.test.sh
   bash scripts/rollback-blue-green.test.sh
+  bash scripts/operational-readiness.test.sh
   sh scripts/apply-ec2-env-remote.test.sh
 }
 

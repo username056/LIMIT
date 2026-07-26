@@ -155,6 +155,7 @@ services:
     image: prom/alertmanager:v0.28.1
     profiles: [observability]
     restart: unless-stopped
+    group_add: ["${MONITORING_SECRET_GID:-1000}"]
     command: ["--config.file=/etc/alertmanager/config.yml"]
     volumes: ["./monitoring/alertmanager/config.yml:/etc/alertmanager/config.yml:ro"]
     secrets: [alertmanager-smtp-password]
@@ -167,8 +168,12 @@ services:
     image: prom/node-exporter:v1.9.1
     profiles: [observability]
     restart: unless-stopped
-    command: ["--path.rootfs=/host"]
-    volumes: ["/:/host:ro,rslave"]
+    command:
+      - --path.rootfs=/host
+      - --collector.textfile.directory=/var/lib/node_exporter/textfile_collector
+    volumes:
+      - /:/host:ro,rslave
+      - ./state/node-exporter:/var/lib/node_exporter/textfile_collector:ro
     networks: [app]
     mem_limit: 128m
     cpus: 0.25

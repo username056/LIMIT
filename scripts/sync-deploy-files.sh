@@ -44,6 +44,10 @@ case "$scope" in
       "$extract_command && sudo -n install -d -m 0755 /var/www/limit-admin && sudo -n install -m 0644 '$DEPLOY_PATH/infra/admin/index.html' '$DEPLOY_PATH/infra/admin/admin.css' '$DEPLOY_PATH/infra/admin/admin.js' /var/www/limit-admin/ && $grafana_assets_command" \
       scripts/deploy-blue-green.sh \
       scripts/deploy-monitoring.sh \
+      scripts/backup-datastores.sh \
+      scripts/restore-backup-drill.sh \
+      scripts/install-backup-cron.sh \
+      scripts/test-alertmanager-notification.sh \
       scripts/rollback-blue-green.sh \
       scripts/smoke-test.sh \
       infra/compose.yml \
@@ -56,6 +60,10 @@ case "$scope" in
     sync_archive \
       "$extract_command && $grafana_assets_command" \
       scripts/deploy-monitoring.sh \
+      scripts/backup-datastores.sh \
+      scripts/restore-backup-drill.sh \
+      scripts/install-backup-cron.sh \
+      scripts/test-alertmanager-notification.sh \
       infra/compose.yml \
       infra/compose.prod.yml \
       infra/monitoring \

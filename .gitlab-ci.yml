@@ -28,6 +28,7 @@ variables:
         - backend/**/*
         - scripts/ci-test.sh
         - scripts/build-image.sh
+        - scripts/bootstrap-ec2-stack.sh
         - scripts/sync-deploy-files.sh
         - scripts/deploy-remote.sh
         - scripts/deploy-blue-green.sh
@@ -80,6 +81,7 @@ variables:
         - backend/Dockerfile.ci
         - scripts/ci-test.sh
         - scripts/build-image.sh
+        - scripts/bootstrap-ec2-stack.sh
         - .gitlab-ci.yml
 
 .backend_scripts_change_template:
@@ -96,6 +98,11 @@ variables:
         - scripts/sync-deploy-files.test.sh
         - scripts/deploy-monitoring.sh
         - scripts/deploy-monitoring-remote.sh
+        - scripts/backup-datastores.sh
+        - scripts/restore-backup-drill.sh
+        - scripts/install-backup-cron.sh
+        - scripts/test-alertmanager-notification.sh
+        - scripts/operational-readiness.test.sh
         - scripts/deploy-remote.sh
         - scripts/deploy-blue-green.sh
         - scripts/rollback-remote.sh
@@ -124,6 +131,11 @@ variables:
         - infra/compose.prod.yml
         - scripts/deploy-monitoring.sh
         - scripts/deploy-monitoring-remote.sh
+        - scripts/backup-datastores.sh
+        - scripts/restore-backup-drill.sh
+        - scripts/install-backup-cron.sh
+        - scripts/test-alertmanager-notification.sh
+        - scripts/operational-readiness.test.sh
         - scripts/sync-deploy-files.sh
         - scripts/sync-deploy-files.test.sh
         - .gitlab-ci.yml
@@ -360,6 +372,19 @@ terraform_frontend_validate:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - infra/terraform/frontend/**/*
+
+terraform_operations_validate:
+  stage: test
+  image:
+    name: hashicorp/terraform:1.13.5
+    entrypoint: [""]
+  script:
+    - terraform -chdir=infra/terraform/operations fmt -check -diff
+    - terraform -chdir=infra/terraform/operations init -backend=false
+    - terraform -chdir=infra/terraform/operations validate
+  rules:
+    - changes:
+        - infra/terraform/operations/**/*
         - .gitlab-ci.yml
 
 sonarqube:
