@@ -32,6 +32,8 @@ run_backend_package() {
 run_backend_scripts() {
   cd "$root_dir"
   bash -n scripts/deploy-blue-green.sh
+  sh -n scripts/apply-ec2-env-remote.sh
+  sh -n scripts/apply-ec2-env-remote.test.sh
   sh -n scripts/check-backend-logging.sh
   sh -n scripts/check-backend-logging.test.sh
   bash -n scripts/deploy-monitoring.sh
@@ -52,6 +54,7 @@ run_backend_scripts() {
   fi
   bash scripts/sync-deploy-files.test.sh
   bash scripts/rollback-blue-green.test.sh
+  sh scripts/apply-ec2-env-remote.test.sh
 }
 
 run_backend() {
