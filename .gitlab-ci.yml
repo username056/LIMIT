@@ -86,6 +86,9 @@ variables:
   rules:
     - changes: &backend_scripts_changes
         - scripts/ci-test.sh
+        - scripts/apply-ec2-env.ps1
+        - scripts/apply-ec2-env-remote.sh
+        - scripts/apply-ec2-env-remote.test.sh
         - scripts/check-backend-logging.sh
         - scripts/check-backend-logging.test.sh
         - scripts/build-image.sh

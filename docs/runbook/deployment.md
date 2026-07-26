@@ -37,6 +37,22 @@ test -f /var/run/reboot-required && cat /var/run/reboot-required
 
 `infra/.env`는 서버에서 600 권한으로 생성하고 `.env.example`의 변수 이름만 참고한다. Mongo URI에는 사용자명·비밀번호와 `authSource=admin`을 포함한다. exporter용 MySQL client 파일과 Qdrant API key 파일은 서버 전용 경로에 640 권한으로 만들고, 소유 그룹 ID를 `MONITORING_SECRET_GID`로 지정한다. Prometheus와 MySQL exporter에만 이 보조 그룹을 부여해 다른 사용자와 컨테이너의 읽기를 막는다.
 
+운영 환경변수 한두 개를 수정할 때는 로컬 PowerShell에서 `scripts/apply-ec2-env.ps1`에
+`KEY=VALUE`를 직접 전달한다. 값은 SSH의 stdin으로만 전송되고 출력하지 않으며, 원격
+파일은 600 권한의 백업을 만든 뒤 같은 파일시스템에서 원자적으로 교체한다. 교체 전
+`docker compose config --quiet` 검증에 실패하면 기존 파일을 유지한다.
+
+```powershell
+.\scripts\apply-ec2-env.ps1 'MAIL_HOST=smtp.example.test' 'MAIL_PORT=587'
+.\scripts\apply-ec2-env.ps1 'MAIL_HOST=smtp.example.test' -DryRun
+```
+
+명령행에 입력한 값은 PowerShell history에 남을 수 있다. Secret은 인자 없이 스크립트를
+실행한 뒤 `KEY=VALUE`를 대화형으로 붙여넣는 방식을 우선한다. 기본적으로 `.env.example`
+또는 Compose 계약에 선언된 키만 허용하며, 새 계약을 먼저 코드에 반영할 수 없는 긴급한
+경우에만 `-AllowUnknownKey`를 사용한다. 파일 변경은 실행 중인 컨테이너 환경을 바꾸지
+않으며 다음 Blue-Green 배포부터 적용된다.
+
 Spring profile은 `local`, `prod`만 사용한다. Compose도 `compose.yml` base와 `compose.local.yml`, `compose.prod.yml`만 유지한다. Testcontainers 테스트는 별도 profile 없이 동적 접속 정보를 주입한다.
 
 `dev`와 `main`은 별도 서버 환경 이름이 아니라 동일한 운영 EC2를 갱신하는 배포 트리거다. 두 브랜치 모두 검증과 이미지 취약점 검사를 통과한 immutable digest를 `limit-prod` Blue/Green 스택에 자동 배포하며 `infra/state/prod.active`를 공유한다. `main`은 프로젝트 종료 시점의 최종 병합에만 사용한다.
