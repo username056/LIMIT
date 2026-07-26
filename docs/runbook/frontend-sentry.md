@@ -1,9 +1,13 @@
-# 프론트엔드 Sentry 오류 모니터링
+# 프론트엔드 Sentry 오류·로그 모니터링
 
 프론트엔드에서 발생한 처리되지 않은 JavaScript 오류와 Vue 오류, 공통 API
 클라이언트의 네트워크 오류 및 5xx 응답은 Sentry에서 확인한다. 예상 가능한
 4xx 응답은 수집하지 않는다. Nginx 접근 로그는 기존 Grafana Loki에서 계속
 확인하며, 두 로그의 역할은 서로 다르다.
+
+브라우저의 `console.log`, `console.info`, `console.warn`, `console.error`는
+Sentry Logs로 전송한다. 운영 로그 양과 민감정보 노출을 줄이기 위해
+`console.debug`, `console.trace`는 전송하지 않는다.
 
 ## GitLab CI/CD 변수
 
@@ -36,6 +40,11 @@ Variables에 등록한다.
    표시되는지 확인한다.
 4. 브라우저 요청 URL의 query/hash, 요청 cookie가 이벤트에서 제거됐는지
    확인한다.
+
+시간순 프론트엔드 로그는 Sentry의 **Explore > Logs**에서 프로젝트와
+`production` 환경을 선택해 확인한다. 로그 메시지와 속성의 인증정보,
+cookie, 이메일, 전화번호 및 URL query/hash는 전송 전에 제거한다. 정제에
+실패한 로그는 원본을 보내지 않고 폐기한다.
 
 API 오류 context에도 method, query/hash를 제거한 path, status, 오류 code,
 백엔드 traceId만 기록한다. 검색어·필터처럼 정상적인 query parameter라도
