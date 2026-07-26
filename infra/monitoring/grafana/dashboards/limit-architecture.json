@@ -436,78 +436,6 @@
               }
             },
             {
-              "name": "Qdrant",
-              "type": "rectangle",
-              "config": {
-                "align": "center",
-                "color": {
-                  "fixed": "#111827"
-                },
-                "size": 13,
-                "text": {
-                  "fixed": "Qdrant",
-                  "mode": "fixed"
-                },
-                "valign": "bottom"
-              },
-              "background": {
-                "color": {
-                  "fixed": "#FFFFFF"
-                }
-              },
-              "border": {
-                "color": {
-                  "fixed": "#73BF69"
-                },
-                "width": 2
-              },
-              "constraint": {
-                "horizontal": "left",
-                "vertical": "top"
-              },
-              "placement": {
-                "top": 190,
-                "left": 660,
-                "width": 150,
-                "height": 84
-              },
-              "links": [
-                {
-                  "title": "Qdrant logs",
-                  "url": "/explore?left={\"datasource\":\"loki\",\"queries\":[{\"expr\":\"{service=\\\"qdrant\\\"}\"}]}",
-                  "targetBlank": false
-                }
-              ]
-            },
-            {
-              "name": "Qdrant Icon",
-              "type": "icon",
-              "config": {
-                "path": {
-                  "mode": "fixed",
-                  "fixed": "https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/qdrant.svg"
-                },
-                "fill": {
-                  "fixed": "#111827"
-                }
-              },
-              "background": {
-                "color": {
-                  "fixed": "transparent"
-                }
-              },
-              "constraint": {
-                "horizontal": "left",
-                "vertical": "top"
-              },
-              "placement": {
-                "top": 197,
-                "left": 711,
-                "width": 48,
-                "height": 48
-              }
-            },
-            {
               "name": "Spring Blue",
               "type": "rectangle",
               "config": {
@@ -761,12 +689,6 @@
           "instant": true,
           "legendFormat": "Redis",
           "refId": "Redis"
-        },
-        {
-          "expr": "up{job=\"qdrant\"}",
-          "instant": true,
-          "legendFormat": "Qdrant",
-          "refId": "Qdrant"
         },
         {
           "expr": "up{job=\"nginx\"}",

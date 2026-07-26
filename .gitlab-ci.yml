@@ -251,7 +251,7 @@ backend_integration_test:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
       changes: *backend_integration_changes
 
-# MongoDB/Redis/Qdrant까지 포함한 전체 인프라 기동 검사는 일반 MR/배포의
+# MongoDB/Redis까지 포함한 전체 인프라 기동 검사는 일반 MR/배포의
 # critical path에서 제외하고 정기 보안/의존성 검사와 함께 실행한다.
 backend_infrastructure_test:
   extends: .backend_gradle_job_pull

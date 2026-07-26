@@ -58,8 +58,6 @@ x-backend-environment: &backend-environment
   TERMS_PRIVACY_VERSION: ${TERMS_PRIVACY_VERSION:-2026-07-22}
   TERMS_AGE_VERSION: ${TERMS_AGE_VERSION:-2026-07-22}
   TERMS_MARKETING_VERSION: ${TERMS_MARKETING_VERSION:-2026-07-22}
-  QDRANT_URL: http://qdrant:6333
-  QDRANT_API_KEY: ${QDRANT_API_KEY:?QDRANT_API_KEY is required}
   SPRINGDOC_API_DOCS_ENABLED: "true"
   SPRINGDOC_SWAGGER_UI_ENABLED: "true"
 
@@ -73,7 +71,6 @@ services:
       mysql: { condition: service_healthy }
       mongodb: { condition: service_healthy }
       redis: { condition: service_healthy }
-      qdrant: { condition: service_healthy }
     ports: ["127.0.0.1:8081:8080"]
     networks: [app, data]
     healthcheck: &backend-healthcheck
@@ -97,7 +94,6 @@ services:
       mysql: { condition: service_healthy }
       mongodb: { condition: service_healthy }
       redis: { condition: service_healthy }
-      qdrant: { condition: service_healthy }
     ports: ["127.0.0.1:8082:8080"]
     networks: [app, data]
     healthcheck: *backend-healthcheck
@@ -114,7 +110,6 @@ services:
     volumes:
       - ./monitoring/prometheus:/etc/prometheus:ro
       - prometheus-data:/prometheus
-    secrets: [qdrant-api-key]
     networks: [app, data]
     mem_limit: 1g
     cpus: 0.5
@@ -273,7 +268,5 @@ volumes:
 secrets:
   mysql-exporter-config:
     file: ${MYSQL_EXPORTER_CONFIG_FILE:-./secrets/mysql-exporter.my.cnf.example}
-  qdrant-api-key:
-    file: ${QDRANT_API_KEY_FILE:-./secrets/qdrant-api-key.example}
   alertmanager-smtp-password:
     file: ${ALERTMANAGER_SMTP_PASSWORD_FILE:-./secrets/alertmanager-smtp-password.example}

@@ -21,7 +21,6 @@ if [[ ! -f "$env_file" ]]; then
   mysql_root_password=$(generate_secret)
   mongodb_password=$(generate_secret)
   redis_password=$(generate_secret)
-  qdrant_api_key=$(generate_secret)
   grafana_admin_password=$(generate_secret)
   jwt_secret=$(openssl rand -base64 48 | tr -d '\n')
 
@@ -61,22 +60,19 @@ if [[ ! -f "$env_file" ]]; then
     printf 'NAVER_OAUTH_CLIENT_ID=\n'
     printf 'NAVER_OAUTH_CLIENT_SECRET=\n'
     printf 'NAVER_OAUTH_REDIRECT_URIS=https://l1mit.shop/auth/callback/naver\n'
-    printf 'QDRANT_API_KEY=%s\n' "$qdrant_api_key"
     printf 'GRAFANA_ADMIN_USER=admin\n'
     printf 'GRAFANA_ADMIN_PASSWORD=%s\n' "$grafana_admin_password"
     printf 'BACKEND_BLUE_IMAGE=%s\n' "$image_ref"
     printf 'BACKEND_GREEN_IMAGE=%s\n' "$image_ref"
-    printf 'QDRANT_API_KEY_FILE=%s/qdrant-api-key\n' "$secret_dir"
     printf 'MYSQL_EXPORTER_CONFIG_FILE=%s/mysql-exporter.my.cnf\n' "$secret_dir"
     printf 'MONITORING_SECRET_GID=%s\n' "$(id -g)"
   } > "$env_file"
   chmod 0600 "$env_file"
 
-  printf '%s\n' "$qdrant_api_key" > "$secret_dir/qdrant-api-key"
   printf '[client]\nuser=disabled_exporter\npassword=%s\nhost=mysql\n' "$(generate_secret)" \
     > "$secret_dir/mysql-exporter.my.cnf"
-  chgrp "$(id -g)" "$secret_dir/qdrant-api-key" "$secret_dir/mysql-exporter.my.cnf"
-  chmod 0640 "$secret_dir/qdrant-api-key" "$secret_dir/mysql-exporter.my.cnf"
+  chgrp "$(id -g)" "$secret_dir/mysql-exporter.my.cnf"
+  chmod 0640 "$secret_dir/mysql-exporter.my.cnf"
 fi
 
 compose=(
@@ -89,7 +85,7 @@ compose=(
 
 docker build --tag "$image_ref" "$root_dir/backend"
 "${compose[@]}" config --quiet
-"${compose[@]}" up -d mysql mongodb redis qdrant
+"${compose[@]}" up -d mysql mongodb redis
 "${compose[@]}" up -d backend-blue
 
 ready=false

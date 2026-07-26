@@ -35,13 +35,6 @@ scrape_configs:
     static_configs:
       - targets: [redis-exporter:9121]
 
-  - job_name: qdrant
-    metrics_path: /metrics
-    authorization:
-      credentials_file: /run/secrets/qdrant-api-key
-    static_configs:
-      - targets: [qdrant:6333]
-
   - job_name: node
     static_configs:
       - targets: [node-exporter:9100]
