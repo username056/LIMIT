@@ -343,7 +343,9 @@ frontend_verify:
     paths: [frontend/.npm]
   variables:
     npm_config_cache: "$CI_PROJECT_DIR/frontend/.npm"
-  script: ["sh scripts/ci-test.sh frontend"]
+  script:
+    - export VITE_SENTRY_RELEASE="${CI_COMMIT_SHA}"
+    - sh scripts/ci-test.sh frontend
   artifacts:
     when: always
     expire_in: 7 days

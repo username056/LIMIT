@@ -5,6 +5,7 @@
 //   실패: { error: { code, message, fieldErrors }, traceId }
 
 import { getAccessToken } from '../auth/session'
+import { captureApiException } from '../monitoring/sentry'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
@@ -20,27 +21,47 @@ export class ApiError extends Error {
 
 async function request(path, options = {}) {
   const accessToken = getAccessToken()
-  const res = await fetch(`${BASE_URL}${path}`, {
-    ...options,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      ...(options.headers || {}),
-    },
-  })
+  const method = options.method || 'GET'
+  let res
+
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      ...options,
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...(options.headers || {}),
+      },
+    })
+  } catch (error) {
+    captureApiException(error, { method, path })
+    throw error
+  }
 
   const body = await res.json().catch(() => null)
 
   if (!res.ok) {
     const err = body?.error || {}
-    throw new ApiError({
+    const apiError = new ApiError({
       code: err.code || 'UNKNOWN_ERROR',
       message: err.message || '요청 처리 중 오류가 발생했습니다.',
       fieldErrors: err.fieldErrors || null,
       traceId: body?.traceId || res.headers.get('X-Trace-Id') || null,
       status: res.status,
     })
+
+    if (res.status >= 500) {
+      captureApiException(apiError, {
+        method,
+        path,
+        status: apiError.status,
+        code: apiError.code,
+        traceId: apiError.traceId,
+      })
+    }
+
+    throw apiError
   }
 
   // 성공 응답은 항상 { data, meta } 형태 → data만 꺼내서 반환
