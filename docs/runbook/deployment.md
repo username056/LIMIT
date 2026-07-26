@@ -35,7 +35,7 @@ test -f /var/run/reboot-required && cat /var/run/reboot-required
 
 서버의 배포 사용자로 Docker Hub private repository에 로그인해 image pull을 확인한다. CI에는 read/write 범위의 전용 Personal Access Token을 사용하고, 서버에는 별도로 발급한 read-only token을 서버 전용 Docker credential store에 보관한다. 개인 비밀번호나 하나의 token을 CI와 서버에서 공유하지 않는다.
 
-`infra/.env`는 서버에서 600 권한으로 생성하고 `.env.example`의 변수 이름만 참고한다. Mongo URI에는 사용자명·비밀번호와 `authSource=admin`을 포함한다. exporter용 MySQL client 파일과 Qdrant API key 파일은 서버 전용 경로에 640 권한으로 만들고, 소유 그룹 ID를 `MONITORING_SECRET_GID`로 지정한다. Prometheus와 MySQL exporter에만 이 보조 그룹을 부여해 다른 사용자와 컨테이너의 읽기를 막는다.
+`infra/.env`는 서버에서 600 권한으로 생성하고 `.env.example`의 변수 이름만 참고한다. Mongo URI에는 사용자명·비밀번호와 `authSource=admin`을 포함한다. exporter용 MySQL client 파일은 서버 전용 경로에 640 권한으로 만들고, 소유 그룹 ID를 `MONITORING_SECRET_GID`로 지정한다. MySQL exporter에만 이 보조 그룹을 부여해 다른 사용자와 컨테이너의 읽기를 막는다.
 
 운영 환경변수 한두 개를 수정할 때는 로컬 PowerShell에서 `scripts/apply-ec2-env.ps1`에
 `KEY=VALUE`를 직접 전달한다. 값은 SSH의 stdin으로만 전송되고 출력하지 않으며, 원격
@@ -59,7 +59,6 @@ Spring profile은 `local`, `prod`만 사용한다. Compose도 `compose.yml` base
 
 ```text
 MYSQL_EXPORTER_CONFIG_FILE=/opt/limit-secrets/mysql-exporter.my.cnf
-QDRANT_API_KEY_FILE=/opt/limit-secrets/qdrant-api-key
 MONITORING_SECRET_GID=1000
 ```
 
@@ -88,7 +87,7 @@ docker compose --env-file infra/.env -p limit-local \
 
 ```bash
 docker compose --env-file infra/.env -p limit-prod \
-  -f infra/compose.yml -f infra/compose.prod.yml up -d mysql mongodb redis qdrant
+  -f infra/compose.yml -f infra/compose.prod.yml up -d mysql mongodb redis
 
 docker compose --env-file infra/.env -p limit-prod \
   -f infra/compose.yml -f infra/compose.prod.yml --profile observability up -d
@@ -168,11 +167,10 @@ Grafana는 `https://grafana.l1mit.shop`에서 로그인하거나 장애 시 SSH 
 
 - MySQL: 일관성 옵션을 적용한 `mysqldump`를 압축한다.
 - MongoDB: `mongodump --archive --gzip`을 사용한다.
-- Qdrant: collections별 snapshot API를 사용한다.
 - Redis: 영속 데이터가 재생성 불가능한 경우 RDB/AOF 사본을 포함한다.
 - 결과물은 SSE-KMS가 적용된 별도 S3 버킷에 올리고 로컬 임시본을 제거한다. lifecycle 보존 기간과 실패 알림을 설정한다.
 
-월 1회 격리된 Compose project와 별도 볼륨에 최신 백업을 복원하고 행 수·대표 쿼리·Qdrant collection/vector 수·애플리케이션 smoke를 검증한다. 현재 S3 버킷, KMS, IAM, 보존 주기와 실제 데이터가 제공되지 않았으므로 자동 백업 실행과 restore drill은 미완료다. 이 작업은 IAM/운영 데이터 변경 승인을 받은 뒤 수행한다.
+월 1회 격리된 Compose project와 별도 볼륨에 최신 백업을 복원하고 행 수·대표 쿼리·MongoDB 문서 및 vector 필드 수·애플리케이션 smoke를 검증한다. 현재 S3 버킷, KMS, IAM, 보존 주기와 실제 데이터가 제공되지 않았으므로 자동 백업 실행과 restore drill은 미완료다. 이 작업은 IAM/운영 데이터 변경 승인을 받은 뒤 수행한다.
 
 MySQL exporter 전용 최소권한 계정 생성도 운영 DB 변경 승인 후 수행한다. `PROCESS`, `REPLICATION CLIENT`, `SELECT`만 필요한 범위로 부여하고 exporter client 파일에 기록하며 애플리케이션 계정이나 root 계정을 재사용하지 않는다.
 

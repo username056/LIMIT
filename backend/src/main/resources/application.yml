@@ -98,10 +98,6 @@ limit:
   security:
     jwt:
       secret: ${JWT_SECRET:local-only-change-this-jwt-secret-32bytes}
-  qdrant:
-    url: ${QDRANT_URL:http://localhost:6333}
-    api-key: ${QDRANT_API_KEY:}
-
 springdoc:
   api-docs:
     enabled: false
