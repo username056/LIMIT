@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ProductListPage from '../ProductListPage.vue'
 import { getDeviceCategories, getProducts } from '../../api/products'
 
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ query: {} }),
+}))
+
 vi.mock('../../api/products', () => ({
   getDeviceCategories: vi.fn(),
   getProducts: vi.fn(),

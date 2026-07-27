@@ -61,9 +61,7 @@ async function submit() {
       <BaseCard class="overflow-hidden">
         <div class="border-b border-border bg-accent px-7 py-5 sm:px-8">
           <div class="flex items-center gap-3">
-            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-lg shadow-card">
-              🔒
-            </span>
+            <span class="h-10 w-10 shrink-0 rounded-full bg-white shadow-card" />
             <div>
               <p class="text-sm font-semibold text-text-main">
                 안전한 비밀번호 사용

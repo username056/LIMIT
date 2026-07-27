@@ -42,7 +42,7 @@ const componentTag = computed(() => props.to && !props.disabled ? RouterLink : '
     :class="[
       block ? 'w-full' : '',
       disabled ? 'cursor-not-allowed opacity-55 active:scale-100' : '',
-      variant === 'primary' && 'bg-primary-gradient text-white shadow-elevated hover:brightness-105',
+      variant === 'primary' && 'bg-primary-gradient text-white shadow-elevated hover:brightness-110',
       variant === 'outline' && 'border border-border bg-surface text-text-main hover:border-primary hover:text-primary',
       variant === 'ghost' && 'text-text-sub hover:text-text-main',
     ]"

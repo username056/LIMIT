@@ -1,32 +1,53 @@
 <script setup>
-import { computed, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseCard from '../components/BaseCard.vue'
 import ChatThread from '../components/ChatThread.vue'
-import { chatRooms, getChatRoom, markRoomRead } from '../mock/chat'
+import { getChatRooms } from '../api/chat'
 
-// WIREFRAME MOCK: 채팅 API/실시간 연결이 아직 없어 화면 흐름만 먼저 확인할 수 있도록
-// mock 데이터로 구현했습니다. 방 목록/대화 내용은 src/mock/chat.js에서 관리합니다.
-// 방 선택 상태는 /chat/:roomId URL로 표현되어 새로고침·공유해도 유지됩니다.
+// 방 목록/지난 메시지 조회는 실제 채팅 API를 사용합니다.
+// TODO(채팅 API 연동): 메시지 전송·실시간 수신 API는 백엔드에 아직 없어 ChatThread.vue 안에서만
+// mock으로 처리됩니다. 상대 회원 닉네임·상품 미리보기를 주는 API도 아직 없어 목록에는
+// 회원 ID/상품 ID만 표시합니다.
 
 const route = useRoute()
-const selectedRoom = computed(() => (route.params.roomId ? getChatRoom(route.params.roomId) : null))
+const rooms = ref([])
+const isLoading = ref(true)
+const errorMessage = ref('')
 
-watch(
-  () => route.params.roomId,
-  (roomId) => {
-    if (roomId) markRoomRead(roomId)
-  },
-  { immediate: true },
+async function loadRooms() {
+  isLoading.value = true
+  errorMessage.value = ''
+  try {
+    const result = await getChatRooms({ size: 20 })
+    rooms.value = result?.content || []
+  } catch (error) {
+    errorMessage.value = error.message || '채팅 목록을 불러오지 못했습니다.'
+  } finally {
+    isLoading.value = false
+  }
+}
+
+onMounted(loadRooms)
+
+const selectedRoomId = computed(() => route.params.roomId || null)
+const selectedRoom = computed(
+  () => rooms.value.find((room) => String(room.roomId) === String(selectedRoomId.value)) || null,
 )
+
+function formatTime(isoString) {
+  if (!isoString) return '대화 없음'
+  return new Date(isoString).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
 </script>
 
 <template>
   <DefaultLayout>
     <div class="mx-auto max-w-[1200px] px-6 py-10 lg:px-10">
       <p class="mb-6 rounded-md bg-accent px-4 py-2 text-xs font-semibold text-primary-dark">
-        WIREFRAME MOCK · 실시간 채팅·화상 검증 연결 전까지 화면 흐름을 확인하기 위한 mock 데이터입니다.
+        실제 채팅 API로 방 목록과 지난 메시지를 불러옵니다. 메시지 전송·실시간 수신 API는 백엔드에
+        아직 없어 새로 보낸 메시지는 저장되지 않는 mock입니다.
       </p>
 
       <div class="grid grid-cols-1 gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
@@ -35,45 +56,46 @@ watch(
             채팅
           </h1>
 
+          <p
+            v-if="isLoading"
+            class="px-5 py-16 text-center text-sm text-text-sub"
+          >
+            불러오는 중...
+          </p>
+          <p
+            v-else-if="errorMessage"
+            role="alert"
+            class="px-5 py-16 text-center text-sm text-red-600"
+          >
+            {{ errorMessage }}
+          </p>
+
           <div
-            v-if="chatRooms.length"
+            v-else-if="rooms.length"
             class="divide-y divide-border"
           >
             <RouterLink
-              v-for="room in chatRooms"
-              :key="room.id"
-              :to="{ name: 'chat', params: { roomId: room.id } }"
-              class="flex w-full items-start gap-3 px-5 py-4 text-left transition-colors"
-              :class="String(route.params.roomId) === String(room.id) ? 'bg-accent' : 'hover:bg-bg'"
+              v-for="room in rooms"
+              :key="room.roomId"
+              :to="{ name: 'chat', params: { roomId: room.roomId } }"
+              class="block px-5 py-4 transition-colors"
+              :class="String(selectedRoomId) === String(room.roomId) ? 'bg-accent' : 'hover:bg-bg'"
             >
-              <span class="h-11 w-11 shrink-0 rounded-full bg-primary-gradient" />
-              <span class="min-w-0 flex-1">
-                <span class="flex items-center justify-between gap-2">
-                  <span class="truncate text-sm font-bold text-text-main">{{ room.name }}</span>
-                  <span class="flex shrink-0 items-center gap-1">
-                    <span class="text-xs text-text-sub">{{ room.time }}</span>
-                    <span
-                      v-if="room.unreadCount"
-                      class="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-white"
-                    >
-                      {{ room.unreadCount }}
-                    </span>
-                  </span>
-                </span>
-                <span class="mt-1 flex items-center gap-1 text-xs text-text-sub">
-                  <span aria-hidden="true">{{ room.productIcon }}</span>
-                  <span class="truncate font-semibold">{{ room.productName }}</span>
-                </span>
-                <p class="mt-1 truncate text-xs text-text-sub">
-                  {{ room.lastMessage }}
-                </p>
+              <div class="flex items-center justify-between gap-2">
+                <span class="truncate text-sm font-bold text-text-main">상대 회원 #{{ room.counterpartId }}</span>
                 <span
-                  v-if="room.statusBadge"
-                  class="mt-2 inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-semibold text-green-600"
+                  v-if="room.unreadCount"
+                  class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-white"
                 >
-                  ✓ {{ room.statusBadge }}
+                  {{ room.unreadCount }}
                 </span>
-              </span>
+              </div>
+              <p class="mt-1 truncate text-xs font-semibold text-text-sub">
+                상품 #{{ room.listingId }}
+              </p>
+              <p class="mt-1 text-xs text-text-sub">
+                {{ formatTime(room.lastMessageAt) }}
+              </p>
             </RouterLink>
           </div>
 

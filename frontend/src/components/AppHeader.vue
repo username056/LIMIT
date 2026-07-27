@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { logout } from '../api/auth'
 import { clearAuthSession, useAuthSession } from '../auth/session'
@@ -22,18 +22,22 @@ const session = useAuthSession()
 const searchQuery = ref('')
 const member = computed(() => session.value?.member || null)
 const isProfileMenuOpen = ref(false)
+const isMobileMenuOpen = ref(false)
 
 function isActiveNavItem(href) {
   return route.path === href
 }
 
+watch(() => route.fullPath, () => {
+  isMobileMenuOpen.value = false
+})
+
 async function submitSearch() {
   const query = searchQuery.value.trim()
   if (!query) return
   await router.push({
-    name: 'coming-soon',
-    params: { feature: 'product-search' },
-    query: { q: query },
+    name: 'products',
+    query: { keyword: query },
   })
 }
 
@@ -211,12 +215,122 @@ async function logoutMember() {
           </RouterLink>
           <RouterLink
             to="/signup"
-            class="rounded-md bg-primary-gradient px-4 py-2.5 text-base font-semibold text-white shadow-elevated"
+            class="rounded-md bg-primary-gradient px-4 py-2.5 text-base font-semibold text-white shadow-elevated transition-all hover:brightness-110"
           >
             회원가입
           </RouterLink>
         </template>
+
+        <button
+          type="button"
+          class="text-text-sub hover:text-text-main md:hidden"
+          aria-label="메뉴 열기"
+          :aria-expanded="isMobileMenuOpen"
+          @click="isMobileMenuOpen = !isMobileMenuOpen"
+        >
+          <svg
+            v-if="!isMobileMenuOpen"
+            class="h-6 w-6"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M4 6h16M4 12h16M4 18h16"
+            />
+          </svg>
+          <svg
+            v-else
+            class="h-6 w-6"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M6 18L18 6M6 6l12 12"
+            />
+          </svg>
+        </button>
       </div>
+    </div>
+
+    <div
+      v-if="isMobileMenuOpen"
+      class="border-t border-border px-6 py-4 md:hidden"
+    >
+      <form
+        class="mb-4 flex items-center gap-2 rounded-md border border-border bg-bg px-3 py-2"
+        role="search"
+        @submit.prevent="submitSearch"
+      >
+        <button
+          type="submit"
+          aria-label="상품 검색"
+          class="text-text-sub hover:text-primary"
+        >
+          <svg
+            class="h-4 w-4 text-text-sub"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z"
+            />
+          </svg>
+        </button>
+        <label
+          for="mobile-product-search"
+          class="sr-only"
+        >상품 검색</label>
+        <input
+          id="mobile-product-search"
+          v-model="searchQuery"
+          type="search"
+          placeholder="상품 검색..."
+          class="w-full bg-transparent text-base text-text-main placeholder:text-text-sub focus:outline-none"
+        >
+      </form>
+
+      <nav class="flex flex-col">
+        <RouterLink
+          v-for="item in navItems"
+          :key="item.label"
+          :to="item.href"
+          class="rounded-md px-2 py-2.5 text-base transition-colors"
+          :class="isActiveNavItem(item.href)
+            ? 'font-bold text-text-main'
+            : 'font-semibold text-text-sub hover:bg-bg'"
+        >
+          {{ item.label }}
+        </RouterLink>
+        <RouterLink
+          v-if="member"
+          :to="{ name: 'calls' }"
+          class="rounded-md px-2 py-2.5 text-base font-semibold text-text-sub hover:bg-bg"
+        >
+          실시간 확인
+        </RouterLink>
+        <RouterLink
+          v-else
+          to="/login"
+          class="rounded-md px-2 py-2.5 text-base font-semibold text-text-sub hover:bg-bg"
+        >
+          로그인
+        </RouterLink>
+      </nav>
     </div>
   </header>
 </template>

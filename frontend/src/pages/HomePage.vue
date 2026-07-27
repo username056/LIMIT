@@ -6,10 +6,10 @@ import BaseCard from '../components/BaseCard.vue'
 
 // 예시 데이터입니다. 실제 연동 시 API 응답으로 교체하세요.
 const categories = [
-  { label: '노트북 / 랩탑', icon: '💻' },
-  { label: '스마트폰 / 모바일', icon: '📱' },
-  { label: '태블릿 / 패드', icon: '📱' },
-  { label: '카메라', icon: '📷' },
+  { label: '노트북 / 랩탑' },
+  { label: '스마트폰 / 모바일' },
+  { label: '태블릿 / 패드' },
+  { label: '카메라' },
 ]
 
 const steps = [
@@ -93,9 +93,7 @@ const products = [
           :to="{ name: 'coming-soon', params: { feature: 'category' }, query: { name: category.label } }"
           class="group overflow-hidden rounded-lg border border-border bg-surface transition-shadow hover:shadow-elevated"
         >
-          <div class="flex aspect-square items-center justify-center bg-text-main text-3xl">
-            {{ category.icon }}
-          </div>
+          <div class="aspect-square bg-text-main" />
           <div class="flex items-center justify-between px-4 py-3">
             <span class="text-sm font-semibold text-text-main">{{ category.label }}</span>
           </div>

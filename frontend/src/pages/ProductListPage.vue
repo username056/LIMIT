@@ -1,15 +1,23 @@
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseButton from '../components/BaseButton.vue'
 import { getDeviceCategories, getProducts } from '../api/products'
 
+const route = useRoute()
 const products = ref([])
 const categories = ref([])
 const isLoading = ref(false)
 const errorMessage = ref('')
 const pageMeta = ref({ page: 0, totalPages: 0, hasNext: false })
-const filters = reactive({ keyword: '', categoryId: '', minPrice: '', maxPrice: '', tradeRegion: '' })
+const filters = reactive({
+  keyword: route.query.keyword || '',
+  categoryId: '',
+  minPrice: '',
+  maxPrice: '',
+  tradeRegion: '',
+})
 
 async function search(page = 0) {
   isLoading.value = true
@@ -37,6 +45,15 @@ onMounted(async () => {
   }
   await search(0)
 })
+
+// 헤더 검색창에서 이미 /products에 있는 상태로 다시 검색하면 쿼리만 바뀌므로 갱신을 감지합니다.
+watch(
+  () => route.query.keyword,
+  (keyword) => {
+    filters.keyword = keyword || ''
+    search(0)
+  },
+)
 </script>
 
 <template>

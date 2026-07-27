@@ -1,58 +1,80 @@
 <script setup>
-import { ref } from 'vue'
-import { addProposalMessage, addTextMessage, respondToProposal as respondToProposalInStore } from '../mock/chat'
+import { computed, ref, watch } from 'vue'
+import { getChatMessages } from '../api/chat'
+import { getProduct } from '../api/products'
+import { useAuthSession } from '../auth/session'
 
-// WIREFRAME MOCK: 채팅/실시간 화상 검증 API가 아직 없어 메시지 전송·일정 제안은
-// src/mock/chat.js의 공용 mock 저장소를 통해서만 바뀝니다 (prop을 직접 mutate하지 않습니다).
+// TODO(채팅 전송 API 연동): 백엔드에 메시지 전송/실시간 수신(WebSocket) API가 아직 없습니다.
+// 방·지난 메시지 조회는 실제 API(getChatMessages)를 쓰고, 이 화면에서 새로 작성한 메시지는
+// 화면에만 보이고 저장되지 않는 mock입니다(로컬 메시지는 messageId를 음수로 부여해 구분).
 
 const props = defineProps({
   room: {
     type: Object,
-    required: true,
+    required: true, // ChatRoomSummaryResponse: roomId, listingId, counterpartId, status, unreadCount, lastMessageAt ...
   },
 })
 
+const session = useAuthSession()
+const myMemberId = computed(() => session.value?.member?.memberId ?? null)
+
+const product = ref(null)
+const messages = ref([])
+const isLoadingMessages = ref(true)
+const messagesError = ref('')
+
+async function loadMessages(roomId) {
+  isLoadingMessages.value = true
+  messagesError.value = ''
+  try {
+    const result = await getChatMessages(roomId, { size: 50 })
+    messages.value = (result?.content || []).slice().reverse()
+  } catch (error) {
+    messagesError.value = error.message || '메시지를 불러오지 못했습니다.'
+  } finally {
+    isLoadingMessages.value = false
+  }
+}
+
+async function loadProduct(listingId) {
+  product.value = null
+  try {
+    product.value = await getProduct(listingId)
+  } catch {
+    product.value = null
+  }
+}
+
+watch(
+  () => props.room.roomId,
+  (roomId) => {
+    loadMessages(roomId)
+    loadProduct(props.room.listingId)
+  },
+  { immediate: true },
+)
+
 const messageInput = ref('')
-
-function respondToProposal(message, status) {
-  respondToProposalInStore(props.room.id, message.id, status)
-}
-
-const isScheduleModalOpen = ref(false)
-const scheduleDate = ref('')
-const scheduleTime = ref('')
-const WEEKDAYS_KO = ['일', '월', '화', '수', '목', '금', '토']
-
-function openScheduleModal() {
-  scheduleDate.value = ''
-  scheduleTime.value = ''
-  isScheduleModalOpen.value = true
-}
-
-function closeScheduleModal() {
-  isScheduleModalOpen.value = false
-}
-
-function formatProposedAt(dateStr, timeStr) {
-  const [year, month, day] = dateStr.split('-').map(Number)
-  const [hour, minute] = timeStr.split(':').map(Number)
-  const weekday = WEEKDAYS_KO[new Date(year, month - 1, day).getDay()]
-  const period = hour < 12 ? '오전' : '오후'
-  const hour12 = hour % 12 === 0 ? 12 : hour % 12
-  return `${year}.${String(month).padStart(2, '0')}.${String(day).padStart(2, '0')} (${weekday}) ${period} ${hour12}:${String(minute).padStart(2, '0')}`
-}
-
-function confirmSchedule() {
-  if (!scheduleDate.value || !scheduleTime.value) return
-  addProposalMessage(props.room.id, formatProposedAt(scheduleDate.value, scheduleTime.value))
-  closeScheduleModal()
-}
+let nextMockMessageId = -1
 
 function sendMessage() {
   const text = messageInput.value.trim()
-  if (!text) return
-  addTextMessage(props.room.id, 'me', text)
+  if (!text || myMemberId.value == null) return
+  messages.value.push({
+    messageId: nextMockMessageId--,
+    senderId: myMemberId.value,
+    type: 'TEXT',
+    content: text,
+    status: 'SENT',
+    sentAt: new Date().toISOString(),
+    isMock: true,
+  })
   messageInput.value = ''
+}
+
+function formatTime(isoString) {
+  if (!isoString) return ''
+  return new Date(isoString).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 </script>
 
@@ -80,195 +102,90 @@ function sendMessage() {
             />
           </svg>
         </RouterLink>
-        <div>
-          <p class="text-sm font-bold text-text-main">
-            {{ room.name }}
-          </p>
-          <p class="flex items-center gap-1 text-xs text-text-sub">
-            <span
-              class="h-1.5 w-1.5 rounded-full"
-              :class="room.online ? 'bg-green-500' : 'bg-text-sub'"
-            />
-            {{ room.online ? '온라인' : '오프라인' }}
-          </p>
-        </div>
+        <p class="text-sm font-bold text-text-main">
+          상대 회원 #{{ room.counterpartId }}
+        </p>
       </div>
       <RouterLink
-        :to="{ name: 'coming-soon', params: { feature: 'chat-report' }, query: { name: room.name } }"
-        class="rounded-md border border-border px-3 py-1.5 text-xs font-semibold text-text-sub hover:border-primary hover:text-primary"
+        :to="{ name: 'calls' }"
+        class="rounded-md border border-primary px-3 py-1.5 text-xs font-semibold text-primary hover:bg-accent"
       >
-        신고하기
+        실시간 검증 요청하기
       </RouterLink>
     </div>
 
-    <div class="flex items-center gap-3 border-b border-border px-5 py-3">
-      <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary-gradient text-lg">
-        {{ room.productIcon }}
-      </div>
+    <div
+      v-if="product"
+      class="flex items-center gap-3 border-b border-border px-5 py-3"
+    >
+      <div class="h-10 w-10 shrink-0 rounded-md bg-primary-gradient" />
       <div class="min-w-0 flex-1">
         <p class="truncate text-sm font-bold text-text-main">
-          {{ room.productName }}
+          {{ product.name }}
         </p>
         <p class="truncate text-xs text-text-sub">
-          ₩{{ room.productPrice.toLocaleString('ko-KR') }} · {{ room.productSpec }}
+          ₩{{ Number(product.price).toLocaleString('ko-KR') }}
         </p>
       </div>
       <RouterLink
-        :to="{ name: 'product-detail', params: { productId: room.productId } }"
+        :to="{ name: 'product-detail', params: { productId: room.listingId } }"
         class="whitespace-nowrap rounded-md border border-primary px-3 py-1.5 text-xs font-semibold text-primary hover:bg-accent"
       >
         상품 보기
       </RouterLink>
     </div>
 
-    <div class="flex-1 overflow-y-auto px-5 py-5">
-      <p class="mb-4 text-center text-xs text-text-sub">
-        {{ room.dateLabel }}
+    <div class="flex-1 space-y-3 overflow-y-auto px-5 py-5">
+      <p
+        v-if="isLoadingMessages"
+        class="py-10 text-center text-sm text-text-sub"
+      >
+        불러오는 중...
+      </p>
+      <p
+        v-else-if="messagesError"
+        role="alert"
+        class="py-10 text-center text-sm text-red-600"
+      >
+        {{ messagesError }}
+      </p>
+      <p
+        v-else-if="!messages.length"
+        class="py-10 text-center text-sm text-text-sub"
+      >
+        아직 주고받은 메시지가 없습니다.
       </p>
 
       <TransitionGroup
+        v-else
         name="msg"
         tag="div"
-        class="space-y-4"
+        class="space-y-3"
       >
-        <template
-          v-for="message in room.messages"
-          :key="message.id"
+        <div
+          v-for="message in messages"
+          :key="message.messageId"
+          class="flex flex-col"
+          :class="message.senderId === myMemberId ? 'items-end' : 'items-start'"
         >
-          <!-- 일반 텍스트 메시지 -->
           <div
-            v-if="message.type === 'text'"
-            class="flex flex-col"
-            :class="message.from === 'me' ? 'items-end' : 'items-start'"
+            class="max-w-[75%] rounded-lg px-4 py-2.5 text-sm leading-6"
+            :class="message.senderId === myMemberId ? 'bg-primary-deep text-white' : 'bg-bg text-text-main'"
           >
-            <span
-              v-if="message.from === 'seller'"
-              class="mb-1 text-xs font-semibold text-text-sub"
-            >{{ room.name }}</span>
-            <div
-              class="max-w-[75%] rounded-lg px-4 py-2.5 text-sm leading-6"
-              :class="message.from === 'me' ? 'bg-primary-gradient text-white' : 'bg-bg text-text-main'"
-            >
-              {{ message.text }}
-            </div>
-            <span class="mt-1 text-[11px] text-text-sub">{{ message.time }}</span>
+            {{ message.type === 'TEXT' || message.type === 'SYSTEM' ? message.content : `[${message.type}] ${message.content}` }}
           </div>
-
-          <!-- 실시간 화상 검증 일정 제안 -->
-          <div
-            v-else-if="message.type === 'proposal'"
-            class="flex flex-col"
-            :class="message.from === 'me' ? 'items-end' : 'items-start'"
-          >
-            <span
-              v-if="message.from === 'seller'"
-              class="mb-1 text-xs font-semibold text-text-sub"
-            >{{ room.name }}</span>
-            <div class="w-full max-w-sm rounded-lg border border-border bg-surface p-4 shadow-card">
-              <p class="flex items-center gap-1.5 text-sm font-bold text-text-main">
-                📅 실시간 화상 검증 일정 제안
-              </p>
-              <p class="mt-3 text-xs text-text-sub">
-                제안 시간
-              </p>
-              <p class="mt-1 text-sm font-bold text-text-main">
-                {{ message.proposedAt }}
-              </p>
-              <div
-                v-if="message.status === 'pending'"
-                class="mt-3 flex gap-2"
-              >
-                <button
-                  type="button"
-                  class="flex-1 rounded-md border border-border py-2 text-sm font-semibold text-text-main hover:border-primary"
-                  @click="respondToProposal(message, 'rejected')"
-                >
-                  거절
-                </button>
-                <button
-                  type="button"
-                  class="flex-1 rounded-md bg-primary-gradient py-2 text-sm font-semibold text-white"
-                  @click="respondToProposal(message, 'accepted')"
-                >
-                  수락하기
-                </button>
-              </div>
-              <p
-                v-else
-                class="mt-3 text-sm font-semibold"
-                :class="message.status === 'accepted' ? 'text-green-600' : 'text-text-sub'"
-              >
-                {{ message.status === 'accepted' ? '✓ 수락한 일정입니다' : '거절한 일정입니다' }}
-              </p>
-            </div>
-            <span class="mt-1 text-[11px] text-text-sub">{{ message.time }}</span>
-          </div>
-
-          <!-- 실시간 화상 검증 일정 확정 -->
-          <div
-            v-else-if="message.type === 'confirmed'"
-            class="flex flex-col items-start"
-          >
-            <span class="mb-1 text-xs font-semibold text-text-sub">{{ room.name }}</span>
-            <div class="w-full max-w-sm rounded-lg border border-border bg-surface p-4 shadow-card">
-              <p class="flex items-center gap-1.5 text-sm font-bold text-text-main">
-                📅 실시간 화상 검증 일정 확정
-              </p>
-              <p class="mt-3 text-xs text-text-sub">
-                확정된 일정
-              </p>
-              <p class="mt-1 text-sm font-bold text-text-main">
-                {{ message.confirmedAt }}
-              </p>
-              <RouterLink
-                :to="{ name: 'calls' }"
-                class="mt-3 block rounded-md bg-primary-gradient py-2 text-center text-sm font-semibold text-white"
-              >
-                실시간 검증 입장하기
-              </RouterLink>
-            </div>
-            <span class="mt-1 text-[11px] text-text-sub">{{ message.time }}</span>
-          </div>
-
-          <!-- 일정 확정 배너 -->
-          <div
-            v-else-if="message.type === 'banner'"
-            class="mx-auto w-full max-w-md rounded-lg border border-green-200 bg-green-50 p-4"
-          >
-            <div class="flex items-center justify-between">
-              <p class="text-sm font-bold text-green-700">
-                ✓ 실시간 검증 일정이 확정되었습니다!
-              </p>
-              <span class="rounded-full bg-surface px-2 py-0.5 text-[11px] font-semibold text-green-600">예약 확정</span>
-            </div>
-            <p class="mt-2 text-sm text-green-700">
-              {{ message.confirmedAt }} 시작
-            </p>
-            <p class="mt-1 text-xs text-green-600">
-              검증 시작 5분 전부터 아래 입장 버튼이 활성화됩니다.
-            </p>
-            <RouterLink
-              :to="{ name: 'calls' }"
-              class="mt-3 block rounded-md bg-green-600 py-2 text-center text-sm font-semibold text-white hover:bg-green-700"
-            >
-              실시간 화상 검증 방 입장하기
-            </RouterLink>
-          </div>
-        </template>
+          <span class="mt-1 text-[11px] text-text-sub">
+            {{ formatTime(message.sentAt) }}
+            <template v-if="message.isMock">· 저장 안 됨 (mock)</template>
+          </span>
+        </div>
       </TransitionGroup>
     </div>
 
     <div class="border-t border-border p-4">
-      <div class="mb-2 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          class="shrink-0 rounded-full border border-primary px-3 py-1.5 text-xs font-semibold text-primary hover:bg-accent"
-          @click="openScheduleModal"
-        >
-          📅 실시간 검증 일정 잡기
-        </button>
-        <span class="text-xs text-text-sub">* 상호 조율 하에 라이브 WebRTC 성능 테스트 시간대를 제안해보세요.</span>
-      </div>
+      <p class="mb-2 text-xs text-text-sub">
+        메시지 전송 API가 아직 없어, 여기서 보낸 메시지는 화면에만 표시되고 저장되지 않습니다.
+      </p>
       <form
         class="flex gap-2"
         @submit.prevent="sendMessage"
@@ -281,61 +198,11 @@ function sendMessage() {
         >
         <button
           type="submit"
-          class="whitespace-nowrap rounded-md bg-primary-gradient px-4 py-2.5 text-sm font-semibold text-white"
+          class="whitespace-nowrap rounded-md bg-primary-gradient px-4 py-2.5 text-sm font-semibold text-white transition-all hover:brightness-110"
         >
           전송
         </button>
       </form>
-    </div>
-
-    <div
-      v-if="isScheduleModalOpen"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
-      @click.self="closeScheduleModal"
-    >
-      <div class="w-full max-w-sm rounded-lg bg-surface p-6 shadow-elevated">
-        <h3 class="text-base font-bold text-text-main">
-          실시간 검증 일정 제안
-        </h3>
-        <p class="mt-1 text-xs text-text-sub">
-          날짜와 시간을 선택해 상대방에게 제안하세요.
-        </p>
-        <div class="mt-4 space-y-3">
-          <label class="block">
-            <span class="mb-1 block text-sm font-medium text-text-main">날짜</span>
-            <input
-              v-model="scheduleDate"
-              type="date"
-              class="w-full rounded-md border border-border px-3 py-2 text-sm text-text-main outline-none focus:border-primary"
-            >
-          </label>
-          <label class="block">
-            <span class="mb-1 block text-sm font-medium text-text-main">시간</span>
-            <input
-              v-model="scheduleTime"
-              type="time"
-              class="w-full rounded-md border border-border px-3 py-2 text-sm text-text-main outline-none focus:border-primary"
-            >
-          </label>
-        </div>
-        <div class="mt-5 flex gap-2">
-          <button
-            type="button"
-            class="flex-1 rounded-md border border-border py-2 text-sm font-semibold text-text-main"
-            @click="closeScheduleModal"
-          >
-            취소
-          </button>
-          <button
-            type="button"
-            class="flex-1 rounded-md bg-primary-gradient py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-            :disabled="!scheduleDate || !scheduleTime"
-            @click="confirmSchedule"
-          >
-            제안하기
-          </button>
-        </div>
-      </div>
     </div>
   </div>
 </template>
