@@ -3,6 +3,8 @@ package com.c203.limit.domain.chat.service;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -29,6 +31,7 @@ import com.c203.limit.global.response.CursorResponse;
 
 @Service
 public class ChatRoomService {
+    private static final Logger log = LoggerFactory.getLogger(ChatRoomService.class);
     private static final String CHAT_CREATABLE_LISTING_STATUS = "ON_SALE";
     private static final int MAX_PAGE_SIZE = 100;
 
@@ -141,6 +144,12 @@ public class ChatRoomService {
         ChatMessage message = chatMessageRepository.save(ChatMessage.sendText(
                 roomId, roomSequence, senderId, request.clientMessageId(), content, LocalDateTime.now()));
         room.recordMessage(message.getId(), roomSequence, message.getSentAt());
+        log.info(
+                "chat message sent: roomId={}, senderId={}, messageId={}, roomSequence={}",
+                roomId,
+                senderId,
+                message.getId(),
+                roomSequence);
         return new ChatMessageSendResult(ChatMessageResponse.from(message), true);
     }
 
