@@ -66,13 +66,4 @@ public class DxdiagResult {
         this.parseStatus = parseStatus;
         this.parsedAt = parsedAt;
     }
-
-    public static DxdiagResult failed(Long evidenceId, String parserVersion) {
-        return DxdiagResult.builder()
-            .evidenceId(evidenceId)
-            .parserVersion(parserVersion)
-            .parseStatus(ParseStatus.FAILED)
-            .parsedAt(LocalDateTime.now())
-            .build();
-    }
 }

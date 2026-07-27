@@ -96,7 +96,9 @@ public enum ErrorCode {
     INVALID_EVIDENCE_TYPE("INS007", HttpStatus.BAD_REQUEST, "지원하지 않는 증거 유형입니다."),
     DXDIAG_FILE_FETCH_FAILED("INS008", HttpStatus.BAD_GATEWAY, "증거 파일을 불러오지 못했습니다."),
     BATTERY_REPORT_FILE_FETCH_FAILED("INS009", HttpStatus.BAD_GATEWAY, "증거 파일을 불러오지 못했습니다."),
-    PARSING_FAILED("INS010", HttpStatus.UNPROCESSABLE_ENTITY, "OCR 자동 구조화에 실패했습니다.");
+    PARSING_FAILED("INS010", HttpStatus.UNPROCESSABLE_ENTITY, "OCR 자동 구조화에 실패했습니다."),
+    UNSUPPORTED_FILE_FORMAT("INS011", HttpStatus.BAD_REQUEST, "지원하지 않는 파일 형식입니다."),
+    ITEM_NOT_FOUND("INS012", HttpStatus.NOT_FOUND, "체크리스트 항목을 찾을 수 없습니다.");
 
     private final String code;
     private final HttpStatus status;

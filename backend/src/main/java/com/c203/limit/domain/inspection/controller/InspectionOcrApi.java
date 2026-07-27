@@ -30,6 +30,8 @@ public interface InspectionOcrApi {
                 description = "OCR 자동 구조화 완료 (status: SUCCESS|PARTIAL|FAILED)",
                 content = @Content(schema = @Schema(implementation = OcrResultResponse.class))),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "400", description = "INVALID_EVIDENCE_TYPE"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "403", description = "FORBIDDEN"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "404", description = "EVIDENCE_NOT_FOUND"),

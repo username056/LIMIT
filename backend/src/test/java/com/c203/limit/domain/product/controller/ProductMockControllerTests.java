@@ -26,6 +26,7 @@ import com.c203.limit.domain.member.repository.MemberTermsAgreementRepository;
 import com.c203.limit.domain.inspection.repository.BatteryReportResultRepository;
 import com.c203.limit.domain.inspection.repository.DxdiagResultRepository;
 import com.c203.limit.domain.inspection.repository.EvidenceRepository;
+import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
 import com.c203.limit.domain.inspection.repository.ListingOwnerReader;
 import com.c203.limit.domain.inspection.repository.OcrResultRepository;
 import com.c203.limit.domain.product.repository.ListingRepository;
@@ -94,6 +95,9 @@ class ProductMockControllerTests {
 
     @MockitoBean
     ListingOwnerReader listingOwnerReader;
+
+    @MockitoBean
+    ListingChecklistItemRepository listingChecklistItemRepository;
 
     @MockitoBean
     DxdiagResultRepository dxdiagResultRepository;

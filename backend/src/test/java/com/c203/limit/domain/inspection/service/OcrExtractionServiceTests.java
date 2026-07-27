@@ -169,6 +169,28 @@ class OcrExtractionServiceTests {
     }
 
     @Test
+    void throwsInvalidEvidenceTypeWhenEvidenceIsNotPhoto() {
+        Evidence evidence =
+                Evidence.upload(
+                        LISTING_ID,
+                        null,
+                        EvidenceType.DIAGNOSTIC_FILE,
+                        "s3/key.xml",
+                        "text/xml",
+                        LocalDateTime.now());
+        evidence.markReady("https://cdn.example.com/evidence/9003.xml");
+        stubEvidenceAndOwner(evidence);
+
+        assertThatThrownBy(() -> service.extractAndStructure(EVIDENCE_ID, SELLER_ID))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.INVALID_EVIDENCE_TYPE));
+        verifyNoInteractions(ocrClient, ocrResultRepository);
+    }
+
+    @Test
     void throwsParsingFailedWhenOcrClientErrors() {
         stubEvidenceAndOwner(readyEvidence());
         when(ocrClient.extractFields(any(), any(), anySet())).thenThrow(new RuntimeException("upstream error"));

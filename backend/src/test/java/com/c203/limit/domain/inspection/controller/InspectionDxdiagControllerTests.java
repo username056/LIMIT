@@ -8,8 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.c203.limit.domain.inspection.entity.DxdiagResult;
 import com.c203.limit.domain.inspection.enums.ParseStatus;
-import com.c203.limit.domain.inspection.parser.DxdiagParseResult;
 import com.c203.limit.domain.inspection.service.DxdiagParsingService;
+import com.c203.limit.global.security.CurrentUser;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,15 +24,18 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 class InspectionDxdiagControllerTests {
 
     private static final Long EVIDENCE_ID = 9004L;
+    private static final Long SELLER_ID = 100L;
 
     @Mock DxdiagParsingService dxdiagParsingService;
+    @Mock CurrentUser currentUser;
 
     MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         mockMvc =
-                MockMvcBuilders.standaloneSetup(new InspectionDxdiagController(dxdiagParsingService)).build();
+                MockMvcBuilders.standaloneSetup(new InspectionDxdiagController(dxdiagParsingService, currentUser))
+                        .build();
     }
 
     @Test
@@ -41,39 +44,51 @@ class InspectionDxdiagControllerTests {
                 DxdiagResult.builder()
                         .evidenceId(EVIDENCE_ID)
                         .cpu("11th Gen Intel(R) Core(TM) i7-1165G7")
-                        .memory("16384MB RAM")
+                        .memory("16384 MB RAM")
                         .gpu("Intel(R) Iris(R) Xe Graphics")
                         .gpuMemory("8156 MB")
                         .driverVersion("27.20.100.9415")
                         .soundDevice("스피커(Realtek(R) Audio)")
-                        .parserVersion("dxdiag-dom-v1")
+                        .parserVersion("dxdiag-v1")
                         .parseStatus(ParseStatus.SUCCESS)
                         .parsedAt(LocalDateTime.parse("2026-07-23T20:55:12"))
                         .build();
         ReflectionTestUtils.setField(entity, "id", 1L);
-        DxdiagParseResult parsed =
-                new DxdiagParseResult(
-                        "SAMSUNG ELECTRONICS CO., LTD.",
-                        "950XDB/951XDB/950XDY",
-                        "Windows 10 Pro 64-bit",
-                        entity.getCpu(),
-                        entity.getMemory(),
-                        entity.getGpu(),
-                        entity.getGpuMemory(),
-                        entity.getDriverVersion(),
-                        entity.getSoundDevice());
-        when(dxdiagParsingService.parse(eq(EVIDENCE_ID)))
-                .thenReturn(new DxdiagParsingService.DxdiagParsingResult(entity, parsed));
+        when(currentUser.memberId()).thenReturn(SELLER_ID);
+        when(dxdiagParsingService.parse(eq(EVIDENCE_ID), eq(SELLER_ID))).thenReturn(entity);
 
         mockMvc.perform(post("/api/v1/inspections/evidence/{evidenceId}/dxdiag-results", EVIDENCE_ID))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.dxdiagResultId").value(1))
-                .andExpect(jsonPath("$.data.evidenceId").value(EVIDENCE_ID))
-                .andExpect(jsonPath("$.data.manufacturer").value("SAMSUNG ELECTRONICS CO., LTD."))
-                .andExpect(jsonPath("$.data.model").value("950XDB/951XDB/950XDY"))
-                .andExpect(jsonPath("$.data.osVersion").value("Windows 10 Pro 64-bit"))
                 .andExpect(jsonPath("$.data.cpu").value("11th Gen Intel(R) Core(TM) i7-1165G7"))
-                .andExpect(jsonPath("$.data.parseStatus").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.memory").value("16384 MB RAM"))
+                .andExpect(jsonPath("$.data.gpu").value("Intel(R) Iris(R) Xe Graphics"))
+                .andExpect(jsonPath("$.data.status").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.missingFields").isArray())
+                .andExpect(jsonPath("$.data.missingFields").isEmpty())
                 .andExpect(jsonPath("$.meta").doesNotExist());
+    }
+
+    @Test
+    void returns201WithMissingFieldsWhenPartial() throws Exception {
+        DxdiagResult entity =
+                DxdiagResult.builder()
+                        .evidenceId(EVIDENCE_ID)
+                        .cpu("11th Gen Intel(R) Core(TM) i7-1165G7")
+                        .memory("16384 MB RAM")
+                        .parserVersion("dxdiag-v1")
+                        .parseStatus(ParseStatus.PARTIAL)
+                        .parsedAt(LocalDateTime.parse("2026-07-23T20:55:12"))
+                        .build();
+        ReflectionTestUtils.setField(entity, "id", 2L);
+        when(currentUser.memberId()).thenReturn(SELLER_ID);
+        when(dxdiagParsingService.parse(eq(EVIDENCE_ID), eq(SELLER_ID))).thenReturn(entity);
+
+        mockMvc.perform(post("/api/v1/inspections/evidence/{evidenceId}/dxdiag-results", EVIDENCE_ID))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.status").value("PARTIAL"))
+                .andExpect(jsonPath("$.data.missingFields")
+                        .value(org.hamcrest.Matchers.containsInAnyOrder(
+                                "gpu", "gpuMemory", "driverVersion", "soundDevice")));
     }
 }

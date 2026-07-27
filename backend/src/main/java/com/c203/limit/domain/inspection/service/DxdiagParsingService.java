@@ -1,87 +1,83 @@
 package com.c203.limit.domain.inspection.service;
 
-import com.c203.limit.domain.inspection.entity.Evidence;
 import com.c203.limit.domain.inspection.entity.DxdiagResult;
+import com.c203.limit.domain.inspection.entity.Evidence;
 import com.c203.limit.domain.inspection.enums.EvidenceProcessingStatus;
 import com.c203.limit.domain.inspection.enums.EvidenceType;
-import com.c203.limit.domain.inspection.enums.ParseStatus;
+import com.c203.limit.domain.inspection.mapper.DxdiagResultMapper;
 import com.c203.limit.domain.inspection.parser.DxdiagParseException;
 import com.c203.limit.domain.inspection.parser.DxdiagParseResult;
-import com.c203.limit.domain.inspection.parser.DxdiagXmlParser;
+import com.c203.limit.domain.inspection.parser.DxdiagParser;
 import com.c203.limit.domain.inspection.repository.DxdiagResultRepository;
 import com.c203.limit.domain.inspection.repository.EvidenceRepository;
+import com.c203.limit.domain.inspection.repository.ListingOwnerReader;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.time.LocalDateTime;
 import org.springframework.stereotype.Service;
 
-/**
- * 검수 증거로 업로드된 DxDiag.xml을 다운로드해 DOM으로 파싱하고 dxdiag_result에 저장하는 유스케이스.
- * manufacturer/model/osVersion은 dxdiag_result 테이블에 컬럼이 없어 저장하지 않고 응답에만 담는다.
- */
+/** 검수 증거로 업로드된 DxDiag 진단 파일(txt/xml)을 다운로드해 파싱하고 dxdiag_result에 저장하는 유스케이스. */
 @Service
 public class DxdiagParsingService {
 
-    private static final String PARSER_VERSION = "dxdiag-dom-v1";
+    private static final String PARSER_VERSION = "dxdiag-v1";
 
     private final EvidenceRepository evidenceRepository;
     private final DxdiagResultRepository dxdiagResultRepository;
+    private final ListingOwnerReader listingOwnerReader;
     private final DxdiagFileFetcher dxdiagFileFetcher;
-    private final DxdiagXmlParser dxdiagXmlParser;
+    private final DxdiagParser dxdiagParser;
 
     public DxdiagParsingService(
             EvidenceRepository evidenceRepository,
             DxdiagResultRepository dxdiagResultRepository,
+            ListingOwnerReader listingOwnerReader,
             DxdiagFileFetcher dxdiagFileFetcher,
-            DxdiagXmlParser dxdiagXmlParser) {
+            DxdiagParser dxdiagParser) {
         this.evidenceRepository = evidenceRepository;
         this.dxdiagResultRepository = dxdiagResultRepository;
+        this.listingOwnerReader = listingOwnerReader;
         this.dxdiagFileFetcher = dxdiagFileFetcher;
-        this.dxdiagXmlParser = dxdiagXmlParser;
+        this.dxdiagParser = dxdiagParser;
     }
 
-    public DxdiagParsingResult parse(Long evidenceId) {
+    public DxdiagResult parse(Long evidenceId, Long sellerId) {
         Evidence evidence =
                 evidenceRepository
                         .findById(evidenceId)
                         .orElseThrow(() -> new BusinessException(ErrorCode.EVIDENCE_NOT_FOUND));
 
+        verifyOwnership(evidence, sellerId);
+
+        if (evidence.getEvidenceType() != EvidenceType.DIAGNOSTIC_FILE) {
+            throw new BusinessException(ErrorCode.UNSUPPORTED_FILE_FORMAT);
+        }
         if (evidence.getProcessingStatus() != EvidenceProcessingStatus.READY
                 || evidence.getCdnUrl() == null) {
             throw new BusinessException(ErrorCode.EVIDENCE_NOT_READY);
         }
-        if (evidence.getEvidenceType() != EvidenceType.DIAGNOSTIC_FILE) {
-            throw new BusinessException(ErrorCode.INVALID_EVIDENCE_TYPE);
-        }
 
-        byte[] xmlBytes = dxdiagFileFetcher.fetch(evidence.getCdnUrl());
+        byte[] fileBytes = dxdiagFileFetcher.fetch(evidence.getCdnUrl());
 
         DxdiagParseResult parsed;
-        DxdiagResult entity;
         try {
-            parsed = dxdiagXmlParser.parse(xmlBytes);
-            entity =
-                    DxdiagResult.builder()
-                            .evidenceId(evidenceId)
-                            .cpu(parsed.cpu())
-                            .memory(parsed.memory())
-                            .gpu(parsed.gpu())
-                            .gpuMemory(parsed.gpuMemory())
-                            .driverVersion(parsed.driverVersion())
-                            .soundDevice(parsed.soundDevice())
-                            .parserVersion(PARSER_VERSION)
-                            .parseStatus(parsed.isComplete() ? ParseStatus.SUCCESS : ParseStatus.PARTIAL)
-                            .parsedAt(LocalDateTime.now())
-                            .build();
+            parsed = dxdiagParser.parse(fileBytes, evidence.getS3Key(), evidence.getMimeType());
         } catch (DxdiagParseException exception) {
-            parsed = null;
-            entity = DxdiagResult.failed(evidenceId, PARSER_VERSION);
+            throw new BusinessException(ErrorCode.PARSING_FAILED);
         }
 
-        DxdiagResult saved = dxdiagResultRepository.save(entity);
-        return new DxdiagParsingResult(saved, parsed);
+        DxdiagResult entity =
+                DxdiagResultMapper.toEntity(evidenceId, parsed, PARSER_VERSION, LocalDateTime.now());
+        return dxdiagResultRepository.save(entity);
     }
 
-    /** 저장된 엔티티와, 엔티티에는 없는 manufacturer/model/osVersion을 함께 응답으로 전달하기 위한 래퍼. */
-    public record DxdiagParsingResult(DxdiagResult entity, DxdiagParseResult parsed) {}
+    private void verifyOwnership(Evidence evidence, Long sellerId) {
+        ListingOwnerReader.ListingOwnerInfo listing =
+                listingOwnerReader
+                        .findById(evidence.getListingId())
+                        .orElseThrow(() -> new BusinessException(ErrorCode.EVIDENCE_NOT_FOUND));
+        if (!listing.sellerId().equals(sellerId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+    }
 }

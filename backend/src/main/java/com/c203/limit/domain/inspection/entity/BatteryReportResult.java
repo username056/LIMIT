@@ -63,13 +63,4 @@ public class BatteryReportResult {
         this.parseStatus = parseStatus;
         this.parsedAt = parsedAt;
     }
-
-    public static BatteryReportResult failed(Long evidenceId, String parserVersion) {
-        return BatteryReportResult.builder()
-            .evidenceId(evidenceId)
-            .parserVersion(parserVersion)
-            .parseStatus(ParseStatus.FAILED)
-            .parsedAt(LocalDateTime.now())
-            .build();
-    }
 }

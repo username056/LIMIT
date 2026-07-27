@@ -14,16 +14,14 @@ class DxdiagXmlParserTests {
     void parsesAllFieldsFromCompleteDxdiagXml() {
         DxdiagParseResult result = parser.parse(bytes(completeDxdiagXml()));
 
-        assertThat(result.manufacturer()).isEqualTo("SAMSUNG ELECTRONICS CO., LTD.");
-        assertThat(result.model()).isEqualTo("950XDB/951XDB/950XDY");
-        assertThat(result.osVersion()).isEqualTo("Windows 10 Pro 64-bit (10.0, Build 19045)");
         assertThat(result.cpu()).isEqualTo("11th Gen Intel(R) Core(TM) i7-1165G7 @ 2.80GHz (8 CPUs), ~2.8GHz");
-        assertThat(result.memory()).isEqualTo("16384MB RAM");
+        assertThat(result.memory()).isEqualTo("16384 MB RAM");
         assertThat(result.gpu()).isEqualTo("Intel(R) Iris(R) Xe Graphics");
         assertThat(result.gpuMemory()).isEqualTo("8156 MB");
         assertThat(result.driverVersion()).isEqualTo("27.20.100.9415");
         assertThat(result.soundDevice()).isEqualTo("스피커(Realtek(R) Audio)");
         assertThat(result.isComplete()).isTrue();
+        assertThat(result.missingFields()).isEmpty();
     }
 
     @Test
@@ -32,9 +30,6 @@ class DxdiagXmlParserTests {
                 """
                 <DxDiag>
                   <SystemInformation>
-                    <SystemManufacturer>ACME</SystemManufacturer>
-                    <SystemModel>X1</SystemModel>
-                    <OperatingSystem>Windows 11</OperatingSystem>
                     <Processor>Test CPU</Processor>
                     <Memory>8192MB RAM</Memory>
                   </SystemInformation>
@@ -69,9 +64,6 @@ class DxdiagXmlParserTests {
                 """
                 <DxDiag>
                   <SystemInformation>
-                    <SystemManufacturer>ACME</SystemManufacturer>
-                    <SystemModel>X1</SystemModel>
-                    <OperatingSystem>Windows 11</OperatingSystem>
                     <Processor>Test CPU</Processor>
                     <Memory>8192MB RAM</Memory>
                   </SystemInformation>
@@ -90,6 +82,7 @@ class DxdiagXmlParserTests {
         assertThat(result.gpuMemory()).isNull();
         assertThat(result.driverVersion()).isNull();
         assertThat(result.isComplete()).isFalse();
+        assertThat(result.missingFields()).containsExactlyInAnyOrder("gpu", "gpuMemory", "driverVersion");
     }
 
     @Test
@@ -112,7 +105,7 @@ class DxdiagXmlParserTests {
                 <!DOCTYPE DxDiag [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
                 <DxDiag>
                   <SystemInformation>
-                    <SystemManufacturer>&xxe;</SystemManufacturer>
+                    <Processor>&xxe;</Processor>
                   </SystemInformation>
                 </DxDiag>
                 """;

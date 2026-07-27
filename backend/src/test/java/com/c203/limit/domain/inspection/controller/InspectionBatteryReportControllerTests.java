@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.c203.limit.domain.inspection.entity.BatteryReportResult;
 import com.c203.limit.domain.inspection.enums.ParseStatus;
 import com.c203.limit.domain.inspection.service.BatteryReportParsingService;
+import com.c203.limit.global.security.CurrentUser;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,15 +25,18 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 class InspectionBatteryReportControllerTests {
 
     private static final Long EVIDENCE_ID = 9005L;
+    private static final Long SELLER_ID = 100L;
 
     @Mock BatteryReportParsingService batteryReportParsingService;
+    @Mock CurrentUser currentUser;
 
     MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         mockMvc =
-                MockMvcBuilders.standaloneSetup(new InspectionBatteryReportController(batteryReportParsingService))
+                MockMvcBuilders.standaloneSetup(
+                                new InspectionBatteryReportController(batteryReportParsingService, currentUser))
                         .build();
     }
 
@@ -46,12 +50,13 @@ class InspectionBatteryReportControllerTests {
                         .fullChargeCapacity("55,584 mWh")
                         .cycleCount(418)
                         .capacityRatio(new BigDecimal("82.95"))
-                        .parserVersion("battery-report-dom-v1")
+                        .parserVersion("battery-report-v1")
                         .parseStatus(ParseStatus.SUCCESS)
                         .parsedAt(LocalDateTime.parse("2026-07-23T21:00:00"))
                         .build();
         ReflectionTestUtils.setField(entity, "id", 1L);
-        when(batteryReportParsingService.parse(eq(EVIDENCE_ID))).thenReturn(entity);
+        when(currentUser.memberId()).thenReturn(SELLER_ID);
+        when(batteryReportParsingService.parse(eq(EVIDENCE_ID), eq(SELLER_ID))).thenReturn(entity);
 
         mockMvc.perform(
                         post(
@@ -59,12 +64,11 @@ class InspectionBatteryReportControllerTests {
                                 EVIDENCE_ID))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.batteryReportResultId").value(1))
-                .andExpect(jsonPath("$.data.evidenceId").value(EVIDENCE_ID))
                 .andExpect(jsonPath("$.data.batteryManufacturer").value("SAMSUNG Electronics"))
                 .andExpect(jsonPath("$.data.designCapacity").value("67,010 mWh"))
                 .andExpect(jsonPath("$.data.cycleCount").value(418))
                 .andExpect(jsonPath("$.data.capacityRatio").value(82.95))
-                .andExpect(jsonPath("$.data.parseStatus").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.status").value("SUCCESS"))
                 .andExpect(jsonPath("$.meta").doesNotExist());
     }
 }

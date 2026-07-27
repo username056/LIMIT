@@ -11,10 +11,16 @@ public record BatteryReportParseResult(
         BigDecimal capacityRatio) {
 
     public boolean isComplete() {
-        return batteryManufacturer != null
-                && designCapacity != null
-                && fullChargeCapacity != null
-                && cycleCount != null
-                && capacityRatio != null;
+        return foundFieldCount() == 4;
+    }
+
+    /** design_capacity, full_charge_capacity, battery_manufacturer, cycle_count 중 인식에 성공한 개수. */
+    public int foundFieldCount() {
+        int count = 0;
+        if (batteryManufacturer != null) count++;
+        if (designCapacity != null) count++;
+        if (fullChargeCapacity != null) count++;
+        if (cycleCount != null) count++;
+        return count;
     }
 }

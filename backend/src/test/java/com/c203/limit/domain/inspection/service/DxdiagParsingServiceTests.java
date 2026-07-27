@@ -12,9 +12,10 @@ import com.c203.limit.domain.inspection.enums.EvidenceType;
 import com.c203.limit.domain.inspection.enums.ParseStatus;
 import com.c203.limit.domain.inspection.parser.DxdiagParseException;
 import com.c203.limit.domain.inspection.parser.DxdiagParseResult;
-import com.c203.limit.domain.inspection.parser.DxdiagXmlParser;
+import com.c203.limit.domain.inspection.parser.DxdiagParser;
 import com.c203.limit.domain.inspection.repository.DxdiagResultRepository;
 import com.c203.limit.domain.inspection.repository.EvidenceRepository;
+import com.c203.limit.domain.inspection.repository.ListingOwnerReader;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.time.LocalDateTime;
@@ -29,12 +30,16 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class DxdiagParsingServiceTests {
 
     private static final Long EVIDENCE_ID = 9004L;
+    private static final Long LISTING_ID = 1L;
+    private static final Long SELLER_ID = 100L;
+    private static final Long OTHER_MEMBER_ID = 200L;
     private static final String CDN_URL = "https://cdn.example.com/evidence/9004.xml";
 
     @Mock EvidenceRepository evidenceRepository;
     @Mock DxdiagResultRepository dxdiagResultRepository;
+    @Mock ListingOwnerReader listingOwnerReader;
     @Mock DxdiagFileFetcher dxdiagFileFetcher;
-    @Mock DxdiagXmlParser dxdiagXmlParser;
+    @Mock DxdiagParser dxdiagParser;
 
     DxdiagParsingService service;
 
@@ -42,14 +47,19 @@ class DxdiagParsingServiceTests {
     void setUp() {
         service =
                 new DxdiagParsingService(
-                        evidenceRepository, dxdiagResultRepository, dxdiagFileFetcher, dxdiagXmlParser);
+                        evidenceRepository, dxdiagResultRepository, listingOwnerReader, dxdiagFileFetcher, dxdiagParser);
     }
 
     private Evidence readyEvidence(EvidenceType evidenceType) {
         Evidence evidence =
-                Evidence.upload(1L, null, evidenceType, "s3/key.xml", "text/xml", LocalDateTime.now());
+                Evidence.upload(LISTING_ID, null, evidenceType, "s3/key.xml", "text/xml", LocalDateTime.now());
         evidence.markReady(CDN_URL);
         return evidence;
+    }
+
+    private void stubOwnedListing() {
+        when(listingOwnerReader.findById(LISTING_ID))
+                .thenReturn(Optional.of(new ListingOwnerReader.ListingOwnerInfo(LISTING_ID, SELLER_ID)));
     }
 
     @Test
@@ -57,100 +67,126 @@ class DxdiagParsingServiceTests {
         Evidence evidence = readyEvidence(EvidenceType.DIAGNOSTIC_FILE);
         DxdiagParseResult parsed =
                 new DxdiagParseResult(
-                        "SAMSUNG", "950XDB", "Windows 10", "i7-1165G7", "16384MB RAM",
-                        "Iris Xe", "8156 MB", "27.20.100.9415", "Realtek Audio");
+                        "i7-1165G7", "16384 MB RAM", "Iris Xe", "8156 MB", "27.20.100.9415", "Realtek Audio");
         when(evidenceRepository.findById(EVIDENCE_ID)).thenReturn(Optional.of(evidence));
+        stubOwnedListing();
         when(dxdiagFileFetcher.fetch(CDN_URL)).thenReturn("<DxDiag/>".getBytes());
-        when(dxdiagXmlParser.parse(any())).thenReturn(parsed);
+        when(dxdiagParser.parse(any(), any(), any())).thenReturn(parsed);
         when(dxdiagResultRepository.save(any(DxdiagResult.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        DxdiagParsingService.DxdiagParsingResult result = service.parse(EVIDENCE_ID);
+        DxdiagResult result = service.parse(EVIDENCE_ID, SELLER_ID);
 
-        assertThat(result.entity().getEvidenceId()).isEqualTo(EVIDENCE_ID);
-        assertThat(result.entity().getParseStatus()).isEqualTo(ParseStatus.SUCCESS);
-        assertThat(result.entity().getCpu()).isEqualTo("i7-1165G7");
-        assertThat(result.entity().getGpu()).isEqualTo("Iris Xe");
-        assertThat(result.parsed().manufacturer()).isEqualTo("SAMSUNG");
-        assertThat(result.parsed().model()).isEqualTo("950XDB");
-        assertThat(result.parsed().osVersion()).isEqualTo("Windows 10");
+        assertThat(result.getEvidenceId()).isEqualTo(EVIDENCE_ID);
+        assertThat(result.getParseStatus()).isEqualTo(ParseStatus.SUCCESS);
+        assertThat(result.getCpu()).isEqualTo("i7-1165G7");
+        assertThat(result.getGpu()).isEqualTo("Iris Xe");
     }
 
     @Test
     void parseSavesPartialResultWhenSomeFieldsMissing() {
         Evidence evidence = readyEvidence(EvidenceType.DIAGNOSTIC_FILE);
         DxdiagParseResult parsed =
-                new DxdiagParseResult(
-                        "SAMSUNG", "950XDB", "Windows 10", "i7-1165G7", "16384MB RAM",
-                        null, null, null, "Realtek Audio");
+                new DxdiagParseResult("i7-1165G7", "16384 MB RAM", null, null, null, "Realtek Audio");
         when(evidenceRepository.findById(EVIDENCE_ID)).thenReturn(Optional.of(evidence));
+        stubOwnedListing();
         when(dxdiagFileFetcher.fetch(CDN_URL)).thenReturn("<DxDiag/>".getBytes());
-        when(dxdiagXmlParser.parse(any())).thenReturn(parsed);
+        when(dxdiagParser.parse(any(), any(), any())).thenReturn(parsed);
         when(dxdiagResultRepository.save(any(DxdiagResult.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        DxdiagParsingService.DxdiagParsingResult result = service.parse(EVIDENCE_ID);
+        DxdiagResult result = service.parse(EVIDENCE_ID, SELLER_ID);
 
-        assertThat(result.entity().getParseStatus()).isEqualTo(ParseStatus.PARTIAL);
-        assertThat(result.entity().getGpu()).isNull();
+        assertThat(result.getParseStatus()).isEqualTo(ParseStatus.PARTIAL);
+        assertThat(result.getGpu()).isNull();
     }
 
     @Test
-    void parseSavesFailedResultWhenXmlCannotBeParsed() {
+    void parseSavesFailedResultWhenNoFieldsAreFound() {
         Evidence evidence = readyEvidence(EvidenceType.DIAGNOSTIC_FILE);
+        DxdiagParseResult parsed = new DxdiagParseResult(null, null, null, null, null, null);
         when(evidenceRepository.findById(EVIDENCE_ID)).thenReturn(Optional.of(evidence));
-        when(dxdiagFileFetcher.fetch(CDN_URL)).thenReturn("not-xml".getBytes());
-        when(dxdiagXmlParser.parse(any())).thenThrow(new DxdiagParseException("broken"));
+        stubOwnedListing();
+        when(dxdiagFileFetcher.fetch(CDN_URL)).thenReturn("garbage".getBytes());
+        when(dxdiagParser.parse(any(), any(), any())).thenReturn(parsed);
         when(dxdiagResultRepository.save(any(DxdiagResult.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        DxdiagParsingService.DxdiagParsingResult result = service.parse(EVIDENCE_ID);
+        DxdiagResult result = service.parse(EVIDENCE_ID, SELLER_ID);
 
-        assertThat(result.entity().getParseStatus()).isEqualTo(ParseStatus.FAILED);
-        assertThat(result.entity().getEvidenceId()).isEqualTo(EVIDENCE_ID);
-        assertThat(result.parsed()).isNull();
+        assertThat(result.getParseStatus()).isEqualTo(ParseStatus.FAILED);
+        assertThat(result.getEvidenceId()).isEqualTo(EVIDENCE_ID);
+    }
+
+    @Test
+    void parseThrowsParsingFailedWhenFileCannotBeParsed() {
+        Evidence evidence = readyEvidence(EvidenceType.DIAGNOSTIC_FILE);
+        when(evidenceRepository.findById(EVIDENCE_ID)).thenReturn(Optional.of(evidence));
+        stubOwnedListing();
+        when(dxdiagFileFetcher.fetch(CDN_URL)).thenReturn("not-xml".getBytes());
+        when(dxdiagParser.parse(any(), any(), any())).thenThrow(new DxdiagParseException("broken"));
+
+        assertThatThrownBy(() -> service.parse(EVIDENCE_ID, SELLER_ID))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.PARSING_FAILED));
     }
 
     @Test
     void parseThrowsWhenEvidenceNotFound() {
         when(evidenceRepository.findById(EVIDENCE_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.parse(EVIDENCE_ID))
+        assertThatThrownBy(() -> service.parse(EVIDENCE_ID, SELLER_ID))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         exception ->
                                 assertThat(exception.getErrorCode())
                                         .isEqualTo(ErrorCode.EVIDENCE_NOT_FOUND));
-        verifyNoInteractions(dxdiagFileFetcher, dxdiagXmlParser, dxdiagResultRepository);
+        verifyNoInteractions(dxdiagFileFetcher, dxdiagParser, dxdiagResultRepository);
+    }
+
+    @Test
+    void parseThrowsForbiddenWhenSellerDoesNotOwnListing() {
+        Evidence evidence = readyEvidence(EvidenceType.DIAGNOSTIC_FILE);
+        when(evidenceRepository.findById(EVIDENCE_ID)).thenReturn(Optional.of(evidence));
+        stubOwnedListing();
+
+        assertThatThrownBy(() -> service.parse(EVIDENCE_ID, OTHER_MEMBER_ID))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN));
+        verifyNoInteractions(dxdiagFileFetcher, dxdiagParser, dxdiagResultRepository);
     }
 
     @Test
     void parseThrowsWhenEvidenceNotReady() {
         Evidence evidence =
                 Evidence.upload(
-                        1L, null, EvidenceType.DIAGNOSTIC_FILE, "s3/key.xml", "text/xml", LocalDateTime.now());
+                        LISTING_ID, null, EvidenceType.DIAGNOSTIC_FILE, "s3/key.xml", "text/xml", LocalDateTime.now());
         when(evidenceRepository.findById(EVIDENCE_ID)).thenReturn(Optional.of(evidence));
+        stubOwnedListing();
 
-        assertThatThrownBy(() -> service.parse(EVIDENCE_ID))
+        assertThatThrownBy(() -> service.parse(EVIDENCE_ID, SELLER_ID))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         exception ->
                                 assertThat(exception.getErrorCode())
                                         .isEqualTo(ErrorCode.EVIDENCE_NOT_READY));
-        verifyNoInteractions(dxdiagFileFetcher, dxdiagXmlParser, dxdiagResultRepository);
+        verifyNoInteractions(dxdiagFileFetcher, dxdiagParser, dxdiagResultRepository);
     }
 
     @Test
     void parseThrowsWhenEvidenceTypeIsNotDiagnosticFile() {
         Evidence evidence = readyEvidence(EvidenceType.PHOTO);
         when(evidenceRepository.findById(EVIDENCE_ID)).thenReturn(Optional.of(evidence));
+        stubOwnedListing();
 
-        assertThatThrownBy(() -> service.parse(EVIDENCE_ID))
+        assertThatThrownBy(() -> service.parse(EVIDENCE_ID, SELLER_ID))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         exception ->
                                 assertThat(exception.getErrorCode())
-                                        .isEqualTo(ErrorCode.INVALID_EVIDENCE_TYPE));
-        verifyNoInteractions(dxdiagFileFetcher, dxdiagXmlParser, dxdiagResultRepository);
+                                        .isEqualTo(ErrorCode.UNSUPPORTED_FILE_FORMAT));
+        verifyNoInteractions(dxdiagFileFetcher, dxdiagParser, dxdiagResultRepository);
     }
 }

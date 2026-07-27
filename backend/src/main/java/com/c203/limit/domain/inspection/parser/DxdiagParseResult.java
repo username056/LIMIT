@@ -1,10 +1,10 @@
 package com.c203.limit.domain.inspection.parser;
 
-/** DxDiag.xml에서 추출한 값. manufacturer/model/osVersion은 dxdiag_result에 저장되지 않고 응답에만 담긴다. */
+import java.util.ArrayList;
+import java.util.List;
+
+/** DxDiag 진단 파일(txt/xml)에서 추출한, dxdiag_result 테이블 컬럼과 1:1로 대응하는 값. */
 public record DxdiagParseResult(
-        String manufacturer,
-        String model,
-        String osVersion,
         String cpu,
         String memory,
         String gpu,
@@ -13,14 +13,18 @@ public record DxdiagParseResult(
         String soundDevice) {
 
     public boolean isComplete() {
-        return manufacturer != null
-                && model != null
-                && osVersion != null
-                && cpu != null
-                && memory != null
-                && gpu != null
-                && gpuMemory != null
-                && driverVersion != null
-                && soundDevice != null;
+        return missingFields().isEmpty();
+    }
+
+    /** cpu, memory, gpu, gpuMemory, driverVersion, soundDevice 중 인식하지 못한 필드명. */
+    public List<String> missingFields() {
+        List<String> missing = new ArrayList<>();
+        if (cpu == null) missing.add("cpu");
+        if (memory == null) missing.add("memory");
+        if (gpu == null) missing.add("gpu");
+        if (gpuMemory == null) missing.add("gpuMemory");
+        if (driverVersion == null) missing.add("driverVersion");
+        if (soundDevice == null) missing.add("soundDevice");
+        return missing;
     }
 }

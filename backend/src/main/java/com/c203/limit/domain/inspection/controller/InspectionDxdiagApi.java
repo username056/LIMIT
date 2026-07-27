@@ -18,20 +18,26 @@ public interface InspectionDxdiagApi {
 
     @Operation(
             operationId = "dxdiag01",
-            summary = "DxDiag.xml 파싱",
-            description = "업로드 완료된 DxDiag.xml 증거를 DOM으로 파싱해 제조사·모델·OS·CPU·메모리·GPU·드라이버 정보를 추출하고 결과를 저장합니다.",
+            summary = "DxDiag 진단 파일 파싱",
+            description =
+                    "업로드 완료된 DxDiag 진단 파일(txt/xml)을 포맷에 맞춰 파싱해 CPU·메모리·GPU·드라이버·사운드 장치 정보를 추출하고"
+                            + " 결과를 저장합니다. 해당 증거가 속한 매물의 판매자 본인만 호출할 수 있습니다.",
             security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "201",
-                description = "DxDiag 파싱 완료 (parseStatus로 성공·부분·실패를 구분)",
+                description = "DxDiag 파싱 완료 (status로 성공·부분·실패를 구분, missingFields로 누락 필드 확인)",
                 content = @Content(schema = @Schema(implementation = DxdiagResultResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "400", description = "UNSUPPORTED_FILE_FORMAT"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "403", description = "FORBIDDEN"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "404", description = "EVIDENCE_NOT_FOUND"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "409", description = "EVIDENCE_NOT_READY"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "400", description = "INVALID_EVIDENCE_TYPE")
+                responseCode = "422", description = "PARSING_FAILED")
     })
     @PostMapping(
             path = "/api/v1/inspections/evidence/{evidenceId}/dxdiag-results",

@@ -22,9 +22,6 @@ class DxdiagXmlParserRealFileIntegrationTests {
         byte[] bytes = Files.readAllBytes(Path.of(path));
         DxdiagParseResult result = new DxdiagXmlParser().parse(bytes);
 
-        assertThat(result.manufacturer()).isNotBlank();
-        assertThat(result.model()).isNotBlank();
-        assertThat(result.osVersion()).contains("Windows");
         assertThat(result.cpu()).isNotBlank();
         assertThat(result.memory()).isNotBlank();
         assertThat(result.gpu()).isNotBlank();

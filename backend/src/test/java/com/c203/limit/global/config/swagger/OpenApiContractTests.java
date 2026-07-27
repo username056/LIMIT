@@ -33,6 +33,7 @@ import com.c203.limit.domain.admin.repository.MemberRestrictionRepository;
 import com.c203.limit.domain.inspection.repository.BatteryReportResultRepository;
 import com.c203.limit.domain.inspection.repository.DxdiagResultRepository;
 import com.c203.limit.domain.inspection.repository.EvidenceRepository;
+import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
 import com.c203.limit.domain.inspection.repository.ListingOwnerReader;
 import com.c203.limit.domain.inspection.repository.OcrResultRepository;
 import com.c203.limit.domain.product.repository.ListingRepository;
@@ -100,6 +101,9 @@ class OpenApiContractTests {
 
     @MockitoBean
     ListingOwnerReader listingOwnerReader;
+
+    @MockitoBean
+    ListingChecklistItemRepository listingChecklistItemRepository;
 
     @MockitoBean
     DxdiagResultRepository dxdiagResultRepository;
@@ -197,6 +201,8 @@ class OpenApiContractTests {
                         .value("dxdiag01"))
                 .andExpect(jsonPath("$.paths['/api/v1/inspections/evidence/{evidenceId}/battery-report-results'].post.operationId")
                         .value("batteryReport01"))
+                .andExpect(jsonPath("$.paths['/api/v1/inspections/listing-checklist-items/{itemId}/diagnosis'].get.operationId")
+                        .value("diagnosis01"))
                 .andExpect(jsonPath("$.paths['/api/v1/auth/sessions']").doesNotExist());
 
         mockMvc.perform(get("/v3/api-docs/swagger-config"))

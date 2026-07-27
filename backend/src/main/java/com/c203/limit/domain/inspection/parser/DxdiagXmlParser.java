@@ -1,5 +1,6 @@
 package com.c203.limit.domain.inspection.parser;
 
+import com.c203.limit.domain.inspection.util.UnitNormalizer;
 import java.io.ByteArrayInputStream;
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
@@ -9,7 +10,7 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
-/** Windows dxdiag /x 출력 XML을 DOM으로 파싱해 제조사/모델/OS/CPU/메모리/GPU/드라이버 정보를 추출한다. */
+/** Windows dxdiag /x 출력 XML을 DOM으로 파싱해 CPU/메모리/GPU/드라이버/사운드 장치 정보를 추출한다. */
 @Component
 public class DxdiagXmlParser {
 
@@ -19,22 +20,18 @@ public class DxdiagXmlParser {
         Element root = parseDocument(xmlBytes);
 
         Element systemInformation = firstElement(root, "SystemInformation");
-        String manufacturer = text(systemInformation, "SystemManufacturer");
-        String model = text(systemInformation, "SystemModel");
-        String osVersion = text(systemInformation, "OperatingSystem");
         String cpu = text(systemInformation, "Processor");
-        String memory = text(systemInformation, "Memory");
+        String memory = UnitNormalizer.normalizeUnitSpacing(text(systemInformation, "Memory"));
 
         Element displayDevice = firstElement(root, "DisplayDevice");
         String gpu = text(displayDevice, "CardName");
-        String gpuMemory = text(displayDevice, "DisplayMemory");
+        String gpuMemory = UnitNormalizer.normalizeUnitSpacing(text(displayDevice, "DisplayMemory"));
         String driverVersion = text(displayDevice, "DriverVersion");
 
         Element soundDevice = firstDefaultSoundDevice(root);
         String soundDeviceName = text(soundDevice, "Description");
 
-        return new DxdiagParseResult(
-                manufacturer, model, osVersion, cpu, memory, gpu, gpuMemory, driverVersion, soundDeviceName);
+        return new DxdiagParseResult(cpu, memory, gpu, gpuMemory, driverVersion, soundDeviceName);
     }
 
     private Element parseDocument(byte[] xmlBytes) {

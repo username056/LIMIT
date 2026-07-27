@@ -7,6 +7,7 @@ import com.c203.limit.domain.inspection.dto.response.OcrResultResponse;
 import com.c203.limit.domain.inspection.entity.Evidence;
 import com.c203.limit.domain.inspection.entity.OcrResult;
 import com.c203.limit.domain.inspection.enums.EvidenceProcessingStatus;
+import com.c203.limit.domain.inspection.enums.EvidenceType;
 import com.c203.limit.domain.inspection.enums.OcrExtractionStatus;
 import com.c203.limit.domain.inspection.enums.OcrFieldType;
 import com.c203.limit.domain.inspection.repository.EvidenceRepository;
@@ -52,6 +53,9 @@ public class OcrExtractionService {
         if (evidence.getProcessingStatus() != EvidenceProcessingStatus.READY
                 || evidence.getCdnUrl() == null) {
             throw new BusinessException(ErrorCode.EVIDENCE_NOT_READY);
+        }
+        if (evidence.getEvidenceType() != EvidenceType.PHOTO) {
+            throw new BusinessException(ErrorCode.INVALID_EVIDENCE_TYPE);
         }
 
         Set<OcrFieldType> expectedFieldTypes = OcrFieldExpectations.SCREENSHOT_FIELD_TYPES;
