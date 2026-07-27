@@ -80,7 +80,7 @@ async function submit() {
     <AuthShell
       width="lg"
       title="회원가입"
-      description="필요한 정보만 입력하고 L1MIT의 안전한 중고거래를 시작하세요."
+      description="필요한 정보만 입력하고 LIMIT의 안전한 중고거래를 시작하세요."
     >
       <BaseCard class="p-7 sm:p-8">
         <form
