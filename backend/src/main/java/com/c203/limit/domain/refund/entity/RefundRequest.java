@@ -38,6 +38,13 @@ public class RefundRequest {
     @Column(name = "refund_idempotency_key", length = 100)
     private String refundIdempotencyKey;
 
+    @Column(name = "retry_count", nullable = false)
+    @Builder.Default
+    private int retryCount = 0;
+
+    @Column(name = "next_retry_at")
+    private LocalDateTime nextRetryAt;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     @Builder.Default
