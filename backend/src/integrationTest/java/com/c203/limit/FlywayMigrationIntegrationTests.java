@@ -101,6 +101,7 @@ class FlywayMigrationIntegrationTests {
         assertThat(tableExists("chat_room")).isTrue();
         assertThat(tableExists("ocr_result")).isTrue();
         assertThat(tableExists("payment")).isTrue();
+        assertThat(tableExists("rtc_session_checklist_result")).isTrue();
         assertThat(tableExists("listing")).isTrue();
         assertThat(tableExists("checklist_template_item")).isTrue();
         assertThat(columnExists("listing", "color")).isTrue();
@@ -113,6 +114,8 @@ class FlywayMigrationIntegrationTests {
         assertThat(indexExists("listing", "idx_listing_seller_all_feed")).isTrue();
         assertThat(indexExists("wishlist", "idx_wishlist_user_created")).isTrue();
         assertThat(indexExists("listing_image", "idx_listing_image_thumbnail")).isTrue();
+        assertThat(columnExists("rtc_session", "verification_memo")).isTrue();
+        assertThat(indexExists("rtc_session", "uk_rtc_session_appointment")).isTrue();
         assertThat(tableExists("member_role")).isTrue();
         assertThat(tableExists("user_sanction")).isTrue();
         assertThat(singleString("SELECT member_type FROM user_account WHERE email = 'legacy@example.com'"))
@@ -123,7 +126,7 @@ class FlywayMigrationIntegrationTests {
                         "SELECT version FROM flyway_schema_history "
                                 + "WHERE success = 1 AND version IS NOT NULL "
                                 + "ORDER BY installed_rank DESC LIMIT 1"))
-                .isEqualTo("20260727");
+                .isEqualTo("20260728");
     }
 
     private static boolean tableExists(String tableName) throws SQLException {

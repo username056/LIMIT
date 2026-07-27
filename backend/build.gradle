@@ -22,10 +22,13 @@ spotless {
         target(
                 'src/main/java/com/c203/limit/domain/admin/**/*.java',
                 'src/main/java/com/c203/limit/domain/auth/**/*.java',
+                'src/main/java/com/c203/limit/domain/call/**/*.java',
                 'src/main/java/com/c203/limit/domain/member/**/*.java',
+                'src/main/java/com/c203/limit/domain/rtc/**/*.java',
                 'src/main/java/com/c203/limit/global/security/**/*.java',
                 'src/main/java/com/c203/limit/global/exception/**/*.java',
                 'src/main/java/com/c203/limit/global/config/SecurityConfig.java',
+                'src/main/java/com/c203/limit/global/config/RtcWebSocketConfig.java',
                 'src/main/java/com/c203/limit/global/config/swagger/OpenApiConfig.java'
         )
         googleJavaFormat().aosp()
@@ -53,6 +56,7 @@ dependencyCheck {
 dependencies {
     testImplementation platform('org.testcontainers:testcontainers-bom:2.0.5')
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-websocket'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'

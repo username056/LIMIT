@@ -22,12 +22,16 @@ import MyFavoritesPage from '../pages/MyFavoritesPage.vue'
 import MyProfilePage from '../pages/MyProfilePage.vue'
 import ProductListPage from '../pages/ProductListPage.vue'
 import ProductDetailPage from '../pages/ProductDetailPage.vue'
+import CallsPage from '../pages/CallsPage.vue'
+import RtcCallPage from '../pages/RtcCallPage.vue'
 import { getAccessToken } from '../auth/session'
 
 const routes = [
   { path: '/', name: 'home', component: HomePage },
   { path: '/products', name: 'products', component: ProductListPage },
   { path: '/products/:productId', name: 'product-detail', component: ProductDetailPage },
+  { path: '/calls', name: 'calls', component: CallsPage, meta: { requiresAuth: true } },
+  { path: '/calls/:callId/session', name: 'rtc-call', component: RtcCallPage, meta: { requiresAuth: true } },
   { path: '/login', name: 'login', component: LoginPage },
   { path: '/signup', name: 'signup', component: SignupPage },
   { path: '/signup/social', name: 'social-signup', component: SocialSignupPage },

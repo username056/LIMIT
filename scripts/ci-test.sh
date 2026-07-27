@@ -38,6 +38,7 @@ run_backend_scripts() {
   sh -n scripts/check-backend-logging.sh
   sh -n scripts/check-backend-logging.test.sh
   bash -n scripts/deploy-monitoring.sh
+  sh -n scripts/configure-rtc-turn.sh
   bash -n scripts/backup-datastores.sh
   bash -n scripts/restore-backup-drill.sh
   bash -n scripts/install-backup-cron.sh

@@ -127,6 +127,12 @@ async function logoutMember() {
 
         <template v-if="member">
           <RouterLink
+            :to="{ name: 'calls' }"
+            class="hidden text-sm font-semibold text-text-sub hover:text-primary lg:block"
+          >
+            실시간 확인
+          </RouterLink>
+          <RouterLink
             :to="{ name: 'coming-soon', params: { feature: 'notifications' } }"
             aria-label="알림"
             class="text-text-sub hover:text-text-main"

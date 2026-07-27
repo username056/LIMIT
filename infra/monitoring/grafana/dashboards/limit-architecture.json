@@ -653,6 +653,88 @@
                 "height": 14
               }
             }
+            ,
+            {
+              "name": "Coturn TURN",
+              "type": "rectangle",
+              "config": {
+                "align": "center",
+                "color": {
+                  "fixed": "#111827"
+                },
+                "size": 13,
+                "text": {
+                  "fixed": "Coturn\nTURN/STUN",
+                  "mode": "fixed"
+                },
+                "valign": "middle"
+              },
+              "background": {
+                "color": {
+                  "fixed": "#FFFFFF"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "#B877D9"
+                },
+                "width": 2
+              },
+              "constraint": {
+                "horizontal": "left",
+                "vertical": "top"
+              },
+              "placement": {
+                "top": 190,
+                "left": 660,
+                "width": 150,
+                "height": 84
+              },
+              "links": [
+                {
+                  "title": "Coturn logs",
+                  "url": "/explore?left={\"datasource\":\"loki\",\"queries\":[{\"expr\":\"{service=\\\"coturn\\\"}\"}]}",
+                  "targetBlank": false
+                }
+              ]
+            },
+            {
+              "name": "Coturn Status",
+              "type": "rectangle",
+              "config": {
+                "align": "center",
+                "color": {
+                  "fixed": "#FFFFFF"
+                },
+                "size": 10,
+                "text": {
+                  "fixed": "",
+                  "mode": "fixed"
+                },
+                "valign": "middle"
+              },
+              "background": {
+                "color": {
+                  "field": "Coturn"
+                }
+              },
+              "border": {
+                "color": {
+                  "field": "Coturn"
+                },
+                "width": 1
+              },
+              "constraint": {
+                "horizontal": "left",
+                "vertical": "top"
+              },
+              "placement": {
+                "top": 198,
+                "left": 788,
+                "width": 14,
+                "height": 14
+              }
+            }
           ],
           "name": "Limit Architecture",
           "type": "frame"
@@ -695,6 +777,12 @@
           "instant": true,
           "legendFormat": "Nginx",
           "refId": "Nginx"
+        },
+        {
+          "expr": "up{job=\"coturn\"}",
+          "instant": true,
+          "legendFormat": "Coturn",
+          "refId": "Coturn"
         }
       ],
       "title": "Limit 서비스 아키텍처 — 노드를 클릭하면 Loki 로그로 이동",

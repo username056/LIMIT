@@ -25,6 +25,12 @@ groups:
         labels: { severity: warning }
         annotations:
           summary: A container restarted repeatedly
+      - alert: CoturnUnavailable
+        expr: up{job="coturn"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: Coturn TURN relay is unavailable
       - alert: DatabaseBackupFailed
         expr: limit_backup_last_exit_code != 0
         for: 5m
