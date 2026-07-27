@@ -20,9 +20,9 @@ x-backend-environment: &backend-environment
   JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
   RTC_ALLOWED_ORIGIN_PATTERNS: ${RTC_ALLOWED_ORIGIN_PATTERNS:-http://localhost:5173}
   RTC_STUN_URL: ${RTC_STUN_URL:-stun:stun.l.google.com:19302}
-  RTC_TURN_URL: ${RTC_TURN_URL:-}
-  RTC_TURN_USERNAME: ${RTC_TURN_USERNAME:-}
-  RTC_TURN_CREDENTIAL: ${RTC_TURN_CREDENTIAL:-}
+  RTC_TURN_URL: ${RTC_TURN_URL:-turn:localhost:3478?transport=udp}
+  RTC_TURN_USERNAME: ${RTC_TURN_USERNAME:-limit-local}
+  RTC_TURN_CREDENTIAL: ${RTC_TURN_CREDENTIAL:-local-only-change-me}
   EMAIL_VERIFICATION_STORE: ${EMAIL_VERIFICATION_STORE:-redis}
   EMAIL_VERIFICATION_DELIVERY_ENABLED: ${EMAIL_VERIFICATION_DELIVERY_ENABLED:-false}
   EMAIL_VERIFICATION_TTL: ${EMAIL_VERIFICATION_TTL:-15m}
@@ -110,6 +110,33 @@ services:
     ports: ["127.0.0.1:${MONGODB_PORT:-17017}:27017"]
   redis:
     ports: ["127.0.0.1:${REDIS_PORT:-16379}:6379"]
+  coturn:
+    image: coturn/coturn:4.11.0-r0
+    restart: unless-stopped
+    command:
+      - -n
+      - --log-file=stdout
+      - --fingerprint
+      - --lt-cred-mech
+      - --realm=${RTC_TURN_REALM:-limit.local}
+      - --user=${RTC_TURN_USERNAME:-limit-local}:${RTC_TURN_CREDENTIAL:-local-only-change-me}
+      - --min-port=49160
+      - --max-port=49200
+      - --no-cli
+      - --no-multicast-peers
+      - --prometheus
+    ports:
+      - "3478:3478"
+      - "3478:3478/udp"
+      - "49160-49200:49160-49200/udp"
+    networks: [app]
+    mem_limit: 256m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
   prometheus:
     image: prom/prometheus:v3.4.1
     command:
@@ -124,6 +151,8 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+      coturn:
+        condition: service_started
     mem_limit: 512m
     cpus: 0.5
     logging:

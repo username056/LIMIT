@@ -36,6 +36,7 @@
 - `RTC_ALLOWED_ORIGIN_PATTERNS`: 허용 프론트 Origin 목록
 - `RTC_STUN_URL`: 기본 STUN URL
 - `RTC_TURN_URL`, `RTC_TURN_USERNAME`, `RTC_TURN_CREDENTIAL`: 선택 TURN 설정
+- `RTC_TURN_REALM`: Coturn 장기 자격증명 realm. 운영 기본값은 `l1mit.shop`
 - `VITE_WS_BASE_URL`: 프론트 시그널링 서버 주소. 미설정 시 API 또는 현재 Origin 사용
 
 운영 Nginx는 `/ws/rtc`의 Upgrade/Connection 헤더를 전달하고 읽기 제한 시간을 1시간으로 설정한다.
@@ -48,6 +49,9 @@
 - 시그널 메시지 최대 크기: 64 KiB
 - 입장 토큰 유효시간: 2분, 단일 사용
 - 세션 기본 입장 가능시간: 수락 후 2시간
+- Coturn 릴레이 UDP 포트: `49160-49200` 41개로 제한
+- Grafana Canvas 노드: 16개에서 18개로 2개 증가(Coturn 본체·상태)
+- Prometheus Canvas 상태 대상: 6개에서 7개로 1개 증가
 
 발생한 문제와 조치:
 
@@ -57,8 +61,10 @@
 4. 단독 Nginx 문법 검증 컨테이너는 운영 upstream DNS와 TLS 인증서가 없어 전체 `nginx -t`를 완료하지 못했다. WebSocket location은 기존 운영 upstream·TLS 계약을 그대로 사용하며 실제 배포 전 서버에서 `nginx -t`가 필요하다.
 5. 샌드박스에서는 Gradle 배포본 다운로드가 소켓 권한으로 차단됐다. 네트워크가 허용된 검증 환경에서 동일 명령을 재실행해 전체 빌드가 성공했다.
 6. Windows PowerShell은 `npm.ps1` 실행과 따옴표 없는 `-Dopenapi.output=...` 인자를 각각 차단·오해석했다. `npm.cmd`와 따옴표로 묶은 Gradle 시스템 속성으로 재실행해 프론트 검증 및 OpenAPI 내보내기를 완료했다.
+7. 공식 Coturn 이미지에는 `wget`가 없어 컨테이너 내부 헬스체크가 실행되지 않았다. Prometheus 컨테이너가 Coturn의 `9641` 엔드포인트를 확인하는 방식으로 변경했다.
+8. 메트릭 점검 시 PowerShell 파이프가 앞부분만 읽고 닫혀 명령 종료 코드는 1이었지만, `turn_traffic_*` 지표 출력은 정상 확인됐다.
 
 ## 남은 운영 위험
 
-- TURN 미설정 환경에서는 대칭 NAT나 제한적인 회사망에서 P2P 연결이 실패할 수 있다. 운영 전 TURN 서버와 단기 credential 발급 정책을 구성해야 한다.
+- 현재 Coturn은 MVP용 고정 장기 자격증명을 사용한다. 외부 노출 전 보안 그룹·UFW를 지정 포트로만 제한하고, 후속 단계에서 TURN REST API 기반 단기 credential로 교체해야 한다.
 - 시그널링 참가자 맵과 입장 토큰은 현재 단일 애플리케이션 인스턴스 메모리에 있다. 동시에 여러 백엔드 인스턴스가 트래픽을 받게 되면 sticky routing 또는 Redis Pub/Sub 기반 시그널링으로 확장해야 한다.

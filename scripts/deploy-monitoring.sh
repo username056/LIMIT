@@ -21,7 +21,7 @@ compose=(
 )
 install -d -m 0755 "$root_dir/infra/state/node-exporter"
 services=(
-  prometheus loki grafana alertmanager node-exporter cadvisor alloy
+  prometheus loki grafana alertmanager node-exporter cadvisor alloy coturn
   mongodb-exporter redis-exporter nginx-exporter
 )
 reload_services=(prometheus loki grafana alertmanager alloy)
@@ -103,6 +103,9 @@ wait_until_ready Grafana \
 wait_until_ready Prometheus \
   "${compose[@]}" exec -T prometheus \
     wget -qO- http://localhost:9090/-/ready
+wait_until_ready Coturn \
+  "${compose[@]}" exec -T prometheus \
+    wget -qO- http://coturn:9641/
 wait_until_ready Loki \
   "${compose[@]}" exec -T loki \
     wget -qO- http://localhost:3100/ready
