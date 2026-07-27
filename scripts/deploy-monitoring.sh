@@ -20,6 +20,8 @@ compose=(
   -f "$root_dir/infra/compose.prod.yml"
 )
 install -d -m 0755 "$root_dir/infra/state/node-exporter"
+find "$root_dir/infra/monitoring" -type d -exec chmod 0755 {} +
+find "$root_dir/infra/monitoring" -type f -exec chmod 0644 {} +
 services=(
   prometheus loki grafana alertmanager node-exporter cadvisor alloy coturn
   mongodb-exporter redis-exporter nginx-exporter

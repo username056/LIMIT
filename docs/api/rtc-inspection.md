@@ -52,6 +52,8 @@
 - Coturn 릴레이 UDP 포트: `49160-49200` 41개로 제한
 - Grafana Canvas 노드: 16개에서 18개로 2개 증가(Coturn 본체·상태)
 - Prometheus Canvas 상태 대상: 6개에서 7개로 1개 증가
+- 운영 Coturn 최초 기동 부하: CPU `0.04%`, 메모리 `7.211 MiB / 256 MiB`
+- 운영 Prometheus 수집 상태: `up{job="coturn"}=1`
 
 발생한 문제와 조치:
 
@@ -63,6 +65,8 @@
 6. Windows PowerShell은 `npm.ps1` 실행과 따옴표 없는 `-Dopenapi.output=...` 인자를 각각 차단·오해석했다. `npm.cmd`와 따옴표로 묶은 Gradle 시스템 속성으로 재실행해 프론트 검증 및 OpenAPI 내보내기를 완료했다.
 7. 공식 Coturn 이미지에는 `wget`가 없어 컨테이너 내부 헬스체크가 실행되지 않았다. Prometheus 컨테이너가 Coturn의 `9641` 엔드포인트를 확인하는 방식으로 변경했다.
 8. 메트릭 점검 시 PowerShell 파이프가 앞부분만 읽고 닫혀 명령 종료 코드는 1이었지만, `turn_traffic_*` 지표 출력은 정상 확인됐다.
+9. Windows에서 `scp -r`로 운영 모니터링 폴더를 동기화하자 디렉터리 권한이 `700`이 되어 Prometheus가 설정을 읽지 못했다. 디렉터리 `755`, 파일 `644`로 복구했고 배포 스크립트가 매번 이를 표준화하도록 보강했다.
+10. 운영 Coturn·Prometheus·Grafana 기동과 Canvas 반영은 완료했지만 UFW TURN 규칙 변경은 별도 위험 승인 없이 수행하지 않았다. 현재 외부 TURN 포트는 차단 상태다.
 
 ## 남은 운영 위험
 
