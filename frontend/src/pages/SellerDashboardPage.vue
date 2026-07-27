@@ -7,13 +7,14 @@ import BaseTable from '../components/BaseTable.vue'
 import BasePagination from '../components/BasePagination.vue'
 import BarChart from '../components/charts/BarChart.vue'
 import DonutChart from '../components/charts/DonutChart.vue'
+import BaseButton from '../components/BaseButton.vue'
 
 const sidebarItems = [
-  { label: '대시보드', active: false },
-  { label: '상품 관리', active: false },
-  { label: '주문 관리', active: false },
-  { label: '정산 및 통계', active: true },
-  { label: '설정', active: false },
+  { label: '대시보드', href: '/seller/dashboard', active: false },
+  { label: '상품 관리', href: '/seller/products', active: false },
+  { label: '주문 관리', href: '/coming-soon/seller-orders', active: false },
+  { label: '정산 및 통계', href: '/seller/dashboard', active: true },
+  { label: '설정', href: '/coming-soon/seller-settings', active: false },
 ]
 
 // 예시 데이터입니다. 실제 연동 시 API 응답으로 교체하세요.
@@ -99,7 +100,14 @@ const currentPage = ref(1)
             </BaseBadge>
           </td>
           <td class="px-4 py-3 text-right text-text-sub">
-            ›
+            <BaseButton
+              variant="ghost"
+              class="px-2 py-1"
+              :to="{ name: 'coming-soon', params: { feature: 'settlement' }, query: { name: item.name } }"
+              :aria-label="`${item.name} 정산 상세 보기`"
+            >
+              ›
+            </BaseButton>
           </td>
         </tr>
       </BaseTable>

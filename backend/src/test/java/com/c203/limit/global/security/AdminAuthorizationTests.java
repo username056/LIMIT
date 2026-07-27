@@ -22,12 +22,19 @@ import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 import org.springframework.test.util.ReflectionTestUtils;
 import com.c203.limit.domain.admin.repository.*;
 import com.c203.limit.domain.chat.repository.ChatRoomParticipantRepository;
+import com.c203.limit.domain.chat.repository.ChatMessageRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomRepository;
 import com.c203.limit.domain.chat.repository.ListingChatReader;
 import com.c203.limit.domain.auth.repository.SocialAccountRepository;
 import com.c203.limit.domain.member.repository.MemberRepository;
 import com.c203.limit.domain.member.repository.MemberTermsAgreementRepository;
 import com.c203.limit.domain.member.entity.Member;
+import com.c203.limit.domain.inspection.repository.BatteryReportResultRepository;
+import com.c203.limit.domain.inspection.repository.DxdiagResultRepository;
+import com.c203.limit.domain.inspection.repository.EvidenceRepository;
+import com.c203.limit.domain.inspection.repository.OcrResultRepository;
+import com.c203.limit.domain.product.repository.ListingRepository;
+import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
 
 @SpringBootTest(properties = {
         "management.endpoint.health.validate-group-membership=false",
@@ -54,7 +61,21 @@ class AdminAuthorizationTests {
     @MockitoBean AdminActionLogRepository logs;
     @MockitoBean ChatRoomRepository chatRoomRepository;
     @MockitoBean ChatRoomParticipantRepository chatRoomParticipantRepository;
+    @MockitoBean ChatMessageRepository chatMessageRepository;
     @MockitoBean ListingChatReader listingChatReader;
+    @MockitoBean ListingRepository listingRepository;
+    @MockitoBean ListingStatusHistoryRepository listingStatusHistoryRepository;
+    @MockitoBean EvidenceRepository evidenceRepository;
+    @MockitoBean OcrResultRepository ocrResultRepository;
+    @MockitoBean DxdiagResultRepository dxdiagResultRepository;
+    @MockitoBean BatteryReportResultRepository batteryReportResultRepository;
+
+    @Test
+    void publicHealthEndpointDoesNotRequireAuthentication() throws Exception {
+        mockMvc.perform(get("/api/v1/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("UP"));
+    }
 
     @Test
     void memberCannotReadAdminApi() throws Exception {

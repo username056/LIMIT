@@ -48,6 +48,7 @@ public class OpenApiConfig {
                     com.c203.limit.domain.admin.dto.response.AdminAccountResponse.class,
                     com.c203.limit.domain.chat.dto.response.ChatRoomResponse.class,
                     com.c203.limit.domain.chat.dto.response.ChatRoomSummaryResponse.class,
+                    com.c203.limit.domain.chat.dto.response.ChatMessageResponse.class,
                     com.c203.limit.global.response.ApiResponse.class,
                     com.c203.limit.global.response.PageResponse.class,
                     com.c203.limit.global.response.CursorResponse.class,

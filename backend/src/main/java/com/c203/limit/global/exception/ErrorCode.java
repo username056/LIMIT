@@ -54,6 +54,7 @@ public enum ErrorCode {
     LISTING_NOT_FOUND("CHT001", HttpStatus.NOT_FOUND, "매물을 찾을 수 없습니다."),
     SELF_CHAT_NOT_ALLOWED("CHT002", HttpStatus.BAD_REQUEST, "본인의 매물에는 채팅방을 생성할 수 없습니다."),
     CHAT_ROOM_CREATION_NOT_ALLOWED("CHT003", HttpStatus.CONFLICT, "현재 상태의 매물에는 채팅방을 생성할 수 없습니다."),
+    CHAT_ROOM_ACCESS_DENIED("CHT004", HttpStatus.FORBIDDEN, "채팅방에 접근할 권한이 없습니다."),
 
     SELLER_APPLICATION_NOT_FOUND("SEL001", HttpStatus.NOT_FOUND, "판매자 신청서를 찾을 수 없습니다."),
     ACTIVE_SELLER_APPLICATION_EXISTS("SEL002", HttpStatus.CONFLICT, "처리 중인 판매자 신청서가 있습니다."),
@@ -76,7 +77,25 @@ public enum ErrorCode {
     ADMIN_EMAIL_DUPLICATED("ADM010", HttpStatus.CONFLICT, "이미 사용 중인 관리자 이메일입니다."),
     LAST_SUPER_ADMIN("ADM011", HttpStatus.CONFLICT, "마지막 활성 최고 관리자는 변경할 수 없습니다."),
     INVALID_ADMIN_ROLE("ADM012", HttpStatus.BAD_REQUEST, "관리자 권한은 OPERATOR 또는 SUPER_ADMIN이어야 합니다."),
-    INVALID_ADMIN_STATUS("ADM013", HttpStatus.BAD_REQUEST, "관리자 상태가 올바르지 않습니다.");
+    INVALID_ADMIN_STATUS("ADM013", HttpStatus.BAD_REQUEST, "관리자 상태가 올바르지 않습니다."),
+
+    // ========== 매물(상품) 에러 ==========
+    LISTING_NOT_ON_SALE("PRD001", HttpStatus.CONFLICT, "판매중 상태의 매물만 예약할 수 있습니다."),
+    LISTING_NOT_RESERVED("PRD002", HttpStatus.CONFLICT, "예약중 상태의 매물에만 적용할 수 있는 작업입니다."),
+    LISTING_NOT_PAID("PRD003", HttpStatus.CONFLICT, "결제완료 상태의 매물만 검수를 시작할 수 있습니다."),
+    LISTING_NOT_INSPECTING("PRD004", HttpStatus.CONFLICT, "검수중 상태의 매물만 확정할 수 있습니다."),
+    LISTING_NOT_CONFIRMED("PRD005", HttpStatus.CONFLICT, "확정 상태의 매물만 정산할 수 있습니다."),
+
+    // ========== 검수/OCR 에러 ==========
+    EVIDENCE_NOT_FOUND("INS001", HttpStatus.NOT_FOUND, "증거를 찾을 수 없습니다."),
+    EVIDENCE_NOT_READY("INS002", HttpStatus.CONFLICT, "아직 처리되지 않은 증거입니다."),
+    OCR_UNSUPPORTED_IMAGE_FORMAT("INS003", HttpStatus.BAD_REQUEST, "지원하지 않는 이미지 형식입니다."),
+    OCR_IMAGE_FETCH_FAILED("INS004", HttpStatus.BAD_GATEWAY, "증거 이미지를 불러오지 못했습니다."),
+    OCR_REQUEST_FAILED("INS005", HttpStatus.BAD_GATEWAY, "OCR 요청에 실패했습니다."),
+    OCR_RECOGNITION_FAILED("INS006", HttpStatus.UNPROCESSABLE_ENTITY, "이미지에서 텍스트를 인식하지 못했습니다."),
+    INVALID_EVIDENCE_TYPE("INS007", HttpStatus.BAD_REQUEST, "지원하지 않는 증거 유형입니다."),
+    DXDIAG_FILE_FETCH_FAILED("INS008", HttpStatus.BAD_GATEWAY, "증거 파일을 불러오지 못했습니다."),
+    BATTERY_REPORT_FILE_FETCH_FAILED("INS009", HttpStatus.BAD_GATEWAY, "증거 파일을 불러오지 못했습니다.");
 
     private final String code;
     private final HttpStatus status;

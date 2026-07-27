@@ -7,6 +7,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.c203.limit.domain.auth.repository.SocialAccountRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomParticipantRepository;
+import com.c203.limit.domain.chat.repository.ChatMessageRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomRepository;
 import com.c203.limit.domain.chat.repository.ListingChatReader;
 import com.c203.limit.domain.member.repository.MemberRepository;
@@ -14,6 +15,12 @@ import com.c203.limit.domain.member.repository.MemberTermsAgreementRepository;
 import com.c203.limit.domain.admin.repository.AdminAccountRepository;
 import com.c203.limit.domain.admin.repository.AdminActionLogRepository;
 import com.c203.limit.domain.admin.repository.MemberRestrictionRepository;
+import com.c203.limit.domain.inspection.repository.BatteryReportResultRepository;
+import com.c203.limit.domain.inspection.repository.DxdiagResultRepository;
+import com.c203.limit.domain.inspection.repository.EvidenceRepository;
+import com.c203.limit.domain.inspection.repository.OcrResultRepository;
+import com.c203.limit.domain.product.repository.ListingRepository;
+import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
 
 @SpringBootTest(properties = {
         "spring.autoconfigure.exclude="
@@ -55,7 +62,28 @@ class BackendApplicationTests {
     ChatRoomParticipantRepository chatRoomParticipantRepository;
 
     @MockitoBean
+    ChatMessageRepository chatMessageRepository;
+
+    @MockitoBean
     ListingChatReader listingChatReader;
+
+    @MockitoBean
+    ListingRepository listingRepository;
+
+    @MockitoBean
+    ListingStatusHistoryRepository listingStatusHistoryRepository;
+
+    @MockitoBean
+    EvidenceRepository evidenceRepository;
+
+    @MockitoBean
+    OcrResultRepository ocrResultRepository;
+
+    @MockitoBean
+    DxdiagResultRepository dxdiagResultRepository;
+
+    @MockitoBean
+    BatteryReportResultRepository batteryReportResultRepository;
 
     @Test
     void contextLoads() {

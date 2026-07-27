@@ -101,6 +101,10 @@ limit:
   qdrant:
     url: ${QDRANT_URL:http://localhost:6333}
     api-key: ${QDRANT_API_KEY:}
+  ocr:
+    naver-clova:
+      invoke-url: ${NAVER_CLOVA_OCR_INVOKE_URL:}
+      secret-key: ${NAVER_CLOVA_OCR_SECRET_KEY:}
 
 springdoc:
   api-docs:
@@ -114,6 +118,10 @@ springdoc:
       packages-to-scan: com.c203.limit.domain.admin.controller
     - group: 04-chat
       packages-to-scan: com.c203.limit.domain.chat.controller
+    - group: 05-product
+      packages-to-scan: com.c203.limit.domain.product.controller
+    - group: 06-inspection
+      packages-to-scan: com.c203.limit.domain.inspection.controller
   swagger-ui:
     enabled: false
     disable-swagger-default-url: true

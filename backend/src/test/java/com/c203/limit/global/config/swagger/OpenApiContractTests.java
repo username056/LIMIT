@@ -22,6 +22,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import com.c203.limit.domain.auth.repository.SocialAccountRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomParticipantRepository;
+import com.c203.limit.domain.chat.repository.ChatMessageRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomRepository;
 import com.c203.limit.domain.chat.repository.ListingChatReader;
 import com.c203.limit.domain.member.repository.MemberRepository;
@@ -29,6 +30,12 @@ import com.c203.limit.domain.member.repository.MemberTermsAgreementRepository;
 import com.c203.limit.domain.admin.repository.AdminAccountRepository;
 import com.c203.limit.domain.admin.repository.AdminActionLogRepository;
 import com.c203.limit.domain.admin.repository.MemberRestrictionRepository;
+import com.c203.limit.domain.inspection.repository.BatteryReportResultRepository;
+import com.c203.limit.domain.inspection.repository.DxdiagResultRepository;
+import com.c203.limit.domain.inspection.repository.EvidenceRepository;
+import com.c203.limit.domain.inspection.repository.OcrResultRepository;
+import com.c203.limit.domain.product.repository.ListingRepository;
+import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
 
 @SpringBootTest(properties = {
         "management.endpoint.health.validate-group-membership=false",
@@ -73,7 +80,28 @@ class OpenApiContractTests {
     ChatRoomParticipantRepository chatRoomParticipantRepository;
 
     @MockitoBean
+    ChatMessageRepository chatMessageRepository;
+
+    @MockitoBean
     ListingChatReader listingChatReader;
+
+    @MockitoBean
+    ListingRepository listingRepository;
+
+    @MockitoBean
+    ListingStatusHistoryRepository listingStatusHistoryRepository;
+
+    @MockitoBean
+    EvidenceRepository evidenceRepository;
+
+    @MockitoBean
+    OcrResultRepository ocrResultRepository;
+
+    @MockitoBean
+    DxdiagResultRepository dxdiagResultRepository;
+
+    @MockitoBean
+    BatteryReportResultRepository batteryReportResultRepository;
 
     @Autowired
     MockMvc mockMvc;
@@ -92,6 +120,8 @@ class OpenApiContractTests {
                 .andExpect(jsonPath("$.paths['/api/v1/health'].get.summary").value("애플리케이션 상태 확인"))
                 .andExpect(jsonPath("$.components.schemas.ChatRoomResponse").exists())
                 .andExpect(jsonPath("$.components.schemas.CursorResponse").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/chat-rooms/{roomId}/messages'].get.operationId")
+                        .value("chatBe06"))
                 .andExpect(jsonPath("$.paths['/api/v1/members'].post.operationId").value("auth03"))
                 .andExpect(jsonPath("$.paths['/api/v1/members/me'].get.operationId").value("member01"))
                 .andExpect(jsonPath("$.components.schemas.SignupRequest").exists())
@@ -102,7 +132,10 @@ class OpenApiContractTests {
                 .andExpect(jsonPath("$.components.schemas.AdminLoginRequest").exists())
                 .andExpect(jsonPath("$.components.schemas.MemberProfileResponse").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/admin/members']").exists())
-                .andExpect(jsonPath("$.paths['/api/v1/products']").doesNotExist());
+                .andExpect(jsonPath("$.paths['/api/v1/products'].post.operationId").value("product01"))
+                .andExpect(jsonPath("$.paths['/api/v1/products'].get.operationId").value("product04"))
+                .andExpect(jsonPath("$.components.schemas.CreateProductRequest").exists())
+                .andExpect(jsonPath("$.components.schemas.ProductDetailResponse").exists());
     }
 
     @Test
@@ -136,13 +169,35 @@ class OpenApiContractTests {
                         .isArray())
                 .andExpect(jsonPath("$.paths['/api/v1/chat-rooms'].get.operationId")
                         .value("chatBe07"))
+                .andExpect(jsonPath("$.paths['/api/v1/chat-rooms/{roomId}/messages'].get.operationId")
+                        .value("chatBe06"))
                 .andExpect(jsonPath("$.paths['/api/v1/chat-rooms'].get.security[0].bearerAuth")
                         .isArray())
                 .andExpect(jsonPath("$.paths['/api/v1/auth/sessions']").doesNotExist());
 
+        mockMvc.perform(get("/v3/api-docs/05-product"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['/api/v1/products'].post.operationId")
+                        .value("product01"))
+                .andExpect(jsonPath("$.paths['/api/v1/device-models/{deviceModelId}/checklist-template'].get.operationId")
+                        .value("checklist01"))
+                .andExpect(jsonPath("$.paths['/api/v1/products/{productId}/checklist-items'].get.operationId")
+                        .value("checklist02"))
+                .andExpect(jsonPath("$.paths['/api/v1/auth/sessions']").doesNotExist());
+
+        mockMvc.perform(get("/v3/api-docs/06-inspection"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['/api/v1/inspections/evidence/{evidenceId}/ocr-results'].post.operationId")
+                        .value("ocr01"))
+                .andExpect(jsonPath("$.paths['/api/v1/inspections/evidence/{evidenceId}/dxdiag-results'].post.operationId")
+                        .value("dxdiag01"))
+                .andExpect(jsonPath("$.paths['/api/v1/inspections/evidence/{evidenceId}/battery-report-results'].post.operationId")
+                        .value("batteryReport01"))
+                .andExpect(jsonPath("$.paths['/api/v1/auth/sessions']").doesNotExist());
+
         mockMvc.perform(get("/v3/api-docs/swagger-config"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.urls.length()").value(4))
+                .andExpect(jsonPath("$.urls.length()").value(6))
                 .andExpect(jsonPath("$['urls.primaryName']").value("01-auth"))
                 .andExpect(jsonPath("$.operationsSorter", containsString("post: 0")))
                 .andExpect(jsonPath("$.operationsSorter", containsString("delete: 4")));

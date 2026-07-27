@@ -5,6 +5,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import com.c203.limit.domain.chat.dto.response.ChatRoomResponse;
 import com.c203.limit.domain.chat.dto.response.ChatRoomSummaryResponse;
+import com.c203.limit.domain.chat.dto.response.ChatMessageResponse;
 import com.c203.limit.domain.chat.service.ChatRoomCreateResult;
 import com.c203.limit.domain.chat.service.ChatRoomService;
 import com.c203.limit.global.response.ApiResponse;
@@ -32,6 +33,14 @@ public class ChatRoomController implements ChatRoomApi {
     public ResponseEntity<ApiResponse<CursorResponse<ChatRoomSummaryResponse>>> findRooms(Long cursor, int size) {
         CursorResponse<ChatRoomSummaryResponse> response = chatRoomService.findRooms(
                 currentUser.memberId(), cursor, size);
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    @Override
+    public ResponseEntity<ApiResponse<CursorResponse<ChatMessageResponse>>> findMessages(
+            Long roomId, Long beforeSeq, Long afterSeq, int size) {
+        CursorResponse<ChatMessageResponse> response = chatRoomService.findMessages(
+                roomId, currentUser.memberId(), beforeSeq, afterSeq, size);
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 }
