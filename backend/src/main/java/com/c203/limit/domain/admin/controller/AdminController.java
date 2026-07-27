@@ -1,6 +1,7 @@
 package com.c203.limit.domain.admin.controller;
 
 import com.c203.limit.domain.admin.dto.request.AdminLoginRequest;
+import com.c203.limit.domain.admin.dto.request.ChangeAdminPasswordRequest;
 import com.c203.limit.domain.admin.dto.request.CreateAdminAccountRequest;
 import com.c203.limit.domain.admin.dto.request.CreateMemberRestrictionRequest;
 import com.c203.limit.domain.admin.dto.request.ReleaseMemberRestrictionRequest;
@@ -31,6 +32,14 @@ public class AdminController implements AdminApi {
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, authCookieService.refresh(result.refreshToken()))
                 .body(ApiResponse.ok(result.body()));
+    }
+
+    @Override
+    public ResponseEntity<?> changeOwnPassword(ChangeAdminPasswordRequest request) {
+        adminService.changeOwnPassword(currentUser.adminId(), request);
+        return ResponseEntity.noContent()
+                .header(HttpHeaders.SET_COOKIE, authCookieService.clearRefresh())
+                .build();
     }
 
     @Override
