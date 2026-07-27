@@ -126,7 +126,7 @@ class FlywayMigrationIntegrationTests {
                         "SELECT version FROM flyway_schema_history "
                                 + "WHERE success = 1 AND version IS NOT NULL "
                                 + "ORDER BY installed_rank DESC LIMIT 1"))
-                .isEqualTo("20260728");
+                .isEqualTo("20260729");
     }
 
     private static boolean tableExists(String tableName) throws SQLException {

@@ -54,6 +54,7 @@ run_backend_scripts() {
   bash -n scripts/smoke-test.sh
   grep -Fq 'ports: ["127.0.0.1:8081:8080"]' infra/compose.prod.yml
   grep -Fq 'ports: ["127.0.0.1:8082:8080"]' infra/compose.prod.yml
+  grep -Fq '"${compose[@]}" logs --tail "${DEPLOY_FAILURE_LOG_LINES:-200}" "$target_service"' scripts/deploy-blue-green.sh
   grep -Fq 'nginx_target="/etc/nginx/conf.d/limit.conf"' scripts/deploy-monitoring.sh
   if grep -Fq '/actuator/prometheus' infra/nginx/limit.conf; then
     echo "Prometheus actuator endpoint must not be exposed through Nginx" >&2
