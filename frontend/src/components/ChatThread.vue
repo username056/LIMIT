@@ -221,7 +221,7 @@ function sendMessage() {
                 {{ message.confirmedAt }}
               </p>
               <RouterLink
-                :to="{ name: 'webrtc-session', params: { roomId: room.id } }"
+                :to="{ name: 'calls' }"
                 class="mt-3 block rounded-md bg-primary-gradient py-2 text-center text-sm font-semibold text-white"
               >
                 실시간 검증 입장하기
@@ -248,7 +248,7 @@ function sendMessage() {
               검증 시작 5분 전부터 아래 입장 버튼이 활성화됩니다.
             </p>
             <RouterLink
-              :to="{ name: 'webrtc-session', params: { roomId: room.id } }"
+              :to="{ name: 'calls' }"
               class="mt-3 block rounded-md bg-green-600 py-2 text-center text-sm font-semibold text-white hover:bg-green-700"
             >
               실시간 화상 검증 방 입장하기
