@@ -90,7 +90,14 @@ public enum ErrorCode {
     LISTING_NOT_RESERVED("PRD002", HttpStatus.CONFLICT, "예약중 상태의 매물에만 적용할 수 있는 작업입니다."),
     LISTING_NOT_PAID("PRD003", HttpStatus.CONFLICT, "결제완료 상태의 매물만 검수를 시작할 수 있습니다."),
     LISTING_NOT_INSPECTING("PRD004", HttpStatus.CONFLICT, "검수중 상태의 매물만 확정할 수 있습니다."),
-    LISTING_NOT_CONFIRMED("PRD005", HttpStatus.CONFLICT, "확정 상태의 매물만 정산할 수 있습니다.");
+    LISTING_NOT_CONFIRMED("PRD005", HttpStatus.CONFLICT, "확정 상태의 매물만 정산할 수 있습니다."),
+    PRODUCT_EDIT_NOT_ALLOWED("PRD006", HttpStatus.CONFLICT, "초안 상태의 상품만 수정할 수 있습니다."),
+    PRODUCT_DELETE_NOT_ALLOWED("PRD007", HttpStatus.CONFLICT, "현재 상태의 상품은 삭제할 수 없습니다."),
+    INVALID_PRODUCT_STATUS_TRANSITION("PRD008", HttpStatus.CONFLICT, "허용되지 않은 상품 상태 전환입니다."),
+    REQUIRED_EVIDENCE_INCOMPLETE("PRD009", HttpStatus.UNPROCESSABLE_ENTITY, "필수 체크리스트를 완료해 주세요."),
+    DEVICE_MODEL_NOT_FOUND("PRD010", HttpStatus.NOT_FOUND, "기기 모델을 찾을 수 없습니다."),
+    CHECKLIST_TEMPLATE_NOT_FOUND("PRD011", HttpStatus.NOT_FOUND, "게시된 체크리스트 템플릿을 찾을 수 없습니다."),
+    PRODUCT_ACCESS_DENIED("PRD012", HttpStatus.FORBIDDEN, "해당 상품을 변경할 권한이 없습니다.");
 
     private final String code;
     private final HttpStatus status;

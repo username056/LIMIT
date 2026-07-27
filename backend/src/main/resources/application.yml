@@ -38,6 +38,7 @@ logging:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{traceId:-no-trace}] %logger{36} - %msg%n"
 
 limit:
+  time-zone: ${APPLICATION_TIME_ZONE:Asia/Seoul}
   auth:
     cookie:
       secure: ${AUTH_COOKIE_SECURE:false}

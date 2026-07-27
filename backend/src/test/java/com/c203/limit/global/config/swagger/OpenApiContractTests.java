@@ -31,7 +31,10 @@ import com.c203.limit.domain.admin.repository.AdminAccountRepository;
 import com.c203.limit.domain.admin.repository.AdminActionLogRepository;
 import com.c203.limit.domain.admin.repository.MemberRestrictionRepository;
 import com.c203.limit.domain.product.repository.ListingRepository;
+import com.c203.limit.domain.product.repository.WishlistRepository;
 import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
+import com.c203.limit.domain.product.service.ProductApplicationService;
+import com.c203.limit.domain.product.service.ProductCatalogService;
 
 @SpringBootTest(properties = {
         "management.endpoint.health.validate-group-membership=false",
@@ -83,6 +86,15 @@ class OpenApiContractTests {
 
     @MockitoBean
     ListingRepository listingRepository;
+
+    @MockitoBean
+    WishlistRepository wishlistRepository;
+
+    @MockitoBean
+    ProductApplicationService productApplicationService;
+
+    @MockitoBean
+    ProductCatalogService productCatalogService;
 
     @MockitoBean
     ListingStatusHistoryRepository listingStatusHistoryRepository;

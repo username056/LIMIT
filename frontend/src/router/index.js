@@ -20,10 +20,14 @@ import PrivacyPage from '../pages/PrivacyPage.vue'
 import ComingSoonPage from '../pages/ComingSoonPage.vue'
 import MyFavoritesPage from '../pages/MyFavoritesPage.vue'
 import MyProfilePage from '../pages/MyProfilePage.vue'
+import ProductListPage from '../pages/ProductListPage.vue'
+import ProductDetailPage from '../pages/ProductDetailPage.vue'
 import { getAccessToken } from '../auth/session'
 
 const routes = [
   { path: '/', name: 'home', component: HomePage },
+  { path: '/products', name: 'products', component: ProductListPage },
+  { path: '/products/:productId', name: 'product-detail', component: ProductDetailPage },
   { path: '/login', name: 'login', component: LoginPage },
   { path: '/signup', name: 'signup', component: SignupPage },
   { path: '/signup/social', name: 'social-signup', component: SocialSignupPage },
@@ -60,7 +64,7 @@ const routes = [
     meta: { requiresAuth: true },
   },
   { path: '/seller/apply', name: 'seller-apply', component: SellerApplyPage },
-  { path: '/seller/products', name: 'seller-products', component: ProductManagePage },
+  { path: '/seller/products', name: 'seller-products', component: ProductManagePage, meta: { requiresAuth: true } },
   { path: '/admin', name: 'admin', component: AdminPage },
   { path: '/dev-tools', name: 'dev-tools', component: DevToolsPage },
   { path: '/coming-soon/:feature', name: 'coming-soon', component: ComingSoonPage },
