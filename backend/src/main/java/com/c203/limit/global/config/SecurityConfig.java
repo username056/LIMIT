@@ -46,10 +46,13 @@ public class SecurityConfig {
                                                 "/api/v1/health",
                                                 "/api/v1/members",
                                                 "/api/v1/admin/sessions",
+                                                "/ws/rtc",
                                                 "/actuator/health/**",
                                                 "/v3/api-docs/**",
                                                 "/swagger-ui.html",
                                                 "/swagger-ui/**")
+                                        .permitAll()
+                                        .requestMatchers(HttpMethod.GET, "/actuator/prometheus")
                                         .permitAll()
                                         .requestMatchers(
                                                 HttpMethod.GET,

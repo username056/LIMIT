@@ -142,7 +142,7 @@ const products = [
           최근 올라온 실시간 확인 가능 상품
         </h2>
         <RouterLink
-          :to="{ name: 'coming-soon', params: { feature: 'product-list' } }"
+          :to="{ name: 'products' }"
           class="text-sm font-semibold text-primary hover:underline"
         >
           전체 상품 보기
@@ -153,7 +153,7 @@ const products = [
         <RouterLink
           v-for="product in products"
           :key="product.name"
-          :to="{ name: 'coming-soon', params: { feature: 'product-detail' }, query: { name: product.name } }"
+          :to="{ name: 'products' }"
           class="group overflow-hidden rounded-lg border border-border bg-surface transition-shadow hover:shadow-elevated"
         >
           <div class="flex aspect-square items-center justify-center bg-bg text-xs text-text-sub">

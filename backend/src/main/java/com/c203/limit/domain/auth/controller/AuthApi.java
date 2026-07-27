@@ -221,4 +221,32 @@ public interface AuthApi {
                                                                     "#/components/schemas/SocialLoginRequest")))
                     @org.springframework.web.bind.annotation.RequestBody
                     Object body);
+
+    @Operation(operationId = "auth16", summary = "비밀번호 재설정 메일 발송")
+    @ApiResponse(responseCode = "202", description = "요청 접수")
+    @RequestMapping(method = RequestMethod.POST, path = "/api/v1/auth/password-reset-requests")
+    ResponseEntity<Void> auth16(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            content =
+                                    @Content(
+                                            schema =
+                                                    @Schema(
+                                                            ref =
+                                                                    "#/components/schemas/PasswordResetRequest")))
+                    @org.springframework.web.bind.annotation.RequestBody
+                    Object body);
+
+    @Operation(operationId = "auth17", summary = "비밀번호 재설정 완료")
+    @ApiResponse(responseCode = "204", description = "비밀번호 재설정 성공")
+    @RequestMapping(method = RequestMethod.POST, path = "/api/v1/auth/password-resets")
+    ResponseEntity<Void> auth17(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            content =
+                                    @Content(
+                                            schema =
+                                                    @Schema(
+                                                            ref =
+                                                                    "#/components/schemas/ResetPasswordRequest")))
+                    @org.springframework.web.bind.annotation.RequestBody
+                    Object body);
 }

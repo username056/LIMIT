@@ -1,6 +1,7 @@
 package com.c203.limit.domain.admin.controller;
 
 import com.c203.limit.domain.admin.dto.request.AdminLoginRequest;
+import com.c203.limit.domain.admin.dto.request.ChangeAdminPasswordRequest;
 import com.c203.limit.domain.admin.dto.request.CreateAdminAccountRequest;
 import com.c203.limit.domain.admin.dto.request.CreateMemberRestrictionRequest;
 import com.c203.limit.domain.admin.dto.request.ReleaseMemberRestrictionRequest;
@@ -25,6 +26,10 @@ public interface AdminApi {
     @Operation(summary = "관리자 로그인")
     @PostMapping("/sessions")
     ResponseEntity<?> login(@Valid @RequestBody AdminLoginRequest request);
+
+    @Operation(summary = "관리자 본인 비밀번호 변경", security = @SecurityRequirement(name = "bearerAuth"))
+    @PatchMapping("/me/password")
+    ResponseEntity<?> changeOwnPassword(@Valid @RequestBody ChangeAdminPasswordRequest request);
 
     @Operation(summary = "회원 목록 조회", security = @SecurityRequirement(name = "bearerAuth"))
     @GetMapping("/members")

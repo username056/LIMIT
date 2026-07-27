@@ -12,6 +12,10 @@ scrape_configs:
       - targets: [backend:8080]
         labels: { environment: local }
 
+  - job_name: coturn
+    static_configs:
+      - targets: [coturn:9641]
+
   - job_name: prometheus
     static_configs:
       - targets: [localhost:9090]

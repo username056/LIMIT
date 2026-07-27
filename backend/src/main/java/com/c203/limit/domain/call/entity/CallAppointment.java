@@ -1,8 +1,5 @@
 package com.c203.limit.domain.call.entity;
 
-import java.time.LocalDateTime;
-import java.util.UUID;
-
 import com.c203.limit.domain.call.domain.AppointmentStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -14,11 +11,17 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
+import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
-@Table(name = "call_appointment", indexes = {
-        @Index(name = "IX_CALL_APPOINTMENT_ROOM_SCHEDULE", columnList = "chat_room_id,scheduled_at")
-})
+@Table(
+        name = "call_appointment",
+        indexes = {
+            @Index(
+                    name = "IX_CALL_APPOINTMENT_ROOM_SCHEDULE",
+                    columnList = "chat_room_id,scheduled_at")
+        })
 public class CallAppointment {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -63,4 +66,109 @@ public class CallAppointment {
     private LocalDateTime completedAt;
 
     protected CallAppointment() {}
+
+    public static CallAppointment propose(
+            Long chatRoomId,
+            Long proposerId,
+            Long respondentId,
+            LocalDateTime scheduledAt,
+            String memo) {
+        CallAppointment appointment = new CallAppointment();
+        appointment.appointmentKey = UUID.randomUUID();
+        appointment.chatRoomId = chatRoomId;
+        appointment.proposerId = proposerId;
+        appointment.respondentId = respondentId;
+        appointment.status = AppointmentStatus.PROPOSED;
+        appointment.scheduledAt = scheduledAt;
+        appointment.memo = memo;
+        appointment.version = 0L;
+        return appointment;
+    }
+
+    public void accept(Long memberId) {
+        requireRespondent(memberId);
+        requireProposed();
+        status = AppointmentStatus.ACCEPTED;
+        respondedAt = LocalDateTime.now();
+    }
+
+    public void reject(Long memberId, String reason) {
+        requireRespondent(memberId);
+        requireProposed();
+        status = AppointmentStatus.REJECTED;
+        cancelReason = reason;
+        respondedAt = LocalDateTime.now();
+    }
+
+    public void cancel(Long memberId, String reason) {
+        if (!proposerId.equals(memberId))
+            throw new IllegalStateException("only proposer can cancel");
+        requireProposed();
+        status = AppointmentStatus.CANCELED;
+        cancelReason = reason;
+        canceledAt = LocalDateTime.now();
+    }
+
+    public void complete() {
+        if (status != AppointmentStatus.ACCEPTED) {
+            throw new IllegalStateException("only accepted appointment can complete");
+        }
+        status = AppointmentStatus.COMPLETED;
+        completedAt = LocalDateTime.now();
+    }
+
+    public boolean isParticipant(Long memberId) {
+        return proposerId.equals(memberId) || respondentId.equals(memberId);
+    }
+
+    private void requireRespondent(Long memberId) {
+        if (!respondentId.equals(memberId))
+            throw new IllegalStateException("only respondent can respond");
+    }
+
+    private void requireProposed() {
+        if (status != AppointmentStatus.PROPOSED) {
+            throw new IllegalStateException("appointment is not proposed");
+        }
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public Long getChatRoomId() {
+        return chatRoomId;
+    }
+
+    public Long getProposerId() {
+        return proposerId;
+    }
+
+    public Long getRespondentId() {
+        return respondentId;
+    }
+
+    public AppointmentStatus getStatus() {
+        return status;
+    }
+
+    public LocalDateTime getScheduledAt() {
+        return scheduledAt;
+    }
+
+    public String getMemo() {
+        return memo;
+    }
+
+    public String getCancelReason() {
+        return cancelReason;
+    }
+
+    public LocalDateTime getRespondedAt() {
+        return respondedAt;
+    }
+
+    public LocalDateTime getCompletedAt() {
+        return completedAt;
+    }
 }

@@ -25,3 +25,27 @@ groups:
         labels: { severity: warning }
         annotations:
           summary: A container restarted repeatedly
+      - alert: CoturnUnavailable
+        expr: up{job="coturn"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: Coturn TURN relay is unavailable
+      - alert: DatabaseBackupFailed
+        expr: limit_backup_last_exit_code != 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: The most recent database backup failed
+      - alert: DatabaseBackupStale
+        expr: time() - limit_backup_last_success_timestamp_seconds > 90000
+        for: 15m
+        labels: { severity: critical }
+        annotations:
+          summary: No successful database backup was recorded in the last 25 hours
+      - alert: DatabaseBackupMetricsMissing
+        expr: absent(limit_backup_last_exit_code)
+        for: 2h
+        labels: { severity: warning }
+        annotations:
+          summary: Database backup metrics are missing

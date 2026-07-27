@@ -16,10 +16,24 @@ x-backend-environment: &backend-environment
   OAUTH_STATE_TTL: ${OAUTH_STATE_TTL:-10m}
   SOCIAL_SIGNUP_TTL: ${SOCIAL_SIGNUP_TTL:-15m}
   JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+  RTC_ALLOWED_ORIGIN_PATTERNS: ${RTC_ALLOWED_ORIGIN_PATTERNS:-https://l1mit.shop,https://www.l1mit.shop}
+  RTC_STUN_URL: ${RTC_STUN_URL:-stun:stun.l.google.com:19302}
+  RTC_TURN_URL: ${RTC_TURN_URL:-turn:api.l1mit.shop:3478?transport=udp}
+  RTC_TURN_USERNAME: ${RTC_TURN_USERNAME:?RTC_TURN_USERNAME is required}
+  RTC_TURN_CREDENTIAL: ${RTC_TURN_CREDENTIAL:?RTC_TURN_CREDENTIAL is required}
   EMAIL_VERIFICATION_STORE: redis
   EMAIL_VERIFICATION_DELIVERY_ENABLED: ${EMAIL_VERIFICATION_DELIVERY_ENABLED:-false}
   EMAIL_VERIFICATION_TTL: ${EMAIL_VERIFICATION_TTL:-15m}
   FRONTEND_EMAIL_VERIFICATION_URL: ${FRONTEND_EMAIL_VERIFICATION_URL:-https://l1mit.shop/verify-email}
+  AUTH_RATE_LIMIT_STORE: ${AUTH_RATE_LIMIT_STORE:-redis}
+  EMAIL_VERIFICATION_RATE_LIMIT_MAX_ATTEMPTS: ${EMAIL_VERIFICATION_RATE_LIMIT_MAX_ATTEMPTS:-3}
+  EMAIL_VERIFICATION_RATE_LIMIT_WINDOW: ${EMAIL_VERIFICATION_RATE_LIMIT_WINDOW:-10m}
+  PASSWORD_RESET_STORE: ${PASSWORD_RESET_STORE:-redis}
+  PASSWORD_RESET_DELIVERY_ENABLED: ${PASSWORD_RESET_DELIVERY_ENABLED:-false}
+  PASSWORD_RESET_TTL: ${PASSWORD_RESET_TTL:-15m}
+  FRONTEND_PASSWORD_RESET_URL: ${FRONTEND_PASSWORD_RESET_URL:-https://l1mit.shop/reset-password}
+  PASSWORD_RESET_RATE_LIMIT_MAX_ATTEMPTS: ${PASSWORD_RESET_RATE_LIMIT_MAX_ATTEMPTS:-3}
+  PASSWORD_RESET_RATE_LIMIT_WINDOW: ${PASSWORD_RESET_RATE_LIMIT_WINDOW:-10m}
   MAIL_HOST: ${MAIL_HOST:-}
   MAIL_PORT: ${MAIL_PORT:-587}
   MAIL_USERNAME: ${MAIL_USERNAME:-}
@@ -58,8 +72,6 @@ x-backend-environment: &backend-environment
   TERMS_PRIVACY_VERSION: ${TERMS_PRIVACY_VERSION:-2026-07-22}
   TERMS_AGE_VERSION: ${TERMS_AGE_VERSION:-2026-07-22}
   TERMS_MARKETING_VERSION: ${TERMS_MARKETING_VERSION:-2026-07-22}
-  QDRANT_URL: http://qdrant:6333
-  QDRANT_API_KEY: ${QDRANT_API_KEY:?QDRANT_API_KEY is required}
   SPRINGDOC_API_DOCS_ENABLED: "true"
   SPRINGDOC_SWAGGER_UI_ENABLED: "true"
 
@@ -73,7 +85,6 @@ services:
       mysql: { condition: service_healthy }
       mongodb: { condition: service_healthy }
       redis: { condition: service_healthy }
-      qdrant: { condition: service_healthy }
     ports: ["127.0.0.1:8081:8080"]
     networks: [app, data]
     healthcheck: &backend-healthcheck
@@ -97,7 +108,6 @@ services:
       mysql: { condition: service_healthy }
       mongodb: { condition: service_healthy }
       redis: { condition: service_healthy }
-      qdrant: { condition: service_healthy }
     ports: ["127.0.0.1:8082:8080"]
     networks: [app, data]
     healthcheck: *backend-healthcheck
@@ -105,15 +115,40 @@ services:
     cpus: 1.0
     logging: *default-logging
 
+  coturn:
+    image: coturn/coturn:4.11.0-r0
+    profiles: [rtc]
+    restart: unless-stopped
+    command:
+      - -n
+      - --log-file=stdout
+      - --fingerprint
+      - --lt-cred-mech
+      - --realm=${RTC_TURN_REALM:-l1mit.shop}
+      - --user=${RTC_TURN_USERNAME:?RTC_TURN_USERNAME is required}:${RTC_TURN_CREDENTIAL:?RTC_TURN_CREDENTIAL is required}
+      - --min-port=49160
+      - --max-port=49200
+      - --no-cli
+      - --no-multicast-peers
+      - --prometheus
+    ports:
+      - "3478:3478"
+      - "3478:3478/udp"
+      - "49160-49200:49160-49200/udp"
+    networks: [app]
+    mem_limit: 256m
+    cpus: 0.5
+    logging: *default-logging
+
   prometheus:
     image: prom/prometheus:v3.4.1
     profiles: [observability]
     restart: unless-stopped
+    group_add: ["${MONITORING_SECRET_GID:-1000}"]
     command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=7d", "--storage.tsdb.retention.size=8GB"]
     volumes:
       - ./monitoring/prometheus:/etc/prometheus:ro
       - prometheus-data:/prometheus
-    secrets: [qdrant-api-key]
     networks: [app, data]
     mem_limit: 1g
     cpus: 0.5
@@ -159,6 +194,7 @@ services:
     image: prom/alertmanager:v0.28.1
     profiles: [observability]
     restart: unless-stopped
+    group_add: ["${MONITORING_SECRET_GID:-1000}"]
     command: ["--config.file=/etc/alertmanager/config.yml"]
     volumes: ["./monitoring/alertmanager/config.yml:/etc/alertmanager/config.yml:ro"]
     secrets: [alertmanager-smtp-password]
@@ -171,8 +207,12 @@ services:
     image: prom/node-exporter:v1.9.1
     profiles: [observability]
     restart: unless-stopped
-    command: ["--path.rootfs=/host"]
-    volumes: ["/:/host:ro,rslave"]
+    command:
+      - --path.rootfs=/host
+      - --collector.textfile.directory=/var/lib/node_exporter/textfile_collector
+    volumes:
+      - /:/host:ro,rslave
+      - ./state/node-exporter:/var/lib/node_exporter/textfile_collector:ro
     networks: [app]
     mem_limit: 128m
     cpus: 0.25
@@ -214,6 +254,7 @@ services:
     image: prom/mysqld-exporter:v0.17.2
     profiles: [observability]
     restart: unless-stopped
+    group_add: ["${MONITORING_SECRET_GID:-1000}"]
     command: ["--config.my-cnf=/run/secrets/mysql-exporter-config"]
     secrets: [mysql-exporter-config]
     networks: [app, data]
@@ -271,7 +312,5 @@ volumes:
 secrets:
   mysql-exporter-config:
     file: ${MYSQL_EXPORTER_CONFIG_FILE:-./secrets/mysql-exporter.my.cnf.example}
-  qdrant-api-key:
-    file: ${QDRANT_API_KEY_FILE:-./secrets/qdrant-api-key.example}
   alertmanager-smtp-password:
     file: ${ALERTMANAGER_SMTP_PASSWORD_FILE:-./secrets/alertmanager-smtp-password.example}

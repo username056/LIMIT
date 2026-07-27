@@ -38,6 +38,13 @@ logging:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{traceId:-no-trace}] %logger{36} - %msg%n"
 
 limit:
+  time-zone: ${APPLICATION_TIME_ZONE:Asia/Seoul}
+  rtc:
+    allowed-origin-patterns: ${RTC_ALLOWED_ORIGIN_PATTERNS:http://localhost:5173}
+    stun-url: ${RTC_STUN_URL:stun:stun.l.google.com:19302}
+    turn-url: ${RTC_TURN_URL:}
+    turn-username: ${RTC_TURN_USERNAME:}
+    turn-credential: ${RTC_TURN_CREDENTIAL:}
   auth:
     cookie:
       secure: ${AUTH_COOKIE_SECURE:false}
@@ -75,6 +82,19 @@ limit:
       ttl: ${EMAIL_VERIFICATION_TTL:15m}
       verify-url: ${FRONTEND_EMAIL_VERIFICATION_URL:http://localhost:5173/verify-email}
       from: ${MAIL_FROM:no-reply@limit.local}
+    password-reset:
+      store: ${PASSWORD_RESET_STORE:memory}
+      delivery-enabled: ${PASSWORD_RESET_DELIVERY_ENABLED:false}
+      ttl: ${PASSWORD_RESET_TTL:15m}
+      reset-url: ${FRONTEND_PASSWORD_RESET_URL:http://localhost:5173/reset-password}
+    rate-limit:
+      store: ${AUTH_RATE_LIMIT_STORE:memory}
+      email-verification:
+        max-attempts: ${EMAIL_VERIFICATION_RATE_LIMIT_MAX_ATTEMPTS:3}
+        window: ${EMAIL_VERIFICATION_RATE_LIMIT_WINDOW:10m}
+      password-reset:
+        max-attempts: ${PASSWORD_RESET_RATE_LIMIT_MAX_ATTEMPTS:3}
+        window: ${PASSWORD_RESET_RATE_LIMIT_WINDOW:10m}
   bootstrap:
     admin:
       enabled: ${INITIAL_ADMIN_ENABLED:false}
@@ -98,10 +118,6 @@ limit:
   security:
     jwt:
       secret: ${JWT_SECRET:local-only-change-this-jwt-secret-32bytes}
-  qdrant:
-    url: ${QDRANT_URL:http://localhost:6333}
-    api-key: ${QDRANT_API_KEY:}
-
 springdoc:
   api-docs:
     enabled: false
@@ -116,6 +132,8 @@ springdoc:
       packages-to-scan: com.c203.limit.domain.chat.controller
     - group: 05-product
       packages-to-scan: com.c203.limit.domain.product.controller
+    - group: 06-rtc
+      packages-to-scan: com.c203.limit.domain.rtc.controller
   swagger-ui:
     enabled: false
     disable-swagger-default-url: true

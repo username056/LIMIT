@@ -42,7 +42,6 @@ function Initialize-LocalEnvironment {
     $mysqlRootPassword = New-RandomValue
     $mongodbPassword = New-RandomValue
     $redisPassword = New-RandomValue
-    $qdrantApiKey = New-RandomValue
     $lines = @(
         'MYSQL_DATABASE=limit'
         'MYSQL_USER=limit'
@@ -54,7 +53,6 @@ function Initialize-LocalEnvironment {
         "MONGODB_ROOT_PASSWORD=$mongodbPassword"
         "MONGODB_URI=mongodb://root:${mongodbPassword}@mongodb:27017/limit?authSource=admin"
         "REDIS_PASSWORD=$redisPassword"
-        "QDRANT_API_KEY=$qdrantApiKey"
         "JWT_SECRET=$(New-RandomValue)$(New-RandomValue)"
         'REFRESH_TOKEN_STORE=redis'
         'EMAIL_VERIFICATION_STORE=redis'

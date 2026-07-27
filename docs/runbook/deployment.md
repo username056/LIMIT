@@ -35,7 +35,23 @@ test -f /var/run/reboot-required && cat /var/run/reboot-required
 
 서버의 배포 사용자로 Docker Hub private repository에 로그인해 image pull을 확인한다. CI에는 read/write 범위의 전용 Personal Access Token을 사용하고, 서버에는 별도로 발급한 read-only token을 서버 전용 Docker credential store에 보관한다. 개인 비밀번호나 하나의 token을 CI와 서버에서 공유하지 않는다.
 
-`infra/.env`는 서버에서 600 권한으로 생성하고 `.env.example`의 변수 이름만 참고한다. Mongo URI에는 사용자명·비밀번호와 `authSource=admin`을 포함한다. exporter용 MySQL client 파일과 Qdrant API key 파일도 서버 전용 경로에 600 권한으로 만들고 다음 변수로 연결한다.
+`infra/.env`는 서버에서 600 권한으로 생성하고 `.env.example`의 변수 이름만 참고한다. Mongo URI에는 사용자명·비밀번호와 `authSource=admin`을 포함한다. exporter용 MySQL client 파일은 서버 전용 경로에 640 권한으로 만들고, 소유 그룹 ID를 `MONITORING_SECRET_GID`로 지정한다. MySQL exporter에만 이 보조 그룹을 부여해 다른 사용자와 컨테이너의 읽기를 막는다.
+
+운영 환경변수 한두 개를 수정할 때는 로컬 PowerShell에서 `scripts/apply-ec2-env.ps1`에
+`KEY=VALUE`를 직접 전달한다. 값은 SSH의 stdin으로만 전송되고 출력하지 않으며, 원격
+파일은 600 권한의 백업을 만든 뒤 같은 파일시스템에서 원자적으로 교체한다. 교체 전
+`docker compose config --quiet` 검증에 실패하면 기존 파일을 유지한다.
+
+```powershell
+.\scripts\apply-ec2-env.ps1 'MAIL_HOST=smtp.example.test' 'MAIL_PORT=587'
+.\scripts\apply-ec2-env.ps1 'MAIL_HOST=smtp.example.test' -DryRun
+```
+
+명령행에 입력한 값은 PowerShell history에 남을 수 있다. Secret은 인자 없이 스크립트를
+실행한 뒤 `KEY=VALUE`를 대화형으로 붙여넣는 방식을 우선한다. 기본적으로 `.env.example`
+또는 Compose 계약에 선언된 키만 허용하며, 새 계약을 먼저 코드에 반영할 수 없는 긴급한
+경우에만 `-AllowUnknownKey`를 사용한다. 파일 변경은 실행 중인 컨테이너 환경을 바꾸지
+않으며 다음 Blue-Green 배포부터 적용된다.
 
 Spring profile은 `local`, `prod`만 사용한다. Compose도 `compose.yml` base와 `compose.local.yml`, `compose.prod.yml`만 유지한다. Testcontainers 테스트는 별도 profile 없이 동적 접속 정보를 주입한다.
 
@@ -43,8 +59,18 @@ Spring profile은 `local`, `prod`만 사용한다. Compose도 `compose.yml` base
 
 ```text
 MYSQL_EXPORTER_CONFIG_FILE=/opt/limit-secrets/mysql-exporter.my.cnf
-QDRANT_API_KEY_FILE=/opt/limit-secrets/qdrant-api-key
+MONITORING_SECRET_GID=1000
 ```
+
+`infra/monitoring/**/*` 또는 `infra/nginx/limit.conf` 변경은 `monitoring_deploy_prod`가 백엔드 이미지를 다시 빌드하지 않고 모니터링 파일만 동기화한다. 원격 `deploy-monitoring.sh`는 Compose 유효성을 검사하고 관측 컨테이너만 기동·재시작하며, Nginx 설정은 기존 파일을 백업한 뒤 `nginx -t`를 통과해야 reload한다. 검증 실패 시 백업 파일을 즉시 복원하고, Grafana·Prometheus·Loki readiness는 제한된 횟수만큼 재시도한다. `infra/compose*.yml`처럼 앱과 관측 스택이 함께 참조하는 파일은 기존 백엔드 배포와 모니터링 배포가 모두 직렬화된 `limit-prod` resource group에서 처리한다.
+
+`monitoring_deploy_prod`의 GitLab environment 이름은 기존 배포 job과 동일한 `production`을 사용한다. `SSH_KNOWN_HOSTS`, `DEPLOY_SSH_PRIVATE_KEY` 등 protected file variable이 `production` scope로 제한되어 있으므로 별도 하위 environment 이름으로 변경하지 않는다.
+
+`/actuator/prometheus`는 애플리케이션 보안 필터에서는 인증 없이 허용하지만 외부 공개 엔드포인트가 아니다. 운영 백엔드 포트는 `127.0.0.1`에만 publish하고, Nginx는 `/api/v1/`과 제한된 health 경로만 프록시하며 그 밖의 `/actuator/**` 요청은 404로 차단한다. Prometheus만 Docker `app` 네트워크에서 백엔드 컨테이너 주소로 scrape한다.
+
+Nginx 설정 원복에서 `CRITICAL` 오류가 나더라도 reload 전이므로 기존 worker는 마지막 정상 설정으로 계속 서비스한다. 운영자는 `infra/state/limit.conf.monitoring.previous`를 활성 include 경로인 `/etc/nginx/conf.d/limit.conf`에 다시 설치하고 `sudo nginx -t`를 통과한 뒤에만 `sudo systemctl reload nginx`를 실행한다.
+
+아키텍처 대시보드 아이콘은 Grafana와 같은 origin의 `https://grafana.l1mit.shop/limit-assets/*.svg`를 사용한다. 이 URL은 Nginx에서 정적 자산으로 제공하며 배포 후 HTTP 200을 확인한다. 아이콘 로딩 실패는 시각화에만 영향을 주고 메트릭 수집에는 영향을 주지 않는다.
 
 ## 4. Compose 기동
 
@@ -61,13 +87,13 @@ docker compose --env-file infra/.env -p limit-local \
 
 ```bash
 docker compose --env-file infra/.env -p limit-prod \
-  -f infra/compose.yml -f infra/compose.prod.yml up -d mysql mongodb redis qdrant
+  -f infra/compose.yml -f infra/compose.prod.yml up -d mysql mongodb redis
 
 docker compose --env-file infra/.env -p limit-prod \
   -f infra/compose.yml -f infra/compose.prod.yml --profile observability up -d
 ```
 
-최초 EC2 bootstrap에서는 실제 비밀값을 저장소에 넣지 않고 서버에서 생성한 뒤 데이터 계층, 첫 blue 백엔드와 핵심 관측 서비스를 기동한다. MySQL exporter는 별도 최소권한 계정이 승인·생성되기 전에는 시작하지 않는다.
+최초 EC2 bootstrap에서는 실제 비밀값을 저장소에 넣지 않고 서버에서 생성한 뒤 데이터 계층, 첫 blue 백엔드와 핵심 관측 서비스를 기동한다. MongoDB·Redis exporter는 함께 기동하고, MySQL exporter는 별도 최소권한 계정이 승인·생성되기 전에는 시작하지 않는다.
 
 ```bash
 bash scripts/bootstrap-ec2-stack.sh
@@ -126,6 +152,10 @@ Flyway 마이그레이션이 포함된 MR은 병합 즉시 운영 DB에 적용�
 
 ## 7. 장애 확인과 로그
 
+브라우저 JavaScript·Vue 오류는 [프론트엔드 Sentry 오류 모니터링](frontend-sentry.md)에
+따라 Sentry Issues에서 확인한다. Nginx 접근 로그는 아래 Grafana Loki 절차를
+사용한다.
+
 ```bash
 docker compose --env-file infra/.env -p limit-prod \
   -f infra/compose.yml -f infra/compose.prod.yml ps
@@ -139,13 +169,14 @@ Grafana는 `https://grafana.l1mit.shop`에서 로그인하거나 장애 시 SSH 
 
 ## 8. 백업과 복구 훈련
 
+자동 백업, 격리 복구 훈련, Alertmanager 전송 테스트와 Route 53 외부 uptime 구성은 [DB 백업·복구·알림·외부 uptime Runbook](./backup-alert-uptime.md)을 따른다.
+
 - MySQL: 일관성 옵션을 적용한 `mysqldump`를 압축한다.
 - MongoDB: `mongodump --archive --gzip`을 사용한다.
-- Qdrant: collections별 snapshot API를 사용한다.
 - Redis: 영속 데이터가 재생성 불가능한 경우 RDB/AOF 사본을 포함한다.
 - 결과물은 SSE-KMS가 적용된 별도 S3 버킷에 올리고 로컬 임시본을 제거한다. lifecycle 보존 기간과 실패 알림을 설정한다.
 
-월 1회 격리된 Compose project와 별도 볼륨에 최신 백업을 복원하고 행 수·대표 쿼리·Qdrant collection/vector 수·애플리케이션 smoke를 검증한다. 현재 S3 버킷, KMS, IAM, 보존 주기와 실제 데이터가 제공되지 않았으므로 자동 백업 실행과 restore drill은 미완료다. 이 작업은 IAM/운영 데이터 변경 승인을 받은 뒤 수행한다.
+월 1회 격리된 Compose project와 별도 볼륨에 최신 백업을 복원하고 행 수·대표 쿼리·MongoDB 문서 및 vector 필드 수·애플리케이션 smoke를 검증한다. 현재 S3 버킷, KMS, IAM, 보존 주기와 실제 데이터가 제공되지 않았으므로 자동 백업 실행과 restore drill은 미완료다. 이 작업은 IAM/운영 데이터 변경 승인을 받은 뒤 수행한다.
 
 MySQL exporter 전용 최소권한 계정 생성도 운영 DB 변경 승인 후 수행한다. `PROCESS`, `REPLICATION CLIENT`, `SELECT`만 필요한 범위로 부여하고 exporter client 파일에 기록하며 애플리케이션 계정이나 root 계정을 재사용하지 않는다.
 
@@ -161,6 +192,7 @@ MySQL exporter 전용 최소권한 계정 생성도 운영 DB 변경 승인 후 
 - `backend_coverage`가 두 execution data를 합산해 coverage report와 검증 완료 JAR을 생성하고, `backend/Dockerfile.ci`가 해당 JAR을 이미지에 넣는다. CI 이미지 단계에서 Gradle 빌드를 다시 실행하지 않는다.
 - `backend_image`는 unit, integration, coverage 작업이 모두 성공해야 시작하며 SonarQube 완료는 기다리지 않는다.
 - `dependency_check`는 Merge Request에서는 실행되지 않으며 오직 GitLab Pipeline Schedule(예: 매주 1회)로만 동작하므로 프로젝트 설정에서 Schedule을 등록해야 한다. 새 의존성의 취약점은 다음 스케줄 실행 시 발견되어 최대 1주 지연될 수 있다. NVD 캐시(`.gradle/dependency-check-data`)는 최초 실행 시에만 느리고 이후에는 변경분만 받는다.
+- `NVD_API_KEY`는 미국 NVD 취약점 데이터 API 호출 한도를 높이기 위한 키다. NVD에서 발급받아 GitLab의 masked/protected CI/CD 변수로 등록하며 저장소나 서버 `.env`에는 넣지 않는다.
 - PR Agent는 strategy가 없는 child pipeline에서 비동기로 실행한다. child 실패·취소는 부모 MR pipeline과 병합을 막지 않으며, 긴급한 경우 pipeline 변수 `SKIP_PR_AGENT=true`로 child 생성을 생략한다.
 - 2026-07-20 로컬 `--rerun-tasks` 기준 기존 직렬 test+integration+coverage는 81초였다. 분리 후 unit 48초와 integration 53초를 병렬 실행하고 coverage/JAR 12초를 이어 실행해 예상 critical path는 약 65초로, 약 20% 단축됐다. 실제 Runner 시간은 Merge Request pipeline에서 계속 기록한다.
 - `sonar-project.properties`만 변경되면 전체 테스트 대신 Sonar 분석에 필요한 `classes`만 생성한다. Secret guard는 생략하지 않고 테스트 job과 병렬로 실행한다.

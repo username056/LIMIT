@@ -31,7 +31,10 @@ import com.c203.limit.domain.admin.repository.AdminAccountRepository;
 import com.c203.limit.domain.admin.repository.AdminActionLogRepository;
 import com.c203.limit.domain.admin.repository.MemberRestrictionRepository;
 import com.c203.limit.domain.product.repository.ListingRepository;
+import com.c203.limit.domain.product.repository.WishlistRepository;
 import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
+import com.c203.limit.domain.product.service.ProductApplicationService;
+import com.c203.limit.domain.product.service.ProductCatalogService;
 
 @SpringBootTest(properties = {
         "management.endpoint.health.validate-group-membership=false",
@@ -47,6 +50,9 @@ import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
 @AutoConfigureMockMvc
 @ActiveProfiles("local")
 class OpenApiContractTests {
+
+    @MockitoBean
+    com.c203.limit.domain.rtc.service.RtcCallService rtcCallService;
 
     @MockitoBean
     JpaMetamodelMappingContext jpaMetamodelMappingContext;
@@ -85,6 +91,15 @@ class OpenApiContractTests {
     ListingRepository listingRepository;
 
     @MockitoBean
+    WishlistRepository wishlistRepository;
+
+    @MockitoBean
+    ProductApplicationService productApplicationService;
+
+    @MockitoBean
+    ProductCatalogService productCatalogService;
+
+    @MockitoBean
     ListingStatusHistoryRepository listingStatusHistoryRepository;
 
     @Autowired
@@ -113,13 +128,22 @@ class OpenApiContractTests {
                 .andExpect(jsonPath("$.paths['/api/v1/auth/social-authorizations/{provider}']").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/auth/social-signups']").exists())
                 .andExpect(jsonPath("$.components.schemas.EmailVerificationRequest").exists())
+                .andExpect(jsonPath("$.components.schemas.PasswordResetRequest").exists())
+                .andExpect(jsonPath("$.components.schemas.ResetPasswordRequest").exists())
                 .andExpect(jsonPath("$.components.schemas.AdminLoginRequest").exists())
+                .andExpect(jsonPath("$.components.schemas.ChangeAdminPasswordRequest").exists())
                 .andExpect(jsonPath("$.components.schemas.MemberProfileResponse").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/admin/members']").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/admin/me/password']").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/auth/password-reset-requests']").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/auth/password-resets']").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/products'].post.operationId").value("product01"))
                 .andExpect(jsonPath("$.paths['/api/v1/products'].get.operationId").value("product04"))
                 .andExpect(jsonPath("$.components.schemas.CreateProductRequest").exists())
-                .andExpect(jsonPath("$.components.schemas.ProductDetailResponse").exists());
+                .andExpect(jsonPath("$.components.schemas.ProductDetailResponse").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/chat-rooms/{roomId}/calls'].post").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/rtc-sessions/{sessionId}/join'].post").exists())
+                .andExpect(jsonPath("$.components.schemas.EndRtcSessionRequest").exists());
     }
 
     @Test
@@ -169,9 +193,15 @@ class OpenApiContractTests {
                         .value("checklist02"))
                 .andExpect(jsonPath("$.paths['/api/v1/auth/sessions']").doesNotExist());
 
+        mockMvc.perform(get("/v3/api-docs/06-rtc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['/api/v1/chat-rooms/{roomId}/calls'].post").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/rtc-sessions/{sessionId}/join'].post").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/auth/sessions']").doesNotExist());
+
         mockMvc.perform(get("/v3/api-docs/swagger-config"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.urls.length()").value(5))
+                .andExpect(jsonPath("$.urls.length()").value(6))
                 .andExpect(jsonPath("$['urls.primaryName']").value("01-auth"))
                 .andExpect(jsonPath("$.operationsSorter", containsString("post: 0")))
                 .andExpect(jsonPath("$.operationsSorter", containsString("delete: 4")));

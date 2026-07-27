@@ -63,24 +63,6 @@ services:
     cpus: 0.5
     logging: *default-logging
 
-  qdrant:
-    image: qdrant/qdrant:v1.14.1
-    restart: unless-stopped
-    environment:
-      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:?QDRANT_API_KEY is required}
-    volumes:
-      - qdrant-data:/qdrant/storage
-    networks: [data]
-    healthcheck:
-      test: ["CMD-SHELL", "bash -c ': > /dev/tcp/127.0.0.1/6333'"]
-      interval: 10s
-      timeout: 3s
-      retries: 10
-      start_period: 20s
-    mem_limit: 1536m
-    cpus: 0.75
-    logging: *default-logging
-
 networks:
   app:
   data:
@@ -90,4 +72,3 @@ volumes:
   mysql-data:
   mongodb-data:
   redis-data:
-  qdrant-data:
