@@ -26,8 +26,10 @@ import com.c203.limit.domain.rtc.repository.RtcSessionRepository;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -130,7 +132,7 @@ public class RtcCallService {
             }
             appointment.accept(memberId);
         } catch (IllegalStateException exception) {
-            throw new BusinessException(ErrorCode.CHAT_ROOM_CREATION_NOT_ALLOWED);
+            throw new BusinessException(ErrorCode.RTC_INVALID_STATE);
         }
         ChatRoom room = room(appointment.getChatRoomId(), memberId);
         RtcSession session =
@@ -154,14 +156,10 @@ public class RtcCallService {
         return sessionResponse(session(sessionId, memberId));
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public RtcJoinResponse join(Long sessionId, Long memberId) {
         RtcSession session = session(sessionId, memberId);
-        if (session.getStatus() == RtcSessionStatus.ENDED
-                || session.getStatus() == RtcSessionStatus.EXPIRED
-                || session.getExpiresAt().isBefore(LocalDateTime.now())) {
-            throw new BusinessException(ErrorCode.CHAT_ROOM_CREATION_NOT_ALLOWED);
-        }
+        ensureJoinable(session, LocalDateTime.now());
         var ticket = tokenStore.issue(sessionId, memberId);
         return new RtcJoinResponse(
                 sessionId,
@@ -176,12 +174,13 @@ public class RtcCallService {
     public RtcSessionResponse connected(
             Long sessionId, Long memberId, MarkRtcConnectedRequest request) {
         RtcSession session = session(sessionId, memberId);
+        ensureJoinable(session, LocalDateTime.now());
         try {
             session.connect(
                     ConnectionType.valueOf(
                             request.connectionType() == null ? "P2P" : request.connectionType()));
-        } catch (IllegalStateException exception) {
-            throw new BusinessException(ErrorCode.CHAT_ROOM_CREATION_NOT_ALLOWED);
+        } catch (IllegalArgumentException | IllegalStateException exception) {
+            throw new BusinessException(ErrorCode.RTC_INVALID_STATE);
         }
         return sessionResponse(session);
     }
@@ -189,8 +188,20 @@ public class RtcCallService {
     @Transactional
     public RtcSessionResponse end(Long sessionId, Long memberId, EndRtcSessionRequest request) {
         RtcSession session = session(sessionId, memberId);
+        if (session.getStatus() == RtcSessionStatus.EXPIRED) {
+            throw new BusinessException(ErrorCode.RTC_SESSION_EXPIRED);
+        }
+        if (session.getStatus() == RtcSessionStatus.ENDED) {
+            return sessionResponse(session);
+        }
         List<com.c203.limit.domain.rtc.dto.request.RtcChecklistResultRequest> requested =
                 request.checklistResults() == null ? List.of() : request.checklistResults();
+        Set<Long> requestedItemIds = new HashSet<>();
+        if (requested.stream()
+                .map(item -> item.checklistItemId())
+                .anyMatch(itemId -> !requestedItemIds.add(itemId))) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
         Map<Long, ListingChecklistItem> validItems =
                 checklistRepository
                         .findByListingIdOrderByDisplayOrderAsc(session.getListingId())
@@ -258,11 +269,24 @@ public class RtcCallService {
         RtcSession session =
                 sessionRepository
                         .findById(sessionId)
-                        .orElseThrow(() -> new BusinessException(ErrorCode.LISTING_NOT_FOUND));
+                        .orElseThrow(() -> new BusinessException(ErrorCode.RTC_SESSION_NOT_FOUND));
         if (!session.isParticipant(memberId)) {
-            throw new BusinessException(ErrorCode.CHAT_ROOM_ACCESS_DENIED);
+            throw new BusinessException(ErrorCode.RTC_SESSION_ACCESS_DENIED);
         }
         return session;
+    }
+
+    private void ensureJoinable(RtcSession session, LocalDateTime now) {
+        if (session.getStatus() == RtcSessionStatus.EXPIRED) {
+            throw new BusinessException(ErrorCode.RTC_SESSION_EXPIRED);
+        }
+        if (session.getStatus() == RtcSessionStatus.ENDED) {
+            throw new BusinessException(ErrorCode.RTC_SESSION_CLOSED);
+        }
+        if (session.getExpiresAt() == null || !session.getExpiresAt().isAfter(now)) {
+            session.expireIfDue(now);
+            throw new BusinessException(ErrorCode.RTC_SESSION_EXPIRED);
+        }
     }
 
     private CallResponse callResponse(

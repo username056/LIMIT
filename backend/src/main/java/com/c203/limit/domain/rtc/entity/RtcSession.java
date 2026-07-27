@@ -110,6 +110,21 @@ public class RtcSession {
         endedAt = LocalDateTime.now();
     }
 
+    public boolean expireIfDue(LocalDateTime now) {
+        if (status == RtcSessionStatus.ENDED || status == RtcSessionStatus.EXPIRED) return false;
+        if (expiresAt != null && expiresAt.isAfter(now)) {
+            return false;
+        }
+        status = RtcSessionStatus.EXPIRED;
+        endReason = RtcEndReason.TIMEOUT;
+        endedAt = now;
+        return true;
+    }
+
+    public boolean isClosed() {
+        return status == RtcSessionStatus.ENDED || status == RtcSessionStatus.EXPIRED;
+    }
+
     public boolean isParticipant(Long memberId) {
         return sellerId.equals(memberId) || buyerId.equals(memberId);
     }
