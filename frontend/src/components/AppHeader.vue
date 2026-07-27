@@ -37,7 +37,7 @@ async function submitSearch() {
   if (!query) return
   await router.push({
     name: 'products',
-    query: { keyword: query },
+    query: { q: query },
   })
 }
 

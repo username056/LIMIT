@@ -31,6 +31,7 @@ const isSaving = ref(false)
 const errorMessage = ref('')
 const notice = ref('')
 const editingId = ref(null)
+const activeStep = ref(1)
 const pageMeta = ref({ page: 0, totalPages: 0, hasNext: false })
 const form = reactive({
   categoryId: '', deviceModelId: '', name: '', description: '', price: '',
@@ -39,11 +40,34 @@ const form = reactive({
 
 function resetForm() {
   editingId.value = null
+  activeStep.value = 1
   Object.assign(form, {
     categoryId: '', deviceModelId: '', name: '', description: '', price: '',
     color: '', storageGb: '', tradeRegion: '',
   })
   models.value = []
+}
+
+function goToNextStep() {
+  errorMessage.value = ''
+  if (activeStep.value === 1 && (!form.categoryId || !form.deviceModelId)) {
+    errorMessage.value = '카테고리와 기기 모델을 선택해 주세요.'
+    return
+  }
+  if (activeStep.value === 2 && (!form.name || form.price === '' || !form.tradeRegion)) {
+    errorMessage.value = '상품명, 가격, 거래 지역을 입력해 주세요.'
+    return
+  }
+  if (activeStep.value === 2 && (!Number.isFinite(Number(form.price)) || Number(form.price) < 1)) {
+    errorMessage.value = '가격은 1원 이상 입력해 주세요.'
+    return
+  }
+  if (activeStep.value === 2 && form.storageGb !== ''
+    && (!Number.isFinite(Number(form.storageGb)) || Number(form.storageGb) < 1)) {
+    errorMessage.value = '저장 용량은 1GB 이상 입력해 주세요.'
+    return
+  }
+  activeStep.value = Math.min(3, activeStep.value + 1)
 }
 
 async function loadProducts(page = 0) {
@@ -110,6 +134,7 @@ async function startEdit(productId) {
   try {
     const product = await getMyProduct(productId)
     editingId.value = productId
+    activeStep.value = 2
     Object.assign(form, {
       categoryId: product.category?.categoryId || '',
       deviceModelId: product.device?.deviceModelId || '',
@@ -161,101 +186,238 @@ onMounted(async () => {
 
 <template>
   <SidebarLayout :sidebar-items="sidebarItems">
-    <section class="mb-8 rounded-lg border border-border bg-surface p-6">
-      <div class="mb-5 flex items-center justify-between">
+    <section class="mb-10 overflow-hidden rounded-lg border border-border bg-surface shadow-card">
+      <div class="flex flex-col gap-5 border-b border-border bg-bg px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 class="text-xl font-bold text-text-main">
+          <p class="text-xs font-bold uppercase tracking-[0.16em] text-primary">
+            Sell your device
+          </p>
+          <h1 class="mt-1 text-2xl font-bold text-text-main">
             {{ editingId ? '상품 수정' : '상품 등록' }}
           </h1>
           <p class="mt-1 text-sm text-text-sub">
-            기기 모델과 거래 정보를 입력하면 초안으로 저장됩니다.
+            기기 정보와 거래 조건을 확인한 뒤 안전하게 초안으로 저장합니다.
           </p>
         </div>
         <button
           v-if="editingId"
           type="button"
-          class="text-sm text-primary"
+          class="text-sm font-semibold text-primary"
           @click="resetForm"
         >
           등록으로 돌아가기
         </button>
       </div>
+
+      <ol
+        class="grid grid-cols-3 border-b border-border"
+        aria-label="상품 등록 단계"
+      >
+        <li
+          v-for="step in [
+            { number: 1, label: '기기 선택' },
+            { number: 2, label: '판매 정보' },
+            { number: 3, label: '최종 확인' },
+          ]"
+          :key="step.number"
+          class="flex items-center justify-center gap-2 border-r border-border px-2 py-4 text-xs font-semibold last:border-r-0 sm:text-sm"
+          :class="activeStep >= step.number ? 'bg-accent text-primary' : 'text-text-sub'"
+        >
+          <span
+            class="flex h-6 w-6 items-center justify-center rounded-full text-xs"
+            :class="activeStep >= step.number ? 'bg-primary text-white' : 'bg-slate-100 text-text-sub'"
+          >{{ step.number }}</span>
+          {{ step.label }}
+        </li>
+      </ol>
+
       <form
-        class="grid gap-4 sm:grid-cols-2"
+        class="p-6 lg:p-8"
         @submit.prevent="submit"
       >
-        <label class="text-sm text-text-main">카테고리
-          <select
-            v-model="form.categoryId"
-            :disabled="Boolean(editingId)"
-            required
-            class="mt-1 w-full rounded-md border border-border bg-white px-3 py-2"
-            @change="loadModels"
-          >
-            <option value="">선택하세요</option><option
-              v-for="item in categories"
-              :key="item.categoryId"
-              :value="item.categoryId"
-            >{{ item.name }}</option>
-          </select>
-        </label>
-        <label class="text-sm text-text-main">기기 모델
-          <select
-            v-model="form.deviceModelId"
-            :disabled="Boolean(editingId)"
-            required
-            class="mt-1 w-full rounded-md border border-border bg-white px-3 py-2"
-          >
-            <option value="">선택하세요</option><option
-              v-for="item in models"
-              :key="item.deviceModelId"
-              :value="item.deviceModelId"
-            >{{ item.manufacturerName }} {{ item.modelName }}</option>
-          </select>
-        </label>
-        <label class="text-sm text-text-main">상품명<input
-          v-model.trim="form.name"
-          required
-          maxlength="100"
-          class="mt-1 w-full rounded-md border border-border px-3 py-2"
-        ></label>
-        <label class="text-sm text-text-main">가격<input
-          v-model="form.price"
-          required
-          min="1"
-          type="number"
-          class="mt-1 w-full rounded-md border border-border px-3 py-2"
-        ></label>
-        <label class="text-sm text-text-main">색상<input
-          v-model.trim="form.color"
-          maxlength="50"
-          class="mt-1 w-full rounded-md border border-border px-3 py-2"
-        ></label>
-        <label class="text-sm text-text-main">저장 용량(GB)<input
-          v-model="form.storageGb"
-          min="1"
-          type="number"
-          class="mt-1 w-full rounded-md border border-border px-3 py-2"
-        ></label>
-        <label class="text-sm text-text-main sm:col-span-2">거래 지역<input
-          v-model.trim="form.tradeRegion"
-          required
-          maxlength="100"
-          class="mt-1 w-full rounded-md border border-border px-3 py-2"
-        ></label>
-        <label class="text-sm text-text-main sm:col-span-2">설명<textarea
-          v-model.trim="form.description"
-          maxlength="2000"
-          rows="4"
-          class="mt-1 w-full rounded-md border border-border px-3 py-2"
-        /></label>
-        <BaseButton
-          type="submit"
-          :disabled="isSaving"
-          class="sm:col-span-2"
+        <section
+          v-if="activeStep === 1"
+          class="mx-auto max-w-2xl"
         >
-          {{ isSaving ? '저장 중…' : editingId ? '수정 저장' : '초안 등록' }}
-        </BaseButton>
+          <h2 class="text-lg font-bold text-text-main">
+            판매할 기기를 선택해 주세요.
+          </h2>
+          <p class="mt-1 text-sm text-text-sub">
+            선택한 모델에 맞는 검증 체크리스트가 자동으로 연결됩니다.
+          </p>
+          <div class="mt-6 grid gap-5 sm:grid-cols-2">
+            <label class="text-sm font-semibold text-text-main">카테고리
+              <select
+                v-model="form.categoryId"
+                :disabled="Boolean(editingId)"
+                required
+                class="mt-2 w-full rounded-md border border-border bg-bg px-3 py-3 font-normal outline-none focus:border-primary"
+                @change="loadModels"
+              >
+                <option value="">카테고리 선택</option><option
+                  v-for="item in categories"
+                  :key="item.categoryId"
+                  :value="item.categoryId"
+                >{{ item.name }}</option>
+              </select>
+            </label>
+            <label class="text-sm font-semibold text-text-main">기기 모델
+              <select
+                v-model="form.deviceModelId"
+                :disabled="Boolean(editingId) || !form.categoryId"
+                required
+                class="mt-2 w-full rounded-md border border-border bg-bg px-3 py-3 font-normal outline-none focus:border-primary disabled:opacity-60"
+              >
+                <option value="">기기 모델 선택</option><option
+                  v-for="item in models"
+                  :key="item.deviceModelId"
+                  :value="item.deviceModelId"
+                >{{ item.manufacturerName }} {{ item.modelName }}</option>
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <section v-else-if="activeStep === 2">
+          <h2 class="text-lg font-bold text-text-main">
+            판매 정보를 입력해 주세요.
+          </h2>
+          <p class="mt-1 text-sm text-text-sub">
+            구매자가 상품 상태와 거래 조건을 이해할 수 있도록 작성해 주세요.
+          </p>
+          <div class="mt-6 grid gap-5 sm:grid-cols-2">
+            <label class="text-sm font-semibold text-text-main">상품명<input
+              v-model.trim="form.name"
+              required
+              maxlength="100"
+              placeholder="예: 갤럭시 S24 256GB 자급제"
+              class="mt-2 w-full rounded-md border border-border px-3 py-3 font-normal outline-none focus:border-primary"
+            ></label>
+            <label class="text-sm font-semibold text-text-main">가격<input
+              v-model="form.price"
+              required
+              min="1"
+              type="number"
+              placeholder="판매 가격"
+              class="mt-2 w-full rounded-md border border-border px-3 py-3 font-normal outline-none focus:border-primary"
+            ></label>
+            <label class="text-sm font-semibold text-text-main">색상<input
+              v-model.trim="form.color"
+              maxlength="50"
+              placeholder="예: 오닉스 블랙"
+              class="mt-2 w-full rounded-md border border-border px-3 py-3 font-normal outline-none focus:border-primary"
+            ></label>
+            <label class="text-sm font-semibold text-text-main">저장 용량(GB)<input
+              v-model="form.storageGb"
+              min="1"
+              type="number"
+              placeholder="예: 256"
+              class="mt-2 w-full rounded-md border border-border px-3 py-3 font-normal outline-none focus:border-primary"
+            ></label>
+            <label class="text-sm font-semibold text-text-main sm:col-span-2">
+              거래 지역
+              <input
+                v-model.trim="form.tradeRegion"
+                required
+                maxlength="100"
+                placeholder="예: 광주광역시 광산구"
+                class="mt-2 w-full rounded-md border border-border px-3 py-3 font-normal outline-none focus:border-primary"
+              >
+            </label>
+            <label class="text-sm font-semibold text-text-main sm:col-span-2">
+              상품 설명
+              <textarea
+                v-model.trim="form.description"
+                maxlength="2000"
+                rows="5"
+                placeholder="외관 상태, 사용 기간, 구성품 등을 알려 주세요."
+                class="mt-2 w-full rounded-md border border-border px-3 py-3 font-normal outline-none focus:border-primary"
+              />
+            </label>
+          </div>
+        </section>
+
+        <section
+          v-else
+          class="mx-auto max-w-2xl"
+        >
+          <h2 class="text-lg font-bold text-text-main">
+            입력한 내용을 확인해 주세요.
+          </h2>
+          <p class="mt-1 text-sm text-text-sub">
+            등록 후 체크리스트 자료를 완료하면 판매 중으로 전환할 수 있습니다.
+          </p>
+          <dl class="mt-6 grid grid-cols-2 gap-x-8 gap-y-5 rounded-lg border border-border bg-bg p-6 text-sm">
+            <div>
+              <dt class="text-xs text-text-sub">
+                상품명
+              </dt><dd class="mt-1 font-semibold text-text-main">
+                {{ form.name }}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-xs text-text-sub">
+                가격
+              </dt><dd class="mt-1 font-semibold text-text-main">
+                {{ Number(form.price).toLocaleString() }}원
+              </dd>
+            </div>
+            <div>
+              <dt class="text-xs text-text-sub">
+                색상
+              </dt><dd class="mt-1 font-semibold text-text-main">
+                {{ form.color || '미입력' }}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-xs text-text-sub">
+                저장 용량
+              </dt><dd class="mt-1 font-semibold text-text-main">
+                {{ form.storageGb ? `${form.storageGb}GB` : '미입력' }}
+              </dd>
+            </div>
+            <div class="col-span-2">
+              <dt class="text-xs text-text-sub">
+                거래 지역
+              </dt><dd class="mt-1 font-semibold text-text-main">
+                {{ form.tradeRegion }}
+              </dd>
+            </div>
+            <div class="col-span-2">
+              <dt class="text-xs text-text-sub">
+                설명
+              </dt><dd class="mt-1 whitespace-pre-wrap leading-6 text-text-main">
+                {{ form.description || '설명 없음' }}
+              </dd>
+            </div>
+          </dl>
+        </section>
+
+        <div class="mt-8 flex items-center justify-between border-t border-border pt-5">
+          <BaseButton
+            v-if="activeStep > 1"
+            type="button"
+            variant="outline"
+            @click="activeStep -= 1"
+          >
+            이전
+          </BaseButton>
+          <span v-else />
+          <BaseButton
+            v-if="activeStep < 3"
+            type="button"
+            @click="goToNextStep"
+          >
+            다음 단계
+          </BaseButton>
+          <BaseButton
+            v-else
+            type="submit"
+            :disabled="isSaving"
+          >
+            {{ isSaving ? '저장 중…' : editingId ? '수정 저장' : '초안 등록' }}
+          </BaseButton>
+        </div>
       </form>
     </section>
 
