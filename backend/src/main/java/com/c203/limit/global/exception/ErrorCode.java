@@ -97,7 +97,14 @@ public enum ErrorCode {
     REQUIRED_EVIDENCE_INCOMPLETE("PRD009", HttpStatus.UNPROCESSABLE_ENTITY, "필수 체크리스트를 완료해 주세요."),
     DEVICE_MODEL_NOT_FOUND("PRD010", HttpStatus.NOT_FOUND, "기기 모델을 찾을 수 없습니다."),
     CHECKLIST_TEMPLATE_NOT_FOUND("PRD011", HttpStatus.NOT_FOUND, "게시된 체크리스트 템플릿을 찾을 수 없습니다."),
-    PRODUCT_ACCESS_DENIED("PRD012", HttpStatus.FORBIDDEN, "해당 상품을 변경할 권한이 없습니다.");
+    PRODUCT_ACCESS_DENIED("PRD012", HttpStatus.FORBIDDEN, "해당 상품을 변경할 권한이 없습니다."),
+
+    // ========== 결제 에러 ==========
+    PAYMENT_NOT_FOUND("PAY001", HttpStatus.NOT_FOUND, "결제 내역을 찾을 수 없습니다."),
+    SELF_PURCHASE_NOT_ALLOWED("PAY002", HttpStatus.BAD_REQUEST, "본인의 매물은 결제할 수 없습니다."),
+    PAYMENT_ACCESS_DENIED("PAY003", HttpStatus.FORBIDDEN, "해당 결제 내역을 조회할 권한이 없습니다."),
+    IDEMPOTENCY_KEY_CONFLICT(
+            "PAY004", HttpStatus.CONFLICT, "동일한 멱등키로 다른 내용의 결제 요청이 이미 존재합니다.");
 
     private final String code;
     private final HttpStatus status;

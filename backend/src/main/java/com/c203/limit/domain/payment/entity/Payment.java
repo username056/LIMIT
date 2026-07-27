@@ -91,12 +91,17 @@ public class Payment extends BaseTimeEntity {
     private LocalDateTime approvedAt;
 
     public static Payment request(
-            Long listingId, Member buyer, String idempotencyKey, BigDecimal requestedAmount) {
+            Long listingId,
+            Member buyer,
+            String idempotencyKey,
+            BigDecimal requestedAmount,
+            PaymentMethod method) {
         return Payment.builder()
                 .listingId(listingId)
                 .buyer(buyer)
                 .idempotencyKey(idempotencyKey)
                 .requestedAmount(requestedAmount)
+                .method(method)
                 .requestedAt(LocalDateTime.now())
                 .build();
     }

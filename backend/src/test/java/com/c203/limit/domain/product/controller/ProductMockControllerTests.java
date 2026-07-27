@@ -36,6 +36,7 @@ import com.c203.limit.domain.product.dto.response.ProductDetailResponse;
 import com.c203.limit.domain.product.service.ProductApplicationService;
 import com.c203.limit.domain.product.service.ProductApplicationService.ProductPage;
 import com.c203.limit.domain.product.service.ProductCatalogService;
+import com.c203.limit.domain.payment.service.PaymentService;
 
 @SpringBootTest(properties = {
         "management.endpoint.health.validate-group-membership=false",
@@ -103,6 +104,9 @@ class ProductMockControllerTests {
 
     @MockitoBean
     ProductCatalogService productCatalogService;
+
+    @MockitoBean
+    PaymentService paymentService;
 
     @Autowired
     MockMvc mockMvc;

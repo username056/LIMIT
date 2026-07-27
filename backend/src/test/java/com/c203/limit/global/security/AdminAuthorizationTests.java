@@ -34,6 +34,7 @@ import com.c203.limit.domain.product.repository.WishlistRepository;
 import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
 import com.c203.limit.domain.product.service.ProductApplicationService;
 import com.c203.limit.domain.product.service.ProductCatalogService;
+import com.c203.limit.domain.payment.service.PaymentService;
 
 @SpringBootTest(properties = {
         "management.endpoint.health.validate-group-membership=false",
@@ -70,6 +71,7 @@ class AdminAuthorizationTests {
     @MockitoBean ProductApplicationService productApplicationService;
     @MockitoBean ProductCatalogService productCatalogService;
     @MockitoBean ListingStatusHistoryRepository listingStatusHistoryRepository;
+    @MockitoBean PaymentService paymentService;
 
     @Test
     void publicHealthEndpointDoesNotRequireAuthentication() throws Exception {
