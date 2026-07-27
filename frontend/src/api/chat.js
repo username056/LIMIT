@@ -34,8 +34,6 @@ function query(params) {
   return value ? `?${value}` : ''
 }
 
-// TODO(채팅 API 연동): 백엔드에 메시지 전송·실시간 수신(WebSocket) API가 아직 없습니다.
-// 목록 조회(getChatRooms)와 지난 메시지 조회(getChatMessages)만 실제 API입니다.
 export function getChatRooms(params = {}) {
   return apiClient.get(`/chat-rooms${query(params)}`)
 }

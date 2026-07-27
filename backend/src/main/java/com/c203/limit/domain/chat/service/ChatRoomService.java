@@ -1,5 +1,6 @@
 package com.c203.limit.domain.chat.service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.dao.DataIntegrityViolationException;
@@ -8,7 +9,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.c203.limit.domain.chat.dto.response.ChatRoomResponse;
 import com.c203.limit.domain.chat.dto.response.ChatRoomSummaryResponse;
+import com.c203.limit.domain.chat.dto.request.ChatMessageSendRequest;
+import com.c203.limit.domain.chat.dto.request.ChatReadRequest;
 import com.c203.limit.domain.chat.dto.response.ChatMessageResponse;
+import com.c203.limit.domain.chat.entity.ChatMessage;
+import com.c203.limit.domain.chat.entity.ChatRoomParticipant;
+import com.c203.limit.domain.chat.domain.MessageType;
 import com.c203.limit.domain.chat.entity.ChatRoom;
 import com.c203.limit.domain.chat.repository.ChatMessageProjection;
 import com.c203.limit.domain.chat.repository.ChatMessageRepository;
@@ -87,6 +93,32 @@ public class ChatRoomService {
         return new CursorResponse<>(content, nextCursor, hasNext);
     }
 
+    @Transactional
+    public ChatMessageSendResult sendMessage(Long roomId, Long memberId, ChatMessageSendRequest request) {
+        ChatRoomParticipant participant = participant(roomId, memberId);
+        if (!MessageType.TEXT.name().equals(request.type())) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+        String content = request.content() == null ? "" : request.content().trim();
+        if (content.isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+
+        return chatMessageRepository.findByChatRoomIdAndClientMessageId(roomId, request.clientMessageId())
+                .map(message -> new ChatMessageSendResult(ChatMessageResponse.from(message), false))
+                .orElseGet(() -> saveNewTextMessage(roomId, participant.getUserId(), request, content));
+    }
+
+    @Transactional
+    public Long readMessages(Long roomId, Long memberId, ChatReadRequest request) {
+        ChatRoomParticipant participant = participant(roomId, memberId);
+        ChatRoom room = chatRoomRepository.findById(roomId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.CHAT_ROOM_ACCESS_DENIED));
+        long readSeq = Math.min(request.lastReadSeq(), room.nextMessageSequence() - 1);
+        participant.readUpTo(readSeq);
+        return participant.getLastReadSeq();
+    }
+
     private void validateMessageCursor(Long beforeSeq, Long afterSeq, int size) {
         if (size < 1 || size > MAX_PAGE_SIZE
                 || beforeSeq != null && beforeSeq < 1
@@ -95,6 +127,29 @@ public class ChatRoomService {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
         }
     }
+
+    private ChatMessageSendResult saveNewTextMessage(
+            Long roomId, Long senderId, ChatMessageSendRequest request, String content) {
+        ChatRoom room = chatRoomRepository.findLockedById(roomId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.CHAT_ROOM_ACCESS_DENIED));
+        var existing = chatMessageRepository.findByChatRoomIdAndClientMessageId(
+                roomId, request.clientMessageId());
+        if (existing.isPresent()) {
+            return new ChatMessageSendResult(ChatMessageResponse.from(existing.get()), false);
+        }
+        long roomSequence = room.nextMessageSequence();
+        ChatMessage message = chatMessageRepository.save(ChatMessage.sendText(
+                roomId, roomSequence, senderId, request.clientMessageId(), content, LocalDateTime.now()));
+        room.recordMessage(message.getId(), roomSequence, message.getSentAt());
+        return new ChatMessageSendResult(ChatMessageResponse.from(message), true);
+    }
+
+    private ChatRoomParticipant participant(Long roomId, Long memberId) {
+        return participantRepository.findByChatRoomIdAndUserIdAndLeftAtIsNull(roomId, memberId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.CHAT_ROOM_ACCESS_DENIED));
+    }
+
+    public record ChatMessageSendResult(ChatMessageResponse message, boolean created) {}
 
     private ChatRoomSummaryResponse toSummary(ChatRoomSummaryProjection row, Long memberId) {
         Long counterpartId = memberId.equals(row.getBuyerId()) ? row.getSellerId() : row.getBuyerId();

@@ -63,6 +63,16 @@ public class ChatRoom extends BaseTimeEntity {
         return room;
     }
 
+    public long nextMessageSequence() {
+        return lastMessageSeq + 1;
+    }
+
+    public void recordMessage(Long messageId, long roomSequence, LocalDateTime sentAt) {
+        lastMessageId = messageId;
+        lastMessageSeq = roomSequence;
+        lastMessageAt = sentAt;
+    }
+
     public Long getId() { return id; }
     public Long getListingId() { return listingId; }
     public Long getBuyerId() { return buyerId; }

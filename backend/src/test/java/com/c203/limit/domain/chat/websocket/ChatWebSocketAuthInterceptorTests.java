@@ -130,6 +130,16 @@ class ChatWebSocketAuthInterceptorTests {
     }
 
     @Test
+    void allowsAuthenticatedMemberToSubscribeToPersonalAcks() {
+        StompHeaderAccessor accessor = authenticatedSubscribe("/user/queue/chat-acks");
+
+        Message<?> result = interceptor.preSend(message(accessor), channel);
+
+        assertThat(result).isNotNull();
+        verifyNoInteractions(participantRepository);
+    }
+
+    @Test
     void rejectsUnexpectedSubscriptionDestinationThroughPersonalErrors() {
         AuthenticatedUser user =
                 new AuthenticatedUser(MEMBER_ID, "MEMBER", Set.of("MEMBER"));

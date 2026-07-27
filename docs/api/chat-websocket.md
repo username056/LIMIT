@@ -1,84 +1,100 @@
-# 채팅 WebSocket 계약
+# 채팅 WebSocket API
 
-## CHAT-BE-02 연결 인증
+## 범위
 
-- Handshake endpoint: `/ws`
-- Protocol: WebSocket + STOMP
-- CONNECT header: `Authorization: Bearer {accessToken}`
-- 허용 계정: `MEMBER`
-- 인증 실패: STOMP `ERROR` frame의 `WebSocketErrorResponse`
+- 채팅 WebSocket은 STOMP over WebSocket을 사용한다.
+- REST 인증으로 발급받은 Access Token을 STOMP `CONNECT` 헤더에 전달한다.
+- 메시지 전송, 방 이벤트 수신, 사용자별 ACK와 오류 수신, 읽음 처리를 지원한다.
+- 현재 구현 범위는 `TEXT` 메시지다. `IMAGE`, `VIDEO`의 `mediaIds` 저장과 검증은 후속 작업이다.
 
-HTTP handshake는 `/ws`까지 허용하고 실제 사용자 인증은 STOMP `CONNECT` frame에서 수행한다.
+## 연결
 
-## 구독 권한
+| Method | Endpoint | 설명 |
+| --- | --- | --- |
+| CONNECT | `/ws` | `Authorization: Bearer {accessToken}` 헤더로 회원 인증 |
 
-- 채팅방 이벤트: `/sub/chat-rooms/{roomId}`
-- 개인 오류: `/user/queue/errors`
+`MEMBER` 계정만 연결할 수 있다. 인증 실패는 STOMP `ERROR` 프레임으로 반환된다.
 
-채팅방 이벤트는 탈퇴하지 않은 참여자만 구독할 수 있다. 비참여자 또는 허용되지 않은
-목적지의 구독 요청은 브로커에 등록하지 않고 개인 오류 채널로
-`CHAT_ROOM_ACCESS_DENIED(CHT004)`를 전달한다.
+## 구독
 
-## 오류 응답
+| Method | Destination | 설명 |
+| --- | --- | --- |
+| SUBSCRIBE | `/sub/chat-rooms/{roomId}` | 채팅방 이벤트 수신 |
+| SUBSCRIBE | `/user/queue/chat-acks` | 내가 보낸 메시지 저장 ACK 수신 |
+| SUBSCRIBE | `/user/queue/errors` | 사용자별 WebSocket 오류 수신 |
+
+`/sub/chat-rooms/{roomId}` 구독은 채팅방 참여자만 허용한다. 권한이 없으면 구독을 취소하고 `/user/queue/errors`로 오류를 보낸다.
+
+## 메시지 전송
+
+Client sends:
 
 ```json
 {
-  "error": {
-    "code": "CHT004",
-    "message": "채팅방에 접근할 권한이 없습니다.",
-    "fieldErrors": []
-  },
-  "traceId": "generated-uuid"
+  "clientMessageId": "8e5654b5-b608-43a0-8e0f-1d63e31d41f9",
+  "type": "TEXT",
+  "content": "안녕하세요",
+  "mediaIds": []
 }
 ```
 
-연결 전 인증 오류는 STOMP `ERROR` frame으로 전달한다. 연결된 사용자의 구독 권한
-오류는 연결을 유지한 채 `/user/queue/errors`로 전달한다.
+| Method | Destination | Request | ACK |
+| --- | --- | --- | --- |
+| SEND | `/pub/chat-rooms/{roomId}/messages` | `ChatMessageSendRequest` | `/user/queue/chat-acks` |
 
-## 아직 포함하지 않는 기능
+Server broadcasts:
 
-- `CHAT-BE-03` 메시지 전송·저장·방송
-- `CHAT-BE-12` Heartbeat 및 Redis TTL 연결 상태 관리
-- `CHAT-BE-15` `ChatEventResponse` 발행
+```json
+{
+  "type": "MESSAGE",
+  "roomId": 10,
+  "message": {
+    "messageId": 501,
+    "roomSequence": 8,
+    "senderId": 20,
+    "clientMessageId": "8e5654b5-b608-43a0-8e0f-1d63e31d41f9",
+    "type": "TEXT",
+    "content": "안녕하세요",
+    "status": "SENT",
+    "sentAt": "2026-07-27T22:30:00"
+  },
+  "readerId": null,
+  "lastReadSeq": null
+}
+```
 
-## 구현 중 트러블슈팅
+중복 `clientMessageId`가 들어오면 기존 메시지를 ACK로 다시 반환하고 방 이벤트는 재발행하지 않는다.
 
-### STOMP 인증이 HTTP JWT 필터를 통과하지 않는 문제
+## 읽음 처리
 
-WebSocket handshake 이후의 STOMP frame은 일반 HTTP 요청이 아니므로 기존 JWT 필터만으로
-인증할 수 없다. `/ws` handshake는 Spring Security에서 허용하고, inbound channel의
-`ChannelInterceptor`가 STOMP `CONNECT` header의 Access Token을 검증하도록 분리했다.
+Client sends:
 
-### 인증된 사용자가 다른 채팅방을 구독할 수 있는 문제
+```json
+{
+  "lastReadSeq": 8
+}
+```
 
-JWT는 사용자 신원만 보장하고 채팅방 참여 여부는 보장하지 않는다. `SUBSCRIBE` frame의
-`/sub/chat-rooms/{roomId}`에서 방 ID를 추출한 뒤, 탈퇴하지 않은 참여자인지 Repository로
-확인한다. 권한 없는 SUBSCRIBE frame은 `null`을 반환해 브로커 등록을 막는다.
+| Method | Destination | Request | Broadcast |
+| --- | --- | --- | --- |
+| SEND | `/pub/chat-rooms/{roomId}/read` | `ChatReadRequest` | `/sub/chat-rooms/{roomId}` |
 
-### 개인 오류 채널과 STOMP ERROR frame의 역할이 겹친 문제
+Server broadcasts:
 
-세션이 아직 없는 CONNECT 인증 오류는 STOMP `ERROR` frame으로 반환한다. 연결된 사용자의
-구독 권한 오류는 연결을 종료하지 않고 `/user/queue/errors`로 전송한다.
+```json
+{
+  "type": "READ",
+  "roomId": 10,
+  "message": null,
+  "readerId": 20,
+  "lastReadSeq": 8
+}
+```
 
-### WebSocket 설정 Bean의 순환 의존성
+`lastReadSeq`가 방의 마지막 메시지 순서보다 크면 서버가 마지막 메시지 순서로 보정한다.
 
-초기 구조는 `WebSocketConfig → AuthInterceptor → ErrorPublisher →
-SimpMessagingTemplate → WebSocketConfig` 순환 의존성을 만들었다. 순환 참조 허용 설정을
-사용하지 않고 `ObjectProvider<SimpMessagingTemplate>`로 실제 오류 발행 시점까지 조회를
-지연했다.
+## 구현 메모
 
-### 통합 테스트의 handshake 401
-
-최소 테스트 애플리케이션에는 운영 `SecurityConfig`가 없어 Spring Security 기본 정책이
-`/ws`를 차단했다. 테스트에서도 HTTP handshake만 허용하고 STOMP CONNECT 인증은 실제
-인터셉터가 담당하도록 경계를 동일하게 구성했다.
-
-### Spring 7 JSON 변환기 제거 예정 경고
-
-제거 예정인 `MappingJackson2MessageConverter` 대신 Spring 7의
-`JacksonJsonMessageConverter`를 STOMP 테스트 클라이언트에 사용했다.
-
-### 오류 JSON fallback의 인코딩과 traceId 누락
-
-ObjectMapper 직렬화 실패 시 사용하던 fallback 문자열의 한글이 깨져 있었고 `traceId`도
-없었다. ASCII 기반의 안전한 메시지와 생성된 `traceId`를 포함하는 JSON으로 보완했다.
+- 방별 메시지 순서는 `chat_room` 행을 pessimistic lock으로 조회한 뒤 `last_message_seq + 1`로 발급한다.
+- `chat_message`에는 `(chat_room_id, room_sequence)`와 `(chat_room_id, client_message_id)` unique constraint가 있어 순서 중복과 클라이언트 재전송 중복을 막는다.
+- 같은 `clientMessageId` 동시 전송을 고려해 방 락 획득 후에도 중복 메시지를 한 번 더 확인한다.

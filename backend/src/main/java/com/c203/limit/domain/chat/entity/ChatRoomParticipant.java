@@ -54,4 +54,14 @@ public class ChatRoomParticipant extends BaseTimeEntity {
         participant.joinedAt = LocalDateTime.now();
         return participant;
     }
+
+    public void readUpTo(long roomSequence) {
+        if (roomSequence > lastReadSeq) {
+            lastReadSeq = roomSequence;
+        }
+    }
+
+    public Long getChatRoomId() { return chatRoomId; }
+    public Long getUserId() { return userId; }
+    public long getLastReadSeq() { return lastReadSeq; }
 }

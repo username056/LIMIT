@@ -22,6 +22,7 @@ import com.c203.limit.global.security.JwtTokenProvider.TokenClaims;
 public class ChatWebSocketAuthInterceptor implements ChannelInterceptor {
     private static final String BEARER_PREFIX = "Bearer ";
     private static final String USER_ERROR_DESTINATION = "/user/queue/errors";
+    private static final String USER_ACK_DESTINATION = "/user/queue/chat-acks";
     private static final Pattern CHAT_ROOM_DESTINATION =
             Pattern.compile("^/sub/chat-rooms/([1-9][0-9]*)$");
 
@@ -87,7 +88,7 @@ public class ChatWebSocketAuthInterceptor implements ChannelInterceptor {
     private void authorizeSubscription(StompHeaderAccessor accessor) {
         AuthenticatedUser user = authenticatedMember(accessor);
         String destination = accessor.getDestination();
-        if (USER_ERROR_DESTINATION.equals(destination)) {
+        if (USER_ERROR_DESTINATION.equals(destination) || USER_ACK_DESTINATION.equals(destination)) {
             return;
         }
 
