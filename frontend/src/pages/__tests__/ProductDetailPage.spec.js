@@ -45,27 +45,39 @@ describe('ProductDetailPage', () => {
     getFavoriteStatus.mockResolvedValue({ favorite: true })
     removeFavorite.mockResolvedValue(undefined)
     const wrapper = mount(ProductDetailPage, {
-      global: { stubs: { DefaultLayout: layoutStub, BaseButton: buttonStub } },
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
     })
     await flushPromises()
 
     expect(getFavoriteStatus).toHaveBeenCalledWith('1001')
-    expect(wrapper.find('button').text()).toBe('관심 상품 해제')
-    await wrapper.find('button').trigger('click')
+    const favoriteButton = wrapper.get('button[aria-label="관심 상품 해제"]')
+    await favoriteButton.trigger('click')
     await flushPromises()
 
     expect(removeFavorite).toHaveBeenCalledWith(1001)
-    expect(wrapper.find('button').text()).toBe('관심 상품 등록')
+    expect(wrapper.get('button[aria-label="관심 상품 등록"]').exists()).toBe(true)
   })
 
   it('비로그인 사용자는 관심 상품 클릭 시 로그인으로 이동한다', async () => {
     getAccessToken.mockReturnValue(null)
     const wrapper = mount(ProductDetailPage, {
-      global: { stubs: { DefaultLayout: layoutStub, BaseButton: buttonStub } },
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
     })
     await flushPromises()
 
-    await wrapper.find('button').trigger('click')
+    await wrapper.get('button[aria-label="관심 상품 등록"]').trigger('click')
 
     expect(getFavoriteStatus).not.toHaveBeenCalled()
     expect(push).toHaveBeenCalledWith({

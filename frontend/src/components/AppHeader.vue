@@ -34,8 +34,7 @@ async function submitSearch() {
   const query = searchQuery.value.trim()
   if (!query) return
   await router.push({
-    name: 'coming-soon',
-    params: { feature: 'product-search' },
+    name: 'products',
     query: { q: query },
   })
 }
