@@ -103,6 +103,16 @@ class FlywayMigrationIntegrationTests {
         assertThat(tableExists("payment")).isTrue();
         assertThat(tableExists("listing")).isTrue();
         assertThat(tableExists("checklist_template_item")).isTrue();
+        assertThat(columnExists("listing", "color")).isTrue();
+        assertThat(columnExists("listing", "storage_gb")).isTrue();
+        assertThat(columnExists("listing", "trade_region")).isTrue();
+        assertThat(columnExists("category", "manufacturer_id")).isTrue();
+        assertThat(columnExists("category", "supported_storage_gb")).isTrue();
+        assertThat(indexExists("listing", "idx_listing_public_feed")).isTrue();
+        assertThat(indexExists("listing", "idx_listing_seller_feed")).isTrue();
+        assertThat(indexExists("listing", "idx_listing_seller_all_feed")).isTrue();
+        assertThat(indexExists("wishlist", "idx_wishlist_user_created")).isTrue();
+        assertThat(indexExists("listing_image", "idx_listing_image_thumbnail")).isTrue();
         assertThat(tableExists("member_role")).isTrue();
         assertThat(tableExists("user_sanction")).isTrue();
         assertThat(singleString("SELECT member_type FROM user_account WHERE email = 'legacy@example.com'"))
@@ -113,7 +123,7 @@ class FlywayMigrationIntegrationTests {
                         "SELECT version FROM flyway_schema_history "
                                 + "WHERE success = 1 AND version IS NOT NULL "
                                 + "ORDER BY installed_rank DESC LIMIT 1"))
-                .isEqualTo("20260723");
+                .isEqualTo("20260727");
     }
 
     private static boolean tableExists(String tableName) throws SQLException {
@@ -134,6 +144,17 @@ class FlywayMigrationIntegrationTests {
                                 + columnName
                                 + "'")
                 == 1L;
+    }
+
+    private static boolean indexExists(String tableName, String indexName) throws SQLException {
+        return singleLong(
+                        "SELECT COUNT(*) FROM information_schema.statistics "
+                                + "WHERE table_schema = DATABASE() AND table_name = '"
+                                + tableName
+                                + "' AND index_name = '"
+                                + indexName
+                                + "'")
+                > 0L;
     }
 
     private static long singleLong(String sql) throws SQLException {

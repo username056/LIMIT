@@ -1,0 +1,522 @@
+package com.c203.limit.domain.product.service;
+
+import com.c203.limit.domain.inspection.entity.ChecklistTemplate;
+import com.c203.limit.domain.inspection.entity.ChecklistTemplateItem;
+import com.c203.limit.domain.inspection.entity.ListingChecklistItem;
+import com.c203.limit.domain.inspection.enums.ChecklistItemCompletionStatus;
+import com.c203.limit.domain.inspection.enums.ChecklistTemplateStatus;
+import com.c203.limit.domain.inspection.repository.ChecklistTemplateItemRepository;
+import com.c203.limit.domain.inspection.repository.ChecklistTemplateRepository;
+import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
+import com.c203.limit.domain.inspection.repository.ListingChecklistCountProjection;
+import com.c203.limit.domain.product.dto.request.CreateProductRequest;
+import com.c203.limit.domain.product.dto.request.TransitionProductStatusRequest;
+import com.c203.limit.domain.product.dto.request.UpdateProductRequest;
+import com.c203.limit.domain.product.dto.response.ChecklistSummaryResponse;
+import com.c203.limit.domain.product.dto.response.DeviceCategoryResponse;
+import com.c203.limit.domain.product.dto.response.DeviceInfoResponse;
+import com.c203.limit.domain.product.dto.response.MyProductSummaryResponse;
+import com.c203.limit.domain.product.dto.response.ProductCreatedResponse;
+import com.c203.limit.domain.product.dto.response.ProductDetailResponse;
+import com.c203.limit.domain.product.dto.response.ProductStatusTransitionResponse;
+import com.c203.limit.domain.product.dto.response.ProductSummaryResponse;
+import com.c203.limit.domain.product.entity.Category;
+import com.c203.limit.domain.product.entity.Listing;
+import com.c203.limit.domain.product.entity.ListingImageType;
+import com.c203.limit.domain.product.entity.ListingStatus;
+import com.c203.limit.domain.product.entity.ListingStatusHistory;
+import com.c203.limit.domain.product.repository.CategoryRepository;
+import com.c203.limit.domain.product.repository.ListingImageRepository;
+import com.c203.limit.domain.product.repository.ListingRepository;
+import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
+import com.c203.limit.domain.product.repository.ListingThumbnailProjection;
+import com.c203.limit.global.exception.BusinessException;
+import com.c203.limit.global.exception.ErrorCode;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class ProductApplicationService {
+    private static final Logger log = LoggerFactory.getLogger(ProductApplicationService.class);
+    private static final int MAX_PAGE_SIZE = 100;
+    private static final ZoneId PRODUCT_TIME_ZONE = ZoneId.of("Asia/Seoul");
+    private static final Set<String> PUBLIC_SORT_FIELDS = Set.of("createdAt", "price");
+    private static final Set<String> MY_SORT_FIELDS = Set.of("updatedAt", "createdAt", "price");
+
+    private final ListingRepository listingRepository;
+    private final CategoryRepository categoryRepository;
+    private final ChecklistTemplateRepository templateRepository;
+    private final ChecklistTemplateItemRepository templateItemRepository;
+    private final ListingChecklistItemRepository checklistItemRepository;
+    private final ListingStatusHistoryRepository statusHistoryRepository;
+    private final ListingImageRepository imageRepository;
+
+    public ProductApplicationService(
+            ListingRepository listingRepository,
+            CategoryRepository categoryRepository,
+            ChecklistTemplateRepository templateRepository,
+            ChecklistTemplateItemRepository templateItemRepository,
+            ListingChecklistItemRepository checklistItemRepository,
+            ListingStatusHistoryRepository statusHistoryRepository,
+            ListingImageRepository imageRepository) {
+        this.listingRepository = listingRepository;
+        this.categoryRepository = categoryRepository;
+        this.templateRepository = templateRepository;
+        this.templateItemRepository = templateItemRepository;
+        this.checklistItemRepository = checklistItemRepository;
+        this.statusHistoryRepository = statusHistoryRepository;
+        this.imageRepository = imageRepository;
+    }
+
+    @Transactional
+    public ProductCreatedResponse create(Long sellerId, CreateProductRequest request) {
+        Category model = categoryRepository
+                .findById(request.getDeviceModelId())
+                .filter(Category::isActive)
+                .orElseThrow(() -> new BusinessException(ErrorCode.DEVICE_MODEL_NOT_FOUND));
+        validateModelCategory(model, request.getCategoryId());
+        ChecklistTemplate template = templateRepository
+                .findFirstByCategoryIdAndStatusOrderByVersionDesc(
+                        model.getId(), ChecklistTemplateStatus.PUBLISHED)
+                .orElseThrow(() -> new BusinessException(ErrorCode.CHECKLIST_TEMPLATE_NOT_FOUND));
+        List<ChecklistTemplateItem> templateItems =
+                templateItemRepository.findByChecklistTemplateIdOrderByDisplayOrderAsc(template.getId());
+        Listing listing = listingRepository.saveAndFlush(
+                Listing.createDraft(
+                        sellerId,
+                        model,
+                        request.getName(),
+                        request.getDescription(),
+                        price(request.getPrice()),
+                        request.getColor(),
+                        request.getStorageGb(),
+                        request.getTradeRegion(),
+                        template.getId()));
+        List<ListingChecklistItem> snapshots = templateItems.stream()
+                .map(item -> ListingChecklistItem.createFromTemplateItem(listing.getId(), item))
+                .toList();
+        checklistItemRepository.saveAll(snapshots);
+        int required = (int) snapshots.stream().filter(ListingChecklistItem::isRequired).count();
+        log.info(
+                "product draft created: productId={}, modelId={}, checklistVersion={}",
+                listing.getId(),
+                model.getId(),
+                template.getVersion());
+        return new ProductCreatedResponse(
+                listing.getId(),
+                listing.getStatus().name(),
+                model.getId(),
+                template.getVersion(),
+                required,
+                0,
+                offset(listing.getCreatedAt()));
+    }
+
+    @Transactional
+    public ProductDetailResponse update(Long sellerId, Long productId, UpdateProductRequest request) {
+        Listing listing = owned(productId, sellerId);
+        listing.updateDraft(
+                request.getName(),
+                request.getDescription(),
+                request.isDescriptionSpecified(),
+                request.getPrice() == null ? null : price(request.getPrice()),
+                request.getColor(),
+                request.isColorSpecified(),
+                request.getStorageGb(),
+                request.isStorageGbSpecified(),
+                request.getTradeRegion());
+        log.info("product draft updated: productId={}", productId);
+        return detail(listing);
+    }
+
+    @Transactional
+    public void delete(Long sellerId, Long productId) {
+        Listing listing = owned(productId, sellerId);
+        if (!List.of(ListingStatus.DRAFT, ListingStatus.ON_SALE, ListingStatus.HIDDEN)
+                .contains(listing.getStatus())) {
+            throw new BusinessException(ErrorCode.PRODUCT_DELETE_NOT_ALLOWED);
+        }
+        ListingStatus previous = listing.getStatus();
+        listing.softDelete();
+        log.info(
+                "product soft deleted: productId={}, previousStatus={}",
+                productId,
+                previous);
+    }
+
+    @Transactional(readOnly = true)
+    public ProductPage findPublic(
+            String keyword,
+            Long categoryId,
+            Long manufacturerId,
+            Long deviceModelId,
+            BigDecimal minPrice,
+            BigDecimal maxPrice,
+            String tradeRegion,
+            String verificationStatus,
+            int page,
+            int size,
+            String sort) {
+        validatePage(page, size);
+        Specification<Listing> spec = Specification.where(notDeleted())
+                .and(hasStatus(ListingStatus.ON_SALE))
+                .and(keyword(keyword))
+                .and(category(categoryId, deviceModelId))
+                .and(manufacturer(manufacturerId))
+                .and(priceRange(minPrice, maxPrice))
+                .and(tradeRegion(tradeRegion))
+                .and(verificationStatus(verificationStatus));
+        Page<Listing> result = listingRepository.findAll(
+                spec, PageRequest.of(page, size, sort(sort, "createdAt", PUBLIC_SORT_FIELDS)));
+        Map<Long, ProductMetrics> metrics = loadMetrics(result.getContent());
+        return new ProductPage(
+                result.getContent().stream()
+                        .map(listing -> summary(listing, metrics.get(listing.getId())))
+                        .toList(),
+                result.getNumber(),
+                result.getSize(),
+                result.getTotalElements(),
+                result.getTotalPages(),
+                result.hasNext());
+    }
+
+    @Transactional(readOnly = true)
+    public ProductDetailResponse findPublicDetail(Long productId) {
+        return detail(listingRepository
+                .findByIdAndStatusAndDeletedAtIsNull(productId, ListingStatus.ON_SALE)
+                .orElseThrow(() -> new BusinessException(ErrorCode.LISTING_NOT_FOUND)));
+    }
+
+    @Transactional(readOnly = true)
+    public ProductDetailResponse findOwnedDetail(Long sellerId, Long productId) {
+        return detail(owned(productId, sellerId));
+    }
+
+    @Transactional(readOnly = true)
+    public MyProductPage findMine(Long sellerId, String status, int page, int size, String sort) {
+        validatePage(page, size);
+        PageRequest pageable = PageRequest.of(page, size, sort(sort, "updatedAt", MY_SORT_FIELDS));
+        Page<Listing> result;
+        try {
+            result = status == null
+                    ? listingRepository.findBySellerIdAndDeletedAtIsNull(sellerId, pageable)
+                    : listingRepository.findBySellerIdAndStatusAndDeletedAtIsNull(
+                            sellerId, ListingStatus.valueOf(status), pageable);
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+        Map<Long, ProductMetrics> metrics = loadMetrics(result.getContent());
+        List<MyProductSummaryResponse> content = result.getContent().stream()
+                .map(
+                        listing -> {
+                            ProductMetrics itemMetrics = metrics.get(listing.getId());
+                            return
+                                new MyProductSummaryResponse(
+                                        listing.getId(),
+                                        listing.getTitle(),
+                                        listing.getStatus().name(),
+                                        itemMetrics.completedRequired(),
+                                        itemMetrics.required(),
+                                        offset(listing.getUpdatedAt()));
+                        })
+                .toList();
+        return new MyProductPage(
+                content,
+                result.getNumber(),
+                result.getSize(),
+                result.getTotalElements(),
+                result.getTotalPages(),
+                result.hasNext());
+    }
+
+    @Transactional
+    public ProductStatusTransitionResponse transition(
+            Long sellerId, Long productId, TransitionProductStatusRequest request) {
+        Listing listing = owned(productId, sellerId);
+        ListingStatus previous = listing.getStatus();
+        ListingStatus target;
+        try {
+            target = ListingStatus.valueOf(request.getTargetStatus());
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(ErrorCode.INVALID_PRODUCT_STATUS_TRANSITION);
+        }
+        if (target == ListingStatus.ON_SALE) {
+            if (required(listing.getId()) != completedRequired(listing.getId())) {
+                throw new BusinessException(ErrorCode.REQUIRED_EVIDENCE_INCOMPLETE);
+            }
+            listing.completePrecheck();
+            listing.publish();
+        } else if (target == ListingStatus.HIDDEN) {
+            listing.hide();
+        } else {
+            throw new BusinessException(ErrorCode.INVALID_PRODUCT_STATUS_TRANSITION);
+        }
+        ListingStatusHistory history = statusHistoryRepository.saveAndFlush(
+                ListingStatusHistory.record(
+                        listing, previous, listing.getStatus(), request.getReason(), sellerId));
+        log.info(
+                "product status changed: productId={}, from={}, to={}",
+                productId,
+                previous,
+                listing.getStatus());
+        return new ProductStatusTransitionResponse(
+                history.getId(),
+                listing.getId(),
+                previous.name(),
+                listing.getStatus().name(),
+                request.getReason(),
+                offset(history.getCreatedAt()));
+    }
+
+    private Listing owned(Long productId, Long sellerId) {
+        return listingRepository
+                .findByIdAndSellerIdAndDeletedAtIsNull(productId, sellerId)
+                .orElseGet(
+                        () -> {
+                            if (listingRepository.findByIdAndDeletedAtIsNull(productId).isPresent()) {
+                                throw new BusinessException(ErrorCode.PRODUCT_ACCESS_DENIED);
+                            }
+                            throw new BusinessException(ErrorCode.LISTING_NOT_FOUND);
+                        });
+    }
+
+    private ProductDetailResponse detail(Listing listing) {
+        Category model = listing.getCategory();
+        Category parent = model.getParent();
+        ProductMetrics metrics = loadMetrics(List.of(listing)).get(listing.getId());
+        return new ProductDetailResponse(
+                listing.getId(),
+                listing.getSellerId(),
+                categoryResponse(parent == null ? model : parent),
+                new DeviceInfoResponse(
+                        model.getId(),
+                        model.getManufacturer(),
+                        model.getName(),
+                        model.getOsFamily() == null ? null : model.getOsFamily().name(),
+                        listing.getColor(),
+                        listing.getStorageGb()),
+                listing.getTitle(),
+                listing.getDescription(),
+                BigDecimal.valueOf(listing.getPrice()),
+                listing.getStatus().name(),
+                listing.getTradeRegion(),
+                checklistSummary(metrics),
+                metrics.thumbnailUrl(),
+                offset(listing.getCreatedAt()),
+                offset(listing.getUpdatedAt()));
+    }
+
+    private ProductSummaryResponse summary(Listing listing, ProductMetrics metrics) {
+        int required = metrics.required();
+        int completed = metrics.completedRequired();
+        String verification = required > 0 && required == completed ? "COMPLETED" : "IN_PROGRESS";
+        return new ProductSummaryResponse(
+                listing.getId(),
+                listing.getTitle(),
+                listing.getCategory().getManufacturer(),
+                listing.getCategory().getName(),
+                BigDecimal.valueOf(listing.getPrice()),
+                listing.getStatus().name(),
+                verification,
+                metrics.thumbnailUrl(),
+                listing.getTradeRegion());
+    }
+
+    private ChecklistSummaryResponse checklistSummary(ProductMetrics metrics) {
+        return new ChecklistSummaryResponse(metrics.required(), metrics.completedRequired(), 0);
+    }
+
+    private int required(Long listingId) {
+        return Math.toIntExact(checklistItemRepository.countByListingIdAndIsRequiredTrue(listingId));
+    }
+
+    private int completedRequired(Long listingId) {
+        return Math.toIntExact(
+                checklistItemRepository.countByListingIdAndIsRequiredTrueAndCompletionStatus(
+                        listingId, ChecklistItemCompletionStatus.COMPLETED));
+    }
+
+    private Map<Long, ProductMetrics> loadMetrics(List<Listing> listings) {
+        if (listings.isEmpty()) return Map.of();
+        List<Long> listingIds = listings.stream().map(Listing::getId).toList();
+        Map<Long, ListingChecklistCountProjection> counts = checklistItemRepository
+                .countRequiredByListingIds(listingIds, ChecklistItemCompletionStatus.COMPLETED)
+                .stream()
+                .collect(Collectors.toMap(ListingChecklistCountProjection::getListingId, Function.identity()));
+        Map<Long, String> thumbnails = imageRepository
+                .findFirstByListingIdsAndImageType(listingIds, ListingImageType.THUMBNAIL)
+                .stream()
+                .collect(Collectors.toMap(
+                        ListingThumbnailProjection::getListingId,
+                        ListingThumbnailProjection::getCdnUrl));
+        Map<Long, ProductMetrics> result = new HashMap<>();
+        listingIds.forEach(listingId -> {
+            ListingChecklistCountProjection count = counts.get(listingId);
+            int required = count == null ? 0 : Math.toIntExact(count.getRequiredCount());
+            int completed = count == null ? 0 : Math.toIntExact(count.getCompletedRequiredCount());
+            result.put(listingId, new ProductMetrics(required, completed, thumbnails.get(listingId)));
+        });
+        return result;
+    }
+
+    private DeviceCategoryResponse categoryResponse(Category category) {
+        return new DeviceCategoryResponse(
+                category.getId(),
+                category.getDeviceType().name(),
+                category.getName(),
+                category.getParent() == null ? null : category.getParent().getId(),
+                category.isActive());
+    }
+
+    private void validateModelCategory(Category model, Long categoryId) {
+        Long actual = model.getParent() == null ? model.getId() : model.getParent().getId();
+        if (!actual.equals(categoryId)) {
+            throw new BusinessException(ErrorCode.DEVICE_MODEL_NOT_FOUND);
+        }
+    }
+
+    private int price(BigDecimal price) {
+        try {
+            return price.intValueExact();
+        } catch (ArithmeticException exception) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+    }
+
+    private void validatePage(int page, int size) {
+        if (page < 0 || size < 1 || size > MAX_PAGE_SIZE) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+    }
+
+    private OffsetDateTime offset(LocalDateTime value) {
+        return value == null ? null : value.atZone(PRODUCT_TIME_ZONE).toOffsetDateTime();
+    }
+
+    private Specification<Listing> notDeleted() {
+        return (root, query, cb) -> cb.isNull(root.get("deletedAt"));
+    }
+
+    private Specification<Listing> hasStatus(ListingStatus status) {
+        return (root, query, cb) -> cb.equal(root.get("status"), status);
+    }
+
+    private Specification<Listing> keyword(String value) {
+        return (root, query, cb) -> value == null || value.isBlank()
+                ? cb.conjunction()
+                : cb.like(cb.lower(root.get("title")), "%" + value.toLowerCase() + "%");
+    }
+
+    private Specification<Listing> category(Long categoryId, Long modelId) {
+        return (root, query, cb) -> {
+            if (modelId != null) return cb.equal(root.get("category").get("id"), modelId);
+            if (categoryId == null) return cb.conjunction();
+            return cb.or(
+                    cb.equal(root.get("category").get("id"), categoryId),
+                    cb.equal(root.get("category").get("parent").get("id"), categoryId));
+        };
+    }
+
+    private Specification<Listing> manufacturer(Long manufacturerId) {
+        return (root, query, cb) -> manufacturerId == null
+                ? cb.conjunction()
+                : cb.equal(root.get("category").get("manufacturerId"), manufacturerId);
+    }
+
+    private Specification<Listing> verificationStatus(String value) {
+        if (value == null || value.isBlank()) return (root, query, cb) -> cb.conjunction();
+        String normalized = value.toUpperCase(Locale.ROOT);
+        if (!Set.of("COMPLETED", "IN_PROGRESS").contains(normalized)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+        return (root, query, cb) -> {
+            var requiredQuery = query.subquery(Long.class);
+            var requiredItem = requiredQuery.from(ListingChecklistItem.class);
+            requiredQuery.select(cb.count(requiredItem)).where(
+                    cb.equal(requiredItem.get("listingId"), root.get("id")),
+                    cb.isTrue(requiredItem.get("isRequired")));
+
+            var incompleteQuery = query.subquery(Long.class);
+            var incompleteItem = incompleteQuery.from(ListingChecklistItem.class);
+            incompleteQuery.select(cb.count(incompleteItem)).where(
+                    cb.equal(incompleteItem.get("listingId"), root.get("id")),
+                    cb.isTrue(incompleteItem.get("isRequired")),
+                    cb.notEqual(
+                            incompleteItem.get("completionStatus"),
+                            ChecklistItemCompletionStatus.COMPLETED));
+            if ("COMPLETED".equals(normalized)) {
+                return cb.and(cb.greaterThan(requiredQuery, 0L), cb.equal(incompleteQuery, 0L));
+            }
+            return cb.or(cb.equal(requiredQuery, 0L), cb.greaterThan(incompleteQuery, 0L));
+        };
+    }
+
+    private Specification<Listing> priceRange(BigDecimal min, BigDecimal max) {
+        return (root, query, cb) -> {
+            if (min != null && max != null) {
+                return cb.between(root.get("price"), price(min), price(max));
+            }
+            if (min != null) return cb.greaterThanOrEqualTo(root.get("price"), price(min));
+            if (max != null) return cb.lessThanOrEqualTo(root.get("price"), price(max));
+            return cb.conjunction();
+        };
+    }
+
+    private Specification<Listing> tradeRegion(String value) {
+        return (root, query, cb) -> value == null || value.isBlank()
+                ? cb.conjunction()
+                : cb.like(root.get("tradeRegion"), "%" + value + "%");
+    }
+
+    private Sort sort(String value, String defaultField, Set<String> allowedFields) {
+        String effective = value == null || value.isBlank() ? defaultField + ",desc" : value;
+        String[] parts = effective.split(",");
+        if (parts.length > 2 || !allowedFields.contains(parts[0])) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+        Sort.Direction direction;
+        try {
+            direction = parts.length == 1
+                    ? Sort.Direction.ASC
+                    : Sort.Direction.fromString(parts[1]);
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+        return Sort.by(direction, parts[0]);
+    }
+
+    private record ProductMetrics(int required, int completedRequired, String thumbnailUrl) {}
+
+    public record ProductPage(
+            List<ProductSummaryResponse> content,
+            int page,
+            int size,
+            long totalElements,
+            int totalPages,
+            boolean hasNext) {}
+
+    public record MyProductPage(
+            List<MyProductSummaryResponse> content,
+            int page,
+            int size,
+            long totalElements,
+            int totalPages,
+            boolean hasNext) {}
+}

@@ -39,6 +39,15 @@ public class Listing extends BaseTimeEntity {
     @Column(nullable = false)
     private int price;
 
+    @Column(length = 50)
+    private String color;
+
+    @Column(name = "storage_gb")
+    private Integer storageGb;
+
+    @Column(name = "trade_region", length = 100)
+    private String tradeRegion;
+
     @Column(name = "checklist_template_id", nullable = false)
     private Long checklistTemplateId;
 
@@ -93,10 +102,66 @@ public class Listing extends BaseTimeEntity {
         return listing;
     }
 
+    public static Listing createDraft(
+            Long sellerId,
+            Category category,
+            String title,
+            String description,
+            int price,
+            String color,
+            Integer storageGb,
+            String tradeRegion,
+            Long checklistTemplateId) {
+        Listing listing = createDraft(
+                sellerId, category, title, description, price, checklistTemplateId);
+        listing.color = color;
+        listing.storageGb = storageGb;
+        listing.tradeRegion = tradeRegion;
+        return listing;
+    }
+
     public void updateDraft(String title, String description, int price) {
         if (title != null) this.title = title;
         if (description != null) this.description = description;
         this.price = price;
+    }
+
+    public void updateDraft(
+            String title,
+            String description,
+            boolean descriptionSpecified,
+            Integer price,
+            String color,
+            boolean colorSpecified,
+            Integer storageGb,
+            boolean storageGbSpecified,
+            String tradeRegion) {
+        requireStatus(ListingStatus.DRAFT, ErrorCode.PRODUCT_EDIT_NOT_ALLOWED);
+        if (title != null) this.title = title;
+        if (descriptionSpecified) this.description = description;
+        if (price != null) this.price = price;
+        if (colorSpecified) this.color = color;
+        if (storageGbSpecified) this.storageGb = storageGb;
+        if (tradeRegion != null) this.tradeRegion = tradeRegion;
+    }
+
+    public void publish() {
+        requireStatus(ListingStatus.DRAFT, ErrorCode.INVALID_PRODUCT_STATUS_TRANSITION);
+        if (!precheckCompleted) {
+            throw new BusinessException(ErrorCode.REQUIRED_EVIDENCE_INCOMPLETE);
+        }
+        this.status = ListingStatus.ON_SALE;
+    }
+
+    public void completePrecheck() {
+        this.precheckCompleted = true;
+    }
+
+    public void hide() {
+        if (status != ListingStatus.ON_SALE) {
+            throw new BusinessException(ErrorCode.INVALID_PRODUCT_STATUS_TRANSITION);
+        }
+        this.status = ListingStatus.HIDDEN;
     }
 
     /** ON_SALE 매물을 구매자에게 예약 처리한다. */

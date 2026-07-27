@@ -30,7 +30,10 @@ import com.c203.limit.domain.member.repository.MemberRepository;
 import com.c203.limit.domain.member.repository.MemberTermsAgreementRepository;
 import com.c203.limit.domain.member.entity.Member;
 import com.c203.limit.domain.product.repository.ListingRepository;
+import com.c203.limit.domain.product.repository.WishlistRepository;
 import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
+import com.c203.limit.domain.product.service.ProductApplicationService;
+import com.c203.limit.domain.product.service.ProductCatalogService;
 
 @SpringBootTest(properties = {
         "management.endpoint.health.validate-group-membership=false",
@@ -60,6 +63,9 @@ class AdminAuthorizationTests {
     @MockitoBean ChatMessageRepository chatMessageRepository;
     @MockitoBean ListingChatReader listingChatReader;
     @MockitoBean ListingRepository listingRepository;
+    @MockitoBean WishlistRepository wishlistRepository;
+    @MockitoBean ProductApplicationService productApplicationService;
+    @MockitoBean ProductCatalogService productCatalogService;
     @MockitoBean ListingStatusHistoryRepository listingStatusHistoryRepository;
 
     @Test
