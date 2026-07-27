@@ -1,0 +1,19 @@
+backup_bucket_name = "replace-with-globally-unique-limit-backup-bucket"
+alert_email        = "alerts@example.com"
+
+uptime_endpoints = {
+  frontend = {
+    fqdn          = "l1mit.shop"
+    resource_path = "/"
+  }
+  api = {
+    fqdn          = "api.l1mit.shop"
+    resource_path = "/health"
+  }
+}
+
+tags = {
+  Project     = "limit"
+  Environment = "prod"
+  ManagedBy   = "terraform"
+}

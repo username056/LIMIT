@@ -36,9 +36,7 @@ async function resend() {
       description="받은 메일의 인증 버튼을 누르면 이메일 로그인을 시작할 수 있습니다."
     >
       <BaseCard class="p-8 text-center">
-        <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent text-2xl">
-          ✉️
-        </div>
+        <div class="mx-auto h-14 w-14 rounded-full bg-accent" />
         <p class="mt-5 text-sm leading-6 text-text-sub">
           회원가입이 완료되었습니다. 인증 링크는 보안을 위해 한 번만 사용할 수 있습니다.
         </p>

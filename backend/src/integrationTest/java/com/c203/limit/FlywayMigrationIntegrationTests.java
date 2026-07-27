@@ -25,6 +25,13 @@ class FlywayMigrationIntegrationTests {
                     .withUsername("limit")
                     .withPassword("test-only-password");
 
+    @Container
+    static final MySQLContainer PRODUCTION_HISTORY_MYSQL =
+            new MySQLContainer(DockerImageName.parse("mysql:8.4"))
+                    .withDatabaseName("limit_production_history")
+                    .withUsername("limit")
+                    .withPassword("test-only-password");
+
     @BeforeAll
     static void migrateLegacySchema() throws SQLException {
         try (var connection =
@@ -87,6 +94,28 @@ class FlywayMigrationIntegrationTests {
                 .migrate();
     }
 
+    @BeforeAll
+    static void migrateProductionHistory() throws SQLException {
+        migrateTo(PRODUCTION_HISTORY_MYSQL, "20260723");
+        migrateTo(PRODUCTION_HISTORY_MYSQL, "20260727");
+
+        assertThat(
+                        singleLong(
+                                PRODUCTION_HISTORY_MYSQL,
+                                "SELECT COUNT(*) FROM flyway_schema_history "
+                                        + "WHERE version > '20260723' AND version < '20260727'"))
+                .isZero();
+        assertThat(
+                        singleString(
+                                PRODUCTION_HISTORY_MYSQL,
+                                "SELECT version FROM flyway_schema_history "
+                                        + "WHERE success = 1 AND version IS NOT NULL "
+                                        + "ORDER BY installed_rank DESC LIMIT 1"))
+                .isEqualTo("20260727");
+
+        migrateTo(PRODUCTION_HISTORY_MYSQL, null);
+    }
+
     @Test
     void migratesLegacySchemaWithoutDeletingLegacyRoleData() throws SQLException {
         assertThat(columnExists("admin_account", "updated_at")).isTrue();
@@ -101,12 +130,76 @@ class FlywayMigrationIntegrationTests {
         assertThat(tableExists("chat_room")).isTrue();
         assertThat(tableExists("ocr_result")).isTrue();
         assertThat(tableExists("payment")).isTrue();
+        assertThat(tableExists("rtc_session_checklist_result")).isTrue();
+        assertThat(tableExists("listing")).isTrue();
+        assertThat(tableExists("checklist_template_item")).isTrue();
+        assertThat(columnExists("listing", "color")).isTrue();
+        assertThat(columnExists("listing", "storage_gb")).isTrue();
+        assertThat(columnExists("listing", "trade_region")).isTrue();
+        assertThat(columnExists("category", "manufacturer_id")).isTrue();
+        assertThat(columnExists("category", "supported_storage_gb")).isTrue();
+        assertThat(indexExists("listing", "idx_listing_public_feed")).isTrue();
+        assertThat(indexExists("listing", "idx_listing_seller_feed")).isTrue();
+        assertThat(indexExists("listing", "idx_listing_seller_all_feed")).isTrue();
+        assertThat(indexExists("wishlist", "idx_wishlist_user_created")).isTrue();
+        assertThat(indexExists("listing_image", "idx_listing_image_thumbnail")).isTrue();
+        assertThat(columnExists("rtc_session", "verification_memo")).isTrue();
+        assertThat(indexExists("rtc_session", "uk_rtc_session_appointment")).isTrue();
+        assertThat(singleLong("SELECT COUNT(*) FROM category WHERE parent_id IS NULL"))
+                .isGreaterThanOrEqualTo(4L);
+        assertThat(singleLong("SELECT COUNT(*) FROM category WHERE model_code IS NOT NULL"))
+                .isGreaterThanOrEqualTo(7L);
+        assertThat(
+                        singleLong(
+                                "SELECT COUNT(*) FROM checklist_template WHERE status = 'PUBLISHED'"))
+                .isGreaterThanOrEqualTo(7L);
+        assertThat(singleLong("SELECT COUNT(*) FROM checklist_template_item"))
+                .isGreaterThanOrEqualTo(32L);
+        assertThat(singleLong("SELECT COUNT(*) FROM account_removal_guide"))
+                .isGreaterThanOrEqualTo(7L);
         assertThat(tableExists("member_role")).isTrue();
         assertThat(tableExists("user_sanction")).isTrue();
         assertThat(singleString("SELECT member_type FROM user_account WHERE email = 'legacy@example.com'"))
                 .isEqualTo("SELLER");
         assertThat(singleLong("SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1"))
-                .isGreaterThanOrEqualTo(6L);
+                .isGreaterThanOrEqualTo(7L);
+        assertThat(
+                        singleLong(
+                                "SELECT COUNT(*) FROM flyway_schema_history "
+                                        + "WHERE success = 1 AND version = '20260801'"))
+                .isEqualTo(1L);
+    }
+
+    @Test
+    void migratesPendingChangesAfterExistingProductionProductMigration() throws SQLException {
+        assertThat(
+                        singleLong(
+                                PRODUCTION_HISTORY_MYSQL,
+                                "SELECT COUNT(*) FROM flyway_schema_history "
+                                        + "WHERE success = 1 AND version = '20260801'"))
+                .isEqualTo(1L);
+        assertThat(
+                        singleLong(
+                                PRODUCTION_HISTORY_MYSQL,
+                                "SELECT COUNT(*) FROM flyway_schema_history "
+                                        + "WHERE success = 1 "
+                                        + "AND version IN ('20260728', '20260729', '20260730', '20260731', '20260801')"))
+                .isEqualTo(5L);
+    }
+
+    private static void migrateTo(MySQLContainer container, String target) {
+        var configuration =
+                Flyway.configure()
+                        .dataSource(
+                                container.getJdbcUrl(),
+                                container.getUsername(),
+                                container.getPassword())
+                        .locations("classpath:db/migration")
+                        .cleanDisabled(true);
+        if (target != null) {
+            configuration.target(target);
+        }
+        configuration.load().migrate();
     }
 
     private static boolean tableExists(String tableName) throws SQLException {
@@ -129,10 +222,27 @@ class FlywayMigrationIntegrationTests {
                 == 1L;
     }
 
+    private static boolean indexExists(String tableName, String indexName) throws SQLException {
+        return singleLong(
+                        "SELECT COUNT(*) FROM information_schema.statistics "
+                                + "WHERE table_schema = DATABASE() AND table_name = '"
+                                + tableName
+                                + "' AND index_name = '"
+                                + indexName
+                                + "'")
+                > 0L;
+    }
+
     private static long singleLong(String sql) throws SQLException {
+        return singleLong(MYSQL, sql);
+    }
+
+    private static long singleLong(MySQLContainer container, String sql) throws SQLException {
         try (var connection =
                         DriverManager.getConnection(
-                                MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
+                                container.getJdbcUrl(),
+                                container.getUsername(),
+                                container.getPassword());
                 Statement statement = connection.createStatement();
                 ResultSet resultSet = statement.executeQuery(sql)) {
             resultSet.next();
@@ -141,9 +251,15 @@ class FlywayMigrationIntegrationTests {
     }
 
     private static String singleString(String sql) throws SQLException {
+        return singleString(MYSQL, sql);
+    }
+
+    private static String singleString(MySQLContainer container, String sql) throws SQLException {
         try (var connection =
                         DriverManager.getConnection(
-                                MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
+                                container.getJdbcUrl(),
+                                container.getUsername(),
+                                container.getPassword());
                 Statement statement = connection.createStatement();
                 ResultSet resultSet = statement.executeQuery(sql)) {
             resultSet.next();

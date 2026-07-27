@@ -1,24 +1,69 @@
 {
-  "annotations": {"list": []},
+  "annotations": {
+    "list": []
+  },
   "editable": true,
   "graphTooltip": 1,
   "links": [
-    {"title": "All container logs", "type": "link", "url": "/explore?left={\"datasource\":\"loki\",\"queries\":[{\"expr\":\"{source=\\\"docker\\\"}\"}]}", "targetBlank": false}
+    {
+      "title": "All container logs",
+      "type": "link",
+      "url": "/explore?left={\"datasource\":\"loki\",\"queries\":[{\"expr\":\"{source=\\\"docker\\\"}\"}]}",
+      "targetBlank": false
+    }
   ],
   "panels": [
     {
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": {"mode": "thresholds"},
+          "color": {
+            "mode": "thresholds"
+          },
           "mappings": [
-            {"options": {"0": {"color": "red", "text": "장애"}, "1": {"color": "green", "text": "정상"}}, "type": "value"}
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "text": "장애"
+                },
+                "1": {
+                  "color": "green",
+                  "text": "정상"
+                }
+              },
+              "type": "value"
+            }
           ],
-          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "yellow", "value": 0.5}, {"color": "green", "value": 1}]}
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.5
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
         },
         "overrides": []
       },
-      "gridPos": {"h": 14, "w": 24, "x": 0, "y": 0},
+      "gridPos": {
+        "h": 14,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
       "id": 1,
       "options": {
         "inlineEditing": false,
@@ -26,125 +71,1780 @@
         "panZoom": false,
         "infinitePan": false,
         "root": {
-          "background": {"color": {"fixed": "transparent"}},
-          "border": {"color": {"fixed": "dark-green"}},
+          "background": {
+            "color": {
+              "fixed": "transparent"
+            }
+          },
+          "border": {
+            "color": {
+              "fixed": "dark-green"
+            }
+          },
           "elements": [
             {
-              "name": "Vue CloudFront S3", "type": "rectangle",
-              "config": {"align": "center", "color": {"fixed": "text"}, "size": 18, "text": {"fixed": "Vue 3\nS3 + CloudFront", "mode": "fixed"}, "valign": "middle"},
-              "background": {"color": {"fixed": "#1F60C4"}}, "border": {"color": {"fixed": "#73BF69"}, "width": 2},
-              "constraint": {"horizontal": "left", "vertical": "top"}, "placement": {"top": 40, "left": 30, "width": 180, "height": 80}
+              "name": "Vue CloudFront S3",
+              "type": "rectangle",
+              "config": {
+                "align": "center",
+                "color": {
+                  "fixed": "#111827"
+                },
+                "size": 14,
+                "text": {
+                  "fixed": "Vue 3\nS3 + CloudFront",
+                  "mode": "fixed"
+                },
+                "valign": "bottom"
+              },
+              "background": {
+                "color": {
+                  "fixed": "#FFFFFF"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "#73BF69"
+                },
+                "width": 2
+              },
+              "constraint": {
+                "horizontal": "left",
+                "vertical": "top"
+              },
+              "placement": {
+                "top": 40,
+                "left": 30,
+                "width": 180,
+                "height": 92
+              }
             },
             {
-              "name": "Nginx", "type": "rectangle",
-              "config": {"align": "center", "color": {"fixed": "text"}, "size": 18, "text": {"fixed": "HTTPS :443\nNginx", "mode": "fixed"}, "valign": "middle"},
-              "background": {"color": {"field": "Nginx"}}, "border": {"color": {"fixed": "#73BF69"}, "width": 2},
-              "constraint": {"horizontal": "left", "vertical": "top"}, "placement": {"top": 40, "left": 270, "width": 180, "height": 80},
-              "links": [{"title": "Nginx logs", "url": "/explore?left={\"datasource\":\"loki\",\"queries\":[{\"expr\":\"{service=\\\"nginx\\\"}\"}]}", "targetBlank": false}]
+              "name": "Vue Icon",
+              "type": "icon",
+              "config": {
+                "path": {
+                  "mode": "fixed",
+                  "fixed": "https://grafana.l1mit.shop/limit-assets/vue.svg"
+                },
+                "fill": {
+                  "fixed": "#111827"
+                }
+              },
+              "background": {
+                "color": {
+                  "fixed": "transparent"
+                }
+              },
+              "constraint": {
+                "horizontal": "left",
+                "vertical": "top"
+              },
+              "placement": {
+                "top": 47,
+                "left": 96,
+                "width": 48,
+                "height": 48
+              }
             },
             {
-              "name": "Spring Blue Green", "type": "rectangle",
-              "config": {"align": "center", "color": {"fixed": "text"}, "size": 18, "text": {"fixed": "Spring Boot\nBlue / Green", "mode": "fixed"}, "valign": "middle"},
-              "background": {"color": {"field": "Backend"}}, "border": {"color": {"fixed": "#5794F2"}, "width": 2},
-              "constraint": {"horizontal": "left", "vertical": "top"}, "placement": {"top": 40, "left": 510, "width": 200, "height": 80},
-              "links": [{"title": "Backend logs", "url": "/explore?left={\"datasource\":\"loki\",\"queries\":[{\"expr\":\"{service=~\\\"backend-(blue|green)\\\"}\"}]}", "targetBlank": false}]
+              "name": "Nginx",
+              "type": "rectangle",
+              "config": {
+                "align": "center",
+                "color": {
+                  "fixed": "#111827"
+                },
+                "size": 14,
+                "text": {
+                  "fixed": "HTTPS :443\nNginx",
+                  "mode": "fixed"
+                },
+                "valign": "bottom"
+              },
+              "background": {
+                "color": {
+                  "fixed": "#FFFFFF"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "#73BF69"
+                },
+                "width": 2
+              },
+              "constraint": {
+                "horizontal": "left",
+                "vertical": "top"
+              },
+              "placement": {
+                "top": 40,
+                "left": 270,
+                "width": 180,
+                "height": 92
+              },
+              "links": [
+                {
+                  "title": "Nginx logs",
+                  "url": "/explore?left={\"datasource\":\"loki\",\"queries\":[{\"expr\":\"{service=\\\"nginx\\\"}\"}]}",
+                  "targetBlank": false
+                }
+              ]
             },
             {
-              "name": "MySQL", "type": "rectangle",
-              "config": {"align": "center", "color": {"fixed": "text"}, "size": 16, "text": {"fixed": "MySQL", "mode": "fixed"}, "valign": "middle"},
-              "background": {"color": {"field": "MySQL"}}, "border": {"color": {"fixed": "#73BF69"}, "width": 2},
-              "constraint": {"horizontal": "left", "vertical": "top"}, "placement": {"top": 190, "left": 90, "width": 150, "height": 70},
-              "links": [{"title": "MySQL logs", "url": "/explore?left={\"datasource\":\"loki\",\"queries\":[{\"expr\":\"{service=\\\"mysql\\\"}\"}]}", "targetBlank": false}]
+              "name": "Nginx Icon",
+              "type": "icon",
+              "config": {
+                "path": {
+                  "mode": "fixed",
+                  "fixed": "https://grafana.l1mit.shop/limit-assets/nginx.svg"
+                },
+                "fill": {
+                  "fixed": "#111827"
+                }
+              },
+              "background": {
+                "color": {
+                  "fixed": "transparent"
+                }
+              },
+              "constraint": {
+                "horizontal": "left",
+                "vertical": "top"
+              },
+              "placement": {
+                "top": 47,
+                "left": 336,
+                "width": 48,
+                "height": 48
+              }
             },
             {
-              "name": "MongoDB", "type": "rectangle",
-              "config": {"align": "center", "color": {"fixed": "text"}, "size": 16, "text": {"fixed": "MongoDB", "mode": "fixed"}, "valign": "middle"},
-              "background": {"color": {"field": "MongoDB"}}, "border": {"color": {"fixed": "#73BF69"}, "width": 2},
-              "constraint": {"horizontal": "left", "vertical": "top"}, "placement": {"top": 190, "left": 280, "width": 150, "height": 70},
-              "links": [{"title": "MongoDB logs", "url": "/explore?left={\"datasource\":\"loki\",\"queries\":[{\"expr\":\"{service=\\\"mongodb\\\"}\"}]}", "targetBlank": false}]
+              "name": "MySQL",
+              "type": "rectangle",
+              "config": {
+                "align": "center",
+                "color": {
+                  "fixed": "#111827"
+                },
+                "size": 13,
+                "text": {
+                  "fixed": "MySQL",
+                  "mode": "fixed"
+                },
+                "valign": "bottom"
+              },
+              "background": {
+                "color": {
+                  "fixed": "#FFFFFF"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "#73BF69"
+                },
+                "width": 2
+              },
+              "constraint": {
+                "horizontal": "left",
+                "vertical": "top"
+              },
+              "placement": {
+                "top": 190,
+                "left": 90,
+                "width": 150,
+                "height": 84
+              },
+              "links": [
+                {
+                  "title": "MySQL logs",
+                  "url": "/explore?left={\"datasource\":\"loki\",\"queries\":[{\"expr\":\"{service=\\\"mysql\\\"}\"}]}",
+                  "targetBlank": false
+                }
+              ]
             },
             {
-              "name": "Redis", "type": "rectangle",
-              "config": {"align": "center", "color": {"fixed": "text"}, "size": 16, "text": {"fixed": "Redis", "mode": "fixed"}, "valign": "middle"},
-              "background": {"color": {"field": "Redis"}}, "border": {"color": {"fixed": "#73BF69"}, "width": 2},
-              "constraint": {"horizontal": "left", "vertical": "top"}, "placement": {"top": 190, "left": 470, "width": 150, "height": 70},
-              "links": [{"title": "Redis logs", "url": "/explore?left={\"datasource\":\"loki\",\"queries\":[{\"expr\":\"{service=\\\"redis\\\"}\"}]}", "targetBlank": false}]
+              "name": "MySQL Icon",
+              "type": "icon",
+              "config": {
+                "path": {
+                  "mode": "fixed",
+                  "fixed": "https://grafana.l1mit.shop/limit-assets/mysql.svg"
+                },
+                "fill": {
+                  "fixed": "#111827"
+                }
+              },
+              "background": {
+                "color": {
+                  "fixed": "transparent"
+                }
+              },
+              "constraint": {
+                "horizontal": "left",
+                "vertical": "top"
+              },
+              "placement": {
+                "top": 197,
+                "left": 141,
+                "width": 48,
+                "height": 48
+              }
             },
             {
-              "name": "Qdrant", "type": "rectangle",
-              "config": {"align": "center", "color": {"fixed": "text"}, "size": 16, "text": {"fixed": "Qdrant", "mode": "fixed"}, "valign": "middle"},
-              "background": {"color": {"field": "Qdrant"}}, "border": {"color": {"fixed": "#73BF69"}, "width": 2},
-              "constraint": {"horizontal": "left", "vertical": "top"}, "placement": {"top": 190, "left": 660, "width": 150, "height": 70},
-              "links": [{"title": "Qdrant logs", "url": "/explore?left={\"datasource\":\"loki\",\"queries\":[{\"expr\":\"{service=\\\"qdrant\\\"}\"}]}", "targetBlank": false}]
+              "name": "MongoDB",
+              "type": "rectangle",
+              "config": {
+                "align": "center",
+                "color": {
+                  "fixed": "#111827"
+                },
+                "size": 13,
+                "text": {
+                  "fixed": "MongoDB",
+                  "mode": "fixed"
+                },
+                "valign": "bottom"
+              },
+              "background": {
+                "color": {
+                  "fixed": "#FFFFFF"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "#73BF69"
+                },
+                "width": 2
+              },
+              "constraint": {
+                "horizontal": "left",
+                "vertical": "top"
+              },
+              "placement": {
+                "top": 190,
+                "left": 280,
+                "width": 150,
+                "height": 84
+              },
+              "links": [
+                {
+                  "title": "MongoDB logs",
+                  "url": "/explore?left={\"datasource\":\"loki\",\"queries\":[{\"expr\":\"{service=\\\"mongodb\\\"}\"}]}",
+                  "targetBlank": false
+                }
+              ]
+            },
+            {
+              "name": "MongoDB Icon",
+              "type": "icon",
+              "config": {
+                "path": {
+                  "mode": "fixed",
+                  "fixed": "https://grafana.l1mit.shop/limit-assets/mongodb.svg"
+                },
+                "fill": {
+                  "fixed": "#111827"
+                }
+              },
+              "background": {
+                "color": {
+                  "fixed": "transparent"
+                }
+              },
+              "constraint": {
+                "horizontal": "left",
+                "vertical": "top"
+              },
+              "placement": {
+                "top": 197,
+                "left": 331,
+                "width": 48,
+                "height": 48
+              }
+            },
+            {
+              "name": "Redis",
+              "type": "rectangle",
+              "config": {
+                "align": "center",
+                "color": {
+                  "fixed": "#111827"
+                },
+                "size": 13,
+                "text": {
+                  "fixed": "Redis",
+                  "mode": "fixed"
+                },
+                "valign": "bottom"
+              },
+              "background": {
+                "color": {
+                  "fixed": "#FFFFFF"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "#73BF69"
+                },
+                "width": 2
+              },
+              "constraint": {
+                "horizontal": "left",
+                "vertical": "top"
+              },
+              "placement": {
+                "top": 190,
+                "left": 470,
+                "width": 150,
+                "height": 84
+              },
+              "links": [
+                {
+                  "title": "Redis logs",
+                  "url": "/explore?left={\"datasource\":\"loki\",\"queries\":[{\"expr\":\"{service=\\\"redis\\\"}\"}]}",
+                  "targetBlank": false
+                }
+              ]
+            },
+            {
+              "name": "Redis Icon",
+              "type": "icon",
+              "config": {
+                "path": {
+                  "mode": "fixed",
+                  "fixed": "https://grafana.l1mit.shop/limit-assets/redis.svg"
+                },
+                "fill": {
+                  "fixed": "#111827"
+                }
+              },
+              "background": {
+                "color": {
+                  "fixed": "transparent"
+                }
+              },
+              "constraint": {
+                "horizontal": "left",
+                "vertical": "top"
+              },
+              "placement": {
+                "top": 197,
+                "left": 521,
+                "width": 48,
+                "height": 48
+              }
+            },
+            {
+              "name": "Spring Blue",
+              "type": "rectangle",
+              "config": {
+                "align": "center",
+                "color": {
+                  "fixed": "#111827"
+                },
+                "size": 13,
+                "text": {
+                  "fixed": "Spring Boot\nBlue",
+                  "mode": "fixed"
+                },
+                "valign": "bottom"
+              },
+              "background": {
+                "color": {
+                  "fixed": "#FFFFFF"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "#5794F2"
+                },
+                "width": 3
+              },
+              "constraint": {
+                "horizontal": "left",
+                "vertical": "top"
+              },
+              "placement": {
+                "top": 40,
+                "left": 510,
+                "width": 140,
+                "height": 92
+              },
+              "links": [
+                {
+                  "title": "Blue backend logs",
+                  "url": "/explore?left={\"datasource\":\"loki\",\"queries\":[{\"expr\":\"{service=\\\"backend-blue\\\"}\"}]}",
+                  "targetBlank": false
+                }
+              ]
+            },
+            {
+              "name": "Spring Blue Icon",
+              "type": "icon",
+              "config": {
+                "path": {
+                  "mode": "fixed",
+                  "fixed": "https://grafana.l1mit.shop/limit-assets/spring.svg"
+                },
+                "fill": {
+                  "fixed": "#111827"
+                }
+              },
+              "background": {
+                "color": {
+                  "fixed": "transparent"
+                }
+              },
+              "constraint": {
+                "horizontal": "left",
+                "vertical": "top"
+              },
+              "placement": {
+                "top": 47,
+                "left": 556,
+                "width": 48,
+                "height": 48
+              }
+            },
+            {
+              "name": "Blue Status",
+              "type": "rectangle",
+              "config": {
+                "align": "center",
+                "color": {
+                  "fixed": "#FFFFFF"
+                },
+                "size": 10,
+                "text": {
+                  "fixed": "",
+                  "mode": "fixed"
+                },
+                "valign": "middle"
+              },
+              "background": {
+                "color": {
+                  "field": "Blue"
+                }
+              },
+              "border": {
+                "color": {
+                  "field": "Blue"
+                },
+                "width": 1
+              },
+              "constraint": {
+                "horizontal": "left",
+                "vertical": "top"
+              },
+              "placement": {
+                "top": 48,
+                "left": 628,
+                "width": 14,
+                "height": 14
+              }
+            },
+            {
+              "name": "Spring Green",
+              "type": "rectangle",
+              "config": {
+                "align": "center",
+                "color": {
+                  "fixed": "#111827"
+                },
+                "size": 13,
+                "text": {
+                  "fixed": "Spring Boot\nGreen",
+                  "mode": "fixed"
+                },
+                "valign": "bottom"
+              },
+              "background": {
+                "color": {
+                  "fixed": "#FFFFFF"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "#73BF69"
+                },
+                "width": 3
+              },
+              "constraint": {
+                "horizontal": "left",
+                "vertical": "top"
+              },
+              "placement": {
+                "top": 40,
+                "left": 670,
+                "width": 140,
+                "height": 92
+              },
+              "links": [
+                {
+                  "title": "Green backend logs",
+                  "url": "/explore?left={\"datasource\":\"loki\",\"queries\":[{\"expr\":\"{service=\\\"backend-green\\\"}\"}]}",
+                  "targetBlank": false
+                }
+              ]
+            },
+            {
+              "name": "Spring Green Icon",
+              "type": "icon",
+              "config": {
+                "path": {
+                  "mode": "fixed",
+                  "fixed": "https://grafana.l1mit.shop/limit-assets/spring.svg"
+                },
+                "fill": {
+                  "fixed": "#111827"
+                }
+              },
+              "background": {
+                "color": {
+                  "fixed": "transparent"
+                }
+              },
+              "constraint": {
+                "horizontal": "left",
+                "vertical": "top"
+              },
+              "placement": {
+                "top": 47,
+                "left": 716,
+                "width": 48,
+                "height": 48
+              }
+            },
+            {
+              "name": "Green Status",
+              "type": "rectangle",
+              "config": {
+                "align": "center",
+                "color": {
+                  "fixed": "#FFFFFF"
+                },
+                "size": 10,
+                "text": {
+                  "fixed": "",
+                  "mode": "fixed"
+                },
+                "valign": "middle"
+              },
+              "background": {
+                "color": {
+                  "field": "Green"
+                }
+              },
+              "border": {
+                "color": {
+                  "field": "Green"
+                },
+                "width": 1
+              },
+              "constraint": {
+                "horizontal": "left",
+                "vertical": "top"
+              },
+              "placement": {
+                "top": 48,
+                "left": 788,
+                "width": 14,
+                "height": 14
+              }
+            }
+            ,
+            {
+              "name": "Coturn TURN",
+              "type": "rectangle",
+              "config": {
+                "align": "center",
+                "color": {
+                  "fixed": "#111827"
+                },
+                "size": 13,
+                "text": {
+                  "fixed": "Coturn\nTURN/STUN",
+                  "mode": "fixed"
+                },
+                "valign": "middle"
+              },
+              "background": {
+                "color": {
+                  "fixed": "#FFFFFF"
+                }
+              },
+              "border": {
+                "color": {
+                  "fixed": "#B877D9"
+                },
+                "width": 2
+              },
+              "constraint": {
+                "horizontal": "left",
+                "vertical": "top"
+              },
+              "placement": {
+                "top": 190,
+                "left": 660,
+                "width": 150,
+                "height": 84
+              },
+              "links": [
+                {
+                  "title": "Coturn logs",
+                  "url": "/explore?left={\"datasource\":\"loki\",\"queries\":[{\"expr\":\"{service=\\\"coturn\\\"}\"}]}",
+                  "targetBlank": false
+                }
+              ]
+            },
+            {
+              "name": "Coturn Status",
+              "type": "rectangle",
+              "config": {
+                "align": "center",
+                "color": {
+                  "fixed": "#FFFFFF"
+                },
+                "size": 10,
+                "text": {
+                  "fixed": "",
+                  "mode": "fixed"
+                },
+                "valign": "middle"
+              },
+              "background": {
+                "color": {
+                  "field": "Coturn"
+                }
+              },
+              "border": {
+                "color": {
+                  "field": "Coturn"
+                },
+                "width": 1
+              },
+              "constraint": {
+                "horizontal": "left",
+                "vertical": "top"
+              },
+              "placement": {
+                "top": 198,
+                "left": 788,
+                "width": 14,
+                "height": 14
+              }
             }
           ],
-          "name": "Limit Architecture", "type": "frame"
+          "name": "Limit Architecture",
+          "type": "frame"
         }
       },
       "pluginVersion": "12.0.1",
       "targets": [
-        {"expr": "max(up{job=~\"spring-blue|spring-green\"})", "instant": true, "legendFormat": "Backend", "refId": "Backend"},
-        {"expr": "up{job=\"mysql\"}", "instant": true, "legendFormat": "MySQL", "refId": "MySQL"},
-        {"expr": "up{job=\"mongodb\"}", "instant": true, "legendFormat": "MongoDB", "refId": "MongoDB"},
-        {"expr": "up{job=\"redis\"}", "instant": true, "legendFormat": "Redis", "refId": "Redis"},
-        {"expr": "up{job=\"qdrant\"}", "instant": true, "legendFormat": "Qdrant", "refId": "Qdrant"},
-        {"expr": "up{job=\"nginx\"}", "instant": true, "legendFormat": "Nginx", "refId": "Nginx"}
+        {
+          "expr": "up{job=\"spring-green\"}",
+          "instant": true,
+          "legendFormat": "Green",
+          "refId": "Green"
+        },
+        {
+          "expr": "up{job=\"spring-blue\"}",
+          "instant": true,
+          "legendFormat": "Blue",
+          "refId": "Blue"
+        },
+        {
+          "expr": "up{job=\"mysql\"}",
+          "instant": true,
+          "legendFormat": "MySQL",
+          "refId": "MySQL"
+        },
+        {
+          "expr": "up{job=\"mongodb\"}",
+          "instant": true,
+          "legendFormat": "MongoDB",
+          "refId": "MongoDB"
+        },
+        {
+          "expr": "up{job=\"redis\"}",
+          "instant": true,
+          "legendFormat": "Redis",
+          "refId": "Redis"
+        },
+        {
+          "expr": "up{job=\"nginx\"}",
+          "instant": true,
+          "legendFormat": "Nginx",
+          "refId": "Nginx"
+        },
+        {
+          "expr": "up{job=\"coturn\"}",
+          "instant": true,
+          "legendFormat": "Coturn",
+          "refId": "Coturn"
+        }
       ],
-      "title": "Limit 서비스 아키텍처 — 노드를 클릭하면 Loki 로그로 이동", "type": "canvas"
+      "title": "Limit 서비스 아키텍처 — 노드를 클릭하면 Loki 로그로 이동",
+      "type": "canvas"
     },
     {
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 0.75}, {"color": "red", "value": 0.9}]}}, "overrides": []},
-      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 14}, "id": 2,
-      "options": {"colorMode": "background", "graphMode": "area", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}},
-      "targets": [{"expr": "1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m]))", "refId": "A"}],
-      "title": "EC2 CPU", "type": "stat"
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.75
+              },
+              {
+                "color": "red",
+                "value": 0.9
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 0,
+        "y": 14
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m]))",
+          "refId": "A"
+        }
+      ],
+      "title": "EC2 CPU",
+      "type": "stat"
     },
     {
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 0.75}, {"color": "red", "value": 0.9}]}}, "overrides": []},
-      "gridPos": {"h": 6, "w": 8, "x": 8, "y": 14}, "id": 3,
-      "options": {"colorMode": "background", "graphMode": "area", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}},
-      "targets": [{"expr": "1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes", "refId": "A"}],
-      "title": "EC2 RAM", "type": "stat"
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.75
+              },
+              {
+                "color": "red",
+                "value": 0.9
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 8,
+        "y": 14
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes",
+          "refId": "A"
+        }
+      ],
+      "title": "EC2 RAM",
+      "type": "stat"
     },
     {
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 0.75}, {"color": "red", "value": 0.9}]}}, "overrides": []},
-      "gridPos": {"h": 6, "w": 8, "x": 16, "y": 14}, "id": 4,
-      "options": {"colorMode": "background", "graphMode": "area", "reduceOptions": {"calcs": ["lastNotNull"], "values": false}},
-      "targets": [{"expr": "1 - node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"}", "refId": "A"}],
-      "title": "EC2 Disk", "type": "stat"
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.75
+              },
+              {
+                "color": "red",
+                "value": 0.9
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 16,
+        "y": 14
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "1 - node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"}",
+          "refId": "A"
+        }
+      ],
+      "title": "EC2 Disk",
+      "type": "stat"
     },
     {
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []},
-      "gridPos": {"h": 7, "w": 8, "x": 0, "y": 20}, "id": 5,
-      "targets": [{"expr": "sum(rate(nginx_http_requests_total[5m]))", "legendFormat": "requests/s", "refId": "A"}],
-      "title": "Nginx 요청률", "type": "timeseries"
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 20
+      },
+      "id": 5,
+      "targets": [
+        {
+          "expr": "sum(rate(nginx_http_requests_total[5m]))",
+          "legendFormat": "requests/s",
+          "refId": "A"
+        }
+      ],
+      "title": "Nginx 요청률",
+      "type": "timeseries"
     },
     {
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"unit": "percentunit"}, "overrides": []},
-      "gridPos": {"h": 7, "w": 8, "x": 8, "y": 20}, "id": 6,
-      "targets": [{"expr": "sum(rate(http_server_requests_seconds_count{status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count[5m])), 1)", "legendFormat": "5xx ratio", "refId": "A"}],
-      "title": "API 오류율", "type": "timeseries"
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 20
+      },
+      "id": 6,
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count[5m])), 1)",
+          "legendFormat": "5xx ratio",
+          "refId": "A"
+        }
+      ],
+      "title": "API 오류율",
+      "type": "timeseries"
     },
     {
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
-      "gridPos": {"h": 7, "w": 8, "x": 16, "y": 20}, "id": 7,
-      "targets": [{"expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket[5m])))", "legendFormat": "p95", "refId": "A"}],
-      "title": "API p95 지연", "type": "timeseries"
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 20
+      },
+      "id": 7,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket[5m])))",
+          "legendFormat": "p95",
+          "refId": "A"
+        }
+      ],
+      "title": "API p95 지연",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 27
+      },
+      "id": 8,
+      "targets": [
+        {
+          "expr": "sum by (area) (jvm_memory_used_bytes{job=~\"spring-blue|spring-green\", color=~\"$color\"})",
+          "legendFormat": "{{area}} used",
+          "refId": "A"
+        },
+        {
+          "expr": "sum by (area) (jvm_memory_committed_bytes{job=~\"spring-blue|spring-green\", color=~\"$color\"})",
+          "legendFormat": "{{area}} committed",
+          "refId": "B"
+        }
+      ],
+      "title": "JVM 메모리 (heap/nonheap)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 27
+      },
+      "id": 9,
+      "targets": [
+        {
+          "expr": "sum(hikaricp_connections_active{job=~\"spring-blue|spring-green\", color=~\"$color\"})",
+          "legendFormat": "active",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(hikaricp_connections_idle{job=~\"spring-blue|spring-green\", color=~\"$color\"})",
+          "legendFormat": "idle",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(hikaricp_connections_pending{job=~\"spring-blue|spring-green\", color=~\"$color\"})",
+          "legendFormat": "pending",
+          "refId": "C"
+        },
+        {
+          "expr": "sum(hikaricp_connections_max{job=~\"spring-blue|spring-green\", color=~\"$color\"})",
+          "legendFormat": "max",
+          "refId": "D"
+        }
+      ],
+      "title": "HikariCP 커넥션 풀",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 27
+      },
+      "id": 10,
+      "targets": [
+        {
+          "expr": "sum(jvm_threads_live_threads{job=~\"spring-blue|spring-green\", color=~\"$color\"})",
+          "legendFormat": "live",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(jvm_threads_daemon_threads{job=~\"spring-blue|spring-green\", color=~\"$color\"})",
+          "legendFormat": "daemon",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(jvm_threads_peak_threads{job=~\"spring-blue|spring-green\", color=~\"$color\"})",
+          "legendFormat": "peak",
+          "refId": "C"
+        }
+      ],
+      "title": "JVM 쓰레드",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 35
+      },
+      "id": 11,
+      "targets": [
+        {
+          "expr": "topk(10, sum by (uri) (rate(http_server_requests_seconds_sum{job=~\"spring-blue|spring-green\", color=~\"$color\"}[5m])) / clamp_min(sum by (uri) (rate(http_server_requests_seconds_count{job=~\"spring-blue|spring-green\", color=~\"$color\"}[5m])), 0.001))",
+          "legendFormat": "{{uri}}",
+          "refId": "A"
+        }
+      ],
+      "title": "엔드포인트별 TOP10 응답시간",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 35
+      },
+      "id": 12,
+      "targets": [
+        {
+          "expr": "sum by (level) (rate(logback_events_total{job=~\"spring-blue|spring-green\", color=~\"$color\"}[5m]))",
+          "legendFormat": "{{level}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Logback 레벨별 로그 카운트",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "uri"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Name"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 43
+      },
+      "id": 13,
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Mean (s)"
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "Value #A": "Mean (s)",
+              "Value #B": "Max (s)"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "expr": "sum by (uri) (rate(http_server_requests_seconds_sum{job=~\"spring-blue|spring-green\", color=~\"$color\"}[5m])) / clamp_min(sum by (uri) (rate(http_server_requests_seconds_count{job=~\"spring-blue|spring-green\", color=~\"$color\"}[5m])), 0.001)",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        },
+        {
+          "expr": "max by (uri) (http_server_requests_seconds_max{job=~\"spring-blue|spring-green\", color=~\"$color\"})",
+          "format": "table",
+          "instant": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Response Time (엔드포인트별 Mean / Max — Min은 percentile-histogram 미설정으로 제공 안 됨)",
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 51
+      },
+      "id": 14,
+      "panels": [],
+      "title": "Logback Statistics",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "fixed": "#73BF69"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 52
+      },
+      "id": 15,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "lastNotNull",
+            "max",
+            "min",
+            "sum"
+          ],
+          "displayMode": "table",
+          "placement": "right"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(logback_events_total{job=~\"spring-blue|spring-green\", color=~\"$color\", level=\"info\"}[1m]))",
+          "legendFormat": "info",
+          "refId": "A"
+        }
+      ],
+      "title": "INFO logs",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "fixed": "#F2495C"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 52
+      },
+      "id": 16,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "lastNotNull",
+            "max",
+            "min",
+            "sum"
+          ],
+          "displayMode": "table",
+          "placement": "right"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(logback_events_total{job=~\"spring-blue|spring-green\", color=~\"$color\", level=\"error\"}[1m]))",
+          "legendFormat": "error",
+          "refId": "A"
+        }
+      ],
+      "title": "ERROR logs",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "fixed": "#FF9830"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 60
+      },
+      "id": 17,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "lastNotNull",
+            "max",
+            "min",
+            "sum"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(logback_events_total{job=~\"spring-blue|spring-green\", color=~\"$color\", level=\"warn\"}[1m]))",
+          "legendFormat": "warn",
+          "refId": "A"
+        }
+      ],
+      "title": "WARN logs",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "fixed": "#5794F2"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 60
+      },
+      "id": 18,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "lastNotNull",
+            "max",
+            "min",
+            "sum"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(logback_events_total{job=~\"spring-blue|spring-green\", color=~\"$color\", level=\"debug\"}[1m]))",
+          "legendFormat": "debug",
+          "refId": "A"
+        }
+      ],
+      "title": "DEBUG logs",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "fixed": "#B877D9"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 60
+      },
+      "id": 19,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "lastNotNull",
+            "max",
+            "min",
+            "sum"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(logback_events_total{job=~\"spring-blue|spring-green\", color=~\"$color\", level=\"trace\"}[1m]))",
+          "legendFormat": "trace",
+          "refId": "A"
+        }
+      ],
+      "title": "TRACE logs",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 67
+      },
+      "id": 20,
+      "panels": [],
+      "title": "Basic Statistics",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 68
+      },
+      "id": 21,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "expr": "max(process_uptime_seconds{job=~\"spring-blue|spring-green\", color=~\"$color\"})",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Uptime",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dateTimeAsSystem"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 6,
+        "y": 68
+      },
+      "id": 22,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "textMode": "value_and_name"
+      },
+      "targets": [
+        {
+          "expr": "max(process_start_time_seconds{job=~\"spring-blue|spring-green\", color=~\"$color\"}) * 1000",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Start time",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.75
+              },
+              {
+                "color": "red",
+                "value": 0.9
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 12,
+        "y": 68
+      },
+      "id": 23,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(jvm_memory_used_bytes{job=~\"spring-blue|spring-green\", color=~\"$color\", area=\"heap\"}) / clamp_min(sum(jvm_memory_committed_bytes{job=~\"spring-blue|spring-green\", color=~\"$color\", area=\"heap\"}), 1)",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Heap Used",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.75
+              },
+              {
+                "color": "red",
+                "value": 0.9
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 18,
+        "y": 68
+      },
+      "id": 24,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(jvm_memory_used_bytes{job=~\"spring-blue|spring-green\", color=~\"$color\", area=\"nonheap\"}) / clamp_min(sum(jvm_memory_committed_bytes{job=~\"spring-blue|spring-green\", color=~\"$color\", area=\"nonheap\"}), 1)",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Non-Heap Used",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 74
+      },
+      "id": 25,
+      "targets": [
+        {
+          "expr": "sum(process_files_open_files{job=~\"spring-blue|spring-green\", color=~\"$color\"})",
+          "legendFormat": "open files",
+          "refId": "A"
+        }
+      ],
+      "title": "Process Open Files",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 74
+      },
+      "id": 26,
+      "targets": [
+        {
+          "expr": "avg(process_cpu_usage{job=~\"spring-blue|spring-green\", color=~\"$color\"})",
+          "legendFormat": "process cpu",
+          "refId": "A"
+        }
+      ],
+      "title": "CPU Usage",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 74
+      },
+      "id": 27,
+      "targets": [
+        {
+          "expr": "avg(system_load_average_1m{job=~\"spring-blue|spring-green\", color=~\"$color\"})",
+          "legendFormat": "load avg 1m",
+          "refId": "A"
+        }
+      ],
+      "title": "Load Average",
+      "type": "timeseries"
     }
   ],
   "refresh": "30s",
   "schemaVersion": 41,
-  "tags": ["limit", "production"],
-  "templating": {"list": []},
-  "time": {"from": "now-6h", "to": "now"},
+  "tags": [
+    "limit",
+    "production"
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "color",
+        "label": "Blue/Green",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values(up{job=~\"spring-blue|spring-green\"}, color)",
+          "refId": "colorVariable"
+        },
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "refresh": 2,
+        "sort": 1
+      }
+    ]
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
   "timezone": "browser",
   "title": "Limit Platform Overview",
   "uid": "limit-platform-overview",
-  "version": 1
+  "version": 11
 }

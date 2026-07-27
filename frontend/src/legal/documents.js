@@ -1,4 +1,4 @@
-const operatorName = import.meta.env.VITE_LEGAL_OPERATOR_NAME || 'L1MIT 운영팀'
+const operatorName = import.meta.env.VITE_LEGAL_OPERATOR_NAME || 'LIMIT 운영팀'
 const representative = import.meta.env.VITE_LEGAL_REPRESENTATIVE || '운영 책임자'
 const address = import.meta.env.VITE_LEGAL_ADDRESS || '대한민국'
 const contactEmail = import.meta.env.VITE_LEGAL_CONTACT_EMAIL || 'privacy@l1mit.shop'
@@ -10,7 +10,7 @@ export const serviceTermsSections = [
   {
     id: 'purpose',
     title: '목적과 적용',
-    intro: `본 약관은 ${operatorName}(이하 “회사”)가 제공하는 L1MIT 중고거래 중개 서비스와 관련하여 회사와 회원의 권리·의무 및 책임사항을 정합니다. 회원가입을 완료하면 본 약관과 별도로 표시된 필수 정책에 동의한 것으로 봅니다.`,
+    intro: `본 약관은 ${operatorName}(이하 “회사”)가 제공하는 LIMIT 중고거래 중개 서비스와 관련하여 회사와 회원의 권리·의무 및 책임사항을 정합니다. 회원가입을 완료하면 본 약관과 별도로 표시된 필수 정책에 동의한 것으로 봅니다.`,
   },
   {
     id: 'account',
@@ -109,7 +109,7 @@ export const privacySections = [
   {
     id: 'overview',
     title: '처리방침의 적용',
-    intro: `${operatorName}(이하 “회사”)는 L1MIT 서비스에서 처리하는 개인정보를 보호하고 이용자의 권리 행사를 돕기 위해 이 처리방침을 공개합니다. 이 문서는 현재 구현된 회원·인증·관리자 기능을 기준으로 작성되며, 결제·배송 등 새 기능 도입 전 관련 항목과 수탁자를 갱신합니다.`,
+    intro: `${operatorName}(이하 “회사”)는 LIMIT 서비스에서 처리하는 개인정보를 보호하고 이용자의 권리 행사를 돕기 위해 이 처리방침을 공개합니다. 이 문서는 현재 구현된 회원·인증·관리자 기능을 기준으로 작성되며, 결제·배송 등 새 기능 도입 전 관련 항목과 수탁자를 갱신합니다.`,
   },
   {
     id: 'collection',

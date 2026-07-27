@@ -21,20 +21,25 @@ import org.springframework.test.util.ReflectionTestUtils;
 class EmailVerificationServiceTests {
     @Mock MemberRepository members;
     InMemoryEmailVerificationTokenStore tokens;
+    InMemoryAuthRateLimitStore rateLimits;
     CapturingSender sender;
     EmailVerificationService service;
 
     @BeforeEach
     void setUp() {
         tokens = new InMemoryEmailVerificationTokenStore();
+        rateLimits = new InMemoryAuthRateLimitStore();
         sender = new CapturingSender();
         service =
                 new EmailVerificationService(
                         members,
                         tokens,
                         sender,
+                        rateLimits,
                         Duration.ofMinutes(15),
-                        "http://localhost:5173/verify-email");
+                        "http://localhost:5173/verify-email",
+                        3,
+                        Duration.ofMinutes(10));
     }
 
     @Test
@@ -65,8 +70,11 @@ class EmailVerificationServiceTests {
                         members,
                         tokens,
                         new DisabledVerificationEmailSender(),
+                        rateLimits,
                         Duration.ofMinutes(15),
-                        "http://localhost:5173/verify-email");
+                        "http://localhost:5173/verify-email",
+                        3,
+                        Duration.ofMinutes(10));
 
         assertThatThrownBy(() -> service.request("user@example.com"))
                 .isInstanceOfSatisfying(
@@ -74,6 +82,29 @@ class EmailVerificationServiceTests {
                         exception ->
                                 assertThat(exception.getErrorCode())
                                         .isEqualTo(ErrorCode.EMAIL_VERIFICATION_UNAVAILABLE));
+    }
+
+    @Test
+    void rejectsRequestsOverConfiguredRateLimit() {
+        service =
+                new EmailVerificationService(
+                        members,
+                        tokens,
+                        sender,
+                        rateLimits,
+                        Duration.ofMinutes(15),
+                        "http://localhost:5173/verify-email",
+                        1,
+                        Duration.ofMinutes(10));
+
+        service.request("user@example.com");
+
+        assertThatThrownBy(() -> service.request("user@example.com"))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.TOO_MANY_REQUEST));
     }
 
     private static final class CapturingSender implements VerificationEmailSender {

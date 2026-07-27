@@ -1,6 +1,6 @@
 <script setup>
 defineProps({
-  eyebrow: { type: String, default: 'L1MIT' },
+  eyebrow: { type: String, default: 'LIMIT' },
   title: { type: String, required: true },
   description: { type: String, default: '' },
   width: { type: String, default: 'md' },

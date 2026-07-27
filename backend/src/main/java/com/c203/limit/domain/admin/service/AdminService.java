@@ -1,5 +1,6 @@
 package com.c203.limit.domain.admin.service;
 
+import com.c203.limit.domain.admin.dto.request.ChangeAdminPasswordRequest;
 import com.c203.limit.domain.admin.dto.request.CreateMemberRestrictionRequest;
 import com.c203.limit.domain.admin.entity.AdminActionLog;
 import com.c203.limit.domain.admin.entity.MemberRestriction;
@@ -18,6 +19,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -28,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AdminService {
+    private static final Logger log = LoggerFactory.getLogger(AdminService.class);
     private final AdminAccountRepository adminAccounts;
     private final MemberRepository members;
     private final MemberRestrictionRepository restrictions;
@@ -85,6 +89,29 @@ public class AdminService {
         }
         refreshTokenStore.revoke(claims.tokenId());
         return issue(admin);
+    }
+
+    @Transactional
+    public void changeOwnPassword(Long adminId, ChangeAdminPasswordRequest request) {
+        var admin =
+                adminAccounts
+                        .findById(adminId)
+                        .orElseThrow(() -> new BusinessException(ErrorCode.ADMIN_NOT_FOUND));
+        if (!passwordEncoder.matches(request.currentPassword(), admin.getPassword())) {
+            throw new BusinessException(ErrorCode.ADMIN_CURRENT_PASSWORD_MISMATCH);
+        }
+        if (request.newPassword() == null
+                || request.newPassword().length() < 12
+                || request.newPassword().length() > 72) {
+            throw new BusinessException(ErrorCode.INVALID_PASSWORD_FORMAT);
+        }
+        if (passwordEncoder.matches(request.newPassword(), admin.getPassword())) {
+            throw new BusinessException(ErrorCode.ADMIN_SAME_AS_OLD_PASSWORD);
+        }
+        admin.changePassword(passwordEncoder.encode(request.newPassword()));
+        refreshTokenStore.revokeAll(adminId, "ADMIN");
+        audit(adminId, "ADMIN_PASSWORD_CHANGE", "ADMIN_ACCOUNT", adminId, "SELF_SERVICE");
+        log.info("Admin password changed and refresh tokens revoked");
     }
 
     @Transactional(readOnly = true)

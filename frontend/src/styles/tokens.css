@@ -24,6 +24,7 @@
 
   --color-success: #16A34A;
   --color-success-bg: #EEFCF3;
+  --color-success-gradient: linear-gradient(90deg, #15803D 0%, #22C55E 100%);
 
   /* Radius */
   --radius-sm: 8px;

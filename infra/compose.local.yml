@@ -18,10 +18,24 @@ x-backend-environment: &backend-environment
   SOCIAL_SIGNUP_TTL: ${SOCIAL_SIGNUP_TTL:-15m}
   OAUTH_STATE_TTL: ${OAUTH_STATE_TTL:-10m}
   JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+  RTC_ALLOWED_ORIGIN_PATTERNS: ${RTC_ALLOWED_ORIGIN_PATTERNS:-http://localhost:5173}
+  RTC_STUN_URL: ${RTC_STUN_URL:-stun:stun.l.google.com:19302}
+  RTC_TURN_URL: ${RTC_TURN_URL:-turn:localhost:3478?transport=udp}
+  RTC_TURN_USERNAME: ${RTC_TURN_USERNAME:-limit-local}
+  RTC_TURN_CREDENTIAL: ${RTC_TURN_CREDENTIAL:-local-only-change-me}
   EMAIL_VERIFICATION_STORE: ${EMAIL_VERIFICATION_STORE:-redis}
   EMAIL_VERIFICATION_DELIVERY_ENABLED: ${EMAIL_VERIFICATION_DELIVERY_ENABLED:-false}
   EMAIL_VERIFICATION_TTL: ${EMAIL_VERIFICATION_TTL:-15m}
   FRONTEND_EMAIL_VERIFICATION_URL: ${FRONTEND_EMAIL_VERIFICATION_URL:-http://localhost:5173/verify-email}
+  AUTH_RATE_LIMIT_STORE: ${AUTH_RATE_LIMIT_STORE:-redis}
+  EMAIL_VERIFICATION_RATE_LIMIT_MAX_ATTEMPTS: ${EMAIL_VERIFICATION_RATE_LIMIT_MAX_ATTEMPTS:-3}
+  EMAIL_VERIFICATION_RATE_LIMIT_WINDOW: ${EMAIL_VERIFICATION_RATE_LIMIT_WINDOW:-10m}
+  PASSWORD_RESET_STORE: ${PASSWORD_RESET_STORE:-redis}
+  PASSWORD_RESET_DELIVERY_ENABLED: ${PASSWORD_RESET_DELIVERY_ENABLED:-false}
+  PASSWORD_RESET_TTL: ${PASSWORD_RESET_TTL:-15m}
+  FRONTEND_PASSWORD_RESET_URL: ${FRONTEND_PASSWORD_RESET_URL:-http://localhost:5173/reset-password}
+  PASSWORD_RESET_RATE_LIMIT_MAX_ATTEMPTS: ${PASSWORD_RESET_RATE_LIMIT_MAX_ATTEMPTS:-3}
+  PASSWORD_RESET_RATE_LIMIT_WINDOW: ${PASSWORD_RESET_RATE_LIMIT_WINDOW:-10m}
   MAIL_HOST: ${MAIL_HOST:-}
   MAIL_PORT: ${MAIL_PORT:-587}
   MAIL_USERNAME: ${MAIL_USERNAME:-}
@@ -60,8 +74,6 @@ x-backend-environment: &backend-environment
   TERMS_PRIVACY_VERSION: ${TERMS_PRIVACY_VERSION:-2026-07-22}
   TERMS_AGE_VERSION: ${TERMS_AGE_VERSION:-2026-07-22}
   TERMS_MARKETING_VERSION: ${TERMS_MARKETING_VERSION:-2026-07-22}
-  QDRANT_URL: http://qdrant:6333
-  QDRANT_API_KEY: ${QDRANT_API_KEY:?QDRANT_API_KEY is required}
 
 services:
   backend:
@@ -74,8 +86,6 @@ services:
       mongodb:
         condition: service_healthy
       redis:
-        condition: service_healthy
-      qdrant:
         condition: service_healthy
     ports:
       - "127.0.0.1:${BACKEND_PORT:-18080}:8080"
@@ -100,11 +110,33 @@ services:
     ports: ["127.0.0.1:${MONGODB_PORT:-17017}:27017"]
   redis:
     ports: ["127.0.0.1:${REDIS_PORT:-16379}:6379"]
-  qdrant:
+  coturn:
+    image: coturn/coturn:4.11.0-r0
+    restart: unless-stopped
+    command:
+      - -n
+      - --log-file=stdout
+      - --fingerprint
+      - --lt-cred-mech
+      - --realm=${RTC_TURN_REALM:-limit.local}
+      - --user=${RTC_TURN_USERNAME:-limit-local}:${RTC_TURN_CREDENTIAL:-local-only-change-me}
+      - --min-port=49160
+      - --max-port=49200
+      - --no-cli
+      - --no-multicast-peers
+      - --prometheus
     ports:
-      - "127.0.0.1:${QDRANT_HTTP_PORT:-16333}:6333"
-      - "127.0.0.1:${QDRANT_GRPC_PORT:-16334}:6334"
-
+      - "3478:3478"
+      - "3478:3478/udp"
+      - "49160-49200:49160-49200/udp"
+    networks: [app]
+    mem_limit: 256m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
   prometheus:
     image: prom/prometheus:v3.4.1
     command:
@@ -119,6 +151,8 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+      coturn:
+        condition: service_started
     mem_limit: 512m
     cpus: 0.5
     logging:

@@ -1,0 +1,52 @@
+package com.c203.limit.domain.product.entity;
+
+import jakarta.persistence.*;
+import java.time.LocalDateTime;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+/** 매물 대표·상세 이미지. DDL: listing_image */
+@Entity
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@Table(name = "listing_image")
+public class ListingImage {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id")
+    private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "listing_id")
+    private Listing listing;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "image_type", nullable = false, length = 30)
+    private ListingImageType imageType;
+
+    @Column(name = "s3_key", nullable = false, length = 500)
+    private String s3Key;
+
+    @Column(name = "cdn_url", nullable = false, length = 500)
+    private String cdnUrl;
+
+    @Column(name = "mime_type", nullable = false, length = 50)
+    private String mimeType;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    public static ListingImage create(
+            Listing listing, ListingImageType imageType, String s3Key, String cdnUrl, String mimeType) {
+        ListingImage image = new ListingImage();
+        image.listing = listing;
+        image.imageType = imageType;
+        image.s3Key = s3Key;
+        image.cdnUrl = cdnUrl;
+        image.mimeType = mimeType;
+        image.createdAt = LocalDateTime.now();
+        return image;
+    }
+}

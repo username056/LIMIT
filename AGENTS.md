@@ -55,7 +55,7 @@
 - Boolean 이름은 `is`, `has`, `can`, `should` 접두어를 사용한다.
 - DTO 이름에 역할을 포함한다. 예: `CreateOrderRequest`, `OrderDetailResponse`, `PaymentEventV1`.
 - Request DTO와 Response DTO를 분리하고 Entity를 API 응답으로 직접 노출하지 않는다.
-- 단순 불변 DTO는 Java `record`를 우선하고 이벤트에는 명시적인 버전을 사용한다.
+- 이벤트에는 명시적인 버전을 사용한다.
 
 ## 커밋 컨벤션
 

@@ -29,6 +29,11 @@ import com.c203.limit.domain.auth.repository.SocialAccountRepository;
 import com.c203.limit.domain.member.repository.MemberRepository;
 import com.c203.limit.domain.member.repository.MemberTermsAgreementRepository;
 import com.c203.limit.domain.member.entity.Member;
+import com.c203.limit.domain.product.repository.ListingRepository;
+import com.c203.limit.domain.product.repository.WishlistRepository;
+import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
+import com.c203.limit.domain.product.service.ProductApplicationService;
+import com.c203.limit.domain.product.service.ProductCatalogService;
 
 @SpringBootTest(properties = {
         "management.endpoint.health.validate-group-membership=false",
@@ -44,6 +49,9 @@ import com.c203.limit.domain.member.entity.Member;
 @AutoConfigureMockMvc
 @ActiveProfiles("local")
 class AdminAuthorizationTests {
+
+    @MockitoBean
+    com.c203.limit.domain.rtc.service.RtcCallService rtcCallService;
     @Autowired MockMvc mockMvc;
     @Autowired JwtTokenProvider tokens;
     @MockitoBean JpaMetamodelMappingContext jpaMetamodelMappingContext;
@@ -57,6 +65,28 @@ class AdminAuthorizationTests {
     @MockitoBean ChatRoomParticipantRepository chatRoomParticipantRepository;
     @MockitoBean ChatMessageRepository chatMessageRepository;
     @MockitoBean ListingChatReader listingChatReader;
+    @MockitoBean ListingRepository listingRepository;
+    @MockitoBean WishlistRepository wishlistRepository;
+    @MockitoBean ProductApplicationService productApplicationService;
+    @MockitoBean ProductCatalogService productCatalogService;
+    @MockitoBean ListingStatusHistoryRepository listingStatusHistoryRepository;
+
+    @Test
+    void publicHealthEndpointDoesNotRequireAuthentication() throws Exception {
+        mockMvc.perform(get("/api/v1/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("UP"));
+    }
+
+    @Test
+    void prometheusEndpointDoesNotRequireAuthentication() throws Exception {
+        mockMvc.perform(get("/actuator/prometheus")).andExpect(status().isOk());
+    }
+
+    @Test
+    void prometheusEndpointRejectsUnauthenticatedNonGetRequest() throws Exception {
+        mockMvc.perform(post("/actuator/prometheus")).andExpect(status().isUnauthorized());
+    }
 
     @Test
     void memberCannotReadAdminApi() throws Exception {
