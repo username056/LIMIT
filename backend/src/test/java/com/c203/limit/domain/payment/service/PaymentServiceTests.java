@@ -6,11 +6,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.c203.limit.domain.inspection.enums.DeviceType;
 import com.c203.limit.domain.member.entity.Member;
 import com.c203.limit.domain.member.repository.MemberRepository;
 import com.c203.limit.domain.payment.dto.request.CreatePaymentRequest;
@@ -18,9 +18,8 @@ import com.c203.limit.domain.payment.dto.response.PaymentResponse;
 import com.c203.limit.domain.payment.entity.Payment;
 import com.c203.limit.domain.payment.entity.PaymentMethod;
 import com.c203.limit.domain.payment.repository.PaymentRepository;
-import com.c203.limit.domain.product.entity.Category;
 import com.c203.limit.domain.product.entity.Listing;
-import com.c203.limit.domain.product.entity.ListingStatus;
+import com.c203.limit.domain.product.service.ListingReservationView;
 import com.c203.limit.domain.product.service.ListingService;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
@@ -58,13 +57,8 @@ class PaymentServiceTests {
         service = new PaymentService(paymentRepository, memberRepository, listingService, transactionManager);
     }
 
-    private Listing reservedListing(Long sellerId) {
-        Category category = Category.createTopLevel("스마트폰", DeviceType.SMARTPHONE, 0);
-        Listing listing = Listing.createDraft(sellerId, category, "갤럭시 S24", "설명", 650_000, 10L);
-        ReflectionTestUtils.setField(listing, "id", LISTING_ID);
-        ReflectionTestUtils.setField(listing, "status", ListingStatus.RESERVED);
-        ReflectionTestUtils.setField(listing, "buyerId", BUYER_ID);
-        return listing;
+    private ListingReservationView listingView(Long sellerId) {
+        return new ListingReservationView(sellerId, 650_000);
     }
 
     private Member buyer() {
@@ -81,7 +75,8 @@ class PaymentServiceTests {
     void requestReservesListingAndCreatesPayment() {
         when(paymentRepository.findByBuyerIdAndIdempotencyKey(BUYER_ID, "idem-1"))
                 .thenReturn(Optional.empty());
-        when(listingService.reserve(LISTING_ID, BUYER_ID)).thenReturn(reservedListing(SELLER_ID));
+        when(listingService.get(LISTING_ID)).thenReturn(listingView(SELLER_ID));
+        when(listingService.reserve(LISTING_ID, BUYER_ID)).thenReturn(listingView(SELLER_ID));
         when(memberRepository.findById(BUYER_ID)).thenReturn(Optional.of(buyer()));
         when(paymentRepository.save(any(Payment.class)))
                 .thenAnswer(
@@ -118,10 +113,10 @@ class PaymentServiceTests {
     }
 
     @Test
-    void requestRejectsSelfPurchase() {
+    void requestRejectsSelfPurchaseWithoutReservingListing() {
         when(paymentRepository.findByBuyerIdAndIdempotencyKey(BUYER_ID, "idem-1"))
                 .thenReturn(Optional.empty());
-        when(listingService.reserve(LISTING_ID, BUYER_ID)).thenReturn(reservedListing(BUYER_ID));
+        when(listingService.get(LISTING_ID)).thenReturn(listingView(BUYER_ID));
 
         assertThatThrownBy(() -> service.request(BUYER_ID, request("idem-1")))
                 .isInstanceOfSatisfying(
@@ -130,6 +125,7 @@ class PaymentServiceTests {
                                 assertThat(exception.getErrorCode())
                                         .isEqualTo(ErrorCode.SELF_PURCHASE_NOT_ALLOWED));
 
+        verify(listingService, never()).reserve(any(), any());
         verify(paymentRepository, never()).save(any());
     }
 
@@ -182,7 +178,8 @@ class PaymentServiceTests {
         when(paymentRepository.findByBuyerIdAndIdempotencyKey(BUYER_ID, "idem-1"))
                 .thenReturn(Optional.empty())
                 .thenReturn(Optional.of(existing));
-        when(listingService.reserve(LISTING_ID, BUYER_ID)).thenReturn(reservedListing(SELLER_ID));
+        when(listingService.get(LISTING_ID)).thenReturn(listingView(SELLER_ID));
+        when(listingService.reserve(LISTING_ID, BUYER_ID)).thenReturn(listingView(SELLER_ID));
         when(memberRepository.findById(BUYER_ID)).thenReturn(Optional.of(buyer()));
         when(paymentRepository.save(any(Payment.class)))
                 .thenThrow(new DataIntegrityViolationException("duplicate idempotency key"));
@@ -190,13 +187,15 @@ class PaymentServiceTests {
         PaymentResponse response = service.request(BUYER_ID, request("idem-1"));
 
         assertThat(response.getPaymentId()).isEqualTo(PAYMENT_ID);
+        verify(listingService, times(1)).reserve(any(), any());
     }
 
     @Test
     void requestReportsConflictWhenUniqueViolationBelongsToAnotherBuyer() {
         when(paymentRepository.findByBuyerIdAndIdempotencyKey(BUYER_ID, "idem-1"))
                 .thenReturn(Optional.empty());
-        when(listingService.reserve(LISTING_ID, BUYER_ID)).thenReturn(reservedListing(SELLER_ID));
+        when(listingService.get(LISTING_ID)).thenReturn(listingView(SELLER_ID));
+        when(listingService.reserve(LISTING_ID, BUYER_ID)).thenReturn(listingView(SELLER_ID));
         when(memberRepository.findById(BUYER_ID)).thenReturn(Optional.of(buyer()));
         when(paymentRepository.save(any(Payment.class)))
                 .thenThrow(new DataIntegrityViolationException("duplicate idempotency key"));
@@ -210,17 +209,24 @@ class PaymentServiceTests {
     }
 
     @Test
-    void requestRethrowsWhenListingReservationRaceCannotBeRecovered() {
+    void requestReportsConflictWhenLockFailureCannotBeRecoveredAfterMaxAttempts() {
         when(paymentRepository.findByBuyerIdAndIdempotencyKey(BUYER_ID, "idem-1"))
                 .thenReturn(Optional.empty());
-        when(listingService.reserve(LISTING_ID, BUYER_ID)).thenReturn(reservedListing(SELLER_ID));
+        when(listingService.get(LISTING_ID)).thenReturn(listingView(SELLER_ID));
+        when(listingService.reserve(LISTING_ID, BUYER_ID)).thenReturn(listingView(SELLER_ID));
         when(memberRepository.findById(BUYER_ID)).thenReturn(Optional.of(buyer()));
         org.springframework.orm.ObjectOptimisticLockingFailureException thrown =
                 new org.springframework.orm.ObjectOptimisticLockingFailureException(Listing.class, LISTING_ID);
         when(paymentRepository.save(any(Payment.class))).thenThrow(thrown);
 
         assertThatThrownBy(() -> service.request(BUYER_ID, request("idem-1")))
-                .isSameAs(thrown);
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PAYMENT_REQUEST_CONFLICT));
+
+        verify(listingService, times(3)).reserve(any(), any());
     }
 
     @Test

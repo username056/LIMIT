@@ -150,7 +150,10 @@ class OpenApiContractTests {
                 .andExpect(jsonPath("$.components.schemas.EndRtcSessionRequest").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/payments'].post.operationId").value("payment01"))
                 .andExpect(jsonPath("$.components.schemas.CreatePaymentRequest").exists())
-                .andExpect(jsonPath("$.components.schemas.PaymentResponse").exists());
+                .andExpect(jsonPath("$.components.schemas.PaymentResponse").exists())
+                .andExpect(
+                        jsonPath("$.paths['/api/v1/payments'].post.responses['409'].description")
+                                .value(containsString("PAYMENT_REQUEST_CONFLICT")));
     }
 
     @Test

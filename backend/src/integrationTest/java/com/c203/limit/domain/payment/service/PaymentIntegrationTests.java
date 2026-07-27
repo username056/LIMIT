@@ -146,7 +146,7 @@ class PaymentIntegrationTests {
     }
 
     @Test
-    void requestRejectsSelfPurchaseAndRollsBackReservation() {
+    void requestRejectsSelfPurchaseWithoutReservingListing() {
         Listing listing = onSaleListing(sellerId);
         Long listingId = listing.getId();
         CreatePaymentRequest request =
@@ -161,6 +161,8 @@ class PaymentIntegrationTests {
 
         Listing reloaded = listingRepository.findById(listingId).orElseThrow();
         assertThat(reloaded.getStatus()).isEqualTo(ListingStatus.ON_SALE);
+        assertThat(reloaded.getReservedAt()).isNull();
+        assertThat(listingStatusHistoryRepository.findAll()).isEmpty();
         assertThat(paymentRepository.count()).isZero();
     }
 
@@ -268,5 +270,65 @@ class PaymentIntegrationTests {
         Listing reloaded = listingRepository.findById(listing.getId()).orElseThrow();
         assertThat(reloaded.getStatus()).isEqualTo(ListingStatus.RESERVED);
         assertThat(reloaded.getBuyerId()).isEqualTo(buyerId);
+    }
+
+    @Test
+    void concurrentRequestsFromDifferentBuyersReserveListingExactlyOnce() throws InterruptedException {
+        Listing listing = onSaleListing(sellerId);
+        Long otherBuyerId = memberRepository
+                .save(Member.createLocal(unique("other-buyer"), "encoded", unique("ob-nick"), null))
+                .getId();
+        List<Long> buyers = List.of(buyerId, otherBuyerId);
+
+        int attempts = buyers.size();
+        ExecutorService executor = Executors.newFixedThreadPool(attempts);
+        CountDownLatch ready = new CountDownLatch(attempts);
+        CountDownLatch start = new CountDownLatch(1);
+        List<AtomicReference<PaymentResponse>> successes =
+                List.of(new AtomicReference<>(), new AtomicReference<>());
+        List<AtomicReference<Throwable>> failures =
+                List.of(new AtomicReference<>(), new AtomicReference<>());
+
+        try {
+            for (int i = 0; i < attempts; i++) {
+                int index = i;
+                Long buyer = buyers.get(index);
+                CreatePaymentRequest request =
+                        new CreatePaymentRequest(listing.getId(), PaymentMethod.CARD, unique("idem"));
+                executor.submit(
+                        () -> {
+                            ready.countDown();
+                            try {
+                                start.await();
+                                successes.get(index).set(paymentService.request(buyer, request));
+                            } catch (Throwable throwable) {
+                                failures.get(index).set(throwable);
+                            }
+                        });
+            }
+            ready.await();
+            start.countDown();
+            executor.shutdown();
+            assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+        } finally {
+            executor.shutdownNow();
+        }
+
+        assertThat(successes.stream().filter(ref -> ref.get() != null).count()).isEqualTo(1);
+        assertThat(failures.stream().filter(ref -> ref.get() != null).count()).isEqualTo(1);
+
+        Throwable loserFailure =
+                failures.stream().map(AtomicReference::get).filter(java.util.Objects::nonNull).findFirst().orElseThrow();
+        assertThat(loserFailure)
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.LISTING_NOT_ON_SALE));
+
+        assertThat(paymentRepository.count()).isEqualTo(1);
+        Listing reloaded = listingRepository.findById(listing.getId()).orElseThrow();
+        assertThat(reloaded.getStatus()).isEqualTo(ListingStatus.RESERVED);
+        assertThat(buyers).contains(reloaded.getBuyerId());
     }
 }

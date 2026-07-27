@@ -129,6 +129,44 @@ class PaymentSecurityControllerTests {
     }
 
     @Test
+    void createPaymentReturnsConflictWithCommonEnvelopeWhenIdempotencyKeyConflicts() throws Exception {
+        when(paymentService.request(anyLong(), any()))
+                .thenThrow(new BusinessException(ErrorCode.IDEMPOTENCY_KEY_CONFLICT));
+
+        mockMvc.perform(
+                        post("/api/v1/payments")
+                                .header("Authorization", memberBearer(BUYER_ID))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        """
+                                        {"listingId": 100, "method": "CARD", "idempotencyKey": "idem-1"}
+                                        """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("PAY004"))
+                .andExpect(jsonPath("$.error.message").exists())
+                .andExpect(jsonPath("$.traceId").exists());
+    }
+
+    @Test
+    void createPaymentReturnsConflictWithCommonEnvelopeWhenLockRetriesExhausted() throws Exception {
+        when(paymentService.request(anyLong(), any()))
+                .thenThrow(new BusinessException(ErrorCode.PAYMENT_REQUEST_CONFLICT));
+
+        mockMvc.perform(
+                        post("/api/v1/payments")
+                                .header("Authorization", memberBearer(BUYER_ID))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        """
+                                        {"listingId": 100, "method": "CARD", "idempotencyKey": "idem-1"}
+                                        """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("PAY005"))
+                .andExpect(jsonPath("$.error.message").exists())
+                .andExpect(jsonPath("$.traceId").exists());
+    }
+
+    @Test
     void createPaymentWithValidTokenReturnsCreated() throws Exception {
         when(paymentService.request(anyLong(), any()))
                 .thenAnswer(

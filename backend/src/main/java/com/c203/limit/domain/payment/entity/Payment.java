@@ -30,7 +30,6 @@ public class Payment extends BaseTimeEntity {
     @Column(name = "payment_id")
     private Long id;
 
-    // TODO: listing 도메인 엔티티 생성 후 @ManyToOne(Listing)으로 교체
     @Column(name = "listing_id", nullable = false)
     private Long listingId;
 

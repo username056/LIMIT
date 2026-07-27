@@ -11,9 +11,10 @@ PG 웹훅 승인/거절 처리, 결제 재시도, 환불, 정산은 담당 범�
 
 ## 동작
 
-`POST /api/v1/payments`는 매물을 예약(`Listing.reserve`, `ON_SALE -> RESERVED`)한 뒤 결제
-요청 레코드를 생성한다. 예약과 결제 레코드 생성은 하나의 트랜잭션으로 묶여 있어 본인 매물
-결제 시도(`SELF_PURCHASE_NOT_ALLOWED`)처럼 이후 검증이 실패하면 예약도 함께 롤백된다.
+`POST /api/v1/payments`는 본인 매물 결제 시도(`SELF_PURCHASE_NOT_ALLOWED`)를 먼저 검증한 뒤,
+매물을 예약(`Listing.reserve`, `ON_SALE -> RESERVED`)하고 결제 요청 레코드를 생성한다. 예약과
+결제 레코드 생성은 하나의 트랜잭션으로 묶여 있어 이후 단계(회원 조회 등)가 실패해도 예약은 함께
+롤백된다.
 
 결제 금액은 클라이언트 입력을 신뢰하지 않고 항상 `Listing.price`에서 가져온다.
 
@@ -21,12 +22,16 @@ PG 웹훅 승인/거절 처리, 결제 재시도, 환불, 정산은 담당 범�
 재요청하면 새로 예약을 시도하지 않고 기존 결제 요청을 그대로 반환한다
 (`PaymentRepository.findByBuyerIdAndIdempotencyKey`로 구매자 범위까지 확인). 다른 구매자가 같은
 키를 재사용하거나, 같은 구매자가 같은 키로 매물·결제수단이 다른 요청을 보내면
-`IDEMPOTENCY_KEY_CONFLICT`(`PAY004`, 409)를 반환한다.
+`IDEMPOTENCY_KEY_CONFLICT`(`PAY004`, 409)를 반환한다. 이 유니크 제약 위반은 재시도해도 해소되지
+않는 영구적 충돌일 수 있어(다른 구매자가 이미 그 키를 점유), 감지 즉시 재조회로 복구를 시도하고
+내 것이 아니면 남은 재시도를 소진하지 않고 바로 `IDEMPOTENCY_KEY_CONFLICT`로 응답한다.
 
-동일 매물에 대한 동시 요청은 예약(`Listing`)과 결제(`Payment`) 유니크 제약이 서로 다른 순서로
-잠기며 DB 데드락으로 끝날 수 있어, 실패한 트랜잭션을 버리고 새 트랜잭션으로 최대 3회까지
-재시도한다(`PaymentService.request`). 재시도 시작 시점에 멱등키를 다시 조회하므로 먼저 커밋된
-요청은 재예약 없이 그대로 반환된다.
+동일 매물에 대한 서로 다른 구매자의 동시 요청은 `Listing`의 낙관적 락(`payment_version` 아님,
+`Listing.version`) 경합으로 이어질 수 있어, 실패한 트랜잭션을 버리고 새 트랜잭션으로 최대 3회까지
+재시도한다(`PaymentService.request`). 재시도 끝에 이긴 쪽은 매물을 예약하고, 진 쪽은 재조회 시
+매물이 이미 `RESERVED` 상태라 `LISTING_NOT_ON_SALE`(409)을 받는다. 3회 재시도로도 락 경합이
+해소되지 않으면(진짜 DB 데드락 등) 원 예외를 그대로 노출하지 않고
+`PAYMENT_REQUEST_CONFLICT`(`PAY005`, 409)로 정리해 응답 계약을 지킨다.
 
 `GET /api/v1/payments/{paymentId}`는 결제를 요청한 본인만 조회할 수 있다
 (`PAYMENT_ACCESS_DENIED`).
@@ -34,9 +39,11 @@ PG 웹훅 승인/거절 처리, 결제 재시도, 환불, 정산은 담당 범�
 ## 도메인 경계
 
 결제 도메인은 매물 상태 전이를 직접 다루지 않고 기존 `ListingService.reserve(listingId, buyerId)`를
-그대로 재사용한다. `LISTING_NOT_FOUND`, `LISTING_NOT_ON_SALE` 오류는 `ListingService`가 이미
-정의한 것을 그대로 사용하고, 결제 도메인은 `PAYMENT_NOT_FOUND`, `PAYMENT_ACCESS_DENIED`,
-`SELF_PURCHASE_NOT_ALLOWED`, `IDEMPOTENCY_KEY_CONFLICT`(`PAY001~004`)만 새로 추가했다.
+그대로 재사용한다. 본인 매물 여부 확인에는 상태 전이가 없는 `ListingService.get(listingId)`를
+별도로 추가해 예약 전에 먼저 조회한다. `LISTING_NOT_FOUND`, `LISTING_NOT_ON_SALE` 오류는
+`ListingService`가 이미 정의한 것을 그대로 사용하고, 결제 도메인은 `PAYMENT_NOT_FOUND`,
+`PAYMENT_ACCESS_DENIED`, `SELF_PURCHASE_NOT_ALLOWED`, `IDEMPOTENCY_KEY_CONFLICT`,
+`PAYMENT_REQUEST_CONFLICT`(`PAY001~005`)만 새로 추가했다.
 
 ## 남은 위험 · 확인 필요 사항
 

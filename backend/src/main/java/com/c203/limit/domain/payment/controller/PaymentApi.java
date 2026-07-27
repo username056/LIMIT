@@ -36,7 +36,8 @@ public interface PaymentApi {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "UNAUTHORIZED"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "LISTING_NOT_FOUND"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "409", description = "LISTING_NOT_ON_SALE / IDEMPOTENCY_KEY_CONFLICT")
+                responseCode = "409",
+                description = "LISTING_NOT_ON_SALE / IDEMPOTENCY_KEY_CONFLICT / PAYMENT_REQUEST_CONFLICT")
     })
     @PostMapping(
             path = "/api/v1/payments",
