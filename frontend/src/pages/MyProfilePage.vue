@@ -114,7 +114,7 @@ onMounted(loadProfile)
     <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div>
         <p class="text-xs font-semibold text-primary">
-          MY L1MIT
+          MY LIMIT
         </p>
         <h1 class="mt-2 text-2xl font-bold text-text-main">
           내 정보

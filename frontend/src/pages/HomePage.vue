@@ -107,7 +107,7 @@ const products = [
     <section class="mx-auto max-w-[1200px] px-6 pb-12 lg:px-10">
       <BaseCard class="p-8 lg:p-10">
         <h2 class="mb-1 text-lg font-bold text-text-main">
-          안전한 L1MIT 검증 프로세스
+          안전한 LIMIT 검증 프로세스
         </h2>
         <p class="mb-8 text-sm text-text-sub">
           투명하고 안전한 고가 전자기기 구매를 위해 리미트는 해당 서비스를 제공합니다

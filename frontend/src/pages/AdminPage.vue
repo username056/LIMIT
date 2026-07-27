@@ -203,7 +203,7 @@ onMounted(() => {
         to="/"
         class="bg-primary-gradient bg-clip-text text-xl font-extrabold text-transparent"
       >
-        L1MIT
+        LIMIT
       </RouterLink>
       <span class="ml-2 rounded-full bg-accent px-2 py-1 text-[10px] font-bold text-primary">ADMIN</span>
     </div>

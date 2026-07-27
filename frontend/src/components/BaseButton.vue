@@ -38,7 +38,7 @@ const componentTag = computed(() => props.to && !props.disabled ? RouterLink : '
     :type="to && !disabled ? undefined : type"
     :disabled="disabled"
     :aria-disabled="disabled || undefined"
-    class="inline-flex items-center justify-center gap-2 rounded-md px-5 py-3 text-sm font-semibold transition-all active:scale-[0.98]"
+    class="inline-flex items-center justify-center gap-2 rounded-md px-5 py-3 text-[15px] font-semibold transition-all active:scale-[0.98]"
     :class="[
       block ? 'w-full' : '',
       disabled ? 'cursor-not-allowed opacity-55 active:scale-100' : '',

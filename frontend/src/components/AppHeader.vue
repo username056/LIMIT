@@ -9,9 +9,9 @@ defineProps({
   navItems: {
     type: Array,
     default: () => [
-      { label: '상품 둘러보기', href: '/' },
+      { label: '상품 둘러보기', href: '/products' },
       { label: '판매하기', href: '/seller/apply' },
-      { label: '채팅', href: '/coming-soon/chat' },
+      { label: '채팅', href: '/chat' },
     ],
   },
 })
@@ -24,9 +24,6 @@ const member = computed(() => session.value?.member || null)
 const isProfileMenuOpen = ref(false)
 
 function isActiveNavItem(href) {
-  if (href === '/') {
-    return route.name === 'coming-soon' && route.params.feature === 'product-detail'
-  }
   return route.path === href
 }
 

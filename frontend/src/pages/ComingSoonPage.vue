@@ -57,7 +57,7 @@ const features = {
 }
 
 const content = computed(() => features[route.params.feature] || {
-  eyebrow: 'L1MIT',
+  eyebrow: 'LIMIT',
   title: '요청한 화면을 준비하고 있습니다',
   description: '연결할 API와 화면이 준비되는 대로 이 경로에서 바로 이용할 수 있습니다.',
 })
