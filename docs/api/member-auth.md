@@ -4,6 +4,8 @@
 
 - 이메일 회원가입, 이메일·닉네임 중복 확인
 - 이메일 인증 메일 발송과 Redis 1회용 토큰 검증
+- 이메일 인증·비밀번호 재설정 요청의 Redis rate limit
+- 이메일 기반 비밀번호 재설정과 기존 Refresh Token 폐기
 - 이메일 로그인과 Google·Kakao·Naver 소셜 로그인
 - 최초 소셜 로그인 가입 세션과 회원가입 완료
 - 로그인한 회원의 소셜 계정 명시적 연결·조회·해제
@@ -50,6 +52,32 @@
 6. 이메일 인증 전 이메일 로그인은 `AUTH009`로 거절한다.
 
 운영에서는 `EMAIL_VERIFICATION_STORE=redis`, `EMAIL_VERIFICATION_DELIVERY_ENABLED=true`와 SMTP 환경변수를 사용한다.
+
+같은 이메일의 인증 요청은 기본적으로 10분에 3회까지 허용한다. 초과 시 `429 CMN007`을 반환한다. 운영에서는 `AUTH_RATE_LIMIT_STORE=redis`를 사용하고 `EMAIL_VERIFICATION_RATE_LIMIT_MAX_ATTEMPTS`, `EMAIL_VERIFICATION_RATE_LIMIT_WINDOW`로 정책을 조정한다.
+
+## 비밀번호 재설정
+
+1. `POST /api/v1/auth/password-reset-requests`에 가입 이메일을 보낸다.
+2. 서버는 계정 존재 여부와 관계없이 `202 Accepted`를 반환한다.
+3. 활성 로컬 회원이면 32바이트 난수 토큰을 발급하고 SHA-256 해시만 Redis에 15분간 저장한다.
+4. 메일 링크는 `FRONTEND_PASSWORD_RESET_URL?token=...` 형식이다.
+5. 프론트가 `POST /api/v1/auth/password-resets`에 `token`, `newPassword`를 보내면 비밀번호를 변경한다.
+6. 성공한 토큰은 다시 사용할 수 없고 기존 회원 Refresh Token은 모두 폐기한다.
+
+비밀번호 재설정 요청도 기본 10분에 3회로 제한한다. 운영에서는 다음 값을 사용한다.
+
+```env
+PASSWORD_RESET_STORE=redis
+PASSWORD_RESET_DELIVERY_ENABLED=true
+PASSWORD_RESET_TTL=15m
+FRONTEND_PASSWORD_RESET_URL=https://l1mit.shop/reset-password
+PASSWORD_RESET_RATE_LIMIT_MAX_ATTEMPTS=3
+PASSWORD_RESET_RATE_LIMIT_WINDOW=10m
+```
+
+프론트는 `/forgot-password`에서 재설정 메일을 요청하고, 메일의
+`/reset-password?token=...` 링크에서 새 비밀번호를 입력한다. 화면 진입 후 토큰은
+주소창에서 즉시 제거하고 메모리에서만 API 요청에 사용한다.
 
 ## 소셜 로그인과 최초 가입
 

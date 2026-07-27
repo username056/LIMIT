@@ -91,7 +91,12 @@ const providers = [
             />
           </div>
           <div class="mt-3 text-right">
-            <span class="text-xs text-text-sub">비밀번호 찾기는 준비 중입니다.</span>
+            <RouterLink
+              class="text-xs font-semibold text-primary transition-colors hover:text-primary-dark"
+              to="/forgot-password"
+            >
+              비밀번호를 잊으셨나요?
+            </RouterLink>
           </div>
           <BaseButton
             block

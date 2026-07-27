@@ -56,6 +56,11 @@ public class AdminAccount extends BaseTimeEntity {
         if (status != null) this.status = status;
     }
 
+    public void changePassword(String encodedPassword) {
+        this.password = encodedPassword;
+        this.passwordChangedAt = LocalDateTime.now();
+    }
+
     public Long getId() {
         return id;
     }
@@ -82,5 +87,9 @@ public class AdminAccount extends BaseTimeEntity {
 
     public LocalDateTime getLastLoginAt() {
         return lastLoginAt;
+    }
+
+    public LocalDateTime getPasswordChangedAt() {
+        return passwordChangedAt;
     }
 }

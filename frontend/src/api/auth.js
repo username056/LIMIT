@@ -32,6 +32,14 @@ export function verifyEmail(token) {
   return apiClient.post('/auth/email-verifications', { token })
 }
 
+export function requestPasswordReset(email) {
+  return apiClient.post('/auth/password-reset-requests', { email })
+}
+
+export function resetPassword(token, newPassword) {
+  return apiClient.post('/auth/password-resets', { token, newPassword })
+}
+
 export function checkEmailAvailability(email) {
   return apiClient.get(`/auth/email-availability?email=${encodeURIComponent(email)}`)
 }

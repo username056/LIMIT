@@ -12,6 +12,8 @@ import SignupPage from '../pages/SignupPage.vue'
 import SocialSignupPage from '../pages/SocialSignupPage.vue'
 import VerifyEmailPage from '../pages/VerifyEmailPage.vue'
 import EmailVerificationRequestedPage from '../pages/EmailVerificationRequestedPage.vue'
+import ForgotPasswordPage from '../pages/ForgotPasswordPage.vue'
+import ResetPasswordPage from '../pages/ResetPasswordPage.vue'
 import SocialAccountsPage from '../pages/SocialAccountsPage.vue'
 import TermsPage from '../pages/TermsPage.vue'
 import PrivacyPage from '../pages/PrivacyPage.vue'
@@ -27,6 +29,8 @@ const routes = [
   { path: '/signup/social', name: 'social-signup', component: SocialSignupPage },
   { path: '/verify-email', name: 'verify-email', component: VerifyEmailPage },
   { path: '/verify-email/requested', name: 'verify-email-requested', component: EmailVerificationRequestedPage },
+  { path: '/forgot-password', name: 'forgot-password', component: ForgotPasswordPage },
+  { path: '/reset-password', name: 'reset-password', component: ResetPasswordPage },
   {
     path: '/mypage/profile',
     name: 'my-profile',

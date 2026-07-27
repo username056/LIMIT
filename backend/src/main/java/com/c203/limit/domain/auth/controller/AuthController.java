@@ -8,6 +8,7 @@ import com.c203.limit.domain.auth.service.AuthCookieService;
 import com.c203.limit.domain.auth.service.AuthService;
 import com.c203.limit.domain.auth.service.EmailVerificationService;
 import com.c203.limit.domain.auth.service.OAuthAuthorizationService;
+import com.c203.limit.domain.auth.service.PasswordResetService;
 import com.c203.limit.domain.auth.service.SessionResult;
 import com.c203.limit.domain.auth.service.SocialAccountLoginService;
 import com.c203.limit.domain.auth.service.SocialAuthService;
@@ -30,6 +31,7 @@ public class AuthController implements AuthApi {
     private final SocialAuthService socialAuthService;
     private final OAuthAuthorizationService authorizationService;
     private final EmailVerificationService emailVerificationService;
+    private final PasswordResetService passwordResetService;
     private final AuthCookieService authCookieService;
     private final CurrentUser currentUser;
     private final JwtTokenProvider tokenProvider;
@@ -42,6 +44,7 @@ public class AuthController implements AuthApi {
             SocialAuthService socialAuthService,
             OAuthAuthorizationService authorizationService,
             EmailVerificationService emailVerificationService,
+            PasswordResetService passwordResetService,
             AuthCookieService authCookieService,
             CurrentUser currentUser,
             JwtTokenProvider tokenProvider,
@@ -52,6 +55,7 @@ public class AuthController implements AuthApi {
         this.socialAuthService = socialAuthService;
         this.authorizationService = authorizationService;
         this.emailVerificationService = emailVerificationService;
+        this.passwordResetService = passwordResetService;
         this.authCookieService = authCookieService;
         this.currentUser = currentUser;
         this.tokenProvider = tokenProvider;
@@ -231,6 +235,19 @@ public class AuthController implements AuthApi {
                 ResponseEntity.ok()
                         .header(HttpHeaders.SET_COOKIE, authCookieService.clearOauthState())
                         .body(ApiResponse.ok(account)));
+    }
+
+    @Override
+    public ResponseEntity<Void> auth16(Object body) {
+        passwordResetService.request(text(json(body), "email"));
+        return ResponseEntity.accepted().build();
+    }
+
+    @Override
+    public ResponseEntity<Void> auth17(Object body) {
+        JsonNode json = json(body);
+        passwordResetService.reset(text(json, "token"), text(json, "newPassword"));
+        return ResponseEntity.noContent().build();
     }
 
     private ResponseEntity<Void> sessionResponse(SessionResult<?> result) {

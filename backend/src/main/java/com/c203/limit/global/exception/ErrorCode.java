@@ -49,6 +49,10 @@ public enum ErrorCode {
             "AUTH011", HttpStatus.SERVICE_UNAVAILABLE, "이메일 인증 발송 설정을 확인해 주세요."),
     SOCIAL_AUTH_FAILED("AUTH012", HttpStatus.UNAUTHORIZED, "소셜 로그인 인증에 실패했습니다."),
     SOCIAL_ACCOUNT_CONFLICT("AUTH013", HttpStatus.CONFLICT, "이미 다른 소셜 계정이 연결되어 있습니다."),
+    PASSWORD_RESET_TOKEN_INVALID(
+            "AUTH017", HttpStatus.BAD_REQUEST, "비밀번호 재설정 토큰이 만료되었거나 유효하지 않습니다."),
+    PASSWORD_RESET_UNAVAILABLE(
+            "AUTH018", HttpStatus.SERVICE_UNAVAILABLE, "비밀번호 재설정 메일 발송 설정을 확인해 주세요."),
 
     // ========== 채팅 에러 ==========
     LISTING_NOT_FOUND("CHT001", HttpStatus.NOT_FOUND, "매물을 찾을 수 없습니다."),
@@ -78,6 +82,8 @@ public enum ErrorCode {
     LAST_SUPER_ADMIN("ADM011", HttpStatus.CONFLICT, "마지막 활성 최고 관리자는 변경할 수 없습니다."),
     INVALID_ADMIN_ROLE("ADM012", HttpStatus.BAD_REQUEST, "관리자 권한은 OPERATOR 또는 SUPER_ADMIN이어야 합니다."),
     INVALID_ADMIN_STATUS("ADM013", HttpStatus.BAD_REQUEST, "관리자 상태가 올바르지 않습니다."),
+    ADMIN_CURRENT_PASSWORD_MISMATCH("ADM014", HttpStatus.UNAUTHORIZED, "현재 관리자 비밀번호가 일치하지 않습니다."),
+    ADMIN_SAME_AS_OLD_PASSWORD("ADM015", HttpStatus.CONFLICT, "기존 관리자 비밀번호와 다른 비밀번호를 입력해 주세요."),
 
     // ========== 매물(상품) 에러 ==========
     LISTING_NOT_ON_SALE("PRD001", HttpStatus.CONFLICT, "판매중 상태의 매물만 예약할 수 있습니다."),
