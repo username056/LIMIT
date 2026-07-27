@@ -11,5 +11,12 @@ record NaverClovaOcrResponse(String version, List<ImageResult> images) {
     record ImageResult(String inferResult, String message, List<Field> fields) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record Field(String inferText, BigDecimal inferConfidence, Boolean lineBreak) {}
+    record Field(
+            String inferText, BigDecimal inferConfidence, Boolean lineBreak, BoundingPoly boundingPoly) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record BoundingPoly(List<Vertex> vertices) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record Vertex(double x, double y) {}
 }

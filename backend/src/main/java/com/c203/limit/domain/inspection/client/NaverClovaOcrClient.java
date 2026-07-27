@@ -1,6 +1,7 @@
 package com.c203.limit.domain.inspection.client;
 
 import com.c203.limit.domain.inspection.config.NaverClovaOcrProperties;
+import com.c203.limit.domain.inspection.dto.OcrToken;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.math.BigDecimal;
@@ -34,9 +35,45 @@ public class NaverClovaOcrClient {
     }
 
     public NaverClovaOcrResult recognize(String imageUrl, String format) {
+        return toResult(fetchAndRecognize(imageUrl, format));
+    }
+
+    /**
+     * 이미지 안의 텍스트 조각들을 클로바가 반환한 순서와 좌표 그대로 반환한다(필드별 구조화는 호출자가 담당).
+     * 좌표는 라벨과 값이 텍스트 스트림 상에서 멀리 떨어진 카드형·표 레이아웃을 구조화할 때 필요하다.
+     */
+    public List<OcrToken> recognizeFields(String imageUrl, String format) {
+        NaverClovaOcrResponse.ImageResult imageResult = validImageResult(fetchAndRecognize(imageUrl, format));
+        return imageResult.fields().stream().map(this::toToken).toList();
+    }
+
+    private OcrToken toToken(NaverClovaOcrResponse.Field field) {
+        BigDecimal confidence = field.inferConfidence() == null ? BigDecimal.ZERO : field.inferConfidence();
+        double[] box = boundingBox(field.boundingPoly());
+        return new OcrToken(field.inferText(), confidence, box[0], box[1], box[2], box[3]);
+    }
+
+    /** boundingPoly의 꼭짓점들을 감싸는 최소 사각형(left, top, right, bottom)을 계산한다. */
+    private double[] boundingBox(NaverClovaOcrResponse.BoundingPoly boundingPoly) {
+        if (boundingPoly == null || boundingPoly.vertices() == null || boundingPoly.vertices().isEmpty()) {
+            return new double[] {0, 0, 0, 0};
+        }
+        double left = Double.MAX_VALUE;
+        double top = Double.MAX_VALUE;
+        double right = -Double.MAX_VALUE;
+        double bottom = -Double.MAX_VALUE;
+        for (NaverClovaOcrResponse.Vertex vertex : boundingPoly.vertices()) {
+            left = Math.min(left, vertex.x());
+            top = Math.min(top, vertex.y());
+            right = Math.max(right, vertex.x());
+            bottom = Math.max(bottom, vertex.y());
+        }
+        return new double[] {left, top, right, bottom};
+    }
+
+    private NaverClovaOcrResponse fetchAndRecognize(String imageUrl, String format) {
         byte[] imageBytes = fetchImage(imageUrl);
-        NaverClovaOcrResponse response = requestOcr(imageBytes, format);
-        return toResult(response);
+        return requestOcr(imageBytes, format);
     }
 
     private byte[] fetchImage(String imageUrl) {
@@ -71,14 +108,8 @@ public class NaverClovaOcrClient {
     }
 
     private NaverClovaOcrResult toResult(NaverClovaOcrResponse response) {
-        if (response == null || response.images() == null || response.images().isEmpty()) {
-            throw new BusinessException(ErrorCode.OCR_RECOGNITION_FAILED);
-        }
-        NaverClovaOcrResponse.ImageResult imageResult = response.images().get(0);
+        NaverClovaOcrResponse.ImageResult imageResult = validImageResult(response);
         List<NaverClovaOcrResponse.Field> fields = imageResult.fields();
-        if (!INFER_SUCCESS.equals(imageResult.inferResult()) || fields == null || fields.isEmpty()) {
-            throw new BusinessException(ErrorCode.OCR_RECOGNITION_FAILED);
-        }
 
         String rawText =
                 fields.stream()
@@ -88,6 +119,18 @@ public class NaverClovaOcrClient {
         String modelVersion = response.version() != null ? response.version() : "V2";
 
         return new NaverClovaOcrResult(rawText, confidence, modelVersion);
+    }
+
+    private NaverClovaOcrResponse.ImageResult validImageResult(NaverClovaOcrResponse response) {
+        if (response == null || response.images() == null || response.images().isEmpty()) {
+            throw new BusinessException(ErrorCode.OCR_RECOGNITION_FAILED);
+        }
+        NaverClovaOcrResponse.ImageResult imageResult = response.images().get(0);
+        List<NaverClovaOcrResponse.Field> fields = imageResult.fields();
+        if (!INFER_SUCCESS.equals(imageResult.inferResult()) || fields == null || fields.isEmpty()) {
+            throw new BusinessException(ErrorCode.OCR_RECOGNITION_FAILED);
+        }
+        return imageResult;
     }
 
     private BigDecimal averageConfidence(List<NaverClovaOcrResponse.Field> fields) {

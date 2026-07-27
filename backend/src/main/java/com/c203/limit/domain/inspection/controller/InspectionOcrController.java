@@ -1,10 +1,9 @@
 package com.c203.limit.domain.inspection.controller;
 
-import com.c203.limit.domain.inspection.dto.request.ExtractOcrTextRequest;
 import com.c203.limit.domain.inspection.dto.response.OcrResultResponse;
-import com.c203.limit.domain.inspection.entity.OcrResult;
 import com.c203.limit.domain.inspection.service.OcrExtractionService;
 import com.c203.limit.global.response.ApiResponse;
+import com.c203.limit.global.security.CurrentUser;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
@@ -13,16 +12,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class InspectionOcrController implements InspectionOcrApi {
 
     private final OcrExtractionService ocrExtractionService;
+    private final CurrentUser currentUser;
 
-    public InspectionOcrController(OcrExtractionService ocrExtractionService) {
+    public InspectionOcrController(OcrExtractionService ocrExtractionService, CurrentUser currentUser) {
         this.ocrExtractionService = ocrExtractionService;
+        this.currentUser = currentUser;
     }
 
     @Override
-    public ResponseEntity<ApiResponse<OcrResultResponse>> extractOcrText(
-            Long evidenceId, ExtractOcrTextRequest request) {
-        OcrResult ocrResult = ocrExtractionService.extractText(evidenceId, request.getFieldType());
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.ok(OcrResultResponse.from(ocrResult)));
+    public ResponseEntity<ApiResponse<OcrResultResponse>> extractOcrText(Long evidenceId) {
+        OcrResultResponse response =
+                ocrExtractionService.extractAndStructure(evidenceId, currentUser.memberId());
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
     }
 }

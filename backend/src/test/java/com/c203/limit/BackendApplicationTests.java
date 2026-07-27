@@ -18,6 +18,7 @@ import com.c203.limit.domain.admin.repository.MemberRestrictionRepository;
 import com.c203.limit.domain.inspection.repository.BatteryReportResultRepository;
 import com.c203.limit.domain.inspection.repository.DxdiagResultRepository;
 import com.c203.limit.domain.inspection.repository.EvidenceRepository;
+import com.c203.limit.domain.inspection.repository.ListingOwnerReader;
 import com.c203.limit.domain.inspection.repository.OcrResultRepository;
 import com.c203.limit.domain.product.repository.ListingRepository;
 import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
@@ -78,6 +79,9 @@ class BackendApplicationTests {
 
     @MockitoBean
     OcrResultRepository ocrResultRepository;
+
+    @MockitoBean
+    ListingOwnerReader listingOwnerReader;
 
     @MockitoBean
     DxdiagResultRepository dxdiagResultRepository;

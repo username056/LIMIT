@@ -8,8 +8,10 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.c203.limit.domain.inspection.config.NaverClovaOcrProperties;
+import com.c203.limit.domain.inspection.dto.OcrToken;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -55,6 +57,72 @@ class NaverClovaOcrClientTests {
         assertThat(result.rawText()).isEqualTo("Galaxy\nBook4 Pro");
         assertThat(result.confidence()).isEqualByComparingTo("0.965");
         assertThat(result.modelVersion()).isEqualTo("V2");
+        server.verify();
+    }
+
+    @Test
+    void recognizeFieldsReturnsTokensInReadingOrder() {
+        var builder = RestClient.builder();
+        var server = MockRestServiceServer.bindTo(builder).build();
+        var client = new NaverClovaOcrClient(builder, properties());
+
+        server.expect(requestTo(IMAGE_URL))
+                .andRespond(withSuccess(new byte[] {1, 2, 3}, MediaType.IMAGE_JPEG));
+        server.expect(requestTo(INVOKE_URL))
+                .andRespond(
+                        withSuccess(
+                                """
+                                {
+                                  "version": "V2",
+                                  "images": [
+                                    {
+                                      "inferResult": "SUCCESS",
+                                      "message": "SUCCESS",
+                                      "fields": [
+                                        {
+                                          "inferText": "저장소",
+                                          "inferConfidence": 0.99,
+                                          "boundingPoly": {
+                                            "vertices": [
+                                              {"x": 20, "y": 40}, {"x": 80, "y": 40},
+                                              {"x": 80, "y": 60}, {"x": 20, "y": 60}
+                                            ]
+                                          }
+                                        },
+                                        {
+                                          "inferText": "954",
+                                          "inferConfidence": 0.95,
+                                          "boundingPoly": {
+                                            "vertices": [
+                                              {"x": 20, "y": 90}, {"x": 50, "y": 90},
+                                              {"x": 50, "y": 120}, {"x": 20, "y": 120}
+                                            ]
+                                          }
+                                        },
+                                        {
+                                          "inferText": "GB",
+                                          "inferConfidence": 0.97,
+                                          "boundingPoly": {
+                                            "vertices": [
+                                              {"x": 55, "y": 90}, {"x": 80, "y": 90},
+                                              {"x": 80, "y": 120}, {"x": 55, "y": 120}
+                                            ]
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                                """,
+                                MediaType.APPLICATION_JSON));
+
+        List<OcrToken> tokens = client.recognizeFields(IMAGE_URL, "jpg");
+
+        assertThat(tokens).extracting(OcrToken::text).containsExactly("저장소", "954", "GB");
+        assertThat(tokens.get(0).left()).isEqualTo(20.0);
+        assertThat(tokens.get(0).top()).isEqualTo(40.0);
+        assertThat(tokens.get(0).right()).isEqualTo(80.0);
+        assertThat(tokens.get(0).bottom()).isEqualTo(60.0);
         server.verify();
     }
 

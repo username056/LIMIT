@@ -95,7 +95,8 @@ public enum ErrorCode {
     OCR_RECOGNITION_FAILED("INS006", HttpStatus.UNPROCESSABLE_ENTITY, "이미지에서 텍스트를 인식하지 못했습니다."),
     INVALID_EVIDENCE_TYPE("INS007", HttpStatus.BAD_REQUEST, "지원하지 않는 증거 유형입니다."),
     DXDIAG_FILE_FETCH_FAILED("INS008", HttpStatus.BAD_GATEWAY, "증거 파일을 불러오지 못했습니다."),
-    BATTERY_REPORT_FILE_FETCH_FAILED("INS009", HttpStatus.BAD_GATEWAY, "증거 파일을 불러오지 못했습니다.");
+    BATTERY_REPORT_FILE_FETCH_FAILED("INS009", HttpStatus.BAD_GATEWAY, "증거 파일을 불러오지 못했습니다."),
+    PARSING_FAILED("INS010", HttpStatus.UNPROCESSABLE_ENTITY, "OCR 자동 구조화에 실패했습니다.");
 
     private final String code;
     private final HttpStatus status;
