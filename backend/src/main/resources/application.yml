@@ -39,6 +39,12 @@ logging:
 
 limit:
   time-zone: ${APPLICATION_TIME_ZONE:Asia/Seoul}
+  rtc:
+    allowed-origin-patterns: ${RTC_ALLOWED_ORIGIN_PATTERNS:http://localhost:5173}
+    stun-url: ${RTC_STUN_URL:stun:stun.l.google.com:19302}
+    turn-url: ${RTC_TURN_URL:}
+    turn-username: ${RTC_TURN_USERNAME:}
+    turn-credential: ${RTC_TURN_CREDENTIAL:}
   auth:
     cookie:
       secure: ${AUTH_COOKIE_SECURE:false}
@@ -126,6 +132,8 @@ springdoc:
       packages-to-scan: com.c203.limit.domain.chat.controller
     - group: 05-product
       packages-to-scan: com.c203.limit.domain.product.controller
+    - group: 06-rtc
+      packages-to-scan: com.c203.limit.domain.rtc.controller
   swagger-ui:
     enabled: false
     disable-swagger-default-url: true

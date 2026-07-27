@@ -34,6 +34,9 @@ import com.c203.limit.domain.product.service.ProductCatalogService;
 class BackendApplicationTests {
 
     @MockitoBean
+    com.c203.limit.domain.rtc.service.RtcCallService rtcCallService;
+
+    @MockitoBean
     JpaMetamodelMappingContext jpaMetamodelMappingContext;
 
     @MockitoBean

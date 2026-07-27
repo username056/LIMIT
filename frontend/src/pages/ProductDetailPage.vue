@@ -6,6 +6,7 @@ import BaseBadge from '../components/BaseBadge.vue'
 import BaseButton from '../components/BaseButton.vue'
 import { addFavorite, getFavoriteStatus, removeFavorite } from '../api/favorites'
 import { getProduct } from '../api/products'
+import { createChatRoom, requestRtcCall } from '../api/rtc'
 import { getAccessToken } from '../auth/session'
 
 const route = useRoute()
@@ -14,6 +15,7 @@ const product = ref(null)
 const isLoading = ref(true)
 const isFavorite = ref(false)
 const isUpdatingFavorite = ref(false)
+const isRequestingCall = ref(false)
 const errorMessage = ref('')
 
 async function toggleFavorite() {
@@ -31,6 +33,24 @@ async function toggleFavorite() {
     errorMessage.value = error.message || '관심 상품을 변경하지 못했습니다.'
   } finally {
     isUpdatingFavorite.value = false
+  }
+}
+
+async function requestCall() {
+  if (!getAccessToken()) {
+    await router.push({ name: 'login', query: { redirect: route.fullPath } })
+    return
+  }
+  isRequestingCall.value = true
+  errorMessage.value = ''
+  try {
+    const room = await createChatRoom(product.value.productId)
+    await requestRtcCall(room.roomId, { memo: `${product.value.name} 상태 실시간 확인 요청` })
+    await router.push({ name: 'calls' })
+  } catch (error) {
+    errorMessage.value = error.message || '영상 확인 요청을 보내지 못했습니다.'
+  } finally {
+    isRequestingCall.value = false
   }
 }
 
@@ -113,6 +133,15 @@ onMounted(async () => {
             @click="toggleFavorite"
           >
             {{ isUpdatingFavorite ? '처리 중' : isFavorite ? '관심 상품 해제' : '관심 상품 등록' }}
+          </BaseButton>
+          <BaseButton
+            class="mt-3"
+            block
+            variant="outline"
+            :disabled="isRequestingCall"
+            @click="requestCall"
+          >
+            {{ isRequestingCall ? '요청 중' : '1:1 영상으로 추가 확인' }}
           </BaseButton>
           <p
             v-if="errorMessage"

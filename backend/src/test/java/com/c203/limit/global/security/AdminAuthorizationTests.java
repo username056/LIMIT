@@ -49,6 +49,9 @@ import com.c203.limit.domain.product.service.ProductCatalogService;
 @AutoConfigureMockMvc
 @ActiveProfiles("local")
 class AdminAuthorizationTests {
+
+    @MockitoBean
+    com.c203.limit.domain.rtc.service.RtcCallService rtcCallService;
     @Autowired MockMvc mockMvc;
     @Autowired JwtTokenProvider tokens;
     @MockitoBean JpaMetamodelMappingContext jpaMetamodelMappingContext;
