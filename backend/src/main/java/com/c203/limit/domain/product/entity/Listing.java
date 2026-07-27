@@ -67,8 +67,20 @@ public class Listing extends BaseTimeEntity {
     @Column(name = "reserved_at")
     private LocalDateTime reservedAt;
 
+    // 예약 만료 판정 기준 시각. 결제 유예 적용 시 이 값만 연장된다.
+    @Column(name = "reserved_until")
+    private LocalDateTime reservedUntil;
+
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
+
+    // 판매자가 상품 전달 완료를 기록한 시각.
+    @Column(name = "handed_over_at")
+    private LocalDateTime handedOverAt;
+
+    // handedOverAt 기준으로 계산되는 자동 구매확정 배치 기준 시각.
+    @Column(name = "auto_confirm_at")
+    private LocalDateTime autoConfirmAt;
 
     @Column(name = "confirmed_at")
     private LocalDateTime confirmedAt;
