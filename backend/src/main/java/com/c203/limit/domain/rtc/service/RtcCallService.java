@@ -30,12 +30,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class RtcCallService {
+    private static final Logger log = LoggerFactory.getLogger(RtcCallService.class);
+
     private final CallAppointmentRepository appointmentRepository;
     private final RtcSessionRepository sessionRepository;
     private final RtcSessionChecklistResultRepository resultRepository;
@@ -81,6 +85,10 @@ public class RtcCallService {
                 appointmentRepository.save(
                         CallAppointment.propose(
                                 roomId, memberId, respondent, scheduledAt, request.memo()));
+        log.info(
+                "RTC inspection call requested: callId={}, chatRoomId={}",
+                appointment.getId(),
+                roomId);
         return callResponse(appointment, null, memberId);
     }
 
@@ -212,6 +220,7 @@ public class RtcCallService {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
         }
         session.end(reason, request.memo());
+        log.info("RTC inspection session ended: sessionId={}, reason={}", sessionId, reason);
         appointmentRepository
                 .findById(session.getCallAppointmentId())
                 .ifPresent(
