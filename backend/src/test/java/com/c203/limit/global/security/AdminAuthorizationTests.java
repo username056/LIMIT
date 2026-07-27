@@ -78,6 +78,16 @@ class AdminAuthorizationTests {
     }
 
     @Test
+    void prometheusEndpointDoesNotRequireAuthentication() throws Exception {
+        mockMvc.perform(get("/actuator/prometheus")).andExpect(status().isOk());
+    }
+
+    @Test
+    void prometheusEndpointRejectsUnauthenticatedNonGetRequest() throws Exception {
+        mockMvc.perform(post("/actuator/prometheus")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void memberCannotReadAdminApi() throws Exception {
         mockMvc.perform(get("/api/v1/admin/members").header("Authorization", memberBearer()))
                 .andExpect(status().isForbidden());

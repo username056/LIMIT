@@ -12,5 +12,6 @@
 - Entity에 무분별한 setter와 Lombok `@Data`를 사용하지 않고 JPA 기본 생성자는 `protected`로 선언한다.
 - 운영 환경의 스키마 자동 변경을 금지하고 `ddl-auto=validate`와 migration 도구를 사용한다.
 - Secret, 내부 예외, SQL, 호스트 정보를 응답이나 로그에 노출하지 않는다.
+- `service`, `bootstrap`, `event` 구현을 변경하면 중요한 상태 전이 또는 처리 결과를 `INFO` 이상으로 기록하고, 단순 조회·중복 로그와 개인정보·Secret 기록은 피한다.
 - API 변경 시 OpenAPI와 계약 테스트를 함께 수정한다.
 - 기능 변경 후 정상·실패 경로의 인접 테스트를 추가하고 `gradle test`, `gradle bootJar`를 실행한다.

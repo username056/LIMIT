@@ -58,8 +58,6 @@ x-backend-environment: &backend-environment
   TERMS_PRIVACY_VERSION: ${TERMS_PRIVACY_VERSION:-2026-07-22}
   TERMS_AGE_VERSION: ${TERMS_AGE_VERSION:-2026-07-22}
   TERMS_MARKETING_VERSION: ${TERMS_MARKETING_VERSION:-2026-07-22}
-  QDRANT_URL: http://qdrant:6333
-  QDRANT_API_KEY: ${QDRANT_API_KEY:?QDRANT_API_KEY is required}
   SPRINGDOC_API_DOCS_ENABLED: "true"
   SPRINGDOC_SWAGGER_UI_ENABLED: "true"
 
@@ -73,7 +71,6 @@ services:
       mysql: { condition: service_healthy }
       mongodb: { condition: service_healthy }
       redis: { condition: service_healthy }
-      qdrant: { condition: service_healthy }
     ports: ["127.0.0.1:8081:8080"]
     networks: [app, data]
     healthcheck: &backend-healthcheck
@@ -97,7 +94,6 @@ services:
       mysql: { condition: service_healthy }
       mongodb: { condition: service_healthy }
       redis: { condition: service_healthy }
-      qdrant: { condition: service_healthy }
     ports: ["127.0.0.1:8082:8080"]
     networks: [app, data]
     healthcheck: *backend-healthcheck
@@ -109,11 +105,11 @@ services:
     image: prom/prometheus:v3.4.1
     profiles: [observability]
     restart: unless-stopped
+    group_add: ["${MONITORING_SECRET_GID:-1000}"]
     command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=7d", "--storage.tsdb.retention.size=8GB"]
     volumes:
       - ./monitoring/prometheus:/etc/prometheus:ro
       - prometheus-data:/prometheus
-    secrets: [qdrant-api-key]
     networks: [app, data]
     mem_limit: 1g
     cpus: 0.5
@@ -159,8 +155,10 @@ services:
     image: prom/alertmanager:v0.28.1
     profiles: [observability]
     restart: unless-stopped
+    group_add: ["${MONITORING_SECRET_GID:-1000}"]
     command: ["--config.file=/etc/alertmanager/config.yml"]
     volumes: ["./monitoring/alertmanager/config.yml:/etc/alertmanager/config.yml:ro"]
+    secrets: [alertmanager-smtp-password]
     networks: [app]
     mem_limit: 128m
     cpus: 0.25
@@ -170,8 +168,12 @@ services:
     image: prom/node-exporter:v1.9.1
     profiles: [observability]
     restart: unless-stopped
-    command: ["--path.rootfs=/host"]
-    volumes: ["/:/host:ro,rslave"]
+    command:
+      - --path.rootfs=/host
+      - --collector.textfile.directory=/var/lib/node_exporter/textfile_collector
+    volumes:
+      - /:/host:ro,rslave
+      - ./state/node-exporter:/var/lib/node_exporter/textfile_collector:ro
     networks: [app]
     mem_limit: 128m
     cpus: 0.25
@@ -213,6 +215,7 @@ services:
     image: prom/mysqld-exporter:v0.17.2
     profiles: [observability]
     restart: unless-stopped
+    group_add: ["${MONITORING_SECRET_GID:-1000}"]
     command: ["--config.my-cnf=/run/secrets/mysql-exporter-config"]
     secrets: [mysql-exporter-config]
     networks: [app, data]
@@ -270,5 +273,5 @@ volumes:
 secrets:
   mysql-exporter-config:
     file: ${MYSQL_EXPORTER_CONFIG_FILE:-./secrets/mysql-exporter.my.cnf.example}
-  qdrant-api-key:
-    file: ${QDRANT_API_KEY_FILE:-./secrets/qdrant-api-key.example}
+  alertmanager-smtp-password:
+    file: ${ALERTMANAGER_SMTP_PASSWORD_FILE:-./secrets/alertmanager-smtp-password.example}

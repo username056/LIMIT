@@ -4,11 +4,10 @@ import { RouterLink } from 'vue-router'
 
 <template>
   <footer class="w-full border-t border-border bg-surface">
-    <div class="mx-auto flex max-w-[1200px] flex-col gap-4 px-6 py-7 text-sm text-text-sub sm:flex-row sm:items-center sm:justify-between lg:px-10">
-      <p>© 2026 L1MIT. All rights reserved.</p>
+    <div class="mx-auto grid max-w-[1200px] grid-cols-1 items-center gap-4 px-6 py-7 text-sm text-text-sub sm:grid-cols-3 lg:px-10">
       <nav
-        class="flex flex-wrap gap-x-5 gap-y-2"
-        aria-label="정책 및 운영 메뉴"
+        class="flex flex-wrap justify-center gap-x-5 gap-y-2 sm:justify-start"
+        aria-label="정책 메뉴"
       >
         <RouterLink
           to="/terms/service"
@@ -18,15 +17,25 @@ import { RouterLink } from 'vue-router'
         </RouterLink>
         <RouterLink
           to="/terms/privacy"
-          class="font-semibold text-text-main hover:text-primary"
-        >
-          개인정보 처리방침
-        </RouterLink>
-        <RouterLink
-          to="/mypage/social-accounts"
           class="hover:text-text-main"
         >
-          소셜 계정 관리
+          개인정보처리방침
+        </RouterLink>
+      </nav>
+
+      <p class="text-center">
+        © 2026 L1MIT. All rights reserved.
+      </p>
+
+      <nav
+        class="flex justify-center gap-x-5 gap-y-2 sm:justify-end"
+        aria-label="운영 메뉴"
+      >
+        <RouterLink
+          to="/dev-tools"
+          class="hover:text-text-main"
+        >
+          개발 도구
         </RouterLink>
         <RouterLink
           to="/admin"

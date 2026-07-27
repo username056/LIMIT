@@ -7,6 +7,7 @@ import MyOrdersPage from '../pages/MyOrdersPage.vue'
 import SellerApplyPage from '../pages/SellerApplyPage.vue'
 import ProductManagePage from '../pages/ProductManagePage.vue'
 import AdminPage from '../pages/AdminPage.vue'
+import DevToolsPage from '../pages/DevToolsPage.vue'
 import SignupPage from '../pages/SignupPage.vue'
 import SocialSignupPage from '../pages/SocialSignupPage.vue'
 import VerifyEmailPage from '../pages/VerifyEmailPage.vue'
@@ -57,6 +58,7 @@ const routes = [
   { path: '/seller/apply', name: 'seller-apply', component: SellerApplyPage },
   { path: '/seller/products', name: 'seller-products', component: ProductManagePage },
   { path: '/admin', name: 'admin', component: AdminPage },
+  { path: '/dev-tools', name: 'dev-tools', component: DevToolsPage },
   { path: '/coming-soon/:feature', name: 'coming-soon', component: ComingSoonPage },
   { path: '/:pathMatch(.*)*', redirect: '/coming-soon/not-found' },
 
