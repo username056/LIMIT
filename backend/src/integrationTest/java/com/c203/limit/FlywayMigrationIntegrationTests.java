@@ -145,35 +145,46 @@ class FlywayMigrationIntegrationTests {
         assertThat(indexExists("listing_image", "idx_listing_image_thumbnail")).isTrue();
         assertThat(columnExists("rtc_session", "verification_memo")).isTrue();
         assertThat(indexExists("rtc_session", "uk_rtc_session_appointment")).isTrue();
+        assertThat(singleLong("SELECT COUNT(*) FROM category WHERE parent_id IS NULL"))
+                .isGreaterThanOrEqualTo(4L);
+        assertThat(singleLong("SELECT COUNT(*) FROM category WHERE model_code IS NOT NULL"))
+                .isGreaterThanOrEqualTo(7L);
+        assertThat(
+                        singleLong(
+                                "SELECT COUNT(*) FROM checklist_template WHERE status = 'PUBLISHED'"))
+                .isGreaterThanOrEqualTo(7L);
+        assertThat(singleLong("SELECT COUNT(*) FROM checklist_template_item"))
+                .isGreaterThanOrEqualTo(32L);
+        assertThat(singleLong("SELECT COUNT(*) FROM account_removal_guide"))
+                .isGreaterThanOrEqualTo(7L);
         assertThat(tableExists("member_role")).isTrue();
         assertThat(tableExists("user_sanction")).isTrue();
         assertThat(singleString("SELECT member_type FROM user_account WHERE email = 'legacy@example.com'"))
                 .isEqualTo("SELLER");
         assertThat(singleLong("SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1"))
                 .isGreaterThanOrEqualTo(7L);
-        assertThat(singleString(
-                        "SELECT version FROM flyway_schema_history "
-                                + "WHERE success = 1 AND version IS NOT NULL "
-                                + "ORDER BY installed_rank DESC LIMIT 1"))
-                .isEqualTo("20260731");
+        assertThat(
+                        singleLong(
+                                "SELECT COUNT(*) FROM flyway_schema_history "
+                                        + "WHERE success = 1 AND version = '20260801'"))
+                .isEqualTo(1L);
     }
 
     @Test
     void migratesPendingChangesAfterExistingProductionProductMigration() throws SQLException {
         assertThat(
-                        singleString(
+                        singleLong(
                                 PRODUCTION_HISTORY_MYSQL,
-                                "SELECT version FROM flyway_schema_history "
-                                        + "WHERE success = 1 AND version IS NOT NULL "
-                                        + "ORDER BY installed_rank DESC LIMIT 1"))
-                .isEqualTo("20260731");
+                                "SELECT COUNT(*) FROM flyway_schema_history "
+                                        + "WHERE success = 1 AND version = '20260801'"))
+                .isEqualTo(1L);
         assertThat(
                         singleLong(
                                 PRODUCTION_HISTORY_MYSQL,
                                 "SELECT COUNT(*) FROM flyway_schema_history "
                                         + "WHERE success = 1 "
-                                        + "AND version IN ('20260728', '20260729', '20260730', '20260731')"))
-                .isEqualTo(4L);
+                                        + "AND version IN ('20260728', '20260729', '20260730', '20260731', '20260801')"))
+                .isEqualTo(5L);
     }
 
     private static void migrateTo(MySQLContainer container, String target) {

@@ -179,7 +179,7 @@ class WishlistRepositoryIntegrationTests {
         statistics.clear();
 
         var models = categoryRepository.findModels(
-                null, null, null, PageRequest.of(0, 100));
+                PARENT_CATEGORY_ID, null, null, PageRequest.of(0, 100));
         models.getContent().forEach(category -> {
             if (category.getParent() != null) {
                 assertThat(category.getParent().getId()).isEqualTo(PARENT_CATEGORY_ID);
