@@ -18,7 +18,7 @@ describe('favorites api', () => {
   })
 
   it('인증 헤더로 관심 상품 목록을 조회한다', async () => {
-    setAuthSession({ accessToken: 'test-token' })
+    setAuthSession({ accessToken: '<test-token>' })
     const fetchMock = vi.fn().mockResolvedValue(ok([{ favoriteId: 501, productId: 1001 }]))
     vi.stubGlobal('fetch', fetchMock)
 
@@ -30,7 +30,7 @@ describe('favorites api', () => {
       `${API_BASE_URL}/members/me/favorites?page=0&size=20`,
       expect.objectContaining({
         method: 'GET',
-        headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
+        headers: expect.objectContaining({ Authorization: 'Bearer <test-token>' }),
       }),
     )
   })

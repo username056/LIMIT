@@ -60,6 +60,13 @@ public enum ErrorCode {
     CHAT_ROOM_CREATION_NOT_ALLOWED("CHT003", HttpStatus.CONFLICT, "현재 상태의 매물에는 채팅방을 생성할 수 없습니다."),
     CHAT_ROOM_ACCESS_DENIED("CHT004", HttpStatus.FORBIDDEN, "채팅방에 접근할 권한이 없습니다."),
 
+    // ========== 실시간 확인 오류 ==========
+    RTC_SESSION_NOT_FOUND("RTC001", HttpStatus.NOT_FOUND, "실시간 확인 세션을 찾을 수 없습니다."),
+    RTC_SESSION_ACCESS_DENIED("RTC002", HttpStatus.FORBIDDEN, "실시간 확인 세션에 접근할 권한이 없습니다."),
+    RTC_SESSION_EXPIRED("RTC003", HttpStatus.GONE, "실시간 확인 세션이 만료되었습니다."),
+    RTC_SESSION_CLOSED("RTC004", HttpStatus.CONFLICT, "이미 종료된 실시간 확인 세션입니다."),
+    RTC_INVALID_STATE("RTC005", HttpStatus.CONFLICT, "현재 상태에서는 실시간 확인 요청을 처리할 수 없습니다."),
+
     SELLER_APPLICATION_NOT_FOUND("SEL001", HttpStatus.NOT_FOUND, "판매자 신청서를 찾을 수 없습니다."),
     ACTIVE_SELLER_APPLICATION_EXISTS("SEL002", HttpStatus.CONFLICT, "처리 중인 판매자 신청서가 있습니다."),
     ALREADY_SELLER("SEL003", HttpStatus.CONFLICT, "이미 판매자 권한을 가진 회원입니다."),

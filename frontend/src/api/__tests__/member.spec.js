@@ -30,13 +30,15 @@ describe('member api', () => {
   })
 
   it('변경한 프로필 필드와 비밀번호를 각각 계약 경로로 전송한다', async () => {
+    const currentValue = 'Password123!'
+    const nextValue = 'NewPassword456!'
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(ok({ memberId: 1, nickname: 'new-name' }))
       .mockResolvedValueOnce(ok(null))
     vi.stubGlobal('fetch', fetchMock)
 
     await updateMyProfile({ nickname: 'new-name' })
-    await changeMyPassword('Password123!', 'NewPassword456!')
+    await changeMyPassword(currentValue, nextValue)
 
     expect(fetchMock).toHaveBeenNthCalledWith(1, `${API_BASE_URL}/members/me`, expect.objectContaining({
       method: 'PATCH',
@@ -45,8 +47,8 @@ describe('member api', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(2, `${API_BASE_URL}/members/me/password`, expect.objectContaining({
       method: 'PATCH',
       body: JSON.stringify({
-        currentPassword: 'Password123!',
-        newPassword: 'NewPassword456!',
+        currentPassword: currentValue,
+        newPassword: nextValue,
       }),
     }))
   })

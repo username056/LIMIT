@@ -1,12 +1,9 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { getChatMessages } from '../api/chat'
+import { createChatSocket } from '../api/chatSocket'
 import { getProduct } from '../api/products'
 import { useAuthSession } from '../auth/session'
-
-// TODO(채팅 전송 API 연동): 백엔드에 메시지 전송/실시간 수신(WebSocket) API가 아직 없습니다.
-// 방·지난 메시지 조회는 실제 API(getChatMessages)를 쓰고, 이 화면에서 새로 작성한 메시지는
-// 화면에만 보이고 저장되지 않는 mock입니다(로컬 메시지는 messageId를 음수로 부여해 구분).
 
 const props = defineProps({
   room: {
@@ -22,6 +19,9 @@ const product = ref(null)
 const messages = ref([])
 const isLoadingMessages = ref(true)
 const messagesError = ref('')
+const socketStatus = ref('connecting')
+let chatSocket = null
+let nextPendingMessageId = -1
 
 async function loadMessages(roomId) {
   isLoadingMessages.value = true
@@ -29,11 +29,71 @@ async function loadMessages(roomId) {
   try {
     const result = await getChatMessages(roomId, { size: 50 })
     messages.value = (result?.content || []).slice().reverse()
+    markRead()
   } catch (error) {
     messagesError.value = error.message || '메시지를 불러오지 못했습니다.'
   } finally {
     isLoadingMessages.value = false
   }
+}
+
+function upsertMessage(message) {
+  const indexByClientId = messages.value.findIndex((item) => item.clientMessageId === message.clientMessageId)
+  if (indexByClientId >= 0) {
+    messages.value[indexByClientId] = { ...messages.value[indexByClientId], ...message, isPending: false }
+    return
+  }
+  if (!messages.value.some((item) => item.messageId === message.messageId)) {
+    messages.value.push(message)
+  }
+}
+
+function latestSequence() {
+  return messages.value.reduce((max, message) => Math.max(max, Number(message.roomSequence || 0)), 0)
+}
+
+function markRead() {
+  const lastReadSeq = latestSequence()
+  if (lastReadSeq > 0) chatSocket?.markRead(lastReadSeq)
+}
+
+function connectSocket(roomId) {
+  chatSocket?.close()
+  socketStatus.value = 'connecting'
+  chatSocket = createChatSocket({
+    roomId,
+    onOpen: () => {
+      socketStatus.value = 'connected'
+      messagesError.value = ''
+      markRead()
+    },
+    onEvent: (event) => {
+      if (event.type === 'MESSAGE' && event.message) {
+        upsertMessage(event.message)
+        markRead()
+      }
+    },
+    onAck: (ack) => {
+      const index = messages.value.findIndex((message) => message.clientMessageId === ack.clientMessageId)
+      if (index >= 0) {
+        messages.value[index] = {
+          ...messages.value[index],
+          messageId: ack.messageId,
+          roomSequence: ack.roomSequence,
+          status: ack.status,
+          sentAt: ack.sentAt,
+          isPending: false,
+        }
+      }
+    },
+    onError: (error) => {
+      messagesError.value = error?.error?.message || '채팅 처리 중 오류가 발생했습니다.'
+      socketStatus.value = 'error'
+    },
+    onClose: () => {
+      if (socketStatus.value !== 'closed' && socketStatus.value !== 'error') socketStatus.value = 'disconnected'
+    },
+  })
 }
 
 async function loadProduct(listingId) {
@@ -50,25 +110,36 @@ watch(
   (roomId) => {
     loadMessages(roomId)
     loadProduct(props.room.listingId)
+    connectSocket(roomId)
   },
   { immediate: true },
 )
 
 const messageInput = ref('')
-let nextMockMessageId = -1
+
+function createClientMessageId() {
+  if (crypto.randomUUID) return crypto.randomUUID()
+  return '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, (digit) => (
+    Number(digit) ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> Number(digit) / 4
+  ).toString(16))
+}
 
 function sendMessage() {
   const text = messageInput.value.trim()
-  if (!text || myMemberId.value == null) return
+  if (!text || myMemberId.value == null || socketStatus.value !== 'connected') return
+  const clientMessageId = createClientMessageId()
   messages.value.push({
-    messageId: nextMockMessageId--,
+    messageId: nextPendingMessageId--,
+    roomSequence: null,
     senderId: myMemberId.value,
+    clientMessageId,
     type: 'TEXT',
     content: text,
-    status: 'SENT',
+    status: 'SENDING',
     sentAt: new Date().toISOString(),
-    isMock: true,
+    isPending: true,
   })
+  chatSocket?.sendMessage({ clientMessageId, type: 'TEXT', content: text, mediaIds: [] })
   messageInput.value = ''
 }
 
@@ -76,6 +147,11 @@ function formatTime(isoString) {
   if (!isoString) return ''
   return new Date(isoString).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
+
+onBeforeUnmount(() => {
+  socketStatus.value = 'closed'
+  chatSocket?.close()
+})
 </script>
 
 <template>
@@ -105,6 +181,12 @@ function formatTime(isoString) {
         <p class="text-sm font-bold text-text-main">
           상대 회원 #{{ room.counterpartId }}
         </p>
+        <span
+          class="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+          :class="socketStatus === 'connected' ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'"
+        >
+          {{ socketStatus === 'connected' ? '실시간 연결됨' : '연결 확인 중' }}
+        </span>
       </div>
       <RouterLink
         :to="{ name: 'calls' }"
@@ -176,16 +258,13 @@ function formatTime(isoString) {
           </div>
           <span class="mt-1 text-[11px] text-text-sub">
             {{ formatTime(message.sentAt) }}
-            <template v-if="message.isMock">· 저장 안 됨 (mock)</template>
+            <template v-if="message.isPending">· 전송 중</template>
           </span>
         </div>
       </TransitionGroup>
     </div>
 
     <div class="border-t border-border p-4">
-      <p class="mb-2 text-xs text-text-sub">
-        메시지 전송 API가 아직 없어, 여기서 보낸 메시지는 화면에만 표시되고 저장되지 않습니다.
-      </p>
       <form
         class="flex gap-2"
         @submit.prevent="sendMessage"
@@ -198,7 +277,8 @@ function formatTime(isoString) {
         >
         <button
           type="submit"
-          class="whitespace-nowrap rounded-md bg-primary-gradient px-4 py-2.5 text-sm font-semibold text-white transition-all hover:brightness-110"
+          :disabled="socketStatus !== 'connected'"
+          class="whitespace-nowrap rounded-md bg-primary-gradient px-4 py-2.5 text-sm font-semibold text-white transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:brightness-100"
         >
           전송
         </button>

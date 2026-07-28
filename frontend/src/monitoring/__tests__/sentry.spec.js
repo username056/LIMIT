@@ -103,14 +103,15 @@ describe('initializeSentry', () => {
   it('콘솔 로그의 인증정보, 개인정보와 URL query/hash를 제거한다', () => {
     initializeSentry({}, { VITE_SENTRY_DSN: 'https://public@example.ingest.sentry.io/1' })
     const options = Sentry.init.mock.calls[0][0]
+    const filtered = '[Filtered]'
     const log = {
       message:
-        'request https://l1mit.shop/listings?email=user@example.com#detail authorization=Bearer secret-token',
+        'request https://l1mit.shop/listings?email=user@example.com#detail authorization=Bearer <token>',
       attributes: {
         email: 'user@example.com',
-        accessToken: 'secret-token',
-        'refresh-token': 'secret-refresh-token',
-        api_key: 'secret-api-key',
+        accessToken: '<access-token>',
+        'refresh-token': '<refresh-token>',
+        api_key: '<api-key>',
         accessibility: 'enabled',
         path: '/listings?owner=private#detail',
         nested: {
@@ -123,14 +124,14 @@ describe('initializeSentry', () => {
     expect(options.beforeSendLog(log)).toEqual({
       message: 'request https://l1mit.shop/listings authorization=[Filtered]',
       attributes: {
-        email: '[Filtered]',
-        accessToken: '[Filtered]',
-        'refresh-token': '[Filtered]',
-        api_key: '[Filtered]',
+        email: filtered,
+        accessToken: filtered,
+        'refresh-token': filtered,
+        api_key: filtered,
         accessibility: 'enabled',
         path: '/listings',
         nested: {
-          phone: '[Filtered]',
+          phone: filtered,
           detail: 'contact [Filtered email]',
         },
       },
