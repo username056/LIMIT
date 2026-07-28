@@ -20,6 +20,7 @@ import {
   updateProduct,
 } from '../api/products'
 import { compressImage, compressVideo } from '../utils/mediaOptimize'
+import { searchPlaces } from '../api/places'
 
 const WIZARD_STEPS = [
   { number: 1, label: '기기 등록' },
@@ -73,6 +74,40 @@ const form = reactive({
   categoryId: '', deviceModelId: '', name: '', description: '', price: '',
   color: '', storageGb: '', tradeRegion: '',
 })
+
+const tradeRegionResults = ref([])
+const isSearchingTradeRegion = ref(false)
+const showTradeRegionResults = ref(false)
+let tradeRegionSearchTimer = null
+
+function onTradeRegionInput() {
+  showTradeRegionResults.value = true
+  clearTimeout(tradeRegionSearchTimer)
+  const keyword = form.tradeRegion.trim()
+  if (!keyword) {
+    tradeRegionResults.value = []
+    return
+  }
+  tradeRegionSearchTimer = setTimeout(async () => {
+    isSearchingTradeRegion.value = true
+    try {
+      tradeRegionResults.value = await searchPlaces(keyword)
+    } catch {
+      tradeRegionResults.value = []
+    } finally {
+      isSearchingTradeRegion.value = false
+    }
+  }, 300)
+}
+
+function selectTradeRegion(place) {
+  const address = place.roadAddressName || place.addressName
+  form.tradeRegion = place.placeName && place.placeName !== address
+    ? `${place.placeName} (${address})`
+    : address
+  tradeRegionResults.value = []
+  showTradeRegionResults.value = false
+}
 
 // 체크리스트 관련: templateItems는 항목 가이드/허용 형식을 보여주기 위한 모델 템플릿,
 // checklistItems는 상품 생성 시 고정된 실제 스냅샷(evidence API 호출에 필요한 checklistItemId 포함).
@@ -559,15 +594,43 @@ onMounted(async () => {
               placeholder="예: 256"
               class="mt-2 w-full rounded-md border border-border px-3 py-3 font-normal outline-none focus:border-primary"
             ></label>
-            <label class="text-sm font-semibold text-text-main sm:col-span-2">
+            <label class="relative text-sm font-semibold text-text-main sm:col-span-2">
               거래 지역
               <input
                 v-model.trim="form.tradeRegion"
                 required
                 maxlength="100"
-                placeholder="예: 광주광역시 광산구"
+                placeholder="역, 랜드마크로 검색 (예: 상동역)"
+                autocomplete="off"
                 class="mt-2 w-full rounded-md border border-border px-3 py-3 font-normal outline-none focus:border-primary"
+                @input="onTradeRegionInput"
+                @focus="showTradeRegionResults = true"
+                @blur="showTradeRegionResults = false"
               >
+              <ul
+                v-if="showTradeRegionResults && (tradeRegionResults.length || isSearchingTradeRegion)"
+                class="absolute z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-md border border-border bg-white text-left shadow-lg"
+              >
+                <li
+                  v-if="isSearchingTradeRegion"
+                  class="px-3 py-2 text-xs font-normal text-text-sub"
+                >
+                  검색 중...
+                </li>
+                <li
+                  v-for="place in tradeRegionResults"
+                  :key="`${place.placeName}-${place.addressName}`"
+                >
+                  <button
+                    type="button"
+                    class="w-full px-3 py-2 text-left text-sm font-normal hover:bg-accent"
+                    @mousedown.prevent="selectTradeRegion(place)"
+                  >
+                    <span class="block font-semibold text-text-main">{{ place.placeName || place.addressName }}</span>
+                    <span class="block text-xs text-text-sub">{{ place.roadAddressName || place.addressName }}</span>
+                  </button>
+                </li>
+              </ul>
             </label>
             <label class="text-sm font-semibold text-text-main sm:col-span-2">
               상품 설명
