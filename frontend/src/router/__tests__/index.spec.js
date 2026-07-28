@@ -23,7 +23,7 @@ describe('router seller authorization', () => {
 
   it('일반 회원이 판매자 화면에 접근하면 판매자 등록으로 이동한다', async () => {
     setAuthSession({
-      accessToken: 'member-token',
+      accessToken: 'stub',
       member: { roles: ['MEMBER'], sellerStatus: null },
     })
 
@@ -34,7 +34,7 @@ describe('router seller authorization', () => {
 
   it('판매자는 등록 화면 대신 상품 관리로 이동한다', async () => {
     setAuthSession({
-      accessToken: 'seller-token',
+      accessToken: 'stub',
       member: { roles: ['MEMBER', 'SELLER'], sellerStatus: 'ACTIVE' },
     })
 

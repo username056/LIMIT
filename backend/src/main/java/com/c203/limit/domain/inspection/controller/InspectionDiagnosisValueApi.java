@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 
-@Tag(name = "08. 검수", description = "검수 증거 OCR·DxDiag·배터리 리포트 파싱 API")
+@Tag(name = "09. 검수", description = "검수 증거 OCR·DxDiag·배터리 리포트 파싱 API")
 public interface InspectionDiagnosisValueApi {
 
     @Operation(

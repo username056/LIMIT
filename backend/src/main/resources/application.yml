@@ -144,7 +144,9 @@ springdoc:
       packages-to-scan: com.c203.limit.domain.rtc.controller
     - group: 07-seller
       packages-to-scan: com.c203.limit.domain.seller.controller
-    - group: 08-inspection
+    - group: 08-payment
+      packages-to-scan: com.c203.limit.domain.payment.controller
+    - group: 09-inspection
       packages-to-scan: com.c203.limit.domain.inspection.controller
   swagger-ui:
     enabled: false

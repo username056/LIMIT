@@ -60,3 +60,43 @@ docker compose --env-file infra/.env.local -p limit-local -f infra/compose.yml -
 - MySQL DDL이 일부 반영됐을 수 있으므로 애플리케이션 로그와 실제 스키마를 함께 대조한다.
 - 원인과 영향 범위를 확정한 뒤 백업 복원 또는 새 후속 migration 중 하나를 선택한다.
 - 실제 `.env`, Secret, 토큰, 키는 저장소에 커밋하지 않는다.
+
+### 판매자 migration 읽기 전용 진단
+
+`V20260802` 실패를 조사할 때는 `seller_migration_diagnostic` Job으로
+`flyway_schema_history`, `seller` 컬럼·인덱스와 중복·길이 집계만 확인한다. 이 Job은
+제목에 `판매자 마이그레이션 읽기 전용 진단`이 포함된 `dev` push에서만 실행하며,
+같은 파이프라인의 이미지 push와 백엔드·모니터링·프론트 운영 배포는 건너뛴다.
+회원 ID나 이메일, 이름, 연락처, 계좌 데이터는 출력하지 않는다.
+
+진단 결과만으로 실패 행을 삭제하거나 `repair`하지 않는다. 실제 스키마 보정,
+Flyway `repair`와 배포 재시도는 별도 운영 승인을 받은 뒤 수행한다.
+
+### V20260802 판매자 migration 승인 복구
+
+진단 결과가 아래 조건과 모두 일치하고 운영 변경 승인을 받은 경우에만
+`seller_migration_repair_deploy` Job을 사용한다.
+
+- `V20260802` 실패 이력 1건, 성공 이력 0건
+- `seller` 행 0건과 `user_id` 중복 0건
+- `member_type=SELLER` 회원 1명과 판매자 프로필 누락 1건
+- `approved_at`, `product_limit`, `sales_amount_limit`이 `NOT NULL`이며 기본값 없음
+
+Job은 변경 전에 `backup-datastores.sh`를 성공시킨 뒤
+`db/maintenance/V20260802__prepare_failed_seller_migration.sql`로 행 데이터 변경 없이
+기존 컬럼의 nullable/default만 보정한다. 프로젝트와 동일한
+`flyway/flyway:11.14.1-alpine` 이미지로 `repair`하고, 검증·스캔된 backend image를
+Blue-Green 배포한다. `repair`에는 애플리케이션과 같은 `db/migration` 위치를 전달한다.
+
+Job은 제목에 `판매자 마이그레이션 복구와 재배포`가 포함된 `dev` push에서만 실행한다.
+같은 파이프라인의 일반 `deploy_prod`, 모니터링 배포와 프론트 배포는 건너뛴다.
+복구 완료 조건은 다음과 같다.
+
+- `V20260802 success=1`, 실패 이력 0건
+- 판매자 프로필 1건, SELLER 프로필 누락 0건, `user_id` 중복 0건
+- 기존 한도 컬럼 기본값 적용과 `approved_at` nullable 상태
+- 신규 backend readiness 및 외부 `/health` smoke 통과
+
+사전 조건이 하나라도 달라졌거나 백업·스키마 보정·repair·배포 후 검증 중 하나라도
+실패하면 Job은 즉시 중단한다. 실패한 신규 색상은 트래픽에 연결하지 않으며,
+DB 백업 복원은 원인과 영향 범위를 다시 확인하고 별도 승인 후 수행한다.

@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import com.c203.limit.domain.rtc.dto.request.CreateCallRequest;
 import com.c203.limit.domain.rtc.dto.request.RespondCallRequest;
+import com.c203.limit.domain.rtc.dto.request.UpdateCallRequest;
 import com.c203.limit.domain.rtc.dto.response.CallResponse;
 import com.c203.limit.domain.rtc.service.RtcCallService;
 import com.c203.limit.global.security.CurrentUser;
@@ -48,5 +49,22 @@ class RtcCallControllerTests {
         controller.respond(1L, request);
 
         verify(service).respond(1L, 20L, request);
+    }
+
+    @Test
+    void updatesCallAsCurrentMember() {
+        UpdateCallRequest request =
+                new UpdateCallRequest(LocalDateTime.now().plusMinutes(30), "시간 변경");
+
+        controller.update(1L, request);
+
+        verify(service).update(1L, 20L, request);
+    }
+
+    @Test
+    void cancelsCallAsCurrentMember() {
+        controller.cancel(1L, "일정 취소");
+
+        verify(service).cancel(1L, 20L, "일정 취소");
     }
 }

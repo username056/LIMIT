@@ -53,11 +53,38 @@ class ListingServiceTests {
         Listing listing = listingWithStatus(ListingStatus.ON_SALE);
         when(listingRepository.findById(LISTING_ID)).thenReturn(Optional.of(listing));
 
-        Listing result = service.reserve(LISTING_ID, BUYER_ID);
+        ListingReservationView result = service.reserve(LISTING_ID, BUYER_ID);
 
-        assertThat(result.getStatus()).isEqualTo(ListingStatus.RESERVED);
-        assertThat(result.getBuyerId()).isEqualTo(BUYER_ID);
+        assertThat(listing.getStatus()).isEqualTo(ListingStatus.RESERVED);
+        assertThat(listing.getBuyerId()).isEqualTo(BUYER_ID);
+        assertThat(result.sellerId()).isEqualTo(listing.getSellerId());
+        assertThat(result.price()).isEqualTo(listing.getPrice());
         verify(listingStatusHistoryRepository).save(any(ListingStatusHistory.class));
+    }
+
+    @Test
+    void getReturnsReservationViewWithoutMutatingListing() {
+        Listing listing = listingWithStatus(ListingStatus.ON_SALE);
+        when(listingRepository.findById(LISTING_ID)).thenReturn(Optional.of(listing));
+
+        ListingReservationView result = service.get(LISTING_ID);
+
+        assertThat(result.sellerId()).isEqualTo(listing.getSellerId());
+        assertThat(result.price()).isEqualTo(listing.getPrice());
+        assertThat(listing.getStatus()).isEqualTo(ListingStatus.ON_SALE);
+        verifyNoInteractions(listingStatusHistoryRepository);
+    }
+
+    @Test
+    void getThrowsWhenListingNotFound() {
+        when(listingRepository.findById(LISTING_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.get(LISTING_ID))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.LISTING_NOT_FOUND));
     }
 
     @Test

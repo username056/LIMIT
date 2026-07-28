@@ -32,6 +32,10 @@ variables:
         - scripts/sync-deploy-files.sh
         - scripts/deploy-remote.sh
         - scripts/deploy-blue-green.sh
+        - scripts/recover-seller-migration.sh
+        - scripts/recover-seller-migration-remote.sh
+        - scripts/recover-seller-migration.test.sh
+        - scripts/recover-seller-migration-remote.test.sh
         - scripts/rollback-remote.sh
         - scripts/rollback-blue-green.sh
         - scripts/rollback-blue-green.test.sh
@@ -93,6 +97,12 @@ variables:
         - scripts/apply-ec2-env-remote.test.sh
         - scripts/check-backend-logging.sh
         - scripts/check-backend-logging.test.sh
+        - scripts/diagnose-seller-migration-remote.sh
+        - scripts/diagnose-seller-migration-remote.test.sh
+        - scripts/recover-seller-migration.sh
+        - scripts/recover-seller-migration-remote.sh
+        - scripts/recover-seller-migration.test.sh
+        - scripts/recover-seller-migration-remote.test.sh
         - scripts/build-image.sh
         - scripts/sync-deploy-files.sh
         - scripts/sync-deploy-files.test.sh
@@ -493,6 +503,8 @@ backend_image:
       dotenv: image.env
     expire_in: 7 days
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev" && $CI_COMMIT_TITLE =~ /판매자 마이그레이션 읽기 전용 진단/'
+      when: never
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
       changes: [backend/Dockerfile.ci]
       variables:
@@ -530,6 +542,8 @@ container_scan:
     expire_in: 7 days
     paths: [trivy-report.json]
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev" && $CI_COMMIT_TITLE =~ /판매자 마이그레이션 읽기 전용 진단/'
+      when: never
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
       changes: *backend_changes
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
@@ -570,6 +584,10 @@ deploy_prod:
     - sh scripts/sync-deploy-files.sh
     - sh scripts/deploy-remote.sh prod "$DEPLOY_IMAGE"
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev" && $CI_COMMIT_TITLE =~ /판매자 마이그레이션 복구와 재배포/'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev" && $CI_COMMIT_TITLE =~ /판매자 마이그레이션 읽기 전용 진단/'
+      when: never
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
       changes: *backend_changes
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
@@ -598,6 +616,10 @@ monitoring_deploy_prod:
     - sh scripts/sync-deploy-files.sh monitoring
     - sh scripts/deploy-monitoring-remote.sh
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev" && $CI_COMMIT_TITLE =~ /판매자 마이그레이션 복구와 재배포/'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev" && $CI_COMMIT_TITLE =~ /판매자 마이그레이션 읽기 전용 진단/'
+      when: never
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
       changes: *monitoring_changes
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
@@ -626,6 +648,62 @@ rollback_prod:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
       when: manual
   allow_failure: true
+
+seller_migration_diagnostic:
+  stage: deploy
+  image: alpine:3.22
+  interruptible: false
+  resource_group: limit-prod
+  needs:
+    - job: secret_guard
+      artifacts: false
+  environment:
+    name: production
+    action: verify
+  before_script:
+    - apk add --no-cache openssh-client
+    - install -d -m 700 ~/.ssh
+    - install -m 644 "$SSH_KNOWN_HOSTS" ~/.ssh/known_hosts
+    - install -m 600 "$DEPLOY_SSH_PRIVATE_KEY" /tmp/limit-deploy-key
+    - export DEPLOY_SSH_KEY_FILE=/tmp/limit-deploy-key
+  script:
+    - sh scripts/diagnose-seller-migration-remote.sh
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev" && $CI_COMMIT_TITLE =~ /판매자 마이그레이션 읽기 전용 진단/'
+
+seller_migration_repair_deploy:
+  stage: deploy
+  image: alpine:3.22
+  interruptible: false
+  resource_group: limit-prod
+  needs:
+    - job: secret_guard
+      artifacts: false
+    - job: backend_unit_test
+      artifacts: false
+    - job: backend_integration_test
+      artifacts: false
+    - job: backend_scripts_test
+      artifacts: false
+    - job: backend_image
+      artifacts: true
+    - job: container_scan
+      artifacts: false
+  environment:
+    name: production
+    url: https://grafana.l1mit.shop/
+  before_script:
+    - apk add --no-cache openssh-client
+    - install -d -m 700 ~/.ssh
+    - install -m 644 "$SSH_KNOWN_HOSTS" ~/.ssh/known_hosts
+    - install -m 600 "$DEPLOY_SSH_PRIVATE_KEY" /tmp/limit-deploy-key
+    - export DEPLOY_SSH_KEY_FILE=/tmp/limit-deploy-key
+    - printf '%s' "$DEPLOY_IMAGE" | grep -Eq '@sha256:[a-f0-9]{64}$'
+  script:
+    - sh scripts/sync-deploy-files.sh seller-recovery
+    - sh scripts/recover-seller-migration-remote.sh "$DEPLOY_IMAGE"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev" && $CI_COMMIT_TITLE =~ /판매자 마이그레이션 복구와 재배포/'
 
 .frontend_aws_auth:
   image:
@@ -661,6 +739,10 @@ frontend_deploy_prod:
   script:
     - sh scripts/deploy-frontend.sh deploy frontend/dist "$CI_COMMIT_SHA" "$FRONTEND_BUCKET_NAME" "$CLOUDFRONT_DISTRIBUTION_ID"
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev" && $CI_COMMIT_TITLE =~ /판매자 마이그레이션 복구와 재배포/'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev" && $CI_COMMIT_TITLE =~ /판매자 마이그레이션 읽기 전용 진단/'
+      when: never
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
       changes: *frontend_changes
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
@@ -701,6 +783,10 @@ frontend_smoke_prod:
     - api_health_url="${VITE_API_BASE_URL%/api/v1}/health"
     - curl --fail --silent --show-error --retry 5 --retry-all-errors --retry-delay 5 "$api_health_url" > /dev/null
   rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev" && $CI_COMMIT_TITLE =~ /판매자 마이그레이션 복구와 재배포/'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev" && $CI_COMMIT_TITLE =~ /판매자 마이그레이션 읽기 전용 진단/'
+      when: never
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
       changes: *frontend_changes
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'

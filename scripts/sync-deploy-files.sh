@@ -71,8 +71,20 @@ case "$scope" in
       infra/monitoring \
       infra/nginx/limit.conf
     ;;
+  seller-recovery)
+    sync_archive \
+      "$extract_command" \
+      scripts/deploy-blue-green.sh \
+      scripts/backup-datastores.sh \
+      scripts/recover-seller-migration.sh \
+      scripts/smoke-test.sh \
+      infra/compose.yml \
+      infra/compose.prod.yml \
+      backend/src/main/resources/db/migration \
+      backend/src/main/resources/db/maintenance/V20260802__prepare_failed_seller_migration.sql
+    ;;
   *)
-    echo "usage: $0 [all|monitoring]" >&2
+    echo "usage: $0 [all|monitoring|seller-recovery]" >&2
     exit 64
     ;;
 esac
