@@ -21,10 +21,10 @@ describe('rtc api', () => {
   })
 
   it('issues a reentry token and builds a websocket url', async () => {
-    const join = { signalingUrl: '/ws/rtc', joinToken: 'one-time-token' }
+    const join = { signalingUrl: '/ws/rtc', joinToken: '<one-time-token>' }
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(ok(join)))
 
     await expect(issueRtcJoinToken(55)).resolves.toEqual(join)
-    expect(signalingSocketUrl(join)).toContain('/ws/rtc?token=one-time-token')
+    expect(signalingSocketUrl(join)).toContain('/ws/rtc?token=%3Cone-time-token%3E')
   })
 })

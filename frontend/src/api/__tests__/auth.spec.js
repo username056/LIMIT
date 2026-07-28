@@ -17,11 +17,13 @@ describe('password reset api', () => {
   })
 
   it('메일 요청과 비밀번호 재설정을 인증 계약 경로로 전송한다', async () => {
+    const resetLinkValue = 'one-time-token'
+    const resetValue = 'NewPassword456!'
     const fetchMock = vi.fn().mockResolvedValue(noContent())
     vi.stubGlobal('fetch', fetchMock)
 
     await requestPasswordReset('member@example.com')
-    await resetPassword('one-time-token', 'NewPassword456!')
+    await resetPassword(resetLinkValue, resetValue)
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
@@ -37,8 +39,8 @@ describe('password reset api', () => {
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({
-          token: 'one-time-token',
-          newPassword: 'NewPassword456!',
+          token: resetLinkValue,
+          newPassword: resetValue,
         }),
       }),
     )

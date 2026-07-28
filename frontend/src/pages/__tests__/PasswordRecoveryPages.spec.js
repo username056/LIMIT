@@ -56,7 +56,9 @@ describe('Password recovery pages', () => {
   })
 
   it('일회용 토큰과 검증된 새 비밀번호를 전송하고 로그인으로 이동한다', async () => {
-    mocks.routeQuery = { token: 'one-time-token' }
+    const resetLinkValue = 'one-time-token'
+    const resetValue = 'NewPassword456!'
+    mocks.routeQuery = { token: resetLinkValue }
     mocks.resetPassword.mockResolvedValue()
     const replaceState = vi.spyOn(window.history, 'replaceState')
     const wrapper = mount(ResetPasswordPage, { global })
@@ -65,12 +67,12 @@ describe('Password recovery pages', () => {
     expect(replaceState).toHaveBeenCalledWith({}, document.title, '/reset-password')
 
     const inputs = wrapper.findAll('input[type="password"]')
-    await inputs[0].setValue('NewPassword456!')
-    await inputs[1].setValue('NewPassword456!')
+    await inputs[0].setValue(resetValue)
+    await inputs[1].setValue(resetValue)
     await wrapper.get('form').trigger('submit')
     await flushPromises()
 
-    expect(mocks.resetPassword).toHaveBeenCalledWith('one-time-token', 'NewPassword456!')
+    expect(mocks.resetPassword).toHaveBeenCalledWith(resetLinkValue, resetValue)
     expect(mocks.routerReplace).toHaveBeenCalledWith({
       name: 'login',
       query: { passwordChanged: '1' },

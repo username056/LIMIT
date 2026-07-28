@@ -12,6 +12,7 @@ export default {
         primary: {
           DEFAULT: '#6C8DFF',
           dark: '#5B7FFF',
+          deep: '#6366F1',
         },
         accent: '#EFF5FF',
         border: '#E2E8F5',
@@ -22,6 +23,7 @@ export default {
       },
       backgroundImage: {
         'primary-gradient': 'linear-gradient(90deg, #6366F1 0%, #93C5FD 100%)',
+        'success-gradient': 'linear-gradient(90deg, #15803D 0%, #22C55E 100%)',
       },
       borderRadius: {
         sm: '8px',

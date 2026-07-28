@@ -5,13 +5,19 @@ import java.util.Optional;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import com.c203.limit.domain.chat.entity.ChatRoom;
+import jakarta.persistence.LockModeType;
 
 public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
     Optional<ChatRoom> findByListingIdAndBuyerIdAndSellerId(
             Long listingId, Long buyerId, Long sellerId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT room FROM ChatRoom room WHERE room.id = :roomId")
+    Optional<ChatRoom> findLockedById(@Param("roomId") Long roomId);
 
     @Query("""
             SELECT room.id AS roomId,

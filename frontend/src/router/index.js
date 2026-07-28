@@ -20,6 +20,9 @@ import PrivacyPage from '../pages/PrivacyPage.vue'
 import ComingSoonPage from '../pages/ComingSoonPage.vue'
 import MyFavoritesPage from '../pages/MyFavoritesPage.vue'
 import MyProfilePage from '../pages/MyProfilePage.vue'
+import PurchasePage from '../pages/PurchasePage.vue'
+import PurchaseSuccessPage from '../pages/PurchaseSuccessPage.vue'
+import ChatPage from '../pages/ChatPage.vue'
 import ProductListPage from '../pages/ProductListPage.vue'
 import ProductDetailPage from '../pages/ProductDetailPage.vue'
 import CallsPage from '../pages/CallsPage.vue'
@@ -32,6 +35,9 @@ const routes = [
   { path: '/products/:productId', name: 'product-detail', component: ProductDetailPage },
   { path: '/calls', name: 'calls', component: CallsPage, meta: { requiresAuth: true } },
   { path: '/calls/:callId/session', name: 'rtc-call', component: RtcCallPage, meta: { requiresAuth: true } },
+  { path: '/purchase/:productId', name: 'purchase', component: PurchasePage },
+  { path: '/purchase/:productId/success', name: 'purchase-success', component: PurchaseSuccessPage },
+  { path: '/chat/:roomId?', name: 'chat', component: ChatPage },
   { path: '/login', name: 'login', component: LoginPage },
   { path: '/signup', name: 'signup', component: SignupPage },
   { path: '/signup/social', name: 'social-signup', component: SocialSignupPage },
@@ -75,7 +81,7 @@ const routes = [
   { path: '/:pathMatch(.*)*', redirect: '/coming-soon/not-found' },
 
   // 각자 담당 페이지는 여기에 이렇게 추가하면 됩니다:
-  // { path: '/checkout', name: 'checkout', component: () => import('../pages/CheckoutPage.vue') },
+  // { path: '/wishlist', name: 'wishlist', component: () => import('../pages/WishlistPage.vue') },
 ]
 
 const router = createRouter({

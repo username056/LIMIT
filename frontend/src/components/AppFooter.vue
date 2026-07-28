@@ -24,7 +24,7 @@ import { RouterLink } from 'vue-router'
       </nav>
 
       <p class="text-center">
-        © 2026 L1MIT. All rights reserved.
+        © 2026 LIMIT. All rights reserved.
       </p>
 
       <nav

@@ -38,11 +38,11 @@ const componentTag = computed(() => props.to && !props.disabled ? RouterLink : '
     :type="to && !disabled ? undefined : type"
     :disabled="disabled"
     :aria-disabled="disabled || undefined"
-    class="inline-flex items-center justify-center gap-2 rounded-md px-5 py-3 text-sm font-semibold transition-all active:scale-[0.98]"
+    class="inline-flex items-center justify-center gap-2 rounded-md px-5 py-3 text-[15px] font-semibold transition-all active:scale-[0.98]"
     :class="[
       block ? 'w-full' : '',
       disabled ? 'cursor-not-allowed opacity-55 active:scale-100' : '',
-      variant === 'primary' && 'bg-primary-gradient text-white shadow-elevated hover:brightness-105',
+      variant === 'primary' && 'bg-primary-gradient text-white shadow-elevated hover:brightness-110',
       variant === 'outline' && 'border border-border bg-surface text-text-main hover:border-primary hover:text-primary',
       variant === 'ghost' && 'text-text-sub hover:text-text-main',
     ]"
