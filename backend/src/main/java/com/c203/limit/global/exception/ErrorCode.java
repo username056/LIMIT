@@ -117,6 +117,9 @@ public enum ErrorCode {
     PAYMENT_REQUEST_CONFLICT(
             "PAY005", HttpStatus.CONFLICT, "결제 요청이 다른 요청과 경합해 처리하지 못했습니다. 잠시 후 다시 시도해 주세요."),
 
+    // ========== 장소 검색 에러 ==========
+    PLACE_SEARCH_UNAVAILABLE("PLC001", HttpStatus.SERVICE_UNAVAILABLE, "장소 검색 설정을 확인해 주세요."),
+
     // ========== 검수/OCR 에러 ==========
     EVIDENCE_NOT_FOUND("INS001", HttpStatus.NOT_FOUND, "증거를 찾을 수 없습니다."),
     EVIDENCE_NOT_READY("INS002", HttpStatus.CONFLICT, "아직 처리되지 않은 증거입니다."),

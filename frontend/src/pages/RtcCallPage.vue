@@ -160,7 +160,10 @@ onBeforeUnmount(cleanup)
     <main class="mx-auto max-w-[1200px] px-5 py-8">
       <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 class="text-2xl font-bold text-text-main">
+          <p class="text-xs font-bold uppercase tracking-[0.16em] text-primary">
+            LIVE CALL
+          </p>
+          <h1 class="mt-2 text-2xl font-bold text-text-main">
             1:1 상품 실시간 확인
           </h1><p class="text-sm text-text-sub">
             상태: {{ status }} · 전체 통화는 녹화되지 않습니다.

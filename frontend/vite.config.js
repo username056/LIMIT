@@ -35,6 +35,11 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  optimizeDeps: {
+    // ffmpeg.wasm은 내부적으로 Web Worker(worker.js)를 자기 자신 기준 상대 경로로 띄우는데,
+    // Vite dev 서버의 의존성 사전 번들링을 거치면 그 경로가 깨져 개발 모드에서만 로딩에 실패합니다.
+    exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util'],
+  },
   server: {
     proxy: {
       '/api': {

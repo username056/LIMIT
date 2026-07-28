@@ -24,7 +24,7 @@ async function loadFavorites(page = 0) {
     favorites.value = response?.data || []
     pageMeta.value = response?.meta || { page, totalPages: 0, hasNext: false }
   } catch (error) {
-    errorMessage.value = error.message || '관심 상품을 불러오지 못했습니다.'
+    errorMessage.value = error.message || '좋아요한 상품을 불러오지 못했습니다.'
   } finally {
     isLoading.value = false
   }
@@ -43,7 +43,7 @@ async function removeFavorite(product) {
       : pageMeta.value.page
     await loadFavorites(targetPage)
   } catch (error) {
-    errorMessage.value = error.message || '관심 상품을 해제하지 못했습니다.'
+    errorMessage.value = error.message || '좋아요한 상품을 해제하지 못했습니다.'
   } finally {
     const remaining = new Set(removingProductIds.value)
     remaining.delete(product.productId)
@@ -57,8 +57,11 @@ onMounted(() => loadFavorites(0))
 <template>
   <MyPageLayout>
     <div class="mb-6">
+      <p class="text-xs font-semibold text-primary">
+        MY FAVORITES
+      </p>
       <h1 class="mt-2 text-2xl font-bold text-text-main">
-        관심 상품
+        좋아요한 상품
       </h1>
       <p class="mt-2 text-sm text-text-sub">
         저장한 상품의 판매 상태와 가격을 한곳에서 확인하세요.
@@ -71,7 +74,7 @@ onMounted(() => loadFavorites(0))
       aria-live="polite"
     >
       <p class="font-semibold text-text-main">
-        관심 상품을 불러오는 중입니다.
+        좋아요한 상품을 불러오는 중입니다.
       </p>
     </BaseCard>
 
@@ -127,7 +130,7 @@ onMounted(() => loadFavorites(0))
             <BaseButton
               variant="outline"
               class="px-3"
-              :aria-label="`${product.name} 관심 상품 해제`"
+              :aria-label="`${product.name} 좋아요 해제`"
               :disabled="removingProductIds.has(product.productId)"
               @click="removeFavorite(product)"
             >
@@ -141,7 +144,7 @@ onMounted(() => loadFavorites(0))
     <nav
       v-if="!isLoading && pageMeta.totalPages > 1"
       class="mt-6 flex items-center justify-center gap-4"
-      aria-label="관심 상품 페이지"
+      aria-label="좋아요한 상품 페이지"
     >
       <BaseButton
         variant="outline"
@@ -167,7 +170,7 @@ onMounted(() => loadFavorites(0))
       class="py-16 text-center"
     >
       <p class="font-semibold text-text-main">
-        관심 상품이 없습니다.
+        좋아요한 상품이 없습니다.
       </p>
       <p class="mt-2 text-sm text-text-sub">
         둘러보기에서 마음에 드는 상품을 저장해 보세요.

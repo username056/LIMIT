@@ -55,13 +55,13 @@ const visibleOrders = computed(() => {
   <MyPageLayout>
     <div class="mb-5">
       <p class="text-xs font-semibold text-primary">
-        WIREFRAME MOCK
+        MY PAGE
       </p>
       <h1 class="mt-2 text-2xl font-bold text-text-main">
         주문 내역 조회
       </h1>
       <p class="mt-2 text-sm text-text-sub">
-        주문 API 연결 전 화면과 상태 전환을 확인하기 위한 목업 데이터입니다.
+        최근 주문한 상품의 결제와 배송 상태를 확인하세요.
       </p>
     </div>
 
@@ -122,7 +122,7 @@ const visibleOrders = computed(() => {
       <div class="flex items-start justify-between gap-4">
         <div>
           <p class="text-xs font-semibold text-primary">
-            주문 상세 목업
+            주문 상세
           </p>
           <h2 class="mt-2 text-lg font-bold text-text-main">
             {{ selectedOrder.name }}

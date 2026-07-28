@@ -1,7 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ProductDetailPage from '../ProductDetailPage.vue'
-import { getProduct } from '../../api/products'
+import { getProduct, getProductChecklist } from '../../api/products'
 import { getFavoriteStatus, removeFavorite } from '../../api/favorites'
 import { getAccessToken } from '../../auth/session'
 import { createOrGetChatRoom } from '../../api/chat'
@@ -13,7 +13,11 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ push }),
 }))
 
-vi.mock('../../api/products', () => ({ getProduct: vi.fn() }))
+vi.mock('../../api/products', () => ({
+  getProduct: vi.fn(),
+  getProductChecklist: vi.fn(),
+  requestRecapture: vi.fn(),
+}))
 vi.mock('../../api/favorites', () => ({
   addFavorite: vi.fn(),
   getFavoriteStatus: vi.fn(),
@@ -41,6 +45,7 @@ describe('ProductDetailPage', () => {
       device: {},
       checklistSummary: {},
     })
+    getProductChecklist.mockResolvedValue([])
   })
 
   it('기존 관심 상품 상태를 불러와 첫 클릭으로 해제한다', async () => {
