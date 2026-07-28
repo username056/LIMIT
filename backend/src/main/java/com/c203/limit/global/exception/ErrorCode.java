@@ -115,7 +115,24 @@ public enum ErrorCode {
     PAYMENT_ACCESS_DENIED("PAY003", HttpStatus.FORBIDDEN, "해당 결제 내역을 조회할 권한이 없습니다."),
     IDEMPOTENCY_KEY_CONFLICT("PAY004", HttpStatus.CONFLICT, "동일한 멱등키로 다른 내용의 결제 요청이 이미 존재합니다."),
     PAYMENT_REQUEST_CONFLICT(
-            "PAY005", HttpStatus.CONFLICT, "결제 요청이 다른 요청과 경합해 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+            "PAY005", HttpStatus.CONFLICT, "결제 요청이 다른 요청과 경합해 처리하지 못했습니다. 잠시 후 다시 시도해 주세요."),
+
+    // ========== 검수/OCR 에러 ==========
+    EVIDENCE_NOT_FOUND("INS001", HttpStatus.NOT_FOUND, "증거를 찾을 수 없습니다."),
+    EVIDENCE_NOT_READY("INS002", HttpStatus.CONFLICT, "아직 처리되지 않은 증거입니다."),
+    OCR_UNSUPPORTED_IMAGE_FORMAT("INS003", HttpStatus.BAD_REQUEST, "지원하지 않는 이미지 형식입니다."),
+    OCR_IMAGE_FETCH_FAILED("INS004", HttpStatus.BAD_GATEWAY, "증거 이미지를 불러오지 못했습니다."),
+    OCR_REQUEST_FAILED("INS005", HttpStatus.BAD_GATEWAY, "OCR 요청에 실패했습니다."),
+    OCR_RECOGNITION_FAILED("INS006", HttpStatus.UNPROCESSABLE_ENTITY, "이미지에서 텍스트를 인식하지 못했습니다."),
+    INVALID_EVIDENCE_TYPE("INS007", HttpStatus.BAD_REQUEST, "지원하지 않는 증거 유형입니다."),
+    DXDIAG_FILE_FETCH_FAILED("INS008", HttpStatus.BAD_GATEWAY, "증거 파일을 불러오지 못했습니다."),
+    BATTERY_REPORT_FILE_FETCH_FAILED("INS009", HttpStatus.BAD_GATEWAY, "증거 파일을 불러오지 못했습니다."),
+    PARSING_FAILED("INS010", HttpStatus.UNPROCESSABLE_ENTITY, "OCR 자동 구조화에 실패했습니다."),
+    UNSUPPORTED_FILE_FORMAT("INS011", HttpStatus.BAD_REQUEST, "지원하지 않는 파일 형식입니다."),
+    ITEM_NOT_FOUND("INS012", HttpStatus.NOT_FOUND, "체크리스트 항목을 찾을 수 없습니다."),
+    FIELD_NOT_EDITABLE("INS013", HttpStatus.BAD_REQUEST, "수정할 수 없는 필드입니다."),
+    PRODUCT_NOT_FOUND("INS014", HttpStatus.NOT_FOUND, "상품을 찾을 수 없습니다."),
+    ALREADY_PARSED("INS015", HttpStatus.CONFLICT, "이미 파싱된 증거입니다.");
 
     private final String code;
     private final HttpStatus status;

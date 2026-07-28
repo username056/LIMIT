@@ -34,4 +34,6 @@ public interface ListingChecklistItemRepository
     List<ListingChecklistCountProjection> countRequiredByListingIds(
             @Param("listingIds") List<Long> listingIds,
             @Param("completedStatus") ChecklistItemCompletionStatus completedStatus);
+
+    List<ListingChecklistItem> findAllByListingIdOrderByDisplayOrderAsc(Long listingId);
 }

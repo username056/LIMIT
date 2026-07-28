@@ -64,4 +64,9 @@ public class OcrResult {
     public boolean isLowConfidence(BigDecimal threshold) {
         return confidence == null || confidence.compareTo(threshold) < 0;
     }
+
+    /** 판매자가 인식값을 직접 고칠 때 사용한다. 별도 이력 테이블 없이 이 값을 그대로 덮어쓴다. */
+    public void correctValue(String value) {
+        this.parsedValue = value;
+    }
 }
