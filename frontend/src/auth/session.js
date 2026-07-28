@@ -45,18 +45,20 @@ export async function restoreAuthSession() {
     const tokens = body?.data || null
     if (!tokens?.accessToken) return false
 
-    // 세션 복원(refresh) 응답에는 로그인 응답과 달리 회원 정보가 없어, 헤더 등에서
-    // 로그인 상태가 반영되지 않는 문제가 있었습니다. accessToken을 먼저 세팅해
-    // 인증된 상태로 프로필을 조회한 뒤 병합합니다.
     session.value = tokens
-    try {
-      const profile = await getMyProfile()
-      session.value = {
-        ...tokens,
-        member: { memberId: profile.memberId, nickname: profile.nickname, roles: profile.roles },
+    if (!tokens.member) {
+      // 일부 세션 복원(refresh) 응답에는 회원 정보가 없어 헤더 등에서 로그인 상태가
+      // 반영되지 않는 문제가 있었습니다. accessToken을 먼저 세팅해 인증된 상태로
+      // 프로필을 조회한 뒤 병합합니다.
+      try {
+        const profile = await getMyProfile()
+        session.value = {
+          ...tokens,
+          member: { memberId: profile.memberId, nickname: profile.nickname, roles: profile.roles },
+        }
+      } catch {
+        // 프로필 조회 실패는 세션 자체를 무효화하지 않습니다(헤더 표시에만 영향).
       }
-    } catch {
-      // 프로필 조회 실패는 세션 자체를 무효화하지 않습니다(헤더 표시에만 영향).
     }
     return true
   } catch {
