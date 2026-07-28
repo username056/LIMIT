@@ -7,13 +7,9 @@ const route = useRoute()
 
 const sidebarItems = computed(() => [
   { label: '내 정보', href: '/mypage/profile', active: route.path === '/mypage/profile' },
+  { label: '내 상품', href: '/seller/products', active: route.path === '/seller/products' },
+  { label: '좋아요한 상품', href: '/mypage/favorites', active: route.path === '/mypage/favorites' },
   { label: '주문 내역', href: '/mypage/orders', active: route.path === '/mypage/orders' },
-  { label: '관심 상품', href: '/mypage/favorites', active: route.path === '/mypage/favorites' },
-  {
-    label: '소셜 계정',
-    href: '/mypage/social-accounts',
-    active: route.path === '/mypage/social-accounts',
-  },
 ])
 </script>
 

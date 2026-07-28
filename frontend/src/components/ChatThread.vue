@@ -79,7 +79,7 @@ function formatTime(isoString) {
 </script>
 
 <template>
-  <div class="flex h-full min-w-0 min-h-[520px] flex-col rounded-lg border border-border bg-surface">
+  <div class="flex h-full min-w-0 min-h-[520px] flex-col bg-surface">
     <div class="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
       <div class="flex items-center gap-3">
         <RouterLink
@@ -118,7 +118,7 @@ function formatTime(isoString) {
       v-if="product"
       class="flex items-center gap-3 border-b border-border px-5 py-3"
     >
-      <div class="h-10 w-10 shrink-0 rounded-md bg-primary-gradient" />
+      <div class="h-10 w-10 shrink-0 bg-primary-gradient" />
       <div class="min-w-0 flex-1">
         <p class="truncate text-sm font-bold text-text-main">
           {{ product.name }}
@@ -129,7 +129,7 @@ function formatTime(isoString) {
       </div>
       <RouterLink
         :to="{ name: 'product-detail', params: { productId: room.listingId } }"
-        class="whitespace-nowrap rounded-md border border-primary px-3 py-1.5 text-xs font-semibold text-primary hover:bg-accent"
+        class="whitespace-nowrap text-xs font-semibold text-primary hover:text-primary-dark"
       >
         상품 보기
       </RouterLink>

@@ -152,9 +152,9 @@ onMounted(async () => {
       </div>
 
       <template v-else>
-        <div class="grid gap-10 lg:grid-cols-[1.08fr_0.92fr]">
+        <div class="grid gap-8 lg:grid-cols-[1.08fr_0.92fr] lg:gap-12">
           <section aria-label="상품 이미지">
-            <div class="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg border border-border bg-slate-50">
+            <div class="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-md bg-slate-50">
               <img
                 v-if="product.thumbnailUrl"
                 :src="product.thumbnailUrl"
@@ -168,7 +168,7 @@ onMounted(async () => {
                 <span class="text-6xl">▣</span>
                 <span class="mt-3 text-sm">등록된 상품 이미지가 없습니다.</span>
               </div>
-              <span class="absolute left-4 top-4 rounded-pill bg-surface/95 px-3 py-1.5 text-xs font-bold text-primary shadow-card">
+              <span class="absolute left-4 top-4 border-l-2 border-primary bg-surface/95 px-2.5 py-1 text-xs font-bold text-primary">
                 {{ statusLabel(product.status) }}
               </span>
             </div>
@@ -186,7 +186,7 @@ onMounted(async () => {
               {{ formatPrice(product.price) }}원
             </p>
 
-            <dl class="mt-7 grid grid-cols-2 gap-x-6 gap-y-5 rounded-lg border border-border bg-bg p-5 text-sm">
+            <dl class="mt-8 grid grid-cols-2 gap-x-6 gap-y-5 border-y border-border py-5 text-sm">
               <div>
                 <dt class="text-xs text-text-sub">
                   색상
@@ -258,8 +258,8 @@ onMounted(async () => {
           </section>
         </div>
 
-        <div class="mt-14 grid gap-8 lg:grid-cols-[1fr_360px]">
-          <section class="rounded-lg border border-border bg-surface p-6 sm:p-8">
+        <div class="mt-16 grid gap-10 lg:grid-cols-[1fr_360px]">
+          <section class="border-t border-border pt-6 sm:pt-8">
             <h2 class="text-lg font-bold text-text-main">
               상품 설명
             </h2>
@@ -268,7 +268,7 @@ onMounted(async () => {
             </p>
           </section>
 
-          <section class="rounded-lg border border-border bg-surface p-6">
+          <section class="border-l-2 border-primary bg-bg px-5 py-4">
             <div class="flex items-start justify-between">
               <div>
                 <p class="text-xs font-semibold text-primary">

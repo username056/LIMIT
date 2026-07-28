@@ -28,7 +28,7 @@ onMounted(async () => {
 
     if (mode === 'link') {
       await completeSocialLink(provider, code, oauthRedirectUri(provider), state)
-      await router.replace('/mypage/social-accounts?linked=true')
+      await router.replace('/mypage/profile?linked=true')
       return
     }
     const result = await completeSocialLogin(provider, code, oauthRedirectUri(provider), state)
