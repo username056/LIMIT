@@ -19,7 +19,7 @@ describe('auth session', () => {
       ok: true,
       json: vi.fn().mockResolvedValue({
         data: {
-          accessToken: 'renewed-token',
+          accessToken: 'stub',
           member: {
             memberId: 1,
             nickname: 'seller',
@@ -31,13 +31,13 @@ describe('auth session', () => {
     }))
 
     expect(await restoreAuthSession()).toBe(true)
-    expect(getAccessToken()).toBe('renewed-token')
+    expect(getAccessToken()).toBe('stub')
     expect(hasRole('SELLER')).toBe(true)
     expect(getSessionMember().sellerStatus).toBe('ACTIVE')
   })
 
   it('토큰 갱신 실패 시 이전 세션을 제거한다', async () => {
-    setAuthSession({ accessToken: 'stale-token', member: { roles: ['MEMBER'] } })
+    setAuthSession({ accessToken: 'stub', member: { roles: ['MEMBER'] } })
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }))
 
     expect(await restoreAuthSession()).toBe(false)
