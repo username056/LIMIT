@@ -20,11 +20,15 @@ import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /** 검수 증거 스크린샷을 OCR로 분석해 기대 필드들을 한 번에 구조화하는 유스케이스. */
 @Service
 public class OcrExtractionService {
+
+    private static final Logger log = LoggerFactory.getLogger(OcrExtractionService.class);
 
     private final EvidenceRepository evidenceRepository;
     private final OcrResultRepository ocrResultRepository;
@@ -73,7 +77,9 @@ public class OcrExtractionService {
                         .map(ocrResultRepository::save)
                         .toList();
 
-        return buildResponse(evidenceId, expectedFieldTypes, savedResults);
+        OcrResultResponse response = buildResponse(evidenceId, expectedFieldTypes, savedResults);
+        log.info("ocr extraction completed: evidenceId={}, status={}", evidenceId, response.getStatus());
+        return response;
     }
 
     private void verifyOwnership(Evidence evidence, Long sellerId) {
@@ -93,6 +99,7 @@ public class OcrExtractionService {
         } catch (BusinessException exception) {
             throw exception;
         } catch (RuntimeException exception) {
+            log.warn("ocr field extraction failed", exception);
             throw new BusinessException(ErrorCode.PARSING_FAILED);
         }
     }

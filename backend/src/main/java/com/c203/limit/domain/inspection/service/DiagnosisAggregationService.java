@@ -24,6 +24,8 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +35,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class DiagnosisAggregationService {
+
+    private static final Logger log = LoggerFactory.getLogger(DiagnosisAggregationService.class);
 
     private final ListingChecklistItemRepository listingChecklistItemRepository;
     private final EvidenceRepository evidenceRepository;
@@ -69,6 +73,11 @@ public class DiagnosisAggregationService {
         Map<DiagnosisFieldName, FieldSource> fileParseValues = collectFileParseValues(itemId);
 
         List<DiagnosisFieldResponse> fields = buildFields(ocrValues, fileParseValues);
+
+        long conflictCount = fields.stream().filter(DiagnosisFieldResponse::isConflict).count();
+        if (conflictCount > 0) {
+            log.warn("diagnosis field conflict detected: itemId={}, conflictingFieldCount={}", itemId, conflictCount);
+        }
 
         return new DiagnosisFieldListResponse(itemId, fields);
     }

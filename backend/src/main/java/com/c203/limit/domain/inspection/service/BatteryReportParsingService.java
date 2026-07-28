@@ -15,12 +15,15 @@ import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.time.LocalDateTime;
 import java.util.Locale;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /** 검수 증거로 업로드된 배터리 리포트 HTML을 다운로드해 파싱하고 battery_report_result에 저장하는 유스케이스. */
 @Service
 public class BatteryReportParsingService {
 
+    private static final Logger log = LoggerFactory.getLogger(BatteryReportParsingService.class);
     private static final String PARSER_VERSION = "battery-report-v1";
 
     private final EvidenceRepository evidenceRepository;
@@ -68,12 +71,16 @@ public class BatteryReportParsingService {
         try {
             parsed = batteryReportHtmlParser.parse(htmlBytes);
         } catch (BatteryReportParseException exception) {
+            log.warn("battery report parsing failed: evidenceId={}", evidenceId, exception);
             throw new BusinessException(ErrorCode.PARSING_FAILED);
         }
 
         BatteryReportResult entity =
                 BatteryReportResultMapper.toEntity(evidenceId, parsed, PARSER_VERSION, LocalDateTime.now());
-        return batteryReportResultRepository.save(entity);
+        BatteryReportResult saved = batteryReportResultRepository.save(entity);
+        log.info(
+                "battery report parsed: evidenceId={}, parseStatus={}", evidenceId, saved.getParseStatus());
+        return saved;
     }
 
     private void verifyOwnership(Evidence evidence, Long sellerId) {

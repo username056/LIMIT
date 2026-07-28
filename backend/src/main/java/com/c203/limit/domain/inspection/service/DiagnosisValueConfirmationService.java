@@ -17,6 +17,8 @@ import com.c203.limit.domain.inspection.repository.OcrResultRepository;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.time.LocalDateTime;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +29,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class DiagnosisValueConfirmationService {
+
+    private static final Logger log = LoggerFactory.getLogger(DiagnosisValueConfirmationService.class);
 
     private final ListingChecklistItemRepository listingChecklistItemRepository;
     private final ListingOwnerReader listingOwnerReader;
@@ -68,6 +72,12 @@ public class DiagnosisValueConfirmationService {
         String originalValue = current.fileParseValue() != null ? current.fileParseValue() : current.ocrValue();
 
         applyCorrection(current.sourceType(), current.sourceEvidenceId(), fieldName, request.getConfirmedValue());
+
+        log.info(
+                "diagnosis value confirmed: itemId={}, fieldName={}, sourceType={}",
+                itemId,
+                fieldName,
+                current.sourceType());
 
         return new DiagnosisValueUpdateResponse(
                 itemId, fieldName.name(), originalValue, request.getConfirmedValue(), LocalDateTime.now());

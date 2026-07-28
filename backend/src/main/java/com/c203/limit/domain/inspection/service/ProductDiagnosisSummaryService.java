@@ -13,6 +13,8 @@ import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.util.Arrays;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ProductDiagnosisSummaryService {
 
+    private static final Logger log = LoggerFactory.getLogger(ProductDiagnosisSummaryService.class);
     private static final String DISCLAIMER = "자동 추출값은 참고 정보이며 상품의 정상 여부를 보증하지 않습니다.";
 
     private final ListingOwnerReader listingOwnerReader;
@@ -56,6 +59,12 @@ public class ProductDiagnosisSummaryService {
                                         Arrays.stream(DiagnosisFieldName.values())
                                                 .map(fieldName -> toSummaryItem(item.getId(), fieldName)))
                         .toList();
+
+        boolean allExtractionsFailed =
+                !checklistItems.isEmpty() && items.stream().noneMatch(item -> item.status() == DiagnosisSummaryStatus.AVAILABLE);
+        if (allExtractionsFailed) {
+            log.warn("product diagnosis summary has no available fields: productId={}", productId);
+        }
 
         return new ProductDiagnosisSummaryResponse(productId, items, DISCLAIMER);
     }
