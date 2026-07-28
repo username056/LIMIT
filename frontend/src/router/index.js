@@ -17,6 +17,7 @@ import ResetPasswordPage from '../pages/ResetPasswordPage.vue'
 import TermsPage from '../pages/TermsPage.vue'
 import PrivacyPage from '../pages/PrivacyPage.vue'
 import ComingSoonPage from '../pages/ComingSoonPage.vue'
+import NotFoundPage from '../pages/NotFoundPage.vue'
 import MyFavoritesPage from '../pages/MyFavoritesPage.vue'
 import MyProfilePage from '../pages/MyProfilePage.vue'
 import PurchasePage from '../pages/PurchasePage.vue'
@@ -86,7 +87,7 @@ const routes = [
   { path: '/admin', name: 'admin', component: AdminPage },
   { path: '/dev-tools', name: 'dev-tools', component: DevToolsPage },
   { path: '/coming-soon/:feature', name: 'coming-soon', component: ComingSoonPage },
-  { path: '/:pathMatch(.*)*', redirect: '/coming-soon/not-found' },
+  { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFoundPage },
 
   // 각자 담당 페이지는 여기에 이렇게 추가하면 됩니다:
   // { path: '/wishlist', name: 'wishlist', component: () => import('../pages/WishlistPage.vue') },
@@ -110,7 +111,7 @@ router.beforeEach((to) => {
   }
 
   if (to.meta.requiresRole && !hasRole(to.meta.requiresRole)) {
-    return { name: 'seller-apply' }
+    return { name: 'home', query: { notice: 'forbidden' } }
   }
 
   if (to.meta.sellerRegistrationOnly && hasRole('SELLER')) {

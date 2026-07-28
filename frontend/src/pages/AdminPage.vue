@@ -87,6 +87,7 @@ async function submitLogin() {
 }
 
 function logoutAdmin() {
+  if (!window.confirm('로그아웃하시겠습니까?')) return
   clearAuthSession()
   activeSection.value = 'dashboard'
   selectedMember.value = null

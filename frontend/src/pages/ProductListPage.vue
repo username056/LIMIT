@@ -11,6 +11,7 @@ const router = useRouter()
 const categories = ref([])
 const isLoading = ref(false)
 const errorMessage = ref('')
+const isFilterOpen = ref(false)
 const pageMeta = ref({ page: 0, totalPages: 0, hasNext: false, totalElements: 0 })
 const filters = reactive({
   keyword: '',
@@ -58,6 +59,14 @@ function verificationStatusForBuckets(buckets) {
 }
 
 const resultCount = computed(() => pageMeta.value.totalElements ?? products.value.length)
+const activeFilterCount = computed(() => [
+  filters.keyword,
+  filters.categoryId,
+  filters.minPrice,
+  filters.maxPrice,
+  filters.tradeRegion,
+  ...filters.verificationCountRanges,
+].filter(Boolean).length)
 
 function flattenCategories(items, depth = 0) {
   return (items || []).flatMap((item) => [
@@ -149,7 +158,7 @@ watch(() => route.query.q, async (keyword) => {
           <p class="text-xs font-bold uppercase tracking-[0.18em] text-primary">
             VERIFIED DEVICES
           </p>
-          <h1 class="mt-2 text-3xl font-bold tracking-tight text-text-main">
+          <h1 class="mt-2 text-2xl font-bold text-text-main">
             상품 목록
           </h1>
           <p class="mt-2 text-sm text-text-sub">
@@ -161,8 +170,20 @@ watch(() => route.query.q, async (keyword) => {
         </BaseButton>
       </div>
 
+      <div class="mb-5 lg:hidden">
+        <button
+          type="button"
+          class="flex w-full items-center justify-between rounded-md border border-border bg-surface px-4 py-3 text-sm font-semibold text-text-main"
+          :aria-expanded="isFilterOpen"
+          @click="isFilterOpen = !isFilterOpen"
+        >
+          <span>필터{{ activeFilterCount ? ` ${activeFilterCount}` : '' }}</span>
+          <span class="text-primary">{{ isFilterOpen ? '접기' : '열기' }}</span>
+        </button>
+      </div>
+
       <div class="grid gap-8 lg:grid-cols-[220px_minmax(0,1fr)]">
-        <aside>
+        <aside :class="isFilterOpen ? 'block' : 'hidden lg:block'">
           <form
             class="sticky top-6 rounded-lg border border-border bg-surface p-5 shadow-card"
             aria-label="상품 검색 필터"

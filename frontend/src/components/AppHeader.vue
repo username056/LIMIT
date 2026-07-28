@@ -42,6 +42,7 @@ async function submitSearch() {
 }
 
 async function logoutMember() {
+  if (!window.confirm('로그아웃하시겠습니까?')) return
   isProfileMenuOpen.value = false
   try {
     await logout()
@@ -193,7 +194,7 @@ async function logoutMember() {
                   class="block rounded px-2 py-1.5 text-sm text-text-main hover:bg-bg"
                   @click="isProfileMenuOpen = false"
                 >
-                  마이페이지
+                  내 정보
                 </RouterLink>
                 <button
                   type="button"

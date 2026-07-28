@@ -1,8 +1,21 @@
 <script setup>
+import { onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseBadge from '../components/BaseBadge.vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseCard from '../components/BaseCard.vue'
+
+const route = useRoute()
+const router = useRouter()
+const showForbiddenNotice = ref(false)
+
+onMounted(() => {
+  if (route.query.notice !== 'forbidden') return
+  showForbiddenNotice.value = true
+  const { notice, ...rest } = route.query
+  router.replace({ query: rest })
+})
 
 // 예시 데이터입니다. 실제 연동 시 API 응답으로 교체하세요.
 const categories = [
@@ -174,5 +187,26 @@ const products = [
         </RouterLink>
       </div>
     </section>
+
+    <div
+      v-if="showForbiddenNotice"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+    >
+      <BaseCard class="w-full max-w-sm text-center">
+        <h2 class="text-lg font-bold text-text-main">
+          해당 페이지에 권한이 없습니다
+        </h2>
+        <p class="mt-2 text-sm text-text-sub">
+          메인 페이지로 돌아갑니다.
+        </p>
+        <BaseButton
+          block
+          class="mt-5"
+          @click="showForbiddenNotice = false"
+        >
+          확인
+        </BaseButton>
+      </BaseCard>
+    </div>
   </DefaultLayout>
 </template>

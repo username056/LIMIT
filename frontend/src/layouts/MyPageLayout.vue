@@ -11,7 +11,7 @@ const isSeller = computed(() => session.value?.member?.roles?.includes('SELLER')
 const sidebarItems = computed(() => {
   const items = [
     { label: '내 정보', href: '/mypage/profile' },
-    { label: '관심 상품', href: '/mypage/favorites' },
+    { label: '좋아요한 상품', href: '/mypage/favorites' },
     { label: '주문 내역', href: '/mypage/orders' },
   ]
 

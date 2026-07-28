@@ -45,7 +45,7 @@ describe('MyPageLayout', () => {
 
     expect(wrapper.findAll('a').map((item) => item.text())).toEqual([
       '내 정보',
-      '관심 상품',
+      '좋아요한 상품',
       '주문 내역',
       '판매자 등록',
     ])
@@ -57,7 +57,7 @@ describe('MyPageLayout', () => {
 
     expect(wrapper.findAll('a').map((item) => item.text())).toEqual([
       '내 정보',
-      '관심 상품',
+      '좋아요한 상품',
       '주문 내역',
       '판매자 대시보드',
       '상품 관리',

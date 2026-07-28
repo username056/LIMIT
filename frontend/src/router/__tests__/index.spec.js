@@ -21,7 +21,7 @@ describe('router seller authorization', () => {
     expect(router.currentRoute.value.query.redirect).toBe('/seller/products')
   })
 
-  it('일반 회원이 판매자 화면에 접근하면 판매자 등록으로 이동한다', async () => {
+  it('일반 회원이 판매자 화면에 접근하면 권한 없음 알림과 함께 메인으로 이동한다', async () => {
     setAuthSession({
       accessToken: 'stub',
       member: { roles: ['MEMBER'], sellerStatus: null },
@@ -29,7 +29,8 @@ describe('router seller authorization', () => {
 
     await router.push('/seller/dashboard')
 
-    expect(router.currentRoute.value.name).toBe('seller-apply')
+    expect(router.currentRoute.value.name).toBe('home')
+    expect(router.currentRoute.value.query.notice).toBe('forbidden')
   })
 
   it('판매자는 등록 화면 대신 상품 관리로 이동한다', async () => {

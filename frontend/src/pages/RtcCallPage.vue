@@ -1,6 +1,6 @@
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseCard from '../components/BaseCard.vue'
@@ -10,6 +10,7 @@ import {
 } from '../api/rtc'
 
 const route = useRoute()
+const router = useRouter()
 const call = ref(null)
 const session = ref(null)
 const localVideo = ref(null)
@@ -104,6 +105,10 @@ async function connect() {
   }
 }
 
+function goToChat() {
+  router.push({ name: 'chat', params: { roomId: call.value.chatRoomId } })
+}
+
 function showError(error) {
   errorMessage.value = error.message || '통화 연결 중 오류가 발생했습니다.'
 }
@@ -181,6 +186,12 @@ onBeforeUnmount(cleanup)
             @click="finish"
           >
             확인 저장 후 종료
+          </BaseButton><BaseButton
+            v-if="status === 'ended' || status === 'peer-ended'"
+            variant="outline"
+            @click="goToChat"
+          >
+            채팅으로 돌아가기
           </BaseButton>
         </div>
       </div>
