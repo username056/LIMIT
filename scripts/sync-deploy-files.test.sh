@@ -65,6 +65,25 @@ grep -Fxq "infra/admin/" "$test_dir/all.files"
 grep -Fq "/var/www/limit-admin" "$test_dir/all.args"
 grep -Fq "/var/www/limit-grafana-assets" "$test_dir/all.args"
 
+recovery_archive="$test_dir/seller-recovery.tar.gz"
+run_sync seller-recovery "$recovery_archive" "$test_dir/seller-recovery.args"
+tar -tzf "$recovery_archive" > "$test_dir/seller-recovery.files"
+grep -Fxq "scripts/deploy-blue-green.sh" "$test_dir/seller-recovery.files"
+grep -Fxq "scripts/backup-datastores.sh" "$test_dir/seller-recovery.files"
+grep -Fxq "scripts/recover-seller-migration.sh" "$test_dir/seller-recovery.files"
+grep -Fxq "scripts/smoke-test.sh" "$test_dir/seller-recovery.files"
+grep -Fxq "infra/compose.yml" "$test_dir/seller-recovery.files"
+grep -Fxq "infra/compose.prod.yml" "$test_dir/seller-recovery.files"
+grep -Fxq "backend/src/main/resources/db/migration/" "$test_dir/seller-recovery.files"
+grep -Fxq \
+  "backend/src/main/resources/db/maintenance/V20260802__prepare_failed_seller_migration.sql" \
+  "$test_dir/seller-recovery.files"
+if grep -Fq "/var/www/limit-admin" "$test_dir/seller-recovery.args" \
+  || grep -Fq "/var/www/limit-grafana-assets" "$test_dir/seller-recovery.args"; then
+  echo "seller recovery scope included unrelated asset installation" >&2
+  exit 1
+fi
+
 if run_sync invalid "$test_dir/invalid.tar.gz" "$test_dir/invalid.args"; then
   echo "invalid scope unexpectedly succeeded" >&2
   exit 1

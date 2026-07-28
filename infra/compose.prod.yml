@@ -76,6 +76,21 @@ x-backend-environment: &backend-environment
   SPRINGDOC_SWAGGER_UI_ENABLED: "true"
 
 services:
+  flyway-maintenance:
+    image: flyway/flyway:11.14.1-alpine@sha256:f2dac810c1dc66c0d15c65fb82cf46d0c3fb790ab70251cfefa67e901ab29700
+    profiles: [maintenance]
+    environment:
+      FLYWAY_URL: "jdbc:mysql://mysql:3306/${MYSQL_DATABASE:?MYSQL_DATABASE is required}?allowPublicKeyRetrieval=true&useSSL=false"
+      FLYWAY_USER: ${MYSQL_USER:?MYSQL_USER is required}
+      FLYWAY_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+      FLYWAY_LOCATIONS: filesystem:/flyway/sql
+      FLYWAY_CLEAN_DISABLED: "true"
+      FLYWAY_CONNECT_RETRIES: "10"
+      REDGATE_DISABLE_TELEMETRY: "true"
+    volumes:
+      - ../backend/src/main/resources/db/migration:/flyway/sql:ro
+    networks: [data]
+
   backend-blue:
     image: ${BACKEND_BLUE_IMAGE:?BACKEND_BLUE_IMAGE is required}
     profiles: [application]
