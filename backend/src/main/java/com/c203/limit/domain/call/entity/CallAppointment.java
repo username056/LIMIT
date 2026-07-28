@@ -100,9 +100,15 @@ public class CallAppointment {
         respondedAt = LocalDateTime.now();
     }
 
+    public void update(Long memberId, LocalDateTime scheduledAt, String memo) {
+        requireProposer(memberId);
+        requireProposed();
+        this.scheduledAt = scheduledAt;
+        this.memo = memo;
+    }
+
     public void cancel(Long memberId, String reason) {
-        if (!proposerId.equals(memberId))
-            throw new IllegalStateException("only proposer can cancel");
+        requireProposer(memberId);
         requireProposed();
         status = AppointmentStatus.CANCELED;
         cancelReason = reason;
@@ -124,6 +130,11 @@ public class CallAppointment {
     private void requireRespondent(Long memberId) {
         if (!respondentId.equals(memberId))
             throw new IllegalStateException("only respondent can respond");
+    }
+
+    private void requireProposer(Long memberId) {
+        if (!proposerId.equals(memberId))
+            throw new IllegalStateException("only proposer can update appointment");
     }
 
     private void requireProposed() {

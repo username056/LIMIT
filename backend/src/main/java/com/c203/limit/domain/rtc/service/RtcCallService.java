@@ -14,6 +14,7 @@ import com.c203.limit.domain.rtc.dto.request.CreateCallRequest;
 import com.c203.limit.domain.rtc.dto.request.EndRtcSessionRequest;
 import com.c203.limit.domain.rtc.dto.request.MarkRtcConnectedRequest;
 import com.c203.limit.domain.rtc.dto.request.RespondCallRequest;
+import com.c203.limit.domain.rtc.dto.request.UpdateCallRequest;
 import com.c203.limit.domain.rtc.dto.response.CallResponse;
 import com.c203.limit.domain.rtc.dto.response.RtcChecklistItemResponse;
 import com.c203.limit.domain.rtc.dto.response.RtcJoinResponse;
@@ -128,6 +129,7 @@ public class RtcCallService {
         try {
             if (!request.accepted()) {
                 appointment.reject(memberId, request.reason());
+                log.info("RTC inspection call rejected: callId={}", callId);
                 return callResponse(appointment, null, memberId);
             }
             appointment.accept(memberId);
@@ -148,7 +150,32 @@ public class RtcCallService {
                                                         room.getSellerId(),
                                                         room.getBuyerId(),
                                                         LocalDateTime.now().plusHours(2))));
+        log.info("RTC inspection call accepted: callId={}, sessionId={}", callId, session.getId());
         return callResponse(appointment, session, memberId);
+    }
+
+    @Transactional
+    public CallResponse update(Long callId, Long memberId, UpdateCallRequest request) {
+        CallAppointment appointment = appointment(callId, memberId);
+        try {
+            appointment.update(memberId, request.scheduledAt(), request.memo());
+        } catch (IllegalStateException exception) {
+            throw new BusinessException(ErrorCode.RTC_INVALID_STATE);
+        }
+        log.info("RTC inspection call updated: callId={}", callId);
+        return callResponse(appointment, null, memberId);
+    }
+
+    @Transactional
+    public CallResponse cancel(Long callId, Long memberId, String reason) {
+        CallAppointment appointment = appointment(callId, memberId);
+        try {
+            appointment.cancel(memberId, reason);
+        } catch (IllegalStateException exception) {
+            throw new BusinessException(ErrorCode.RTC_INVALID_STATE);
+        }
+        log.info("RTC inspection call canceled: callId={}", callId);
+        return callResponse(appointment, null, memberId);
     }
 
     @Transactional(readOnly = true)
