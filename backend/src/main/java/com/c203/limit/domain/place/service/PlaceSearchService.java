@@ -5,6 +5,8 @@ import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
@@ -14,6 +16,7 @@ import org.springframework.web.client.RestClientException;
 
 @Service
 public class PlaceSearchService {
+    private static final Logger log = LoggerFactory.getLogger(PlaceSearchService.class);
     private static final String KEYWORD_SEARCH_URI =
             "https://dapi.kakao.com/v2/local/search/keyword.json?query={query}&size={size}";
 
@@ -27,6 +30,7 @@ public class PlaceSearchService {
 
     public List<PlaceSearchResultResponse> search(String query, int size) {
         if (!StringUtils.hasText(kakaoRestApiKey)) {
+            log.warn("place search rejected: kakao rest api key is not configured");
             throw new BusinessException(ErrorCode.PLACE_SEARCH_UNAVAILABLE);
         }
         try {
@@ -37,8 +41,11 @@ public class PlaceSearchService {
                             .headers(headers -> headers.set("Authorization", "KakaoAK " + kakaoRestApiKey))
                             .retrieve()
                             .body(new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {});
-            return toResults(body);
+            List<PlaceSearchResultResponse> results = toResults(body);
+            log.info("place search completed: resultCount={}", results.size());
+            return results;
         } catch (RestClientException exception) {
+            log.warn("place search failed: kakao local api request error", exception);
             throw new BusinessException(ErrorCode.PLACE_SEARCH_UNAVAILABLE);
         }
     }
