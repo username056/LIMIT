@@ -60,3 +60,14 @@ docker compose --env-file infra/.env.local -p limit-local -f infra/compose.yml -
 - MySQL DDL이 일부 반영됐을 수 있으므로 애플리케이션 로그와 실제 스키마를 함께 대조한다.
 - 원인과 영향 범위를 확정한 뒤 백업 복원 또는 새 후속 migration 중 하나를 선택한다.
 - 실제 `.env`, Secret, 토큰, 키는 저장소에 커밋하지 않는다.
+
+### 판매자 migration 읽기 전용 진단
+
+`V20260802` 실패를 조사할 때는 `seller_migration_diagnostic` Job으로
+`flyway_schema_history`, `seller` 컬럼·인덱스와 중복·길이 집계만 확인한다. 이 Job은
+제목에 `판매자 마이그레이션 읽기 전용 진단`이 포함된 `dev` push에서만 실행하며,
+같은 파이프라인의 이미지 push와 백엔드·모니터링·프론트 운영 배포는 건너뛴다.
+회원 ID나 이메일, 이름, 연락처, 계좌 데이터는 출력하지 않는다.
+
+진단 결과만으로 실패 행을 삭제하거나 `repair`하지 않는다. 실제 스키마 보정,
+Flyway `repair`와 배포 재시도는 별도 운영 승인을 받은 뒤 수행한다.
