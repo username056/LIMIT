@@ -78,6 +78,7 @@ public enum ErrorCode {
     SELLER_DOCUMENT_NOT_FOUND("SEL007", HttpStatus.NOT_FOUND, "판매자 증빙 문서를 찾을 수 없습니다."),
     INVALID_SELLER_DOCUMENT("SEL008", HttpStatus.BAD_REQUEST, "허용되지 않는 판매자 증빙 문서입니다."),
     SELLER_PROFILE_NOT_FOUND("SEL009", HttpStatus.NOT_FOUND, "판매자 프로필을 찾을 수 없습니다."),
+    SELLER_NOT_ACTIVE("SEL010", HttpStatus.FORBIDDEN, "활성 판매자만 이용할 수 있습니다."),
     ADMIN_NOT_FOUND("ADM001", HttpStatus.NOT_FOUND, "관리자 계정을 찾을 수 없습니다."),
     ADMIN_ROLE_REQUIRED("ADM002", HttpStatus.FORBIDDEN, "관리자 권한이 필요합니다."),
     MEMBER_RESTRICTION_NOT_FOUND("ADM003", HttpStatus.NOT_FOUND, "회원 이용 제한을 찾을 수 없습니다."),

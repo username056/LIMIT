@@ -7,7 +7,12 @@ import './index.css'
 
 const app = createApp(App)
 
-app.use(router)
-initializeSentry(app)
+async function bootstrap() {
+  await restoreAuthSession()
+  app.use(router)
+  initializeSentry(app)
+  await router.isReady()
+  app.mount('#app')
+}
 
-restoreAuthSession().finally(() => app.mount('#app'))
+bootstrap()

@@ -1,123 +1,119 @@
 <script setup>
-import { ref } from 'vue'
-import SidebarLayout from '../layouts/SidebarLayout.vue'
-import StatCard from '../components/StatCard.vue'
+import { computed, onMounted, ref } from 'vue'
+import { getMySellerProfile } from '../api/seller'
 import BaseBadge from '../components/BaseBadge.vue'
-import BaseTable from '../components/BaseTable.vue'
-import BasePagination from '../components/BasePagination.vue'
-import BarChart from '../components/charts/BarChart.vue'
-import DonutChart from '../components/charts/DonutChart.vue'
 import BaseButton from '../components/BaseButton.vue'
+import MyPageLayout from '../layouts/MyPageLayout.vue'
 
-const sidebarItems = [
-  { label: '대시보드', href: '/seller/dashboard', active: false },
-  { label: '상품 관리', href: '/seller/products', active: false },
-  { label: '주문 관리', href: '/coming-soon/seller-orders', active: false },
-  { label: '정산 및 통계', href: '/seller/dashboard', active: true },
-  { label: '설정', href: '/coming-soon/seller-settings', active: false },
-]
+const profile = ref(null)
+const isLoading = ref(true)
+const errorMessage = ref('')
 
-// 예시 데이터입니다. 실제 연동 시 API 응답으로 교체하세요.
-const settlements = [
-  { name: "Nike Dunk Low 'Panda'", date: '2024.05.28', amount: '8,250,000', status: '정산완료' },
-  { name: 'Jordan 1 Retro High OG', date: '2024.05.20', amount: '15,400,000', status: '정산완료' },
-  { name: "New Balance 990v6 'Grey'", date: '2024.06.15', amount: '12,400,000', status: '보류' },
-  { name: 'Adidas Yeezy Boost 350 V2', date: '2024.05.12', amount: '19,200,000', status: '정산완료' },
-]
+const sellerTypeLabel = computed(() => (
+  profile.value?.sellerType === 'BUSINESS' ? '사업자 판매자' : '개인 판매자'
+))
+const createdAtLabel = computed(() => {
+  if (!profile.value?.createdAt) return '-'
+  return new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium' })
+    .format(new Date(profile.value.createdAt))
+})
 
-const currentPage = ref(1)
+onMounted(async () => {
+  try {
+    profile.value = await getMySellerProfile()
+  } catch (error) {
+    errorMessage.value = error.message || '판매자 정보를 불러오지 못했습니다.'
+  } finally {
+    isLoading.value = false
+  }
+})
 </script>
 
 <template>
-  <SidebarLayout :sidebar-items="sidebarItems">
-    <h1 class="mb-1 text-lg font-bold text-text-main">
-      정산 및 통계
-    </h1>
-    <p class="mb-6 text-sm text-text-sub">
-      실시간 판매 데이터와 정산 현황을 확인하세요.
-    </p>
-
-    <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-      <StatCard
-        label="정산 완료"
-        value="₩42,850,000"
-        trend="전월 대비 +8%"
-      />
-      <StatCard
-        label="정산 예정"
-        value="₩12,400,000"
-        trend="이번 주 정산 2건"
-      />
-      <StatCard
-        label="총 드롭 참여"
-        value="14,208명"
-        trend="전월 대비 +12%"
-      />
-    </div>
-
-    <div class="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
-      <div class="rounded-lg border border-border bg-surface p-5 lg:col-span-2">
-        <p class="mb-4 text-sm font-bold text-text-main">
-          드롭 참여 통계
-        </p>
-        <BarChart
-          :labels="['05.24', '05.25', '05.26', '05.27', '05.28', '05.29']"
-          :values="[12, 18, 25, 20, 30, 22]"
-        />
+  <MyPageLayout>
+    <section>
+      <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 class="text-2xl font-bold text-text-main">
+            판매자 대시보드
+          </h1>
+          <p class="mt-1 text-sm text-text-sub">
+            판매자 등록 정보와 상품 관리 메뉴를 확인할 수 있습니다.
+          </p>
+        </div>
+        <BaseButton to="/seller/products">
+          상품 관리
+        </BaseButton>
       </div>
-      <div class="flex flex-col items-center justify-center rounded-lg bg-primary-gradient p-5 text-white">
-        <p class="mb-3 text-sm font-semibold">
-          구매 전환율
-        </p>
-        <DonutChart :percent="72" />
-        <p class="mt-3 text-center text-xs opacity-90">
-          모의 경쟁 대비 전환 우수 (124:1 → 4.2%)
-        </p>
-      </div>
-    </div>
 
-    <div>
-      <p class="mb-3 text-sm font-bold text-text-main">
-        정산 내역 상세
+      <p
+        v-if="isLoading"
+        class="rounded-lg border border-border bg-surface p-6 text-sm text-text-sub"
+      >
+        판매자 정보를 불러오는 중입니다.
       </p>
-      <BaseTable :columns="['드롭 명', '정산 예정일', '정산 금액', '상태', '']">
-        <tr
-          v-for="item in settlements"
-          :key="item.name"
-        >
-          <td class="px-4 py-3 text-sm text-text-main">
-            {{ item.name }}
-          </td>
-          <td class="px-4 py-3 text-sm text-text-sub">
-            {{ item.date }}
-          </td>
-          <td class="px-4 py-3 text-sm font-semibold text-text-main">
-            ₩{{ item.amount }}
-          </td>
-          <td class="px-4 py-3">
-            <BaseBadge :variant="item.status === '정산완료' ? 'primary' : 'gray'">
-              {{ item.status }}
-            </BaseBadge>
-          </td>
-          <td class="px-4 py-3 text-right text-text-sub">
-            <BaseButton
-              variant="ghost"
-              class="px-2 py-1"
-              :to="{ name: 'coming-soon', params: { feature: 'settlement' }, query: { name: item.name } }"
-              :aria-label="`${item.name} 정산 상세 보기`"
-            >
-              ›
-            </BaseButton>
-          </td>
-        </tr>
-      </BaseTable>
+      <p
+        v-else-if="errorMessage"
+        role="alert"
+        class="rounded-lg bg-red-50 p-6 text-sm text-red-600"
+      >
+        {{ errorMessage }}
+      </p>
 
-      <div class="mt-4">
-        <BasePagination
-          v-model:current-page="currentPage"
-          :total-pages="3"
-        />
+      <div
+        v-else
+        class="rounded-lg border border-border bg-surface p-6 shadow-card"
+      >
+        <div class="mb-6 flex items-center justify-between border-b border-border pb-4">
+          <div>
+            <p class="text-sm text-text-sub">
+              판매자 상태
+            </p>
+            <p class="mt-1 font-bold text-text-main">
+              {{ sellerTypeLabel }}
+            </p>
+          </div>
+          <BaseBadge variant="primary">
+            {{ profile.status === 'ACTIVE' ? '활성' : profile.status }}
+          </BaseBadge>
+        </div>
+
+        <dl class="grid grid-cols-1 gap-x-8 gap-y-5 text-sm sm:grid-cols-2">
+          <div>
+            <dt class="text-text-sub">
+              활동 국가
+            </dt>
+            <dd class="mt-1 font-semibold text-text-main">
+              {{ profile.countryCode }}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-text-sub">
+              등록일
+            </dt>
+            <dd class="mt-1 font-semibold text-text-main">
+              {{ createdAtLabel }}
+            </dd>
+          </div>
+          <div v-if="profile.businessName">
+            <dt class="text-text-sub">
+              상호명
+            </dt>
+            <dd class="mt-1 font-semibold text-text-main">
+              {{ profile.businessName }}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-text-sub">
+              정산 계좌
+            </dt>
+            <dd class="mt-1 font-semibold text-text-main">
+              {{ profile.settlementBankName }} · {{ profile.settlementAccountHolder }}
+              (끝 {{ profile.settlementAccountLast4 }})
+            </dd>
+          </div>
+        </dl>
       </div>
-    </div>
-  </SidebarLayout>
+    </section>
+  </MyPageLayout>
 </template>

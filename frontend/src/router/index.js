@@ -26,7 +26,7 @@ import ProductListPage from '../pages/ProductListPage.vue'
 import ProductDetailPage from '../pages/ProductDetailPage.vue'
 import CallsPage from '../pages/CallsPage.vue'
 import RtcCallPage from '../pages/RtcCallPage.vue'
-import { getAccessToken } from '../auth/session'
+import { getAccessToken, hasRole } from '../auth/session'
 
 const routes = [
   { path: '/', name: 'home', component: HomePage },
@@ -59,15 +59,30 @@ const routes = [
   { path: '/auth/callback/:provider', name: 'oauth-callback', component: OAuthCallbackPage },
   { path: '/terms/service', name: 'terms-service', component: TermsPage },
   { path: '/terms/privacy', name: 'terms-privacy', component: PrivacyPage },
-  { path: '/seller/dashboard', name: 'seller-dashboard', component: SellerDashboardPage },
+  {
+    path: '/seller/dashboard',
+    name: 'seller-dashboard',
+    component: SellerDashboardPage,
+    meta: { requiresAuth: true, requiresRole: 'SELLER' },
+  },
   {
     path: '/mypage/orders',
     name: 'my-orders',
     component: MyOrdersPage,
     meta: { requiresAuth: true },
   },
-  { path: '/seller/apply', name: 'seller-apply', component: SellerApplyPage },
-  { path: '/seller/products', name: 'seller-products', component: ProductManagePage, meta: { requiresAuth: true } },
+  {
+    path: '/seller/apply',
+    name: 'seller-apply',
+    component: SellerApplyPage,
+    meta: { requiresAuth: true, sellerRegistrationOnly: true },
+  },
+  {
+    path: '/seller/products',
+    name: 'seller-products',
+    component: ProductManagePage,
+    meta: { requiresAuth: true, requiresRole: 'SELLER' },
+  },
   { path: '/admin', name: 'admin', component: AdminPage },
   { path: '/dev-tools', name: 'dev-tools', component: DevToolsPage },
   { path: '/coming-soon/:feature', name: 'coming-soon', component: ComingSoonPage },
@@ -87,11 +102,22 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
-  if (!to.meta.requiresAuth || getAccessToken()) return true
-  return {
-    name: 'login',
-    query: { redirect: to.fullPath },
+  if (to.meta.requiresAuth && !getAccessToken()) {
+    return {
+      name: 'login',
+      query: { redirect: to.fullPath },
+    }
   }
+
+  if (to.meta.requiresRole && !hasRole(to.meta.requiresRole)) {
+    return { name: 'seller-apply' }
+  }
+
+  if (to.meta.sellerRegistrationOnly && hasRole('SELLER')) {
+    return { name: 'seller-products' }
+  }
+
+  return true
 })
 
 export default router

@@ -113,6 +113,9 @@ class ProductMockControllerTests {
     @MockitoBean
     ProductCatalogService productCatalogService;
 
+    @MockitoBean
+    com.c203.limit.domain.seller.repository.SellerRepository sellerRepository;
+
     @Autowired
     MockMvc mockMvc;
 

@@ -106,6 +106,18 @@ Access Token은 성공 응답의 `data.accessToken`으로 반환하며 API 요�
 
 프론트는 새로고침 시 Refresh Token 쿠키로 Access Token을 복구하며 인증 토큰을 localStorage나 sessionStorage에 저장하지 않는다.
 
+### 회원 역할과 판매자 상태
+
+회원은 항상 `MEMBER` 역할을 가진다. `seller` 프로필 상태가 `ACTIVE`이면 `SELLER` 역할을
+추가로 가진다. 로그인, 소셜 로그인, 토큰 갱신은 DB의 판매자 프로필을 조회해 같은 역할
+목록을 JWT와 `data.member.roles`에 반영한다.
+
+`POST /api/v1/auth/token-refreshes` 응답에도 `member` 요약이 포함되므로 프론트는 앱 라우터를
+시작하기 전에 세션을 복원한다. `GET /api/v1/members/me` 응답은 `roles`와
+`sellerStatus`를 함께 반환하며 판매자 등록 전 `sellerStatus`는 `null`이다.
+
 ## DB 반영
 
-약관 동의 이력 테이블은 Flyway `V20260722__member_terms_agreement.sql`이 적용한다. 기존 운영 DB의 최초 baseline 절차는 `docs/integration/database-schema-runbook.md`를 따른다.
+약관 동의 이력 테이블은 Flyway `V20260722__member_terms_agreement.sql`이 적용한다. 판매자
+역할 기준 데이터는 `V20260802__create_instant_seller_profiles.sql`이 구성한다. 기존 운영
+DB의 최초 baseline 절차는 `docs/integration/database-schema-runbook.md`를 따른다.

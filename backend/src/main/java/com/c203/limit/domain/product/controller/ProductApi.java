@@ -39,11 +39,12 @@ import jakarta.validation.Valid;
 @Tag(name = "03. 상품", description = "중고 전자기기 상품 CRUD와 거래 상태 API")
 public interface ProductApi {
 
-    @Operation(operationId = "product01", summary = "상품 등록", description = "상품 초안을 생성하고 선택한 모델의 최신 체크리스트 템플릿을 스냅샷으로 고정합니다.", security = @SecurityRequirement(name = "bearerAuth"))
+    @Operation(operationId = "product01", summary = "상품 등록", description = "ACTIVE 판매자만 상품 초안을 생성할 수 있으며 선택한 모델의 최신 체크리스트 템플릿을 스냅샷으로 고정합니다.", security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "상품 초안 생성 성공", content = @Content(schema = @Schema(implementation = ProductCreatedApiResponse.class))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "VALIDATION_FAILED"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "UNAUTHORIZED"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "SELLER role / ACTIVE seller required"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "DEVICE_MODEL_NOT_FOUND"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "PRODUCT_DRAFT_LIMIT_EXCEEDED")
     })
@@ -114,7 +115,7 @@ public interface ProductApi {
     @GetMapping(path = "/api/v1/members/me/products/{productId}", produces = MediaType.APPLICATION_JSON_VALUE)
     ResponseEntity<ApiResponse<ProductDetailResponse>> getMyProduct(@PathVariable Long productId);
 
-    @Operation(operationId = "product06", summary = "내 상품 목록 조회", description = "로그인 회원이 등록한 모든 상태의 상품을 조회합니다.", security = @SecurityRequirement(name = "bearerAuth"))
+    @Operation(operationId = "product06", summary = "내 상품 목록 조회", description = "ACTIVE 판매자가 등록한 모든 상태의 상품을 조회합니다.", security = @SecurityRequirement(name = "bearerAuth"))
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "내 상품 목록 조회 성공", content = @Content(schema = @Schema(implementation = MyProductSummaryPageApiResponse.class)))
     @GetMapping(path = "/api/v1/members/me/products", produces = MediaType.APPLICATION_JSON_VALUE)
     ResponseEntity<ApiResponse<List<MyProductSummaryResponse>>> getMyProducts(
