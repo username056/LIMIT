@@ -1,13 +1,17 @@
 package com.c203.limit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.FlywayException;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
@@ -29,6 +33,13 @@ class FlywayMigrationIntegrationTests {
     static final MySQLContainer PRODUCTION_HISTORY_MYSQL =
             new MySQLContainer(DockerImageName.parse("mysql:8.4"))
                     .withDatabaseName("limit_production_history")
+                    .withUsername("limit")
+                    .withPassword("test-only-password");
+
+    @Container
+    static final MySQLContainer FAILED_SELLER_MIGRATION_MYSQL =
+            new MySQLContainer(DockerImageName.parse("mysql:8.4"))
+                    .withDatabaseName("limit_failed_seller_migration")
                     .withUsername("limit")
                     .withPassword("test-only-password");
 
@@ -226,6 +237,180 @@ class FlywayMigrationIntegrationTests {
                                         + "WHERE success = 1 "
                                         + "AND version IN ('20260728', '20260729', '20260730', '20260731', '20260801', '20260802')"))
                 .isEqualTo(6L);
+    }
+
+    @Test
+    void repairsFailedSellerMigrationAfterPreparingProductionSchema()
+            throws SQLException, IOException {
+        createFailedSellerMigrationSchema();
+
+        Flyway.configure()
+                .dataSource(
+                        FAILED_SELLER_MIGRATION_MYSQL.getJdbcUrl(),
+                        FAILED_SELLER_MIGRATION_MYSQL.getUsername(),
+                        FAILED_SELLER_MIGRATION_MYSQL.getPassword())
+                .locations("classpath:db/migration")
+                .baselineOnMigrate(true)
+                .baselineVersion("1")
+                .target("20260801")
+                .cleanDisabled(true)
+                .load()
+                .migrate();
+
+        var flyway =
+                Flyway.configure()
+                        .dataSource(
+                                FAILED_SELLER_MIGRATION_MYSQL.getJdbcUrl(),
+                                FAILED_SELLER_MIGRATION_MYSQL.getUsername(),
+                                FAILED_SELLER_MIGRATION_MYSQL.getPassword())
+                        .locations("classpath:db/migration")
+                        .cleanDisabled(true)
+                        .load();
+
+        assertThatThrownBy(flyway::migrate).isInstanceOf(FlywayException.class);
+        assertThat(
+                        singleLong(
+                                FAILED_SELLER_MIGRATION_MYSQL,
+                                "SELECT COUNT(*) FROM flyway_schema_history "
+                                        + "WHERE version = '20260802' AND success = 0"))
+                .isEqualTo(1L);
+
+        execute(
+                FAILED_SELLER_MIGRATION_MYSQL,
+                classpathSql(
+                        "db/maintenance/V20260802__prepare_failed_seller_migration.sql"));
+        flyway.repair();
+        flyway.migrate();
+
+        assertThat(
+                        singleLong(
+                                FAILED_SELLER_MIGRATION_MYSQL,
+                                "SELECT COUNT(*) FROM flyway_schema_history "
+                                        + "WHERE version = '20260802' AND success = 1"))
+                .isEqualTo(1L);
+        assertThat(
+                        singleLong(
+                                FAILED_SELLER_MIGRATION_MYSQL,
+                                "SELECT COUNT(*) FROM flyway_schema_history "
+                                        + "WHERE version = '20260802' AND success = 0"))
+                .isZero();
+        assertThat(
+                        singleLong(
+                                FAILED_SELLER_MIGRATION_MYSQL,
+                                "SELECT COUNT(*) FROM seller"))
+                .isEqualTo(1L);
+        assertThat(
+                        singleLong(
+                                FAILED_SELLER_MIGRATION_MYSQL,
+                                "SELECT COUNT(*) FROM user_account account "
+                                        + "LEFT JOIN seller profile ON profile.user_id = account.user_id "
+                                        + "WHERE account.member_type = 'SELLER' "
+                                        + "AND profile.user_id IS NULL"))
+                .isZero();
+        assertThat(
+                        singleLong(
+                                FAILED_SELLER_MIGRATION_MYSQL,
+                                "SELECT COUNT(*) FROM seller "
+                                        + "WHERE approved_at IS NULL "
+                                        + "AND product_limit = 0 "
+                                        + "AND sales_amount_limit = 0"))
+                .isEqualTo(1L);
+    }
+
+    private static void createFailedSellerMigrationSchema() throws SQLException {
+        try (var connection =
+                        DriverManager.getConnection(
+                                FAILED_SELLER_MIGRATION_MYSQL.getJdbcUrl(),
+                                FAILED_SELLER_MIGRATION_MYSQL.getUsername(),
+                                FAILED_SELLER_MIGRATION_MYSQL.getPassword());
+                var statement = connection.createStatement()) {
+            statement.execute(
+                    """
+                    CREATE TABLE user_account (
+                        user_id BIGINT NOT NULL AUTO_INCREMENT,
+                        email VARCHAR(255) NOT NULL,
+                        password VARCHAR(255) NULL,
+                        nickname VARCHAR(50) NOT NULL,
+                        phone VARCHAR(20) NULL,
+                        member_type VARCHAR(20) NOT NULL,
+                        status VARCHAR(30) NOT NULL,
+                        marketing_opt_in BIT(1) NOT NULL DEFAULT b'0',
+                        created_at DATETIME(6) NOT NULL,
+                        updated_at DATETIME(6) NOT NULL,
+                        PRIMARY KEY (user_id),
+                        UNIQUE KEY uk_user_account_email (email),
+                        UNIQUE KEY uk_user_account_nickname (nickname)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                    """);
+            statement.execute(
+                    """
+                    CREATE TABLE admin_account (
+                        admin_id BIGINT NOT NULL AUTO_INCREMENT,
+                        email VARCHAR(255) NOT NULL,
+                        password VARCHAR(255) NOT NULL,
+                        name VARCHAR(255) NOT NULL,
+                        role VARCHAR(255) NOT NULL,
+                        status VARCHAR(255) NOT NULL,
+                        created_at DATETIME(6) NOT NULL,
+                        PRIMARY KEY (admin_id),
+                        UNIQUE KEY uk_admin_account_email (email)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                    """);
+            statement.execute("CREATE TABLE member_role (member_role_id BIGINT PRIMARY KEY)");
+            statement.execute("CREATE TABLE user_sanction (sanction_id BIGINT PRIMARY KEY)");
+            statement.execute(
+                    """
+                    CREATE TABLE seller (
+                        seller_id BIGINT NOT NULL AUTO_INCREMENT,
+                        approved_at DATETIME(6) NOT NULL,
+                        business_name VARCHAR(255) NULL,
+                        country_code VARCHAR(2) NOT NULL,
+                        product_limit INT NOT NULL,
+                        sales_amount_limit DECIMAL(38, 2) NOT NULL,
+                        status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+                        seller_type VARCHAR(20) NOT NULL,
+                        user_id BIGINT NOT NULL,
+                        settlement_bank_name VARCHAR(100) NOT NULL,
+                        settlement_account_holder VARCHAR(100) NOT NULL,
+                        settlement_account_last4 VARCHAR(4) NOT NULL,
+                        created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                        updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                        PRIMARY KEY (seller_id),
+                        UNIQUE KEY uk_seller_user_id (user_id)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                    """);
+            statement.execute(
+                    """
+                    INSERT INTO user_account (
+                        email, password, nickname, member_type, status,
+                        marketing_opt_in, created_at, updated_at
+                    ) VALUES (
+                        'seller-recovery@example.com', 'encoded', 'seller-recovery',
+                        'SELLER', 'ACTIVE', b'0', CURRENT_TIMESTAMP(6), CURRENT_TIMESTAMP(6)
+                    )
+                    """);
+        }
+    }
+
+    private static String classpathSql(String path) throws IOException {
+        try (var input = FlywayMigrationIntegrationTests.class.getClassLoader()
+                .getResourceAsStream(path)) {
+            if (input == null) {
+                throw new IOException("classpath SQL not found: " + path);
+            }
+            return new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+
+    private static void execute(MySQLContainer container, String sql) throws SQLException {
+        try (var connection =
+                        DriverManager.getConnection(
+                                container.getJdbcUrl(),
+                                container.getUsername(),
+                                container.getPassword());
+                var statement = connection.createStatement()) {
+            statement.execute(sql);
+        }
     }
 
     private static void migrateTo(MySQLContainer container, String target) {
