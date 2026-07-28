@@ -9,6 +9,7 @@
 | Method | Path | 권한 | 설명 |
 | --- | --- | --- | --- |
 | `POST` | `/api/v1/admin/sessions` | 공개 | 관리자 로그인 |
+| `PATCH` | `/api/v1/admin/me/password` | 관리자 | 본인 비밀번호 변경 |
 | `GET` | `/api/v1/admin/members` | 관리자 | 회원 목록 |
 | `GET` | `/api/v1/admin/members/{memberId}` | 관리자 | 회원 상세 |
 | `GET` | `/api/v1/admin/members/{memberId}/restrictions` | 관리자 | 이용 제한 목록 |
@@ -33,6 +34,8 @@
 
 Refresh Token은 응답 JSON에 노출하지 않고 HttpOnly 쿠키로 발급한다. 재발급과 로그아웃은 회원과 동일하게 `/api/v1/auth/token-refreshes`, `/api/v1/auth/session-revocations`를 사용한다.
 
+관리자 본인 비밀번호 변경은 현재 비밀번호 검증과 12~72자 새 비밀번호 정책을 적용한다. 성공하면 모든 관리자 Refresh Token을 폐기하고 현재 Refresh Token 쿠키도 삭제하며, `ADMIN_PASSWORD_CHANGE` 감사 로그를 남긴다.
+
 ## 초기 최고 관리자
 
 ```env
@@ -43,4 +46,4 @@ INITIAL_ADMIN_NAME=
 INITIAL_ADMIN_ROLE=SUPER_ADMIN
 ```
 
-계정 생성을 확인한 즉시 `INITIAL_ADMIN_ENABLED=false`로 되돌린다. 초기 비밀번호는 별도 API가 준비되는 대로 변경해야 하며 실제 값은 저장소에 남기지 않는다.
+계정 생성을 확인한 즉시 `INITIAL_ADMIN_ENABLED=false`로 되돌린다. 최초 로그인 후 `PATCH /api/v1/admin/me/password`로 초기 비밀번호를 변경하며 실제 값은 저장소에 남기지 않는다.

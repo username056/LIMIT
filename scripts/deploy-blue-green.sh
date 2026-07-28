@@ -101,6 +101,8 @@ for _ in $(seq 1 "${READINESS_ATTEMPTS:-120}"); do
 done
 if [[ "$ready" != "true" ]]; then
   echo "$target_service did not become ready" >&2
+  "${compose[@]}" ps "$target_service" >&2 || true
+  "${compose[@]}" logs --tail "${DEPLOY_FAILURE_LOG_LINES:-200}" "$target_service" >&2 || true
   cleanup_target
   exit 1
 fi

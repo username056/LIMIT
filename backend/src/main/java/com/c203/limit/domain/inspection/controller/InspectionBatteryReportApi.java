@@ -13,7 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 
-@Tag(name = "06. 검수", description = "검수 증거 OCR·DxDiag·배터리 리포트 파싱 API")
+@Tag(name = "08. 검수", description = "검수 증거 OCR·DxDiag·배터리 리포트 파싱 API")
 public interface InspectionBatteryReportApi {
 
     @Operation(

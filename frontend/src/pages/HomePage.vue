@@ -6,10 +6,10 @@ import BaseCard from '../components/BaseCard.vue'
 
 // 예시 데이터입니다. 실제 연동 시 API 응답으로 교체하세요.
 const categories = [
-  { label: '노트북 / 랩탑', icon: '💻' },
-  { label: '스마트폰 / 모바일', icon: '📱' },
-  { label: '태블릿 / 패드', icon: '📱' },
-  { label: '카메라', icon: '📷' },
+  { label: '노트북 / 랩탑' },
+  { label: '스마트폰 / 모바일' },
+  { label: '태블릿 / 패드' },
+  { label: '카메라' },
 ]
 
 const steps = [
@@ -93,9 +93,7 @@ const products = [
           :to="{ name: 'coming-soon', params: { feature: 'category' }, query: { name: category.label } }"
           class="group overflow-hidden rounded-lg border border-border bg-surface transition-shadow hover:shadow-elevated"
         >
-          <div class="flex aspect-square items-center justify-center bg-text-main text-3xl">
-            {{ category.icon }}
-          </div>
+          <div class="aspect-square bg-text-main" />
           <div class="flex items-center justify-between px-4 py-3">
             <span class="text-sm font-semibold text-text-main">{{ category.label }}</span>
           </div>
@@ -107,7 +105,7 @@ const products = [
     <section class="mx-auto max-w-[1200px] px-6 pb-12 lg:px-10">
       <BaseCard class="p-8 lg:p-10">
         <h2 class="mb-1 text-lg font-bold text-text-main">
-          안전한 L1MIT 검증 프로세스
+          안전한 LIMIT 검증 프로세스
         </h2>
         <p class="mb-8 text-sm text-text-sub">
           투명하고 안전한 고가 전자기기 구매를 위해 리미트는 해당 서비스를 제공합니다
@@ -142,7 +140,7 @@ const products = [
           최근 올라온 실시간 확인 가능 상품
         </h2>
         <RouterLink
-          :to="{ name: 'coming-soon', params: { feature: 'product-list' } }"
+          :to="{ name: 'products' }"
           class="text-sm font-semibold text-primary hover:underline"
         >
           전체 상품 보기
@@ -153,7 +151,7 @@ const products = [
         <RouterLink
           v-for="product in products"
           :key="product.name"
-          :to="{ name: 'coming-soon', params: { feature: 'product-detail' }, query: { name: product.name } }"
+          :to="{ name: 'products' }"
           class="group overflow-hidden rounded-lg border border-border bg-surface transition-shadow hover:shadow-elevated"
         >
           <div class="flex aspect-square items-center justify-center bg-bg text-xs text-text-sub">

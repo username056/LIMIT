@@ -24,11 +24,20 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.c203.limit.domain.chat.entity.ChatRoom;
+import com.c203.limit.domain.chat.entity.ChatMessage;
+import com.c203.limit.domain.chat.entity.ChatRoomParticipant;
 import com.c203.limit.domain.chat.domain.ChatRoomStatus;
+import com.c203.limit.domain.chat.domain.ParticipantRole;
+import com.c203.limit.domain.chat.dto.request.ChatMessageSendRequest;
+import com.c203.limit.domain.chat.dto.request.ChatReadRequest;
 import com.c203.limit.domain.chat.repository.ChatRoomRepository;
+import com.c203.limit.domain.chat.repository.ChatRoomContextReader;
+import com.c203.limit.domain.chat.repository.ChatRoomContextReader.ChatRoomContext;
 import com.c203.limit.domain.chat.repository.ChatRoomParticipantRepository;
 import com.c203.limit.domain.chat.repository.ChatMessageProjection;
 import com.c203.limit.domain.chat.repository.ChatMessageRepository;
+import com.c203.limit.domain.chat.repository.ChatMediaRepository;
+import com.c203.limit.domain.chat.repository.ChatMessageMediaRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomSummaryProjection;
 import com.c203.limit.domain.chat.repository.ListingChatReader;
 import com.c203.limit.domain.chat.repository.ListingChatReader.ListingChatInfo;
@@ -49,13 +58,17 @@ class ChatRoomServiceTests {
     @Mock ChatRoomRepository chatRoomRepository;
     @Mock ChatRoomParticipantRepository participantRepository;
     @Mock ChatMessageRepository chatMessageRepository;
+    @Mock ChatMediaRepository chatMediaRepository;
+    @Mock ChatMessageMediaRepository chatMessageMediaRepository;
+    @Mock ChatRoomContextReader contextReader;
     @Mock ChatRoomCreator creator;
     ChatRoomService service;
 
     @BeforeEach
     void setUp() {
         service = new ChatRoomService(
-                listingReader, chatRoomRepository, participantRepository, chatMessageRepository, creator);
+                listingReader, chatRoomRepository, participantRepository, chatMessageRepository,
+                chatMediaRepository, chatMessageMediaRepository, contextReader, creator);
     }
 
     @Test
@@ -131,11 +144,15 @@ class ChatRoomServiceTests {
         ChatRoomSummaryProjection second = summary(90L, BUYER_ID, SELLER_ID, 4L, 4L);
         when(chatRoomRepository.findSummariesByMemberId(
                 eq(BUYER_ID), isNull(), any(Pageable.class))).thenReturn(List.of(first, second));
+        when(contextReader.findAll(List.of(100L), BUYER_ID)).thenReturn(
+                java.util.Map.of(100L, new ChatRoomContext(100L, "판매자", "상품", "https://cdn/image.jpg")));
 
         CursorResponse<ChatRoomSummaryResponse> result = service.findRooms(BUYER_ID, null, 1);
 
         assertThat(result.content()).hasSize(1);
         assertThat(result.content().get(0).counterpartId()).isEqualTo(SELLER_ID);
+        assertThat(result.content().get(0).counterpartNickname()).isEqualTo("판매자");
+        assertThat(result.content().get(0).listingTitle()).isEqualTo("상품");
         assertThat(result.content().get(0).unreadCount()).isEqualTo(5L);
         assertThat(result.nextCursor()).isEqualTo("100");
         assertThat(result.hasNext()).isTrue();
@@ -197,6 +214,65 @@ class ChatRoomServiceTests {
         verifyNoInteractions(chatMessageRepository);
     }
 
+    @Test
+    void sendsTextMessageWithNextRoomSequence() {
+        UUID clientMessageId = new UUID(1L, 2L);
+        ChatRoom room = room(100L);
+        ReflectionTestUtils.setField(room, "lastMessageSeq", 7L);
+        ChatRoomParticipant participant = participant(100L, BUYER_ID);
+        when(participantRepository.findByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID))
+                .thenReturn(Optional.of(participant));
+        when(chatMessageRepository.findByChatRoomIdAndClientMessageId(100L, clientMessageId))
+                .thenReturn(Optional.empty());
+        when(chatRoomRepository.findLockedById(100L)).thenReturn(Optional.of(room));
+        when(chatMessageRepository.save(any(ChatMessage.class)))
+                .thenAnswer(invocation -> {
+                    ChatMessage message = invocation.getArgument(0);
+                    ReflectionTestUtils.setField(message, "id", 501L);
+                    return message;
+                });
+
+        var result = service.sendMessage(
+                100L, BUYER_ID, new ChatMessageSendRequest(clientMessageId, "TEXT", " hello ", List.of()));
+
+        assertThat(result.created()).isTrue();
+        assertThat(result.message().messageId()).isEqualTo(501L);
+        assertThat(result.message().roomSequence()).isEqualTo(8L);
+        assertThat(result.message().content()).isEqualTo("hello");
+    }
+
+    @Test
+    void returnsExistingMessageForDuplicateClientMessageId() {
+        UUID clientMessageId = new UUID(1L, 2L);
+        ChatMessage existing = textMessage(100L, 3L, BUYER_ID, clientMessageId, "hello");
+        when(participantRepository.findByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID))
+                .thenReturn(Optional.of(participant(100L, BUYER_ID)));
+        when(chatMessageRepository.findByChatRoomIdAndClientMessageId(100L, clientMessageId))
+                .thenReturn(Optional.of(existing));
+
+        var result = service.sendMessage(
+                100L, BUYER_ID, new ChatMessageSendRequest(clientMessageId, "TEXT", "hello", List.of()));
+
+        assertThat(result.created()).isFalse();
+        assertThat(result.message().messageId()).isEqualTo(300L);
+        verifyNoInteractions(chatRoomRepository);
+    }
+
+    @Test
+    void updatesParticipantLastReadSequenceUpToRoomLastMessage() {
+        ChatRoom room = room(100L);
+        ReflectionTestUtils.setField(room, "lastMessageSeq", 5L);
+        ChatRoomParticipant participant = participant(100L, BUYER_ID);
+        when(participantRepository.findByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID))
+                .thenReturn(Optional.of(participant));
+        when(chatRoomRepository.findById(100L)).thenReturn(Optional.of(room));
+
+        Long lastReadSeq = service.readMessages(100L, BUYER_ID, new ChatReadRequest(99L));
+
+        assertThat(lastReadSeq).isEqualTo(5L);
+        assertThat(participant.getLastReadSeq()).isEqualTo(5L);
+    }
+
     private ChatRoomSummaryProjection summary(
             Long roomId, Long buyerId, Long sellerId, long lastMessageSeq, long lastReadSeq) {
         return new ChatRoomSummaryProjection() {
@@ -217,6 +293,19 @@ class ChatRoomServiceTests {
         ChatRoom room = ChatRoom.create(LISTING_ID, BUYER_ID, SELLER_ID);
         ReflectionTestUtils.setField(room, "id", id);
         return room;
+    }
+
+    private ChatRoomParticipant participant(Long roomId, Long userId) {
+        return ChatRoomParticipant.create(roomId, userId, ParticipantRole.BUYER);
+    }
+
+    private ChatMessage textMessage(
+            Long roomId, Long sequence, Long senderId, UUID clientMessageId, String content) {
+        ChatMessage message = ChatMessage.sendText(
+                roomId, sequence, senderId, clientMessageId, content,
+                LocalDateTime.of(2026, 7, 23, 12, 0));
+        ReflectionTestUtils.setField(message, "id", 300L);
+        return message;
     }
 
     private ChatMessageProjection message(Long sequence) {

@@ -60,4 +60,38 @@ public class ChatMessage {
     private LocalDateTime deletedAt;
 
     protected ChatMessage() {}
+
+    public static ChatMessage sendText(
+            Long chatRoomId, long roomSequence, Long senderId, UUID clientMessageId,
+            String content, LocalDateTime sentAt) {
+        ChatMessage message = new ChatMessage();
+        message.chatRoomId = chatRoomId;
+        message.roomSequence = roomSequence;
+        message.senderId = senderId;
+        message.clientMessageId = clientMessageId;
+        message.type = MessageType.TEXT;
+        message.content = content;
+        message.status = MessageStatus.SENT;
+        message.sentAt = sentAt;
+        return message;
+    }
+
+    public static ChatMessage sendMedia(
+            Long chatRoomId, long roomSequence, Long senderId, UUID clientMessageId,
+            MessageType type, String content, LocalDateTime sentAt) {
+        ChatMessage message = sendText(
+                chatRoomId, roomSequence, senderId, clientMessageId, content, sentAt);
+        message.type = type;
+        return message;
+    }
+
+    public Long getId() { return id; }
+    public Long getChatRoomId() { return chatRoomId; }
+    public Long getRoomSequence() { return roomSequence; }
+    public Long getSenderId() { return senderId; }
+    public UUID getClientMessageId() { return clientMessageId; }
+    public MessageType getType() { return type; }
+    public String getContent() { return content; }
+    public MessageStatus getStatus() { return status; }
+    public LocalDateTime getSentAt() { return sentAt; }
 }

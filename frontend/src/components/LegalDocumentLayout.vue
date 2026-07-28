@@ -31,7 +31,7 @@ defineProps({
     <article class="min-w-0 rounded-lg border border-border bg-white p-6 shadow-card sm:p-10">
       <div class="border-b border-border pb-8">
         <p class="text-sm font-semibold text-primary">
-          L1MIT 정책
+          LIMIT 정책
         </p>
         <h1 class="mt-3 text-3xl font-bold tracking-[-0.03em] text-text-main sm:text-4xl">
           {{ title }}

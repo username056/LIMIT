@@ -1,162 +1,173 @@
 <script setup>
-import { ref } from 'vue'
-import DefaultLayout from '../layouts/DefaultLayout.vue'
-import BaseTabs from '../components/BaseTabs.vue'
-import BaseStepper from '../components/BaseStepper.vue'
+import { reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { registerSeller } from '../api/seller'
+import { restoreAuthSession } from '../auth/session'
+import BaseButton from '../components/BaseButton.vue'
 import BaseInput from '../components/BaseInput.vue'
 import BaseSelect from '../components/BaseSelect.vue'
-import FileUploadBox from '../components/FileUploadBox.vue'
-import BaseButton from '../components/BaseButton.vue'
+import MyPageLayout from '../layouts/MyPageLayout.vue'
 
-const sellerType = ref('개인 판매자')
-const name = ref('')
-const phone = ref('')
-const country = ref('')
-const bank = ref('')
-const accountNumber = ref('')
-const identityFile = ref(null)
-const supportingFile = ref(null)
-const message = ref('')
-const isError = ref(false)
+const router = useRouter()
+const isSubmitting = ref(false)
+const errorMessage = ref('')
+const form = reactive({
+  sellerType: 'INDIVIDUAL',
+  countryCode: 'KR',
+  businessName: '',
+  settlementBankName: '',
+  settlementAccountHolder: '',
+  settlementAccountLast4: '',
+  sellerTermsAccepted: false,
+})
 
-const steps = [
-  { label: '정보 입력', description: '기본 판매자 정보를 입력해주세요.' },
-  { label: '서류 업로드', description: '판매 자격을 증명할 서류를 첨부해주세요.' },
-  { label: '심사 및 승인', description: '영업일 기준 3일 내 심사가 완료됩니다.' },
+const sellerTypeOptions = [
+  { label: '개인 판매자', value: 'INDIVIDUAL' },
+  { label: '사업자 판매자', value: 'BUSINESS' },
+]
+const countryOptions = [
+  { label: '대한민국', value: 'KR' },
+  { label: '미국', value: 'US' },
+  { label: '일본', value: 'JP' },
 ]
 
-function submitApplication() {
-  message.value = ''
-  isError.value = false
-  if (!name.value.trim() || !phone.value.trim() || !country.value || !bank.value || !accountNumber.value.trim()) {
-    isError.value = true
-    message.value = '필수 판매자 정보와 정산 계좌를 모두 입력해 주세요.'
+async function submitRegistration() {
+  errorMessage.value = ''
+
+  if (form.sellerType === 'BUSINESS' && !form.businessName.trim()) {
+    errorMessage.value = '사업자 판매자는 상호명을 입력해 주세요.'
     return
   }
-  if (!identityFile.value) {
-    isError.value = true
-    message.value = '신분증 또는 여권 파일을 선택해 주세요.'
+  if (!form.settlementBankName.trim() || !form.settlementAccountHolder.trim()) {
+    errorMessage.value = '정산 은행과 예금주를 입력해 주세요.'
     return
   }
-  message.value = '셀러 신청 목업이 접수되었습니다. 실제 API 연결 전에는 서버에 저장되지 않습니다.'
+  if (!/^\d{4}$/.test(form.settlementAccountLast4)) {
+    errorMessage.value = '정산 계좌의 마지막 숫자 4자리를 입력해 주세요.'
+    return
+  }
+  if (!form.sellerTermsAccepted) {
+    errorMessage.value = '판매자 이용 조건에 동의해 주세요.'
+    return
+  }
+
+  isSubmitting.value = true
+  try {
+    await registerSeller({
+      sellerType: form.sellerType,
+      countryCode: form.countryCode,
+      businessName: form.businessName.trim() || null,
+      settlementBankName: form.settlementBankName.trim(),
+      settlementAccountHolder: form.settlementAccountHolder.trim(),
+      settlementAccountLast4: form.settlementAccountLast4,
+      sellerTermsAccepted: form.sellerTermsAccepted,
+    })
+
+    const restored = await restoreAuthSession()
+    if (!restored) {
+      errorMessage.value = '판매자 등록은 완료됐지만 세션 갱신에 실패했습니다. 다시 로그인해 주세요.'
+      return
+    }
+    await router.replace({ name: 'seller-products' })
+  } catch (error) {
+    errorMessage.value = error.message || '판매자 등록을 완료하지 못했습니다.'
+  } finally {
+    isSubmitting.value = false
+  }
 }
 </script>
 
 <template>
-  <DefaultLayout>
-    <section class="mx-auto max-w-2xl px-6 py-10">
+  <MyPageLayout>
+    <section class="mx-auto max-w-2xl">
       <h1 class="mb-2 text-2xl font-bold text-text-main">
-        셀러 신청하기
+        판매자 등록
       </h1>
       <p class="mb-6 text-sm text-text-sub">
-        Limit의 공식 셀러가 되어 전 세계 전자기기 컬렉터들과 만나보세요.
+        별도 심사 없이 등록이 완료되는 즉시 상품을 판매할 수 있습니다.
       </p>
 
-      <BaseStepper
-        :steps="steps"
-        :current-step="1"
-        class="mb-8"
-      />
-
-      <BaseTabs
-        v-model="sellerType"
-        :tabs="['개인 판매자', '기업 판매자']"
-        class="mb-6"
-      />
-
       <form
-        class="space-y-6 rounded-lg border border-border bg-surface p-6"
-        @submit.prevent="submitApplication"
+        class="space-y-6 rounded-lg border border-border bg-surface p-6 shadow-card"
+        @submit.prevent="submitRegistration"
       >
-        <div>
-          <h2 class="mb-3 text-sm font-bold text-text-main">
-            기본 정보
-          </h2>
-          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <BaseInput
-              v-model="name"
-              label="이름 / 상호명"
-              placeholder="실명을 입력하세요"
-              required
-            />
-            <BaseInput
-              v-model="phone"
-              label="연락처"
-              placeholder="010-0000-0000"
-              required
-            />
-          </div>
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <BaseSelect
-            v-model="country"
-            label="국가"
-            class="mt-4"
-            :options="['대한민국 (South Korea)', 'United States', 'Japan']"
+            v-model="form.sellerType"
+            label="판매자 유형"
+            :options="sellerTypeOptions"
+          />
+          <BaseSelect
+            v-model="form.countryCode"
+            label="활동 국가"
+            :options="countryOptions"
           />
         </div>
+
+        <BaseInput
+          v-if="form.sellerType === 'BUSINESS'"
+          v-model="form.businessName"
+          label="상호명"
+          placeholder="사업자 상호명을 입력하세요"
+          required
+        />
 
         <div>
           <h2 class="mb-3 text-sm font-bold text-text-main">
             정산 계좌 정보
           </h2>
           <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <BaseSelect
-              v-model="bank"
+            <BaseInput
+              v-model="form.settlementBankName"
               label="은행"
-              :options="['국민은행', '신한은행', '카카오뱅크']"
+              placeholder="예: 국민은행"
+              required
             />
             <BaseInput
-              v-model="accountNumber"
-              label="계좌번호"
-              placeholder="하이픈 없이 입력"
+              v-model="form.settlementAccountHolder"
+              label="예금주"
+              placeholder="예금주 이름"
               required
             />
           </div>
+          <BaseInput
+            v-model="form.settlementAccountLast4"
+            class="mt-4"
+            label="계좌번호 마지막 4자리"
+            placeholder="1234"
+            autocomplete="off"
+            required
+          />
+          <p class="mt-2 text-xs text-text-sub">
+            계좌번호 전체를 저장하지 않고 확인에 필요한 마지막 4자리만 저장합니다.
+          </p>
         </div>
 
-        <div>
-          <h2 class="mb-3 text-sm font-bold text-text-main">
-            증빙 서류 제출
-          </h2>
-          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FileUploadBox
-              title="신분증 (여권/주민등록증)"
-              description="파일을 드래그하거나 클릭하여 선택"
-              @change="identityFile = $event"
-            />
-            <FileUploadBox
-              title="기타 증빙 (선택)"
-              description="사업자등록증 등 추가 서류"
-              @change="supportingFile = $event"
-            />
-          </div>
-          <p class="mt-2 text-xs text-text-sub">
-            JPG, PNG, PDF 형식만 지원되며, 파일당 10MB까지 업로드 가능합니다.
-          </p>
-          <p
-            v-if="identityFile || supportingFile"
-            class="mt-3 text-xs font-semibold text-primary"
+        <label class="flex items-start gap-3 rounded-md bg-bg p-4 text-sm text-text-main">
+          <input
+            v-model="form.sellerTermsAccepted"
+            type="checkbox"
+            class="mt-0.5 h-4 w-4 accent-primary"
           >
-            선택 파일:
-            {{ [identityFile?.name, supportingFile?.name].filter(Boolean).join(', ') }}
-          </p>
-        </div>
+          <span>판매 상품과 정산 정보에 대한 책임 및 판매자 이용 조건에 동의합니다.</span>
+        </label>
 
         <p
-          v-if="message"
-          class="rounded-md px-4 py-3 text-sm"
-          :class="isError ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'"
-          :role="isError ? 'alert' : 'status'"
+          v-if="errorMessage"
+          role="alert"
+          class="rounded-md bg-red-50 px-4 py-3 text-sm text-red-600"
         >
-          {{ message }}
+          {{ errorMessage }}
         </p>
 
         <BaseButton
           block
           type="submit"
+          :disabled="isSubmitting"
         >
-          신청 완료하기
+          {{ isSubmitting ? '등록 중...' : '판매자로 바로 등록하기' }}
         </BaseButton>
       </form>
     </section>
-  </DefaultLayout>
+  </MyPageLayout>
 </template>

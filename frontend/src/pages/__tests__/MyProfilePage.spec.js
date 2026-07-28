@@ -18,7 +18,7 @@ vi.mock('../../api/member', () => ({
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ replace: mocks.routerReplace }),
-  useRoute: () => ({ path: '/mypage/profile' }),
+  useRoute: () => ({ path: '/mypage/profile', query: {} }),
   RouterLink: {
     props: ['to'],
     template: '<a><slot /></a>',
@@ -66,6 +66,8 @@ describe('MyProfilePage', () => {
 
     expect(wrapper.text()).toContain('member@example.com')
     expect(wrapper.text()).toContain('010****5678')
+
+    await wrapper.find('button[type="button"]').trigger('click')
 
     const nicknameInput = wrapper.find('input[type="text"]')
     await nicknameInput.setValue('new-nickname')

@@ -14,10 +14,12 @@ import lombok.experimental.SuperBuilder;
 @Entity
 @Table(
         name = "payment",
-        uniqueConstraints =
-                @UniqueConstraint(
-                        name = "UK_PAYMENT_IDEMPOTENCY_KEY",
-                        columnNames = "idempotency_key"))
+        uniqueConstraints = {
+            @UniqueConstraint(
+                    name = "UK_PAYMENT_IDEMPOTENCY_KEY",
+                    columnNames = "idempotency_key"),
+            @UniqueConstraint(name = "uk_payment_pg_event_id", columnNames = "pg_event_id")
+        })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @SuperBuilder
@@ -59,6 +61,10 @@ public class Payment extends BaseTimeEntity {
 
     @Column(name = "provider_transaction_id", length = 200)
     private String providerTransactionId;
+
+    // PG 웹훅 이벤트 고유 식별자. unique 제약으로 동일 이벤트 중복 처리를 막는다.
+    @Column(name = "pg_event_id", length = 200)
+    private String pgEventId;
 
     @Column(name = "webhook_verified", nullable = false)
     @Builder.Default

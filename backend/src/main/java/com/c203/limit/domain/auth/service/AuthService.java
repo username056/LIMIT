@@ -11,18 +11,22 @@ import com.c203.limit.domain.member.dto.response.MemberSummaryResponse;
 import com.c203.limit.domain.member.entity.Member;
 import com.c203.limit.domain.member.entity.MemberStatus;
 import com.c203.limit.domain.member.repository.MemberRepository;
+import com.c203.limit.domain.seller.service.SellerStatusReader;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import com.c203.limit.global.security.JwtTokenProvider;
 import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AuthService {
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
     private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
     private static final Pattern NICKNAME = Pattern.compile("^[가-힣a-zA-Z0-9_]{2,20}$");
     private static final Pattern PASSWORD = Pattern.compile("^(?=.*[A-Za-z])(?=.*\\d).{8,72}$");
@@ -31,18 +35,21 @@ public class AuthService {
     private final JwtTokenProvider tokenProvider;
     private final RefreshTokenStore refreshTokenStore;
     private final TermsAgreementService termsAgreementService;
+    private final SellerStatusReader sellerStatusReader;
 
     public AuthService(
             MemberRepository memberRepository,
             PasswordEncoder passwordEncoder,
             JwtTokenProvider tokenProvider,
             RefreshTokenStore refreshTokenStore,
-            TermsAgreementService termsAgreementService) {
+            TermsAgreementService termsAgreementService,
+            SellerStatusReader sellerStatusReader) {
         this.memberRepository = memberRepository;
         this.passwordEncoder = passwordEncoder;
         this.tokenProvider = tokenProvider;
         this.refreshTokenStore = refreshTokenStore;
         this.termsAgreementService = termsAgreementService;
+        this.sellerStatusReader = sellerStatusReader;
     }
 
     @Transactional(readOnly = true)
@@ -106,6 +113,7 @@ public class AuthService {
         }
         member.recordLogin();
         TokenPair pair = issue(member);
+        log.info("member login completed");
         return new SessionResult<>(
                 new LoginResponse(
                         pair.accessToken(),
@@ -132,9 +140,13 @@ public class AuthService {
         validateActiveMember(member);
         refreshTokenStore.revoke(claims.tokenId());
         TokenPair pair = issue(member);
+        log.info("member session token refreshed");
         return new SessionResult<>(
                 new TokenResponse(
-                        pair.accessToken(), "Bearer", tokenProvider.accessTtl().toSeconds()),
+                        pair.accessToken(),
+                        "Bearer",
+                        tokenProvider.accessTtl().toSeconds(),
+                        summary(member)),
                 pair.refreshToken());
     }
 
@@ -151,7 +163,10 @@ public class AuthService {
         TokenPair pair = issue(member);
         return new SessionResult<>(
                 new TokenResponse(
-                        pair.accessToken(), "Bearer", tokenProvider.accessTtl().toSeconds()),
+                        pair.accessToken(),
+                        "Bearer",
+                        tokenProvider.accessTtl().toSeconds(),
+                        summary(member)),
                 pair.refreshToken());
     }
 
@@ -181,7 +196,11 @@ public class AuthService {
     }
 
     private MemberSummaryResponse summary(Member member) {
-        return new MemberSummaryResponse(member.getId(), member.getNickname(), Set.of("MEMBER"));
+        return new MemberSummaryResponse(
+                member.getId(),
+                member.getNickname(),
+                sellerStatusReader.rolesFor(member.getId()),
+                sellerStatusReader.statusOf(member.getId()));
     }
 
     private TermsAgreementService.TermsConsent consent(SignupRequest request) {
@@ -193,7 +212,7 @@ public class AuthService {
     }
 
     private TokenPair issue(Member member) {
-        Set<String> roles = Set.of("MEMBER");
+        Set<String> roles = sellerStatusReader.rolesFor(member.getId());
         var access = tokenProvider.issueAccess(member.getId(), "MEMBER", roles);
         var refresh = tokenProvider.issueRefresh(member.getId(), "MEMBER", roles);
         refreshTokenStore.save(

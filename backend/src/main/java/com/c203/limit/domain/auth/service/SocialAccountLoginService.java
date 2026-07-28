@@ -9,15 +9,15 @@ import com.c203.limit.domain.auth.dto.response.SocialSignupPreviewResponse;
 import com.c203.limit.domain.auth.entity.SocialAccount;
 import com.c203.limit.domain.auth.entity.SocialProvider;
 import com.c203.limit.domain.auth.repository.SocialAccountRepository;
-import com.c203.limit.domain.member.dto.response.MemberSummaryResponse;
 import com.c203.limit.domain.member.entity.Member;
 import com.c203.limit.domain.member.entity.MemberStatus;
 import com.c203.limit.domain.member.repository.MemberRepository;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.util.Locale;
-import java.util.Set;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +25,7 @@ import org.springframework.util.StringUtils;
 
 @Service
 public class SocialAccountLoginService {
+    private static final Logger log = LoggerFactory.getLogger(SocialAccountLoginService.class);
     private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
     private final SocialAccountRepository socialAccountRepository;
     private final MemberRepository memberRepository;
@@ -181,12 +182,13 @@ public class SocialAccountLoginService {
 
     private SocialLoginResponse authenticated(
             Member member, com.c203.limit.domain.auth.dto.response.TokenResponse token) {
+        log.info("social authentication completed");
         return new SocialLoginResponse(
                 "AUTHENTICATED",
                 token.getAccessToken(),
                 token.getTokenType(),
                 token.getExpiresIn(),
-                new MemberSummaryResponse(member.getId(), member.getNickname(), Set.of("MEMBER")),
+                token.getMember(),
                 null);
     }
 

@@ -20,18 +20,19 @@ export class ApiError extends Error {
 }
 
 async function request(path, options = {}) {
+  const { unwrapResponse = true, responseType = 'json', ...fetchOptions } = options
   const accessToken = getAccessToken()
-  const method = options.method || 'GET'
+  const method = fetchOptions.method || 'GET'
   let res
 
   try {
     res = await fetch(`${BASE_URL}${path}`, {
-      ...options,
+      ...fetchOptions,
       credentials: 'include',
       headers: {
-        'Content-Type': 'application/json',
+        ...(fetchOptions.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        ...(options.headers || {}),
+        ...(fetchOptions.headers || {}),
       },
     })
   } catch (error) {
@@ -39,7 +40,9 @@ async function request(path, options = {}) {
     throw error
   }
 
-  const body = await res.json().catch(() => null)
+  const body = responseType === 'blob'
+    ? await res.blob()
+    : await res.json().catch(() => null)
 
   if (!res.ok) {
     const err = body?.error || {}
@@ -65,13 +68,16 @@ async function request(path, options = {}) {
   }
 
   // 성공 응답은 항상 { data, meta } 형태 → data만 꺼내서 반환
-  return body?.data
+  return unwrapResponse ? body?.data : body
 }
 
 export const apiClient = {
   get: (path) => request(path, { method: 'GET' }),
+  getEnvelope: (path) => request(path, { method: 'GET', unwrapResponse: false }),
   post: (path, payload) => request(path, { method: 'POST', body: JSON.stringify(payload) }),
   put: (path, payload) => request(path, { method: 'PUT', body: JSON.stringify(payload) }),
   patch: (path, payload) => request(path, { method: 'PATCH', body: JSON.stringify(payload) }),
   delete: (path) => request(path, { method: 'DELETE' }),
+  upload: (path, formData) => request(path, { method: 'POST', body: formData }),
+  getBlob: (path) => request(path, { method: 'GET', responseType: 'blob', unwrapResponse: false }),
 }

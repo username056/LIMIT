@@ -6,6 +6,7 @@ import AuthShell from '../components/AuthShell.vue'
 import BaseCard from '../components/BaseCard.vue'
 import BaseInput from '../components/BaseInput.vue'
 import BaseButton from '../components/BaseButton.vue'
+import BaseAddressInput from '../components/BaseAddressInput.vue'
 import {
   checkEmailAvailability,
   checkNicknameAvailability,
@@ -17,6 +18,7 @@ import { setPendingVerificationEmail } from '../auth/session'
 const router = useRouter()
 const form = ref({
   email: '', password: '', passwordConfirm: '', nickname: '', phone: '',
+  address: { zonecode: '', address: '', addressDetail: '' },
   serviceTermsAccepted: false, privacyTermsAccepted: false,
   ageRequirementAccepted: false, marketingAccepted: false,
 })
@@ -51,6 +53,7 @@ async function submit() {
     ])
     if (!emailCheck.available) throw new Error('이미 사용 중인 이메일입니다.')
     if (!nicknameCheck.available) throw new Error('이미 사용 중인 닉네임입니다.')
+    // 회원 주소 저장 API가 아직 없어 form.value.address는 입력만 받고 서버로 보내지 않습니다.
     await signupWithEmail({
       email: form.value.email,
       password: form.value.password,
@@ -80,7 +83,7 @@ async function submit() {
     <AuthShell
       width="lg"
       title="회원가입"
-      description="필요한 정보만 입력하고 L1MIT의 안전한 중고거래를 시작하세요."
+      description="필요한 정보만 입력하고 LIMIT의 안전한 중고거래를 시작하세요."
     >
       <BaseCard class="p-7 sm:p-8">
         <form
@@ -128,6 +131,10 @@ async function submit() {
               placeholder="01012345678"
             />
           </div>
+          <BaseAddressInput
+            v-model="form.address"
+            label="주소 (선택)"
+          />
 
           <div class="rounded-lg border border-border bg-bg p-5 text-sm">
             <label class="flex cursor-pointer items-center gap-3 font-semibold text-text-main">

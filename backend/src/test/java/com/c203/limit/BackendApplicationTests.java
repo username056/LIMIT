@@ -22,7 +22,10 @@ import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepositor
 import com.c203.limit.domain.inspection.repository.ListingOwnerReader;
 import com.c203.limit.domain.inspection.repository.OcrResultRepository;
 import com.c203.limit.domain.product.repository.ListingRepository;
+import com.c203.limit.domain.product.repository.WishlistRepository;
 import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
+import com.c203.limit.domain.product.service.ProductApplicationService;
+import com.c203.limit.domain.product.service.ProductCatalogService;
 
 @SpringBootTest(properties = {
         "spring.autoconfigure.exclude="
@@ -35,6 +38,9 @@ import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
                 + "org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration"
 })
 class BackendApplicationTests {
+
+    @MockitoBean
+    com.c203.limit.domain.rtc.service.RtcCallService rtcCallService;
 
     @MockitoBean
     JpaMetamodelMappingContext jpaMetamodelMappingContext;
@@ -67,13 +73,34 @@ class BackendApplicationTests {
     ChatMessageRepository chatMessageRepository;
 
     @MockitoBean
+    com.c203.limit.domain.chat.repository.ChatMediaRepository chatMediaRepository;
+
+    @MockitoBean
+    com.c203.limit.domain.chat.repository.ChatMessageMediaRepository chatMessageMediaRepository;
+
+    @MockitoBean
+    com.c203.limit.domain.chat.repository.ChatRoomContextReader chatRoomContextReader;
+
+    @MockitoBean
     ListingChatReader listingChatReader;
 
     @MockitoBean
     ListingRepository listingRepository;
 
     @MockitoBean
+    WishlistRepository wishlistRepository;
+
+    @MockitoBean
+    ProductApplicationService productApplicationService;
+
+    @MockitoBean
+    ProductCatalogService productCatalogService;
+
+    @MockitoBean
     ListingStatusHistoryRepository listingStatusHistoryRepository;
+
+    @MockitoBean
+    com.c203.limit.domain.seller.repository.SellerRepository sellerRepository;
 
     @MockitoBean
     EvidenceRepository evidenceRepository;
