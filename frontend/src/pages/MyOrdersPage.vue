@@ -58,7 +58,7 @@ const visibleOrders = computed(() => {
         MY PAGE
       </p>
       <h1 class="mt-2 text-2xl font-bold text-text-main">
-        주문 내역 조회
+        주문 내역
       </h1>
       <p class="mt-2 text-sm text-text-sub">
         최근 주문한 상품의 결제와 배송 상태를 확인하세요.

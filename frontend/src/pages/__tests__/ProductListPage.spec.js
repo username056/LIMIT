@@ -143,4 +143,27 @@ describe('ProductListPage', () => {
 
     expect(replace).toHaveBeenCalledWith({ name: 'products', query: {} })
   })
+
+  it('모바일 필터를 접은 상태로 시작하고 토글로 열 수 있다', async () => {
+    getProducts.mockResolvedValue({ data: [], meta: { page: 0, totalPages: 0, hasNext: false } })
+    const wrapper = mount(ProductListPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    const filterToggle = wrapper.get('button[aria-expanded]')
+    expect(filterToggle.attributes('aria-expanded')).toBe('false')
+    expect(wrapper.get('aside').classes()).toContain('hidden')
+
+    await filterToggle.trigger('click')
+
+    expect(filterToggle.attributes('aria-expanded')).toBe('true')
+    expect(wrapper.get('aside').classes()).not.toContain('hidden')
+  })
 })

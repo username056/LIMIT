@@ -193,7 +193,7 @@ async function logoutMember() {
                   class="block rounded px-2 py-1.5 text-sm text-text-main hover:bg-bg"
                   @click="isProfileMenuOpen = false"
                 >
-                  마이페이지
+                  내 정보
                 </RouterLink>
                 <button
                   type="button"

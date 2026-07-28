@@ -126,8 +126,8 @@ const notificationSettings = reactive({
 const notificationItems = [
   {
     key: 'priceAlert',
-    label: '관심 상품 가격 변동 알림',
-    description: '위시리스트에 담은 상품의 가격이 낮아지면 즉시 알림을 발송합니다.',
+    label: '좋아요한 상품 가격 변동 알림',
+    description: '좋아요한 상품의 가격이 낮아지면 즉시 알림을 발송합니다.',
   },
   {
     key: 'inspectionAlert',
@@ -319,7 +319,7 @@ onMounted(() => {
         MY PAGE
       </p>
       <h1 class="mt-2 text-2xl font-bold text-text-main">
-        마이페이지
+        내 정보
       </h1>
       <p class="mt-2 text-sm text-text-sub">
         로그인한 회원에게만 표시되는 페이지입니다.

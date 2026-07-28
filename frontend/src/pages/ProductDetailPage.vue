@@ -26,6 +26,11 @@ const checklistRate = computed(() => {
   const completed = Number(checklist.value.completed || 0)
   return required ? Math.min(100, Math.round((completed / required) * 100)) : 0
 })
+const canPurchase = computed(() => product.value?.status === 'ON_SALE')
+const purchaseButtonLabel = computed(() => {
+  if (canPurchase.value) return '안전결제하고 구매하기'
+  return product.value?.status === 'RESERVED' ? '예약 중인 상품입니다' : '판매가 완료된 상품입니다'
+})
 
 // 재촬영 요청 팝업
 const checklistItems = ref([])
@@ -104,7 +109,7 @@ async function toggleFavorite() {
     else await addFavorite(product.value.productId)
     isFavorite.value = !isFavorite.value
   } catch (error) {
-    errorMessage.value = error.message || '관심 상품 상태를 변경하지 못했습니다.'
+    errorMessage.value = error.message || '좋아요한 상품 상태를 변경하지 못했습니다.'
   } finally {
     isUpdatingFavorite.value = false
   }
@@ -293,28 +298,38 @@ onMounted(async () => {
               </div>
             </dl>
 
-            <div class="mt-5 grid grid-cols-[1fr_auto] gap-3">
+            <div class="mt-5 space-y-3">
               <BaseButton
-                :disabled="isOpeningChat"
-                @click="openChat"
+                block
+                :to="canPurchase ? { name: 'purchase', params: { productId: product.productId } } : ''"
+                :disabled="!canPurchase"
               >
-                {{ isOpeningChat ? '채팅방 여는 중…' : '판매자에게 문의하기' }}
+                {{ purchaseButtonLabel }}
               </BaseButton>
-              <button
-                type="button"
-                class="flex h-12 w-12 items-center justify-center rounded-md border text-xl transition"
-                :class="isFavorite ? 'border-primary bg-accent text-primary' : 'border-border bg-surface text-text-sub hover:border-primary'"
-                :disabled="isUpdatingFavorite"
-                :aria-label="isFavorite ? '관심 상품 해제' : '관심 상품 등록'"
-                @click="toggleFavorite"
-              >
-                {{ isFavorite ? '♥' : '♡' }}
-              </button>
+              <div class="grid grid-cols-[1fr_auto] gap-3">
+                <BaseButton
+                  class="px-3 py-2 text-sm"
+                  variant="outline"
+                  :disabled="isOpeningChat"
+                  @click="openChat"
+                >
+                  {{ isOpeningChat ? '채팅방 여는 중…' : '판매자에게 문의하기' }}
+                </BaseButton>
+                <button
+                  type="button"
+                  class="flex h-10 w-10 items-center justify-center rounded-md border text-xl transition"
+                  :class="isFavorite ? 'border-primary bg-accent text-primary' : 'border-border bg-surface text-text-sub hover:border-primary'"
+                  :disabled="isUpdatingFavorite"
+                  :aria-label="isFavorite ? '좋아요한 상품 해제' : '좋아요한 상품 등록'"
+                  @click="toggleFavorite"
+                >
+                  {{ isFavorite ? '♥' : '♡' }}
+                </button>
+              </div>
             </div>
             <BaseButton
-              class="mt-3"
-              block
-              variant="outline"
+              class="mt-2 px-3 py-2 text-sm"
+              variant="ghost"
               :disabled="isRequestingCall"
               @click="requestCall"
             >
@@ -373,8 +388,7 @@ onMounted(async () => {
               원본 상태 자료는 상품과 연결된 체크리스트 기준으로 관리됩니다.
             </p>
             <BaseButton
-              class="mt-4"
-              block
+              class="mt-4 px-3 py-2 text-sm"
               variant="outline"
               @click="openRecaptureModal"
             >
