@@ -5,7 +5,12 @@ import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseCard from '../components/BaseCard.vue'
 import BaseInput from '../components/BaseInput.vue'
 import BaseButton from '../components/BaseButton.vue'
+import BaseAddressInput from '../components/BaseAddressInput.vue'
 import { buildProductById } from '../mock/products'
+import { formatAddress } from '../utils/daumPostcode'
+import { getAccessToken } from '../auth/session'
+import { getMyProfile } from '../api/member'
+import { getDefaultAddress } from '../stores/addressBook'
 
 // TODO(주문/결제 API 연동): 주문 생성·결제 API가 준비되면 이 페이지의 mock 배송지·결제 흐름을
 // 실제 요청으로 교체하세요. 지금은 결제 자체를 처리할 백엔드가 없어 결제 버튼은 coming-soon으로 연결됩니다.
@@ -14,11 +19,42 @@ const route = useRoute()
 const router = useRouter()
 const product = computed(() => buildProductById(route.params.productId))
 
+const isLoggedIn = Boolean(getAccessToken())
+const useDefaultAddress = ref(false)
+const isLoadingDefaultAddress = ref(false)
+const defaultAddressError = ref('')
+
 const receiverName = ref('홍길동')
 const receiverPhone = ref('010-1234-5678')
-const addressLine1 = ref('서울시 강남구 테헤란로 123')
-const addressLine2 = ref('마크타워 5층 501호')
+const address = ref({ zonecode: '', address: '서울시 강남구 테헤란로 123', addressDetail: '마크타워 5층 501호' })
 const deliveryMemo = ref('문 앞에 놓아주세요.')
+
+async function toggleUseDefaultAddress() {
+  useDefaultAddress.value = !useDefaultAddress.value
+  if (!useDefaultAddress.value) return
+
+  defaultAddressError.value = ''
+  isLoadingDefaultAddress.value = true
+  try {
+    const profile = await getMyProfile()
+    receiverName.value = profile.nickname || receiverName.value
+    receiverPhone.value = profile.phone || receiverPhone.value
+
+    const defaultAddress = getDefaultAddress()
+    if (defaultAddress) {
+      address.value = {
+        zonecode: defaultAddress.zonecode || '',
+        address: defaultAddress.addressLine || defaultAddress.address,
+        addressDetail: defaultAddress.addressDetail || '',
+      }
+    }
+  } catch (error) {
+    defaultAddressError.value = error.message || '회원 정보를 불러오지 못했습니다.'
+    useDefaultAddress.value = false
+  } finally {
+    isLoadingDefaultAddress.value = false
+  }
+}
 
 const PAYMENT_METHODS = [
   { value: 'card', label: '신용/체크카드' },
@@ -42,7 +78,7 @@ function submitPayment() {
     query: {
       orderNumber,
       receiverName: receiverName.value,
-      address: `${addressLine1.value} ${addressLine2.value}`,
+      address: formatAddress(address.value),
     },
   })
 }
@@ -58,10 +94,37 @@ function submitPayment() {
       <div class="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div class="space-y-6">
           <BaseCard>
-            <h2 class="mb-4 text-base font-bold text-text-main">
-              수령인 및 배송지 정보
-            </h2>
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <h2 class="text-base font-bold text-text-main">
+                수령인 및 배송지 정보
+              </h2>
+              <label
+                v-if="isLoggedIn"
+                class="flex items-center gap-2 text-xs font-semibold text-text-sub"
+              >
+                <input
+                  type="checkbox"
+                  :checked="useDefaultAddress"
+                  class="h-4 w-4 rounded border-border"
+                  @change="toggleUseDefaultAddress"
+                >
+                마이페이지 기본 배송지와 동일
+              </label>
+            </div>
+            <p
+              v-if="isLoadingDefaultAddress"
+              class="mt-3 text-xs text-text-sub"
+            >
+              마이페이지 정보를 불러오는 중...
+            </p>
+            <p
+              v-if="defaultAddressError"
+              role="alert"
+              class="mt-3 text-xs text-red-600"
+            >
+              {{ defaultAddressError }}
+            </p>
+            <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
               <BaseInput
                 v-model="receiverName"
                 label="수령인 이름"
@@ -73,26 +136,11 @@ function submitPayment() {
             </div>
 
             <div class="mt-4">
-              <span class="mb-2 block text-sm font-medium text-text-main">배송 주소</span>
-              <div class="flex gap-2">
-                <input
-                  v-model="addressLine1"
-                  type="text"
-                  class="w-full rounded-md border border-border bg-surface px-4 py-3 text-sm text-text-main outline-none focus:border-primary"
-                >
-                <BaseButton
-                  variant="outline"
-                  class="whitespace-nowrap"
-                  :to="{ name: 'coming-soon', params: { feature: 'postal-code-search' } }"
-                >
-                  우편번호 찾기
-                </BaseButton>
-              </div>
-              <input
-                v-model="addressLine2"
-                type="text"
-                class="mt-2 w-full rounded-md border border-border bg-surface px-4 py-3 text-sm text-text-main outline-none focus:border-primary"
-              >
+              <BaseAddressInput
+                v-model="address"
+                label="배송 주소"
+                required
+              />
             </div>
 
             <div class="mt-4">
@@ -112,7 +160,7 @@ function submitPayment() {
                 v-for="method in PAYMENT_METHODS"
                 :key="method.value"
                 type="button"
-                class="rounded-md border px-4 py-3 text-left text-sm font-semibold transition-colors"
+                class="rounded-md border px-4 py-3 text-center text-sm font-semibold transition-colors"
                 :class="selectedPaymentMethod === method.value
                   ? 'border-primary bg-accent text-primary-dark'
                   : 'border-border text-text-main hover:border-primary'"
@@ -157,7 +205,7 @@ function submitPayment() {
               class="mt-5"
               @click="submitPayment"
             >
-              {{ selectedPaymentLabel }}으로 결제하기
+              {{ selectedPaymentLabel }}로 결제하기
             </BaseButton>
 
             <p class="mt-4 text-xs leading-5 text-text-sub">

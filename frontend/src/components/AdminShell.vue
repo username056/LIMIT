@@ -1,4 +1,6 @@
 <script setup>
+import limitLogo from '../assets/limit_logo.png'
+
 defineProps({
   adminName: { type: String, required: true },
   adminRole: { type: String, required: true },
@@ -12,15 +14,16 @@ defineEmits(['select', 'logout'])
   <div class="min-h-screen bg-[#F7F9FC] text-text-main lg:grid lg:grid-cols-[240px_minmax(0,1fr)]">
     <aside class="border-b border-border bg-white px-5 py-6 lg:min-h-screen lg:border-b-0 lg:border-r">
       <div class="flex items-center justify-between lg:block">
-        <div>
-          <RouterLink
-            to="/"
-            class="bg-primary-gradient bg-clip-text text-xl font-extrabold tracking-[-0.04em] text-transparent"
+        <RouterLink
+          to="/"
+          class="flex items-center"
+        >
+          <img
+            :src="limitLogo"
+            alt="LIMIT"
+            class="h-7 w-auto"
           >
-            LIMIT
-          </RouterLink>
-          <span class="ml-2 rounded-full bg-accent px-2 py-1 text-[10px] font-bold text-primary">ADMIN</span>
-        </div>
+        </RouterLink>
         <button
           class="text-xs font-semibold text-text-sub hover:text-text-main lg:hidden"
           @click="$emit('logout')"

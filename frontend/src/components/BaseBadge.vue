@@ -9,7 +9,7 @@ defineProps({
 
 <template>
   <span
-    class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold"
+    class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold"
     :class="[
       variant === 'primary' && 'bg-accent text-primary-dark',
       variant === 'gray' && 'bg-bg text-text-sub',

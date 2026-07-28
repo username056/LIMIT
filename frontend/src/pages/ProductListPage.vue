@@ -18,10 +18,44 @@ const filters = reactive({
   minPrice: '',
   maxPrice: '',
   tradeRegion: '',
-  verificationStatus: '',
+  verificationCountRanges: [], // 빈 배열 = 전체
   sort: 'createdAt,desc',
 })
 let latestSearchRequestId = 0
+
+const VERIFICATION_COUNT_BUCKETS = [
+  { value: '0-5', label: '0-5개' },
+  { value: '5-7', label: '5-7개' },
+  { value: '7-9', label: '7-9개' },
+  { value: '10+', label: '10개 이상' },
+]
+
+function selectAllVerificationBuckets() {
+  filters.verificationCountRanges = []
+  search(0)
+}
+
+function toggleVerificationBucket(value) {
+  const index = filters.verificationCountRanges.indexOf(value)
+  if (index === -1) filters.verificationCountRanges.push(value)
+  else filters.verificationCountRanges.splice(index, 1)
+
+  if (filters.verificationCountRanges.length === VERIFICATION_COUNT_BUCKETS.length) {
+    filters.verificationCountRanges = []
+  }
+  search(0)
+}
+
+// 상품 목록 API가 아직 상품별 검증 개수를 내려주지 않아, 구간 선택을 기존 검증 상태값에 매핑해
+// 동작시킵니다(10개 이상만 선택 → 검증 완료, 나머지 구간만 선택 → 검증 중, 둘 다 섞이거나 전체
+// 선택 → 필터 없음). 백엔드에 개수 필드가 추가되면 실제 구간 필터로 교체하세요.
+function verificationStatusForBuckets(buckets) {
+  if (!buckets.length) return ''
+  const hasHighBucket = buckets.includes('10+')
+  const hasLowBucket = buckets.some((bucket) => bucket !== '10+')
+  if (hasHighBucket && hasLowBucket) return ''
+  return hasHighBucket ? 'COMPLETED' : 'IN_PROGRESS'
+}
 
 const resultCount = computed(() => pageMeta.value.totalElements ?? products.value.length)
 
@@ -48,7 +82,13 @@ async function search(page = 0) {
   isLoading.value = true
   errorMessage.value = ''
   try {
-    const response = await getProducts({ ...filters, page, size: 18 })
+    const { verificationCountRanges, ...restFilters } = filters
+    const response = await getProducts({
+      ...restFilters,
+      verificationStatus: verificationStatusForBuckets(verificationCountRanges),
+      page,
+      size: 18,
+    })
     if (requestId !== latestSearchRequestId) return
     products.value = response?.data || []
     pageMeta.value = {
@@ -74,7 +114,7 @@ async function resetFilters() {
     minPrice: '',
     maxPrice: '',
     tradeRegion: '',
-    verificationStatus: '',
+    verificationCountRanges: [],
     sort: 'createdAt,desc',
   })
   const nextQuery = { ...route.query }
@@ -191,17 +231,35 @@ watch(() => route.query.q, async (keyword) => {
               </div>
             </fieldset>
 
-            <label class="mt-5 block text-xs font-semibold text-text-main">
-              검증 상태
-              <select
-                v-model="filters.verificationStatus"
-                class="mt-2 w-full rounded-md border border-border bg-bg px-3 py-2.5 text-sm outline-none focus:border-primary"
-              >
-                <option value="">전체 상태</option>
-                <option value="COMPLETED">검증 완료</option>
-                <option value="IN_PROGRESS">검증 중</option>
-              </select>
-            </label>
+            <fieldset class="mt-5">
+              <legend class="text-xs font-semibold text-text-main">
+                검증 개수
+              </legend>
+              <div class="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  class="rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors"
+                  :class="filters.verificationCountRanges.length === 0
+                    ? 'border-primary bg-accent text-primary-dark'
+                    : 'border-border text-text-sub hover:border-primary hover:text-text-main'"
+                  @click="selectAllVerificationBuckets"
+                >
+                  전체
+                </button>
+                <button
+                  v-for="bucket in VERIFICATION_COUNT_BUCKETS"
+                  :key="bucket.value"
+                  type="button"
+                  class="rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors"
+                  :class="filters.verificationCountRanges.includes(bucket.value)
+                    ? 'border-primary bg-accent text-primary-dark'
+                    : 'border-border text-text-sub hover:border-primary hover:text-text-main'"
+                  @click="toggleVerificationBucket(bucket.value)"
+                >
+                  {{ bucket.label }}
+                </button>
+              </div>
+            </fieldset>
 
             <label class="mt-5 block text-xs font-semibold text-text-main">
               거래 지역

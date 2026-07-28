@@ -89,7 +89,7 @@ async function logoutMember() {
 
       <div class="flex items-center gap-4">
         <form
-          class="hidden items-center gap-2 rounded-md border border-border bg-bg px-3 py-2 sm:flex"
+          class="hidden items-center gap-2 rounded-md border border-border bg-accent px-3 py-2 sm:flex"
           role="search"
           @submit.prevent="submitSearch"
         >
@@ -267,7 +267,7 @@ async function logoutMember() {
       class="border-t border-border px-6 py-4 md:hidden"
     >
       <form
-        class="mb-4 flex items-center gap-2 rounded-md border border-border bg-bg px-3 py-2"
+        class="mb-4 flex items-center gap-2 rounded-md border border-border bg-accent px-3 py-2"
         role="search"
         @submit.prevent="submitSearch"
       >
