@@ -60,7 +60,8 @@ public class SecurityConfig {
                                                 "/api/v1/products",
                                                 "/api/v1/products/{productId}",
                                                 "/api/v1/device-categories",
-                                                "/api/v1/device-models/**")
+                                                "/api/v1/device-models/**",
+                                                "/api/v1/inspections/products/{productId}/diagnosis-summary")
                                         .permitAll()
                                         .requestMatchers("/api/v1/admin/**")
                                         .hasAnyRole("OPERATOR", "SUPER_ADMIN")

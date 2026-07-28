@@ -6,5 +6,6 @@ public enum OcrFieldType {
     RAM,
     GPU,
     OS_VERSION,
+    STORAGE_CAPACITY,
     OTHER
 }

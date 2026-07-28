@@ -29,6 +29,12 @@ import com.c203.limit.domain.auth.repository.SocialAccountRepository;
 import com.c203.limit.domain.member.repository.MemberRepository;
 import com.c203.limit.domain.member.repository.MemberTermsAgreementRepository;
 import com.c203.limit.domain.member.entity.Member;
+import com.c203.limit.domain.inspection.repository.BatteryReportResultRepository;
+import com.c203.limit.domain.inspection.repository.DxdiagResultRepository;
+import com.c203.limit.domain.inspection.repository.EvidenceRepository;
+import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
+import com.c203.limit.domain.inspection.repository.ListingOwnerReader;
+import com.c203.limit.domain.inspection.repository.OcrResultRepository;
 import com.c203.limit.domain.product.repository.ListingRepository;
 import com.c203.limit.domain.product.repository.WishlistRepository;
 import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
@@ -76,6 +82,12 @@ class AdminAuthorizationTests {
     @MockitoBean ProductCatalogService productCatalogService;
     @MockitoBean ListingStatusHistoryRepository listingStatusHistoryRepository;
     @MockitoBean PaymentService paymentService;
+    @MockitoBean EvidenceRepository evidenceRepository;
+    @MockitoBean OcrResultRepository ocrResultRepository;
+    @MockitoBean ListingOwnerReader listingOwnerReader;
+    @MockitoBean ListingChecklistItemRepository listingChecklistItemRepository;
+    @MockitoBean DxdiagResultRepository dxdiagResultRepository;
+    @MockitoBean BatteryReportResultRepository batteryReportResultRepository;
     @MockitoBean com.c203.limit.domain.seller.repository.SellerRepository sellerRepository;
 
     @Test

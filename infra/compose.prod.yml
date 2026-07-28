@@ -75,6 +75,8 @@ x-backend-environment: &backend-environment
   KAKAO_LOCAL_API_KEY: ${KAKAO_LOCAL_API_KEY:-}
   SPRINGDOC_API_DOCS_ENABLED: "true"
   SPRINGDOC_SWAGGER_UI_ENABLED: "true"
+  NAVER_CLOVA_OCR_INVOKE_URL: ${NAVER_CLOVA_OCR_INVOKE_URL:-}
+  NAVER_CLOVA_OCR_SECRET_KEY: ${NAVER_CLOVA_OCR_SECRET_KEY:-}
 
 services:
   flyway-maintenance:

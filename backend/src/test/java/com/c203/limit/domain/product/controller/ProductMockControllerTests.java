@@ -28,6 +28,12 @@ import com.c203.limit.domain.chat.repository.ChatRoomRepository;
 import com.c203.limit.domain.chat.repository.ListingChatReader;
 import com.c203.limit.domain.member.repository.MemberRepository;
 import com.c203.limit.domain.member.repository.MemberTermsAgreementRepository;
+import com.c203.limit.domain.inspection.repository.BatteryReportResultRepository;
+import com.c203.limit.domain.inspection.repository.DxdiagResultRepository;
+import com.c203.limit.domain.inspection.repository.EvidenceRepository;
+import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
+import com.c203.limit.domain.inspection.repository.ListingOwnerReader;
+import com.c203.limit.domain.inspection.repository.OcrResultRepository;
 import com.c203.limit.domain.product.repository.ListingRepository;
 import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
 import com.c203.limit.domain.product.repository.WishlistRepository;
@@ -104,6 +110,24 @@ class ProductMockControllerTests {
 
     @MockitoBean
     ListingStatusHistoryRepository listingStatusHistoryRepository;
+
+    @MockitoBean
+    EvidenceRepository evidenceRepository;
+
+    @MockitoBean
+    OcrResultRepository ocrResultRepository;
+
+    @MockitoBean
+    ListingOwnerReader listingOwnerReader;
+
+    @MockitoBean
+    ListingChecklistItemRepository listingChecklistItemRepository;
+
+    @MockitoBean
+    DxdiagResultRepository dxdiagResultRepository;
+
+    @MockitoBean
+    BatteryReportResultRepository batteryReportResultRepository;
 
     @MockitoBean
     WishlistRepository wishlistRepository;

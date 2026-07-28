@@ -19,6 +19,12 @@ import com.c203.limit.domain.chat.repository.ChatRoomContextReader;
 import com.c203.limit.domain.chat.repository.ChatRoomParticipantRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomRepository;
 import com.c203.limit.domain.chat.repository.ListingChatReader;
+import com.c203.limit.domain.inspection.repository.BatteryReportResultRepository;
+import com.c203.limit.domain.inspection.repository.DxdiagResultRepository;
+import com.c203.limit.domain.inspection.repository.EvidenceRepository;
+import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
+import com.c203.limit.domain.inspection.repository.ListingOwnerReader;
+import com.c203.limit.domain.inspection.repository.OcrResultRepository;
 import com.c203.limit.domain.member.repository.MemberRepository;
 import com.c203.limit.domain.member.repository.MemberTermsAgreementRepository;
 import com.c203.limit.domain.payment.entity.PaymentMethod;
@@ -86,6 +92,12 @@ class PaymentSecurityControllerTests {
     @MockitoBean ProductApplicationService productApplicationService;
     @MockitoBean ProductCatalogService productCatalogService;
     @MockitoBean com.c203.limit.domain.seller.repository.SellerRepository sellerRepository;
+    @MockitoBean EvidenceRepository evidenceRepository;
+    @MockitoBean OcrResultRepository ocrResultRepository;
+    @MockitoBean DxdiagResultRepository dxdiagResultRepository;
+    @MockitoBean BatteryReportResultRepository batteryReportResultRepository;
+    @MockitoBean ListingChecklistItemRepository listingChecklistItemRepository;
+    @MockitoBean ListingOwnerReader listingOwnerReader;
     @MockitoBean PaymentService paymentService;
 
     @Autowired MockMvc mockMvc;
