@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
  * Windows "설정 &gt; 시스템 &gt; 정보" 화면 스크린샷을 네이버 클로바 OCR로 인식하고
  * {@link SystemInfoScreenshotParser}로 필드별로 구조화하는 실제 운영 구현체.
  *
- * <p>기대 필드 중 {@value #RETRY_MISSING_THRESHOLD}개 이상을 못 찾으면(스크린샷 6개 필드 기준 4개 이상),
+ * <p>기대 필드 중 {@value #RETRY_MISSING_THRESHOLD}개 이상을 못 찾으면(스크린샷 6개 필드 기준 3개 이상),
  * 원본 이미지를 그레이스케일·명암 대비 강화 전처리한 뒤 한 번만 다시 인식을 시도한다. 재시도 결과는 1차
  * 인식에서 이미 찾은 필드는 그대로 두고, 못 찾았던 필드만 채워 넣는 데 쓴다(전처리가 오히려 잘 인식되던 필드를
  * 망칠 수 있어 무조건 덮어쓰지 않는다).
@@ -32,8 +32,8 @@ public class NaverClovaSystemInfoOcrClient implements OcrClient {
     private static final String MODEL_VERSION = "naver-clova-general-v2";
     private static final String PREPROCESSED_IMAGE_FORMAT = "png";
 
-    /** 스크린샷 기대 필드 6개 중 4개 이상 못 찾으면 전처리 후 재시도한다. */
-    private static final int RETRY_MISSING_THRESHOLD = 4;
+    /** 스크린샷 기대 필드 6개 중 3개 이상 못 찾으면 전처리 후 재시도한다. */
+    private static final int RETRY_MISSING_THRESHOLD = 3;
 
     private final NaverClovaOcrClient naverClovaOcrClient;
     private final SystemInfoScreenshotParser parser;

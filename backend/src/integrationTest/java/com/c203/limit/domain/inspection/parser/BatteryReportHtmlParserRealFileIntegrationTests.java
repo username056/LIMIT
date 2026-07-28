@@ -23,6 +23,14 @@ class BatteryReportHtmlParserRealFileIntegrationTests {
         byte[] bytes = Files.readAllBytes(Path.of(path));
         BatteryReportParseResult result = new BatteryReportHtmlParser().parse(bytes);
 
+        System.out.println("===== BATTERY REPORT PARSE RESULT =====");
+        System.out.println("batteryManufacturer=" + result.batteryManufacturer());
+        System.out.println("designCapacity=" + result.designCapacity());
+        System.out.println("fullChargeCapacity=" + result.fullChargeCapacity());
+        System.out.println("cycleCount=" + result.cycleCount());
+        System.out.println("capacityRatio=" + result.capacityRatio());
+        System.out.println("isComplete=" + result.isComplete());
+
         assertThat(result.batteryManufacturer()).isNotBlank();
         assertThat(result.designCapacity()).isNotBlank();
         assertThat(result.fullChargeCapacity()).isNotBlank();

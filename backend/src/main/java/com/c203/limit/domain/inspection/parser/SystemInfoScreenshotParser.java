@@ -59,7 +59,15 @@ public class SystemInfoScreenshotParser {
         return results;
     }
 
-    /** 저장소 / 그래픽 카드 / 설치된 RAM / 프로세서 카드 4개가 나란히 배치된 상단 요약 영역. */
+    /**
+     * 저장소 / 그래픽 카드 / 설치된 RAM / 프로세서 카드 4개가 나란히 배치된 상단 요약 영역.
+     *
+     * <p>클로바가 이 4개 라벨과 값을 반환하는 순서는 이미지마다 다르다 — 깨끗한 스크린샷에서는 "라벨 4개를 몰아서
+     * 반환한 뒤 값 4개를 몰아서" 반환하지만, 카메라로 촬영한 사진 등에서는 "라벨 → 그 값 → 다음 라벨 → 그 값"처럼
+     * 카드별로 붙여서 반환하는 경우가 있다(실제 라이브 테스트로 확인됨). 그래서 값은 "마지막 라벨 뒤"라는 한
+     * 지점에서만 모으지 않고, 라벨 자신이 차지한 토큰 구간과 라벨 행 높이 안에 있는 토큰(라벨 행에 걸친 노이즈,
+     * 예: 아이콘 오인식)을 제외한 나머지 후보 토큰 전체에서 모은다.
+     */
     private void extractCardRow(
             List<OcrToken> tokens,
             Set<OcrFieldType> expected,
@@ -89,7 +97,10 @@ public class SystemInfoScreenshotParser {
         double[] columnCenters = {
             storageLabel.get().centerX(), gpuLabel.get().centerX(), ramLabel.get().centerX(), cpuLabel.get().centerX()
         };
-        List<List<OcrToken>> valueRows = collectValueBlockRows(tokens, cpuLabel.get().endIndex());
+        List<OcrToken> valueCandidates =
+                collectCardValueCandidates(
+                        tokens, List.of(storageLabel.get(), gpuLabel.get(), ramLabel.get(), cpuLabel.get()));
+        List<List<OcrToken>> valueRows = collectValueBlockRows(valueCandidates, 0);
         if (valueRows.isEmpty()) {
             return;
         }
@@ -99,6 +110,36 @@ public class SystemInfoScreenshotParser {
         addIfExpected(results, expected, OcrFieldType.GPU, capacityOrRaw(values[1]), confidence);
         addIfExpected(results, expected, OcrFieldType.RAM, capacityOrRaw(values[2]), confidence);
         addIfExpected(results, expected, OcrFieldType.CPU, blankToEmpty(values[3]), confidence);
+    }
+
+    /**
+     * 카드 4개의 라벨 자신이 차지한 토큰과, 라벨 행의 세로 범위 안에 있는 토큰(라벨 행 높이에 걸친 노이즈)을 뺀
+     * 나머지를, 원래 순서를 유지한 채 값 후보로 모은다.
+     */
+    private List<OcrToken> collectCardValueCandidates(List<OcrToken> tokens, List<LabelMatch> labels) {
+        int firstIndex = labels.stream().mapToInt(LabelMatch::startIndex).min().orElseThrow();
+        double labelRowBottom = labels.stream().mapToDouble(LabelMatch::bottom).max().orElseThrow();
+
+        List<OcrToken> candidates = new ArrayList<>();
+        for (int i = firstIndex; i < tokens.size(); i++) {
+            if (isWithinAnyLabel(i, labels)) {
+                continue;
+            }
+            OcrToken token = tokens.get(i);
+            if (token.top() > labelRowBottom) {
+                candidates.add(token);
+            }
+        }
+        return candidates;
+    }
+
+    private boolean isWithinAnyLabel(int index, List<LabelMatch> labels) {
+        for (LabelMatch label : labels) {
+            if (index >= label.startIndex() && index < label.endIndex()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Windows 사양 표의 "에디션"/"버전" 두 라벨의 값을 합쳐 하나의 OS_VERSION 값으로 만든다. */
@@ -207,7 +248,7 @@ public class SystemInfoScreenshotParser {
                 right = Math.max(right, token.right());
                 bottom = Math.max(bottom, token.bottom());
                 if (accumulated.toString().equals(compact)) {
-                    return Optional.of(new LabelMatch(j + 1, left, top, right, bottom));
+                    return Optional.of(new LabelMatch(i, j + 1, left, top, right, bottom));
                 }
             }
         }
@@ -329,7 +370,7 @@ public class SystemInfoScreenshotParser {
         return sum.divide(BigDecimal.valueOf(tokens.size()), 3, RoundingMode.HALF_UP);
     }
 
-    private record LabelMatch(int endIndex, double left, double top, double right, double bottom) {
+    private record LabelMatch(int startIndex, int endIndex, double left, double top, double right, double bottom) {
         double centerX() {
             return (left + right) / 2.0;
         }

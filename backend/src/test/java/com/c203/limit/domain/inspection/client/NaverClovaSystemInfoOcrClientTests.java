@@ -109,13 +109,14 @@ class NaverClovaSystemInfoOcrClientTests {
     }
 
     @Test
-    void doesNotRetryWhenFewerThanFourFieldsAreMissing() {
-        // 6개 기대 필드 중 3개만 못 찾음 (임계값 4 미만) -> 재시도 안 함
+    void doesNotRetryWhenFewerThanThreeFieldsAreMissing() {
+        // 6개 기대 필드 중 4개 찾음(2개만 누락, 임계값 3 미만) -> 재시도 안 함
         List<OcrFieldExtraction> firstPass =
                 List.of(
                         extraction(OcrFieldType.MODEL_NAME, "Galaxy Book4"),
                         extraction(OcrFieldType.CPU, "i7"),
-                        extraction(OcrFieldType.RAM, "16GB"));
+                        extraction(OcrFieldType.RAM, "16GB"),
+                        extraction(OcrFieldType.GPU, "RTX 4050"));
         when(naverClovaOcrClient.fetchImage(IMAGE_URL)).thenReturn(ORIGINAL_BYTES);
         when(naverClovaOcrClient.recognizeFields(ORIGINAL_BYTES, "jpg")).thenReturn(List.of());
         when(parser.parse(List.of(), SCREENSHOT_FIELD_TYPES)).thenReturn(firstPass);
@@ -128,12 +129,13 @@ class NaverClovaSystemInfoOcrClientTests {
     }
 
     @Test
-    void retriesWithPreprocessingAndFillsOnlyMissingFieldsWhenFourOrMoreAreMissing() {
-        // 6개 중 2개만 찾음(4개 누락, 임계값 이상) -> 전처리 재시도, 1차에서 찾은 값은 유지하고 빠진 것만 채움
+    void retriesWithPreprocessingAndFillsOnlyMissingFieldsWhenThreeOrMoreAreMissing() {
+        // 6개 중 3개만 찾음(3개 누락, 임계값 경계) -> 전처리 재시도, 1차에서 찾은 값은 유지하고 빠진 것만 채움
         List<OcrFieldExtraction> firstPass =
                 List.of(
                         extraction(OcrFieldType.CPU, "i7 (1차)"),
-                        extraction(OcrFieldType.RAM, "16GB"));
+                        extraction(OcrFieldType.RAM, "16GB"),
+                        extraction(OcrFieldType.OS_VERSION, "Windows 11"));
         List<OcrFieldExtraction> retryPass =
                 List.of(
                         extraction(OcrFieldType.CPU, "i7 (재시도, 무시되어야 함)"),
@@ -154,6 +156,7 @@ class NaverClovaSystemInfoOcrClientTests {
                 .containsExactlyInAnyOrder(
                         org.assertj.core.groups.Tuple.tuple(OcrFieldType.CPU, "i7 (1차)"),
                         org.assertj.core.groups.Tuple.tuple(OcrFieldType.RAM, "16GB"),
+                        org.assertj.core.groups.Tuple.tuple(OcrFieldType.OS_VERSION, "Windows 11"),
                         org.assertj.core.groups.Tuple.tuple(OcrFieldType.GPU, "RTX 4050"),
                         org.assertj.core.groups.Tuple.tuple(OcrFieldType.MODEL_NAME, "Galaxy Book4"));
         verify(naverClovaOcrClient).recognizeFields(PREPROCESSED_BYTES, "png");
