@@ -74,6 +74,29 @@ class FlywayMigrationIntegrationTests {
             statement.execute("CREATE TABLE user_sanction (sanction_id BIGINT PRIMARY KEY)");
             statement.execute(
                     """
+                    CREATE TABLE seller (
+                        seller_id BIGINT NOT NULL AUTO_INCREMENT,
+                        seller_name VARCHAR(100) NOT NULL,
+                        seller_category VARCHAR(30) NOT NULL,
+                        country VARCHAR(50) NOT NULL,
+                        status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+                        product_limit INT NOT NULL DEFAULT 0,
+                        sales_amount_limit BIGINT NOT NULL DEFAULT 0,
+                        approved_at DATETIME(6) NULL,
+                        created_at DATETIME(6) NOT NULL,
+                        PRIMARY KEY (seller_id)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                    """);
+            statement.execute(
+                    """
+                    INSERT INTO seller (
+                        seller_name, seller_category, country, status, created_at
+                    ) VALUES (
+                        'legacy-shop', 'INDIVIDUAL', 'KR', 'ACTIVE', CURRENT_TIMESTAMP(6)
+                    )
+                    """);
+            statement.execute(
+                    """
                     INSERT INTO user_account (
                         email, password, nickname, member_type, status,
                         marketing_opt_in, created_at, updated_at
@@ -159,6 +182,19 @@ class FlywayMigrationIntegrationTests {
                 .isGreaterThanOrEqualTo(7L);
         assertThat(tableExists("member_role")).isTrue();
         assertThat(tableExists("user_sanction")).isTrue();
+        assertThat(tableExists("seller")).isTrue();
+        assertThat(columnExists("seller", "user_id")).isTrue();
+        assertThat(columnExists("seller", "seller_type")).isTrue();
+        assertThat(columnExists("seller", "settlement_account_last4")).isTrue();
+        assertThat(indexExists("seller", "uk_seller_user")).isTrue();
+        assertThat(singleString("SELECT seller_type FROM seller WHERE seller_name = 'legacy-shop'"))
+                .isEqualTo("INDIVIDUAL");
+        assertThat(
+                        singleString(
+                                "SELECT status FROM seller WHERE user_id = "
+                                        + "(SELECT user_id FROM user_account "
+                                        + "WHERE email = 'legacy@example.com')"))
+                .isEqualTo("ACTIVE");
         assertThat(singleString("SELECT member_type FROM user_account WHERE email = 'legacy@example.com'"))
                 .isEqualTo("SELLER");
         assertThat(singleLong("SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1"))
@@ -167,6 +203,11 @@ class FlywayMigrationIntegrationTests {
                         singleLong(
                                 "SELECT COUNT(*) FROM flyway_schema_history "
                                         + "WHERE success = 1 AND version = '20260801'"))
+                .isEqualTo(1L);
+        assertThat(
+                        singleLong(
+                                "SELECT COUNT(*) FROM flyway_schema_history "
+                                        + "WHERE success = 1 AND version = '20260802'"))
                 .isEqualTo(1L);
     }
 
@@ -183,8 +224,8 @@ class FlywayMigrationIntegrationTests {
                                 PRODUCTION_HISTORY_MYSQL,
                                 "SELECT COUNT(*) FROM flyway_schema_history "
                                         + "WHERE success = 1 "
-                                        + "AND version IN ('20260728', '20260729', '20260730', '20260731', '20260801')"))
-                .isEqualTo(5L);
+                                        + "AND version IN ('20260728', '20260729', '20260730', '20260731', '20260801', '20260802')"))
+                .isEqualTo(6L);
     }
 
     private static void migrateTo(MySQLContainer container, String target) {

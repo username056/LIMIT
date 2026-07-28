@@ -19,6 +19,7 @@ import com.c203.limit.domain.auth.service.TermsAgreementService;
 import com.c203.limit.domain.member.dto.request.UpdateMemberRequest;
 import com.c203.limit.domain.member.entity.Member;
 import com.c203.limit.domain.member.repository.MemberRepository;
+import com.c203.limit.domain.seller.service.SellerStatusReader;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import com.c203.limit.global.security.JwtTokenProvider;
@@ -28,6 +29,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 class MemberServiceTests {
     @Mock MemberRepository repository;
     @Mock TermsAgreementService termsAgreementService;
+    @Mock SellerStatusReader sellerStatusReader;
     MemberService service;
 
     @BeforeEach void setUp() {
@@ -35,8 +37,9 @@ class MemberServiceTests {
         var auth = new AuthService(repository, encoder,
                 new JwtTokenProvider(new ObjectMapper(), "unit-test-secret-with-at-least-32-bytes", Duration.ofMinutes(30), Duration.ofDays(14)),
                 new InMemoryRefreshTokenStore(),
-                termsAgreementService);
-        service = new MemberService(repository, encoder, auth);
+                termsAgreementService,
+                sellerStatusReader);
+        service = new MemberService(repository, encoder, auth, sellerStatusReader);
     }
 
     @Test void masksPhoneInProfile() {

@@ -46,6 +46,12 @@ public class MemberProfileResponse {
     private final Set<String> roles;
 
     @Schema(
+            description = "판매자 상태. 판매자 등록 전에는 null",
+            example = "ACTIVE",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private final String sellerStatus;
+
+    @Schema(
             description = "이메일 인증 시각",
             example = "null",
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)

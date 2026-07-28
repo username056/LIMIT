@@ -9,6 +9,11 @@
 - 상품 생성 시 게시된 체크리스트 템플릿을 매물 항목으로 스냅샷 저장
 - 관심상품 등록·목록·해제와 판매자 상품 관리 화면 API 연동
 
+상품 등록, 수정, 삭제, 상태 변경과 판매자 본인 상품 조회는 JWT의 `SELLER` 역할이
+필수다. 서버는 토큰 역할 검사 후에도 `seller` 테이블의 현재 상태가 `ACTIVE`인지 확인한다.
+따라서 일반 회원은 상품을 등록할 수 없고, 판매자 정지 직전에 발급된 토큰도 상품 변경에
+사용할 수 없다.
+
 증거 업로드·확인·재촬영 이력, OCR, batteryreport/dxdiag 파싱, 자동 추출값 확정,
 채팅 및 영상통화는 담당 범위에서 제외했으며 기존 목업을 변경하지 않았다.
 
@@ -21,8 +26,9 @@
 - `category.manufacturer_id` 조회 인덱스
 - 공개 목록, 판매자 목록, 관심상품 최신순, 썸네일 일괄 조회용 복합 인덱스
 
-공개 상세 `GET /api/v1/products/{productId}`는 `ON_SALE` 상품만 반환한다. 판매자는 인증이
-필요한 `GET /api/v1/members/me/products/{productId}`로 본인의 `DRAFT`, `HIDDEN` 상품을 조회한다.
+공개 상세 `GET /api/v1/products/{productId}`는 `ON_SALE` 상품만 반환한다. 활성 판매자는
+`SELLER` 역할이 필요한 `GET /api/v1/members/me/products/{productId}`로 본인의 `DRAFT`,
+`HIDDEN` 상품을 조회한다.
 목록의 `manufacturerId`, `verificationStatus(COMPLETED|IN_PROGRESS)`, `sort` 조건은 DB 조회에
 반영하며 허용되지 않은 정렬 필드나 방향은 `INVALID_INPUT_VALUE`로 거절한다.
 

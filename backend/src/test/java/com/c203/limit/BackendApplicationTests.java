@@ -93,6 +93,9 @@ class BackendApplicationTests {
     @MockitoBean
     ListingStatusHistoryRepository listingStatusHistoryRepository;
 
+    @MockitoBean
+    com.c203.limit.domain.seller.repository.SellerRepository sellerRepository;
+
     @Test
     void contextLoads() {
     }
