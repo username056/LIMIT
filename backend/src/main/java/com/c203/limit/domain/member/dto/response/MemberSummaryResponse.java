@@ -25,4 +25,10 @@ public class MemberSummaryResponse {
             example = "[MEMBER]",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private final Set<String> roles;
+
+    @Schema(
+            description = "판매자 상태. 판매자 등록 전에는 null",
+            example = "ACTIVE",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private final String sellerStatus;
 }

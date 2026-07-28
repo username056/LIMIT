@@ -79,7 +79,8 @@ class ChatRoomControllerTests {
     @Test
     void returnsCurrentMembersChatRooms() throws Exception {
         ChatRoomSummaryResponse summary = new ChatRoomSummaryResponse(
-                ROOM_ID, LISTING_ID, SELLER_ID, "ACTIVE", 50L, 7L, null, 2L, null);
+                ROOM_ID, LISTING_ID, SELLER_ID, "판매자", "상품", "https://cdn/image.jpg",
+                "ACTIVE", 50L, 7L, null, 2L, null);
         when(currentUser.memberId()).thenReturn(BUYER_ID);
         when(chatRoomService.findRooms(BUYER_ID, 100L, 10))
                 .thenReturn(new CursorResponse<>(List.of(summary), "40", true));
@@ -90,6 +91,8 @@ class ChatRoomControllerTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content[0].roomId").value(ROOM_ID))
                 .andExpect(jsonPath("$.data.content[0].counterpartId").value(SELLER_ID))
+                .andExpect(jsonPath("$.data.content[0].counterpartNickname").value("판매자"))
+                .andExpect(jsonPath("$.data.content[0].listingTitle").value("상품"))
                 .andExpect(jsonPath("$.data.content[0].unreadCount").value(2))
                 .andExpect(jsonPath("$.data.nextCursor").value("40"))
                 .andExpect(jsonPath("$.data.hasNext").value(true));
@@ -99,7 +102,7 @@ class ChatRoomControllerTests {
     void returnsMessagesAfterLastReceivedSequence() throws Exception {
         ChatMessageResponse message = new ChatMessageResponse(
                 101L, 8L, SELLER_ID, new UUID(0L, 1L), "TEXT", "안녕하세요", "SENT",
-                LocalDateTime.of(2026, 7, 23, 12, 0));
+                LocalDateTime.of(2026, 7, 23, 12, 0), List.of());
         when(currentUser.memberId()).thenReturn(BUYER_ID);
         when(chatRoomService.findMessages(ROOM_ID, BUYER_ID, null, 7L, 10))
                 .thenReturn(new CursorResponse<>(List.of(message), null, false));

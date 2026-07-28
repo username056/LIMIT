@@ -30,7 +30,6 @@ public class Payment extends BaseTimeEntity {
     @Column(name = "payment_id")
     private Long id;
 
-    // TODO: listing 도메인 엔티티 생성 후 @ManyToOne(Listing)으로 교체
     @Column(name = "listing_id", nullable = false)
     private Long listingId;
 
@@ -91,12 +90,17 @@ public class Payment extends BaseTimeEntity {
     private LocalDateTime approvedAt;
 
     public static Payment request(
-            Long listingId, Member buyer, String idempotencyKey, BigDecimal requestedAmount) {
+            Long listingId,
+            Member buyer,
+            String idempotencyKey,
+            BigDecimal requestedAmount,
+            PaymentMethod method) {
         return Payment.builder()
                 .listingId(listingId)
                 .buyer(buyer)
                 .idempotencyKey(idempotencyKey)
                 .requestedAmount(requestedAmount)
+                .method(method)
                 .requestedAt(LocalDateTime.now())
                 .build();
     }

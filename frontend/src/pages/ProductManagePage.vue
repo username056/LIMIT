@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import SidebarLayout from '../layouts/SidebarLayout.vue'
+import MyPageLayout from '../layouts/MyPageLayout.vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseBadge from '../components/BaseBadge.vue'
 import BaseTable from '../components/BaseTable.vue'
@@ -20,13 +20,6 @@ import {
   updateProduct,
 } from '../api/products'
 import { compressImage, compressVideo } from '../utils/mediaOptimize'
-
-const sidebarItems = [
-  { label: '대시보드', href: '/seller/dashboard', active: false },
-  { label: '상품 관리', href: '/seller/products', active: true },
-  { label: '판매 내역', href: '/coming-soon/seller-orders', active: false },
-  { label: '정산', href: '/seller/dashboard', active: false },
-]
 
 const WIZARD_STEPS = [
   { number: 1, label: '기기 등록' },
@@ -433,7 +426,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <SidebarLayout :sidebar-items="sidebarItems">
+  <MyPageLayout>
     <section class="mb-10 overflow-hidden rounded-lg border border-border bg-surface shadow-card">
       <div class="flex flex-col gap-5 border-b border-border bg-bg px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
         <div>
@@ -1009,5 +1002,5 @@ onMounted(async () => {
         다음
       </BaseButton>
     </nav>
-  </SidebarLayout>
+  </MyPageLayout>
 </template>

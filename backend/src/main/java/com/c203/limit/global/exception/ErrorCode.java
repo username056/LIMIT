@@ -59,6 +59,8 @@ public enum ErrorCode {
     SELF_CHAT_NOT_ALLOWED("CHT002", HttpStatus.BAD_REQUEST, "본인의 매물에는 채팅방을 생성할 수 없습니다."),
     CHAT_ROOM_CREATION_NOT_ALLOWED("CHT003", HttpStatus.CONFLICT, "현재 상태의 매물에는 채팅방을 생성할 수 없습니다."),
     CHAT_ROOM_ACCESS_DENIED("CHT004", HttpStatus.FORBIDDEN, "채팅방에 접근할 권한이 없습니다."),
+    CHAT_MEDIA_INVALID("CHT005", HttpStatus.UNPROCESSABLE_ENTITY, "지원하지 않거나 허용 용량을 초과한 채팅 파일입니다."),
+    CHAT_MEDIA_NOT_FOUND("CHT006", HttpStatus.NOT_FOUND, "채팅 파일을 찾을 수 없습니다."),
 
     // ========== 실시간 확인 오류 ==========
     RTC_SESSION_NOT_FOUND("RTC001", HttpStatus.NOT_FOUND, "실시간 확인 세션을 찾을 수 없습니다."),
@@ -76,6 +78,7 @@ public enum ErrorCode {
     SELLER_DOCUMENT_NOT_FOUND("SEL007", HttpStatus.NOT_FOUND, "판매자 증빙 문서를 찾을 수 없습니다."),
     INVALID_SELLER_DOCUMENT("SEL008", HttpStatus.BAD_REQUEST, "허용되지 않는 판매자 증빙 문서입니다."),
     SELLER_PROFILE_NOT_FOUND("SEL009", HttpStatus.NOT_FOUND, "판매자 프로필을 찾을 수 없습니다."),
+    SELLER_NOT_ACTIVE("SEL010", HttpStatus.FORBIDDEN, "활성 판매자만 이용할 수 있습니다."),
     ADMIN_NOT_FOUND("ADM001", HttpStatus.NOT_FOUND, "관리자 계정을 찾을 수 없습니다."),
     ADMIN_ROLE_REQUIRED("ADM002", HttpStatus.FORBIDDEN, "관리자 권한이 필요합니다."),
     MEMBER_RESTRICTION_NOT_FOUND("ADM003", HttpStatus.NOT_FOUND, "회원 이용 제한을 찾을 수 없습니다."),
@@ -104,7 +107,15 @@ public enum ErrorCode {
     REQUIRED_EVIDENCE_INCOMPLETE("PRD009", HttpStatus.UNPROCESSABLE_ENTITY, "필수 체크리스트를 완료해 주세요."),
     DEVICE_MODEL_NOT_FOUND("PRD010", HttpStatus.NOT_FOUND, "기기 모델을 찾을 수 없습니다."),
     CHECKLIST_TEMPLATE_NOT_FOUND("PRD011", HttpStatus.NOT_FOUND, "게시된 체크리스트 템플릿을 찾을 수 없습니다."),
-    PRODUCT_ACCESS_DENIED("PRD012", HttpStatus.FORBIDDEN, "해당 상품을 변경할 권한이 없습니다.");
+    PRODUCT_ACCESS_DENIED("PRD012", HttpStatus.FORBIDDEN, "해당 상품을 변경할 권한이 없습니다."),
+
+    // ========== 결제 에러 ==========
+    PAYMENT_NOT_FOUND("PAY001", HttpStatus.NOT_FOUND, "결제 내역을 찾을 수 없습니다."),
+    SELF_PURCHASE_NOT_ALLOWED("PAY002", HttpStatus.BAD_REQUEST, "본인의 매물은 결제할 수 없습니다."),
+    PAYMENT_ACCESS_DENIED("PAY003", HttpStatus.FORBIDDEN, "해당 결제 내역을 조회할 권한이 없습니다."),
+    IDEMPOTENCY_KEY_CONFLICT("PAY004", HttpStatus.CONFLICT, "동일한 멱등키로 다른 내용의 결제 요청이 이미 존재합니다."),
+    PAYMENT_REQUEST_CONFLICT(
+            "PAY005", HttpStatus.CONFLICT, "결제 요청이 다른 요청과 경합해 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.");
 
     private final String code;
     private final HttpStatus status;

@@ -16,6 +16,7 @@ import com.c203.limit.domain.auth.entity.SocialProvider;
 import com.c203.limit.domain.auth.repository.SocialAccountRepository;
 import com.c203.limit.domain.member.entity.Member;
 import com.c203.limit.domain.member.entity.MemberStatus;
+import com.c203.limit.domain.member.dto.response.MemberSummaryResponse;
 import com.c203.limit.domain.member.repository.MemberRepository;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
@@ -60,7 +61,16 @@ class SocialAccountLoginServiceTests {
         when(authService.issueTokens(member))
                 .thenReturn(
                         new SessionResult<>(
-                                new TokenResponse("access", "Bearer", 1800), "refresh"));
+                                new TokenResponse(
+                                                "access",
+                                                "Bearer",
+                                                1800,
+                                                new MemberSummaryResponse(
+                                                        1L,
+                                                        "member",
+                                                        java.util.Set.of("MEMBER"),
+                                                        null)),
+                                        "refresh"));
 
         var result =
                 service.login(
@@ -131,7 +141,16 @@ class SocialAccountLoginServiceTests {
         when(authService.issueTokens(any(Member.class)))
                 .thenReturn(
                         new SessionResult<>(
-                                new TokenResponse("access", "Bearer", 1800), "refresh"));
+                                new TokenResponse(
+                                                "access",
+                                                "Bearer",
+                                                1800,
+                                                new MemberSummaryResponse(
+                                                        4L,
+                                                        "runner",
+                                                        java.util.Set.of("MEMBER"),
+                                                        null)),
+                                        "refresh"));
 
         var result =
                 service.complete(

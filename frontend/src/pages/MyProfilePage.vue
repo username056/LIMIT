@@ -36,6 +36,13 @@ const passwordForm = reactive({
 })
 
 const isLocalMember = computed(() => profile.value?.authType === 'LOCAL')
+const sellerStatusLabel = computed(() => ({
+  ACTIVE: '활성 판매자',
+  RESTRICTED: '판매자 이용 제한',
+  SUSPENDED: '판매자 이용 정지',
+  BANNED: '판매자 이용 차단',
+  WITHDRAWN: '판매자 탈퇴',
+}[profile.value?.sellerStatus] || '판매자 미등록'))
 
 const socialAccounts = ref([])
 const isSocialLoading = ref(true)
@@ -418,6 +425,22 @@ onMounted(() => {
             </dt>
             <dd class="mt-1 font-semibold text-text-main">
               {{ formatDate(profile.createdAt) }}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-[13px] text-text-sub">
+              계정 역할
+            </dt>
+            <dd class="mt-1 font-semibold text-text-main">
+              {{ profile.roles?.join(', ') || 'MEMBER' }}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-[13px] text-text-sub">
+              판매자 상태
+            </dt>
+            <dd class="mt-1 font-semibold text-text-main">
+              {{ sellerStatusLabel }}
             </dd>
           </div>
         </dl>

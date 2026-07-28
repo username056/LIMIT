@@ -8,6 +8,8 @@ import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.util.function.Consumer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class ListingService {
+    private static final Logger log = LoggerFactory.getLogger(ListingService.class);
 
     private final ListingRepository listingRepository;
     private final ListingStatusHistoryRepository listingStatusHistoryRepository;
@@ -29,9 +32,18 @@ public class ListingService {
         this.listingStatusHistoryRepository = listingStatusHistoryRepository;
     }
 
+    @Transactional(readOnly = true)
+    public ListingReservationView get(Long listingId) {
+        Listing listing = listingRepository
+                .findById(listingId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.LISTING_NOT_FOUND));
+        return toReservationView(listing);
+    }
+
     @Transactional
-    public Listing reserve(Long listingId, Long buyerId) {
-        return transition(listingId, buyerId, null, listing -> listing.reserve(buyerId));
+    public ListingReservationView reserve(Long listingId, Long buyerId) {
+        return toReservationView(
+                transition(listingId, buyerId, null, listing -> listing.reserve(buyerId)));
     }
 
     @Transactional
@@ -76,6 +88,17 @@ public class ListingService {
         listingStatusHistoryRepository.save(
                 ListingStatusHistory.record(listing, fromStatus, listing.getStatus(), reason, actorId));
 
+        log.info(
+                "listing status transitioned: listingId={}, from={}, to={}, actorId={}",
+                listingId,
+                fromStatus,
+                listing.getStatus(),
+                actorId);
+
         return listing;
+    }
+
+    private ListingReservationView toReservationView(Listing listing) {
+        return new ListingReservationView(listing.getSellerId(), listing.getPrice());
     }
 }

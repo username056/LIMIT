@@ -1,21 +1,56 @@
 # 판매자 서비스
 
-판매자 신청서는 `DRAFT`, `SUBMITTED`, `UNDER_REVIEW`, `APPROVED`, `REJECTED`, `CANCELED`
-상태를 사용한다. 회원은 자신의 신청서만 조회·변경할 수 있으며 승인된 신청서는 판매자 프로필로 전환된다.
+회원과 판매자는 서로 배타적인 회원 유형이 아니다. 모든 사용자는 `MEMBER`이며, 활성 판매자
+프로필이 있으면 `SELLER` 역할을 추가로 가진다.
 
-증빙 파일 저장은 `SellerDocumentStorage` 포트로 분리했다. S3 구현체는 파일 악성 코드 검사와
-암호화, 전용 버킷 접근 정책을 적용한 뒤 별도 인프라 PR에서 연결한다.
+## 즉시 등록 흐름
 
-## DB 반영 필요 사항
+1. 이메일 인증을 마친 활성 회원이 `POST /api/v1/sellers`를 호출한다.
+2. 서버는 별도 신청서나 관리자 심사 없이 `ACTIVE` 판매자 프로필을 생성한다.
+3. 프론트는 `POST /api/v1/auth/token-refreshes`를 호출해 새 Access Token을 받는다.
+4. 새 JWT와 회원 요약에는 `MEMBER`, `SELLER` 역할 및 `sellerStatus: ACTIVE`가 반영된다.
+5. 이후 판매자 상품 API와 `GET /api/v1/sellers/me`를 사용할 수 있다.
 
-- `seller_application`: `application_version`, `seller_type`, `country_code`, `business_name`,
-  `business_number`, `settlement_bank_name`, `settlement_account_holder`, `planned_category`,
-  `submitted_at`, `reviewed_at`, `updated_at` 컬럼 추가
-- `seller_application.status`: API 상태 6종을 지원하도록 ENUM 변경
-- ERDCloud 임시 컬럼 `Field`, `Field2`: 각각 `settlement_account_holder`,
-  `settlement_bank_name`으로 이름 변경
-- `seller_application_document`: 신청서별 다중 증빙을 보존하기 위해 신규 테이블 추가
-- `seller`: `seller_category`를 API 용어와 일치하는 `seller_type`으로, `country`를
-  `country_code`로 변경하고 `business_name`을 추가
+동일 회원의 중복 등록은 `409 SEL003`, 활성 판매자 프로필이 없는 상품 변경 요청은
+`403 SEL010`으로 거절한다.
 
-정산 계좌는 애플리케이션 계층 또는 DB 암호화 기능을 사용해 암호화 저장해야 한다.
+## 등록 API
+
+```http
+POST /api/v1/sellers
+Authorization: Bearer {memberAccessToken}
+Content-Type: application/json
+```
+
+```json
+{
+  "sellerType": "INDIVIDUAL",
+  "countryCode": "KR",
+  "businessName": null,
+  "settlementBankName": "국민은행",
+  "settlementAccountHolder": "판매자",
+  "settlementAccountLast4": "1234",
+  "sellerTermsAccepted": true
+}
+```
+
+사업자 판매자는 `businessName`이 필수다. 계좌번호 전체는 저장하지 않고 확인용 마지막
+4자리만 저장한다.
+
+## 역할 저장 기준
+
+권한의 기준 데이터는 다음과 같이 통일한다.
+
+- `MEMBER`: 활성 회원 계정이면 항상 부여
+- `SELLER`: `seller.user_id`로 연결된 프로필의 상태가 `ACTIVE`일 때만 부여
+- `user_account.member_type`: 기존 데이터 이관 호환용이며 런타임 권한 판정에 사용하지 않음
+
+로그인, 소셜 로그인, 토큰 갱신, 회원 정보 응답은 모두 같은 판매자 프로필 조회 결과를
+사용한다. 이미 발급된 JWT에 `SELLER`가 남아 있더라도 상품 변경 직전에 DB의 활성 판매자
+상태를 다시 확인한다.
+
+## DB 마이그레이션
+
+Flyway `V20260802__create_instant_seller_profiles.sql`이 판매자 프로필 컬럼과 회원별 유일
+인덱스를 구성한다. 기존 `seller` 테이블과 `user_account.member_type = SELLER` 데이터는
+삭제하지 않고 새 역할 기준으로 이관한다.

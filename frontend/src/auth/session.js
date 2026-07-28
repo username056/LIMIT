@@ -21,6 +21,14 @@ export function getAccessToken() {
   return session.value?.accessToken || null
 }
 
+export function getSessionMember() {
+  return session.value?.member || null
+}
+
+export function hasRole(role) {
+  return getSessionMember()?.roles?.includes(role) || false
+}
+
 export async function restoreAuthSession() {
   const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1'
   try {
@@ -29,7 +37,10 @@ export async function restoreAuthSession() {
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
     })
-    if (!response.ok) return false
+    if (!response.ok) {
+      clearAuthSession()
+      return false
+    }
     const body = await response.json()
     const tokens = body?.data || null
     if (!tokens?.accessToken) return false
@@ -49,6 +60,7 @@ export async function restoreAuthSession() {
     }
     return true
   } catch {
+    clearAuthSession()
     return false
   }
 }

@@ -7,6 +7,7 @@ import BaseCard from '../components/BaseCard.vue'
 import { addFavorite, getFavoriteStatus, removeFavorite } from '../api/favorites'
 import { getProduct, getProductChecklist, requestRecapture } from '../api/products'
 import { createChatRoom, requestRtcCall } from '../api/rtc'
+import { createOrGetChatRoom } from '../api/chat'
 import { getAccessToken } from '../auth/session'
 
 const route = useRoute()
@@ -16,6 +17,7 @@ const isLoading = ref(true)
 const isFavorite = ref(false)
 const isUpdatingFavorite = ref(false)
 const isRequestingCall = ref(false)
+const isOpeningChat = ref(false)
 const errorMessage = ref('')
 
 const checklist = computed(() => product.value?.checklistSummary || {})
@@ -120,6 +122,20 @@ async function requestCall() {
     errorMessage.value = error.message || '영상 확인 요청을 보내지 못했습니다.'
   } finally {
     isRequestingCall.value = false
+  }
+}
+
+async function openChat() {
+  if (!await requireLogin()) return
+  isOpeningChat.value = true
+  errorMessage.value = ''
+  try {
+    const room = await createOrGetChatRoom(product.value.productId)
+    await router.push({ name: 'chat', params: { roomId: room.roomId } })
+  } catch (error) {
+    errorMessage.value = error.message || '채팅방을 열지 못했습니다.'
+  } finally {
+    isOpeningChat.value = false
   }
 }
 
@@ -279,9 +295,10 @@ onMounted(async () => {
 
             <div class="mt-5 grid grid-cols-[1fr_auto] gap-3">
               <BaseButton
-                :to="{ name: 'coming-soon', params: { feature: 'chat' } }"
+                :disabled="isOpeningChat"
+                @click="openChat"
               >
-                판매자에게 문의하기
+                {{ isOpeningChat ? '채팅방 여는 중…' : '판매자에게 문의하기' }}
               </BaseButton>
               <button
                 type="button"

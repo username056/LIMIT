@@ -4,6 +4,7 @@ import com.c203.limit.domain.rtc.dto.request.CreateCallRequest;
 import com.c203.limit.domain.rtc.dto.request.EndRtcSessionRequest;
 import com.c203.limit.domain.rtc.dto.request.MarkRtcConnectedRequest;
 import com.c203.limit.domain.rtc.dto.request.RespondCallRequest;
+import com.c203.limit.domain.rtc.dto.request.UpdateCallRequest;
 import com.c203.limit.domain.rtc.dto.response.CallResponse;
 import com.c203.limit.domain.rtc.dto.response.RtcJoinResponse;
 import com.c203.limit.domain.rtc.dto.response.RtcSessionResponse;
@@ -47,6 +48,19 @@ public class RtcCallController implements RtcCallApi {
             Long callId, RespondCallRequest request) {
         return ResponseEntity.ok(
                 ApiResponse.ok(service.respond(callId, currentUser.memberId(), request)));
+    }
+
+    @Override
+    public ResponseEntity<ApiResponse<CallResponse>> update(
+            Long callId, UpdateCallRequest request) {
+        return ResponseEntity.ok(
+                ApiResponse.ok(service.update(callId, currentUser.memberId(), request)));
+    }
+
+    @Override
+    public ResponseEntity<ApiResponse<CallResponse>> cancel(Long callId, String reason) {
+        return ResponseEntity.ok(
+                ApiResponse.ok(service.cancel(callId, currentUser.memberId(), reason)));
     }
 
     @Override

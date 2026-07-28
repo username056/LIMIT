@@ -3,6 +3,7 @@
 ## 범위
 
 - 채팅방의 구매자·판매자만 영상 확인을 요청하고 수락·거절할 수 있다.
+- 제안자는 상대가 응답하기 전에 약속 시간·메모를 변경하거나 약속을 취소할 수 있다.
 - 수락 시 상품과 연결된 WebRTC 세션을 만들고 판매자가 offer를 생성한다.
 - SDP, ICE candidate, 특정 부위 확인 요청은 WebSocket으로 상대 참가자에게만 중계한다.
 - 통화 종료 시 확인한 체크리스트 항목과 항목별 메모, 전체 메모를 저장한다.
@@ -16,6 +17,8 @@
 | GET | `/api/v1/calls` | 내 요청 목록 |
 | GET | `/api/v1/calls/{callId}` | 요청 상세 |
 | POST | `/api/v1/calls/{callId}/response` | 상대방의 수락·거절 |
+| PATCH | `/api/v1/calls/{callId}` | 제안자의 약속 시간·메모 변경 |
+| DELETE | `/api/v1/calls/{callId}?reason={reason}` | 제안자의 약속 취소. 사유는 선택 |
 | GET | `/api/v1/rtc-sessions/{sessionId}` | 세션·상품 체크리스트 조회 |
 | POST | `/api/v1/rtc-sessions/{sessionId}/join` | 최초 입장·재입장용 2분 단기 토큰 발급 |
 | POST | `/api/v1/rtc-sessions/{sessionId}/connected` | P2P 또는 TURN 연결 성공 기록 |

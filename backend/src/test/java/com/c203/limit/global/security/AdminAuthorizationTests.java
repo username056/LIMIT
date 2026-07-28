@@ -34,6 +34,8 @@ import com.c203.limit.domain.product.repository.WishlistRepository;
 import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
 import com.c203.limit.domain.product.service.ProductApplicationService;
 import com.c203.limit.domain.product.service.ProductCatalogService;
+import com.c203.limit.domain.payment.service.PaymentService;
+import com.c203.limit.domain.seller.entity.Seller;
 
 @SpringBootTest(properties = {
         "management.endpoint.health.validate-group-membership=false",
@@ -64,12 +66,17 @@ class AdminAuthorizationTests {
     @MockitoBean ChatRoomRepository chatRoomRepository;
     @MockitoBean ChatRoomParticipantRepository chatRoomParticipantRepository;
     @MockitoBean ChatMessageRepository chatMessageRepository;
+    @MockitoBean com.c203.limit.domain.chat.repository.ChatMediaRepository chatMediaRepository;
+    @MockitoBean com.c203.limit.domain.chat.repository.ChatMessageMediaRepository chatMessageMediaRepository;
+    @MockitoBean com.c203.limit.domain.chat.repository.ChatRoomContextReader chatRoomContextReader;
     @MockitoBean ListingChatReader listingChatReader;
     @MockitoBean ListingRepository listingRepository;
     @MockitoBean WishlistRepository wishlistRepository;
     @MockitoBean ProductApplicationService productApplicationService;
     @MockitoBean ProductCatalogService productCatalogService;
     @MockitoBean ListingStatusHistoryRepository listingStatusHistoryRepository;
+    @MockitoBean PaymentService paymentService;
+    @MockitoBean com.c203.limit.domain.seller.repository.SellerRepository sellerRepository;
 
     @Test
     void publicHealthEndpointDoesNotRequireAuthentication() throws Exception {
@@ -92,6 +99,79 @@ class AdminAuthorizationTests {
     void memberCannotReadAdminApi() throws Exception {
         mockMvc.perform(get("/api/v1/admin/members").header("Authorization", memberBearer()))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void memberCannotCreateProductWithoutSellerRole() throws Exception {
+        mockMvc.perform(
+                        post("/api/v1/products")
+                                .header("Authorization", memberBearer())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        """
+                                        {
+                                          "categoryId": 1,
+                                          "deviceModelId": 101,
+                                          "name": "판매 상품",
+                                          "price": 100000,
+                                          "tradeRegion": "서울"
+                                        }
+                                        """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void staleSellerTokenCannotCreateProductWithoutActiveSellerProfile() throws Exception {
+        mockMvc.perform(
+                        post("/api/v1/products")
+                                .header("Authorization", sellerBearer())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        """
+                                        {
+                                          "categoryId": 1,
+                                          "deviceModelId": 101,
+                                          "name": "판매 상품",
+                                          "price": 100000,
+                                          "tradeRegion": "서울"
+                                        }
+                                        """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code").value("SEL010"));
+    }
+
+    @Test
+    void verifiedMemberCanRegisterAsActiveSellerWithoutApproval() throws Exception {
+        Member member = Member.createLocal("seller@limit.local", "encoded", "seller", null);
+        member.verifyEmail();
+        ReflectionTestUtils.setField(member, "id", 1L);
+        when(members.findById(1L)).thenReturn(java.util.Optional.of(member));
+        when(sellerRepository.saveAndFlush(any(Seller.class)))
+                .thenAnswer(
+                        invocation -> {
+                            Seller seller = invocation.getArgument(0);
+                            ReflectionTestUtils.setField(seller, "id", 12L);
+                            return seller;
+                        });
+
+        mockMvc.perform(
+                        post("/api/v1/sellers")
+                                .header("Authorization", memberBearer())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        """
+                                        {
+                                          "sellerType": "INDIVIDUAL",
+                                          "countryCode": "KR",
+                                          "settlementBankName": "국민은행",
+                                          "settlementAccountHolder": "판매자",
+                                          "settlementAccountLast4": "1234",
+                                          "sellerTermsAccepted": true
+                                        }
+                                        """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.sellerId").value(12L))
+                .andExpect(jsonPath("$.data.status").value("ACTIVE"));
     }
 
     @Test
@@ -140,5 +220,10 @@ class AdminAuthorizationTests {
 
     private String memberBearer() {
         return "Bearer " + tokens.issueAccess(1L, "MEMBER", Set.of("MEMBER")).value();
+    }
+
+    private String sellerBearer() {
+        return "Bearer "
+                + tokens.issueAccess(1L, "MEMBER", Set.of("MEMBER", "SELLER")).value();
     }
 }

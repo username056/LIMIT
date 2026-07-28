@@ -1,5 +1,6 @@
 package com.c203.limit.domain.auth.dto.response;
 
+import com.c203.limit.domain.member.dto.response.MemberSummaryResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -19,4 +20,7 @@ public class TokenResponse {
             example = "1800",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private final long expiresIn;
+
+    @Schema(description = "갱신된 역할과 판매자 상태를 포함한 회원 요약", requiredMode = Schema.RequiredMode.REQUIRED)
+    private final MemberSummaryResponse member;
 }

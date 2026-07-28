@@ -68,7 +68,7 @@ describe('ProductManagePage', () => {
     const wrapper = mount(ProductManagePage, {
       global: {
         stubs: {
-          SidebarLayout: layoutStub,
+          MyPageLayout: layoutStub,
           BaseButton: buttonStub,
           BaseBadge: true,
           BaseTable: tableStub,
@@ -113,7 +113,7 @@ describe('ProductManagePage', () => {
     const wrapper = mount(ProductManagePage, {
       global: {
         stubs: {
-          SidebarLayout: layoutStub,
+          MyPageLayout: layoutStub,
           BaseButton: buttonStub,
           BaseBadge: true,
           BaseTable: tableStub,

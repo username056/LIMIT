@@ -31,9 +31,13 @@ import com.c203.limit.domain.chat.domain.ParticipantRole;
 import com.c203.limit.domain.chat.dto.request.ChatMessageSendRequest;
 import com.c203.limit.domain.chat.dto.request.ChatReadRequest;
 import com.c203.limit.domain.chat.repository.ChatRoomRepository;
+import com.c203.limit.domain.chat.repository.ChatRoomContextReader;
+import com.c203.limit.domain.chat.repository.ChatRoomContextReader.ChatRoomContext;
 import com.c203.limit.domain.chat.repository.ChatRoomParticipantRepository;
 import com.c203.limit.domain.chat.repository.ChatMessageProjection;
 import com.c203.limit.domain.chat.repository.ChatMessageRepository;
+import com.c203.limit.domain.chat.repository.ChatMediaRepository;
+import com.c203.limit.domain.chat.repository.ChatMessageMediaRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomSummaryProjection;
 import com.c203.limit.domain.chat.repository.ListingChatReader;
 import com.c203.limit.domain.chat.repository.ListingChatReader.ListingChatInfo;
@@ -54,13 +58,17 @@ class ChatRoomServiceTests {
     @Mock ChatRoomRepository chatRoomRepository;
     @Mock ChatRoomParticipantRepository participantRepository;
     @Mock ChatMessageRepository chatMessageRepository;
+    @Mock ChatMediaRepository chatMediaRepository;
+    @Mock ChatMessageMediaRepository chatMessageMediaRepository;
+    @Mock ChatRoomContextReader contextReader;
     @Mock ChatRoomCreator creator;
     ChatRoomService service;
 
     @BeforeEach
     void setUp() {
         service = new ChatRoomService(
-                listingReader, chatRoomRepository, participantRepository, chatMessageRepository, creator);
+                listingReader, chatRoomRepository, participantRepository, chatMessageRepository,
+                chatMediaRepository, chatMessageMediaRepository, contextReader, creator);
     }
 
     @Test
@@ -136,11 +144,15 @@ class ChatRoomServiceTests {
         ChatRoomSummaryProjection second = summary(90L, BUYER_ID, SELLER_ID, 4L, 4L);
         when(chatRoomRepository.findSummariesByMemberId(
                 eq(BUYER_ID), isNull(), any(Pageable.class))).thenReturn(List.of(first, second));
+        when(contextReader.findAll(List.of(100L), BUYER_ID)).thenReturn(
+                java.util.Map.of(100L, new ChatRoomContext(100L, "판매자", "상품", "https://cdn/image.jpg")));
 
         CursorResponse<ChatRoomSummaryResponse> result = service.findRooms(BUYER_ID, null, 1);
 
         assertThat(result.content()).hasSize(1);
         assertThat(result.content().get(0).counterpartId()).isEqualTo(SELLER_ID);
+        assertThat(result.content().get(0).counterpartNickname()).isEqualTo("판매자");
+        assertThat(result.content().get(0).listingTitle()).isEqualTo("상품");
         assertThat(result.content().get(0).unreadCount()).isEqualTo(5L);
         assertThat(result.nextCursor()).isEqualTo("100");
         assertThat(result.hasNext()).isTrue();

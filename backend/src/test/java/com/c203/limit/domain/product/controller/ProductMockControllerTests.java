@@ -36,6 +36,7 @@ import com.c203.limit.domain.product.dto.response.ProductDetailResponse;
 import com.c203.limit.domain.product.service.ProductApplicationService;
 import com.c203.limit.domain.product.service.ProductApplicationService.ProductPage;
 import com.c203.limit.domain.product.service.ProductCatalogService;
+import com.c203.limit.domain.payment.service.PaymentService;
 
 @SpringBootTest(properties = {
         "management.endpoint.health.validate-group-membership=false",
@@ -87,6 +88,15 @@ class ProductMockControllerTests {
     ChatMessageRepository chatMessageRepository;
 
     @MockitoBean
+    com.c203.limit.domain.chat.repository.ChatMediaRepository chatMediaRepository;
+
+    @MockitoBean
+    com.c203.limit.domain.chat.repository.ChatMessageMediaRepository chatMessageMediaRepository;
+
+    @MockitoBean
+    com.c203.limit.domain.chat.repository.ChatRoomContextReader chatRoomContextReader;
+
+    @MockitoBean
     ListingChatReader listingChatReader;
 
     @MockitoBean
@@ -103,6 +113,12 @@ class ProductMockControllerTests {
 
     @MockitoBean
     ProductCatalogService productCatalogService;
+
+    @MockitoBean
+    PaymentService paymentService;
+
+    @MockitoBean
+    com.c203.limit.domain.seller.repository.SellerRepository sellerRepository;
 
     @Autowired
     MockMvc mockMvc;

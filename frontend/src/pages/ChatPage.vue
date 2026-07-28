@@ -6,10 +6,6 @@ import BaseCard from '../components/BaseCard.vue'
 import ChatThread from '../components/ChatThread.vue'
 import { getChatRooms } from '../api/chat'
 
-// 방 목록/지난 메시지 조회, 메시지 전송·실시간 수신 모두 실제 채팅 API/WebSocket을 사용합니다.
-// TODO(채팅 API 연동): 상대 회원 닉네임·상품 미리보기를 주는 API가 아직 없어 목록에는
-// 회원 ID/상품 ID만 표시합니다.
-
 const route = useRoute()
 const rooms = ref([])
 const isLoading = ref(true)
@@ -44,9 +40,6 @@ function formatTime(isoString) {
 <template>
   <DefaultLayout>
     <div class="mx-auto max-w-[1280px] px-4 py-7 sm:px-6 lg:px-10 lg:py-10">
-      <p class="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-primary">
-        CHAT
-      </p>
       <div class="grid min-h-[560px] grid-cols-1 overflow-hidden border-y border-border bg-surface lg:grid-cols-[320px_minmax(0,1fr)]">
         <BaseCard
           :padded="false"
@@ -82,7 +75,21 @@ function formatTime(isoString) {
               :class="String(selectedRoomId) === String(room.roomId) ? 'border-primary bg-accent/60' : 'border-transparent hover:bg-bg'"
             >
               <div class="flex items-center justify-between gap-2">
-                <span class="truncate text-sm font-bold text-text-main">상대 회원 #{{ room.counterpartId }}</span>
+                <div class="flex min-w-0 items-center gap-3">
+                  <img
+                    v-if="room.listingThumbnailUrl"
+                    :src="room.listingThumbnailUrl"
+                    :alt="room.listingTitle || '상품 이미지'"
+                    class="h-10 w-10 shrink-0 rounded-md object-cover"
+                  >
+                  <div
+                    v-else
+                    class="h-10 w-10 shrink-0 rounded-md bg-primary-gradient"
+                  />
+                  <span class="truncate text-sm font-bold text-text-main">
+                    {{ room.counterpartNickname || `회원 #${room.counterpartId}` }}
+                  </span>
+                </div>
                 <span
                   v-if="room.unreadCount"
                   class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-white"
@@ -91,7 +98,7 @@ function formatTime(isoString) {
                 </span>
               </div>
               <p class="mt-1 truncate text-xs font-semibold text-text-sub">
-                상품 #{{ room.listingId }}
+                {{ room.listingTitle || `상품 #${room.listingId}` }}
               </p>
               <p class="mt-1 text-xs text-text-sub">
                 {{ formatTime(room.lastMessageAt) }}
@@ -112,6 +119,7 @@ function formatTime(isoString) {
         <ChatThread
           v-if="selectedRoom"
           :room="selectedRoom"
+          @room-updated="loadRooms"
         />
         <BaseCard
           v-else
