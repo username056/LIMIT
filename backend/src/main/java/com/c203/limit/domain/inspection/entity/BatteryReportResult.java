@@ -1,5 +1,6 @@
 package com.c203.limit.domain.inspection.entity;
 
+import com.c203.limit.domain.inspection.enums.DiagnosisFieldName;
 import com.c203.limit.domain.inspection.enums.ParseStatus;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -62,5 +63,21 @@ public class BatteryReportResult {
         this.parserVersion = parserVersion;
         this.parseStatus = parseStatus;
         this.parsedAt = parsedAt;
+    }
+
+    /**
+     * 판매자가 필드 하나를 직접 고칠 때 사용한다. 별도 이력 테이블 없이 이 row의 컬럼을 그대로 덮어쓴다.
+     *
+     * @throws IllegalArgumentException battery_report_result에 없는 필드명이면
+     */
+    public void correctField(DiagnosisFieldName fieldName, String value) {
+        switch (fieldName) {
+            case DESIGN_CAPACITY -> this.designCapacity = value;
+            case FULL_CHARGE_CAPACITY -> this.fullChargeCapacity = value;
+            case CYCLE_COUNT -> this.cycleCount = value == null || value.isBlank() ? null : Integer.valueOf(value.trim());
+            case BATTERY_MANUFACTURER -> this.batteryManufacturer = value;
+            case CAPACITY_RATIO -> this.capacityRatio = value == null || value.isBlank() ? null : new BigDecimal(value.trim());
+            default -> throw new IllegalArgumentException("battery_report_result has no column for " + fieldName);
+        }
     }
 }

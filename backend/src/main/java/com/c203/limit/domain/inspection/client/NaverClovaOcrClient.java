@@ -43,7 +43,12 @@ public class NaverClovaOcrClient {
      * 좌표는 라벨과 값이 텍스트 스트림 상에서 멀리 떨어진 카드형·표 레이아웃을 구조화할 때 필요하다.
      */
     public List<OcrToken> recognizeFields(String imageUrl, String format) {
-        NaverClovaOcrResponse.ImageResult imageResult = validImageResult(fetchAndRecognize(imageUrl, format));
+        return recognizeFields(fetchImage(imageUrl), format);
+    }
+
+    /** 이미 내려받은(또는 전처리한) 이미지 바이트로 곧바로 인식한다 — 실패 시 재시도 등 재요청용. */
+    public List<OcrToken> recognizeFields(byte[] imageBytes, String format) {
+        NaverClovaOcrResponse.ImageResult imageResult = validImageResult(requestOcr(imageBytes, format));
         return imageResult.fields().stream().map(this::toToken).toList();
     }
 
@@ -76,7 +81,8 @@ public class NaverClovaOcrClient {
         return requestOcr(imageBytes, format);
     }
 
-    private byte[] fetchImage(String imageUrl) {
+    /** evidence의 cdnUrl에서 이미지 바이트를 내려받는다. 재시도용 전처리 전 원본 바이트를 얻을 때도 쓴다. */
+    public byte[] fetchImage(String imageUrl) {
         byte[] bytes;
         try {
             bytes = restClient.get().uri(imageUrl).retrieve().body(byte[].class);

@@ -58,6 +58,9 @@ public class BatteryReportParsingService {
                 || evidence.getCdnUrl() == null) {
             throw new BusinessException(ErrorCode.EVIDENCE_NOT_READY);
         }
+        if (batteryReportResultRepository.existsByEvidenceId(evidenceId)) {
+            throw new BusinessException(ErrorCode.ALREADY_PARSED);
+        }
 
         byte[] htmlBytes = batteryReportFileFetcher.fetch(evidence.getCdnUrl());
 

@@ -203,6 +203,20 @@ class BatteryReportParsingServiceTests {
     }
 
     @Test
+    void parseThrowsAlreadyParsedWhenResultAlreadyExists() {
+        Evidence evidence = readyEvidence(EvidenceType.DIAGNOSTIC_FILE, "text/html");
+        when(evidenceRepository.findById(EVIDENCE_ID)).thenReturn(Optional.of(evidence));
+        stubOwnedListing();
+        when(batteryReportResultRepository.existsByEvidenceId(EVIDENCE_ID)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.parse(EVIDENCE_ID, SELLER_ID))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.ALREADY_PARSED));
+        verifyNoInteractions(batteryReportFileFetcher, batteryReportHtmlParser);
+    }
+
+    @Test
     void parseThrowsWhenMimeTypeIsNotHtml() {
         Evidence evidence = readyEvidence(EvidenceType.DIAGNOSTIC_FILE, "application/octet-stream");
         when(evidenceRepository.findById(EVIDENCE_ID)).thenReturn(Optional.of(evidence));

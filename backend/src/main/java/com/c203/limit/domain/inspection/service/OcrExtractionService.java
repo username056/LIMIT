@@ -57,6 +57,9 @@ public class OcrExtractionService {
         if (evidence.getEvidenceType() != EvidenceType.PHOTO) {
             throw new BusinessException(ErrorCode.INVALID_EVIDENCE_TYPE);
         }
+        if (ocrResultRepository.existsByEvidenceId(evidenceId)) {
+            throw new BusinessException(ErrorCode.ALREADY_PARSED);
+        }
 
         Set<OcrFieldType> expectedFieldTypes = OcrFieldExpectations.SCREENSHOT_FIELD_TYPES;
         List<OcrFieldExtraction> extractions =

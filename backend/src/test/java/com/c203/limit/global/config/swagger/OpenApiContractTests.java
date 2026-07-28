@@ -203,6 +203,10 @@ class OpenApiContractTests {
                         .value("batteryReport01"))
                 .andExpect(jsonPath("$.paths['/api/v1/inspections/listing-checklist-items/{itemId}/diagnosis'].get.operationId")
                         .value("diagnosis01"))
+                .andExpect(jsonPath("$.paths['/api/v1/inspections/listing-checklist-items/{itemId}/diagnosis-values'].patch.operationId")
+                        .value("diagnosisValue01"))
+                .andExpect(jsonPath("$.paths['/api/v1/inspections/products/{productId}/diagnosis-summary'].get.operationId")
+                        .value("productDiagnosisSummary01"))
                 .andExpect(jsonPath("$.paths['/api/v1/auth/sessions']").doesNotExist());
 
         mockMvc.perform(get("/v3/api-docs/swagger-config"))

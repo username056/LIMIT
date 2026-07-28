@@ -56,6 +56,9 @@ public class DxdiagParsingService {
                 || evidence.getCdnUrl() == null) {
             throw new BusinessException(ErrorCode.EVIDENCE_NOT_READY);
         }
+        if (dxdiagResultRepository.existsByEvidenceId(evidenceId)) {
+            throw new BusinessException(ErrorCode.ALREADY_PARSED);
+        }
 
         byte[] fileBytes = dxdiagFileFetcher.fetch(evidence.getCdnUrl());
 

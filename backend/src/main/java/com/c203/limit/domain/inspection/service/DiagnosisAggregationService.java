@@ -8,6 +8,7 @@ import com.c203.limit.domain.inspection.entity.Evidence;
 import com.c203.limit.domain.inspection.entity.ListingChecklistItem;
 import com.c203.limit.domain.inspection.entity.OcrResult;
 import com.c203.limit.domain.inspection.enums.DiagnosisFieldName;
+import com.c203.limit.domain.inspection.enums.DiagnosisSourceType;
 import com.c203.limit.domain.inspection.enums.EvidenceType;
 import com.c203.limit.domain.inspection.repository.BatteryReportResultRepository;
 import com.c203.limit.domain.inspection.repository.DxdiagResultRepository;
@@ -64,24 +65,29 @@ public class DiagnosisAggregationService {
 
         verifyOwnership(item, sellerId);
 
-        List<Evidence> evidences = evidenceRepository.findAllByListingChecklistItem_Id(itemId);
-        List<Long> photoEvidenceIds =
-                evidences.stream()
-                        .filter(evidence -> evidence.getEvidenceType() == EvidenceType.PHOTO)
-                        .map(Evidence::getId)
-                        .toList();
-        List<Long> diagnosticFileEvidenceIds =
-                evidences.stream()
-                        .filter(evidence -> evidence.getEvidenceType() == EvidenceType.DIAGNOSTIC_FILE)
-                        .map(Evidence::getId)
-                        .toList();
-
-        Map<DiagnosisFieldName, String> ocrValues = collectOcrValues(photoEvidenceIds);
-        Map<DiagnosisFieldName, String> fileParseValues = collectFileParseValues(diagnosticFileEvidenceIds);
+        Map<DiagnosisFieldName, FieldSource> ocrValues = collectOcrValues(itemId);
+        Map<DiagnosisFieldName, FieldSource> fileParseValues = collectFileParseValues(itemId);
 
         List<DiagnosisFieldResponse> fields = buildFields(ocrValues, fileParseValues);
 
         return new DiagnosisFieldListResponse(itemId, fields);
+    }
+
+    /**
+     * 필드 하나에 대해 OCR/진단파일 원본값과, 우선순위(파일파싱 &gt; OCR)로 골랐을 때의 출처(증거 id·소스 타입)를
+     * 반환한다. 소유권 검증은 호출자가 이미 끝냈다고 가정한다(내부 유스케이스 간 호출용).
+     */
+    @Transactional(readOnly = true)
+    public DiagnosisFieldValue getFieldValue(Long itemId, DiagnosisFieldName fieldName) {
+        FieldSource ocr = collectOcrValues(itemId).get(fieldName);
+        FieldSource fileParse = collectFileParseValues(itemId).get(fieldName);
+        FieldSource primary = fileParse != null ? fileParse : ocr;
+
+        return new DiagnosisFieldValue(
+                ocr == null ? null : ocr.value(),
+                fileParse == null ? null : fileParse.value(),
+                primary == null ? null : primary.evidenceId(),
+                primary == null ? null : primary.sourceType());
     }
 
     private void verifyOwnership(ListingChecklistItem item, Long sellerId) {
@@ -94,8 +100,10 @@ public class DiagnosisAggregationService {
         }
     }
 
-    private Map<DiagnosisFieldName, String> collectOcrValues(List<Long> photoEvidenceIds) {
-        Map<DiagnosisFieldName, String> values = new EnumMap<>(DiagnosisFieldName.class);
+    private Map<DiagnosisFieldName, FieldSource> collectOcrValues(Long itemId) {
+        List<Long> photoEvidenceIds = evidenceIdsOfType(itemId, EvidenceType.PHOTO);
+
+        Map<DiagnosisFieldName, FieldSource> values = new EnumMap<>(DiagnosisFieldName.class);
         if (photoEvidenceIds.isEmpty()) {
             return values;
         }
@@ -104,13 +112,20 @@ public class DiagnosisAggregationService {
                 .forEach(
                         result -> {
                             DiagnosisFieldName fieldName = DiagnosisFieldName.fromOcrFieldType(result.getFieldType());
-                            putIfPresent(values, fieldName, result.getParsedValue());
+                            putIfPresent(
+                                    values,
+                                    fieldName,
+                                    result.getParsedValue(),
+                                    result.getEvidenceId(),
+                                    DiagnosisSourceType.OCR);
                         });
         return values;
     }
 
-    private Map<DiagnosisFieldName, String> collectFileParseValues(List<Long> diagnosticFileEvidenceIds) {
-        Map<DiagnosisFieldName, String> values = new EnumMap<>(DiagnosisFieldName.class);
+    private Map<DiagnosisFieldName, FieldSource> collectFileParseValues(Long itemId) {
+        List<Long> diagnosticFileEvidenceIds = evidenceIdsOfType(itemId, EvidenceType.DIAGNOSTIC_FILE);
+
+        Map<DiagnosisFieldName, FieldSource> values = new EnumMap<>(DiagnosisFieldName.class);
         if (diagnosticFileEvidenceIds.isEmpty()) {
             return values;
         }
@@ -119,45 +134,90 @@ public class DiagnosisAggregationService {
                 .sorted(Comparator.comparing(DxdiagResult::getParsedAt))
                 .forEach(
                         result -> {
-                            putIfPresent(values, DiagnosisFieldName.CPU, result.getCpu());
-                            putIfPresent(values, DiagnosisFieldName.RAM, result.getMemory());
-                            putIfPresent(values, DiagnosisFieldName.GPU, result.getGpu());
-                            putIfPresent(values, DiagnosisFieldName.GPU_MEMORY, result.getGpuMemory());
-                            putIfPresent(values, DiagnosisFieldName.DRIVER_VERSION, result.getDriverVersion());
-                            putIfPresent(values, DiagnosisFieldName.SOUND_DEVICE, result.getSoundDevice());
+                            Long evidenceId = result.getEvidenceId();
+                            putIfPresent(values, DiagnosisFieldName.CPU, result.getCpu(), evidenceId, DiagnosisSourceType.DXDIAG);
+                            putIfPresent(
+                                    values, DiagnosisFieldName.RAM, result.getMemory(), evidenceId, DiagnosisSourceType.DXDIAG);
+                            putIfPresent(values, DiagnosisFieldName.GPU, result.getGpu(), evidenceId, DiagnosisSourceType.DXDIAG);
+                            putIfPresent(
+                                    values,
+                                    DiagnosisFieldName.GPU_MEMORY,
+                                    result.getGpuMemory(),
+                                    evidenceId,
+                                    DiagnosisSourceType.DXDIAG);
+                            putIfPresent(
+                                    values,
+                                    DiagnosisFieldName.DRIVER_VERSION,
+                                    result.getDriverVersion(),
+                                    evidenceId,
+                                    DiagnosisSourceType.DXDIAG);
+                            putIfPresent(
+                                    values,
+                                    DiagnosisFieldName.SOUND_DEVICE,
+                                    result.getSoundDevice(),
+                                    evidenceId,
+                                    DiagnosisSourceType.DXDIAG);
                         });
 
         batteryReportResultRepository.findAllByEvidenceIdIn(diagnosticFileEvidenceIds).stream()
                 .sorted(Comparator.comparing(BatteryReportResult::getParsedAt))
                 .forEach(
                         result -> {
-                            putIfPresent(values, DiagnosisFieldName.DESIGN_CAPACITY, result.getDesignCapacity());
+                            Long evidenceId = result.getEvidenceId();
                             putIfPresent(
-                                    values, DiagnosisFieldName.FULL_CHARGE_CAPACITY, result.getFullChargeCapacity());
+                                    values,
+                                    DiagnosisFieldName.DESIGN_CAPACITY,
+                                    result.getDesignCapacity(),
+                                    evidenceId,
+                                    DiagnosisSourceType.BATTERY_REPORT);
+                            putIfPresent(
+                                    values,
+                                    DiagnosisFieldName.FULL_CHARGE_CAPACITY,
+                                    result.getFullChargeCapacity(),
+                                    evidenceId,
+                                    DiagnosisSourceType.BATTERY_REPORT);
                             putIfPresent(
                                     values,
                                     DiagnosisFieldName.CYCLE_COUNT,
-                                    result.getCycleCount() == null ? null : String.valueOf(result.getCycleCount()));
+                                    result.getCycleCount() == null ? null : String.valueOf(result.getCycleCount()),
+                                    evidenceId,
+                                    DiagnosisSourceType.BATTERY_REPORT);
                             putIfPresent(
-                                    values, DiagnosisFieldName.BATTERY_MANUFACTURER, result.getBatteryManufacturer());
+                                    values,
+                                    DiagnosisFieldName.BATTERY_MANUFACTURER,
+                                    result.getBatteryManufacturer(),
+                                    evidenceId,
+                                    DiagnosisSourceType.BATTERY_REPORT);
                             putIfPresent(
                                     values,
                                     DiagnosisFieldName.CAPACITY_RATIO,
-                                    result.getCapacityRatio() == null
-                                            ? null
-                                            : result.getCapacityRatio().toPlainString());
+                                    result.getCapacityRatio() == null ? null : result.getCapacityRatio().toPlainString(),
+                                    evidenceId,
+                                    DiagnosisSourceType.BATTERY_REPORT);
                         });
         return values;
     }
 
-    private void putIfPresent(Map<DiagnosisFieldName, String> values, DiagnosisFieldName fieldName, String value) {
+    private List<Long> evidenceIdsOfType(Long itemId, EvidenceType evidenceType) {
+        return evidenceRepository.findAllByListingChecklistItem_Id(itemId).stream()
+                .filter(evidence -> evidence.getEvidenceType() == evidenceType)
+                .map(Evidence::getId)
+                .toList();
+    }
+
+    private void putIfPresent(
+            Map<DiagnosisFieldName, FieldSource> values,
+            DiagnosisFieldName fieldName,
+            String value,
+            Long evidenceId,
+            DiagnosisSourceType sourceType) {
         if (fieldName != null && value != null) {
-            values.put(fieldName, value);
+            values.put(fieldName, new FieldSource(value, evidenceId, sourceType));
         }
     }
 
     private List<DiagnosisFieldResponse> buildFields(
-            Map<DiagnosisFieldName, String> ocrValues, Map<DiagnosisFieldName, String> fileParseValues) {
+            Map<DiagnosisFieldName, FieldSource> ocrValues, Map<DiagnosisFieldName, FieldSource> fileParseValues) {
         return Arrays.stream(DiagnosisFieldName.values())
                 .map(fieldName -> toFieldResponse(fieldName, ocrValues.get(fieldName), fileParseValues.get(fieldName)))
                 .filter(Objects::nonNull)
@@ -165,11 +225,20 @@ public class DiagnosisAggregationService {
     }
 
     private DiagnosisFieldResponse toFieldResponse(
-            DiagnosisFieldName fieldName, String ocrValue, String fileParseValue) {
-        if (ocrValue == null && fileParseValue == null) {
+            DiagnosisFieldName fieldName, FieldSource ocr, FieldSource fileParse) {
+        if (ocr == null && fileParse == null) {
             return null;
         }
+        String ocrValue = ocr == null ? null : ocr.value();
+        String fileParseValue = fileParse == null ? null : fileParse.value();
         boolean conflict = ocrValue != null && fileParseValue != null && !ocrValue.equals(fileParseValue);
         return new DiagnosisFieldResponse(fieldName.name(), ocrValue, fileParseValue, conflict, null);
     }
+
+    /** 필드 하나의 값과, 그 값이 어느 evidence·어느 소스(OCR/DXDIAG/BATTERY_REPORT)에서 왔는지. */
+    private record FieldSource(String value, Long evidenceId, DiagnosisSourceType sourceType) {}
+
+    /** {@link #getFieldValue} 응답: OCR/파일파싱 원본값과, 우선순위로 고른 값의 출처. */
+    public record DiagnosisFieldValue(
+            String ocrValue, String fileParseValue, Long sourceEvidenceId, DiagnosisSourceType sourceType) {}
 }

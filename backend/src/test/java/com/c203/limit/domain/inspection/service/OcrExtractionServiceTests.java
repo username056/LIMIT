@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -127,7 +129,7 @@ class OcrExtractionServiceTests {
         assertThat(response.getResults()).isEmpty();
         assertThat(response.getMissingFieldTypes())
                 .containsExactlyInAnyOrder("MODEL_NAME", "CPU", "RAM", "GPU", "STORAGE_CAPACITY", "OS_VERSION");
-        verifyNoInteractions(ocrResultRepository);
+        verify(ocrResultRepository, never()).save(any());
     }
 
     @Test
@@ -191,6 +193,18 @@ class OcrExtractionServiceTests {
     }
 
     @Test
+    void throwsAlreadyParsedWhenResultAlreadyExists() {
+        stubEvidenceAndOwner(readyEvidence());
+        when(ocrResultRepository.existsByEvidenceId(EVIDENCE_ID)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.extractAndStructure(EVIDENCE_ID, SELLER_ID))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.ALREADY_PARSED));
+        verifyNoInteractions(ocrClient);
+    }
+
+    @Test
     void throwsParsingFailedWhenOcrClientErrors() {
         stubEvidenceAndOwner(readyEvidence());
         when(ocrClient.extractFields(any(), any(), anySet())).thenThrow(new RuntimeException("upstream error"));
@@ -199,7 +213,7 @@ class OcrExtractionServiceTests {
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.PARSING_FAILED));
-        verifyNoInteractions(ocrResultRepository);
+        verify(ocrResultRepository, never()).save(any());
     }
 
     @Test
@@ -214,6 +228,6 @@ class OcrExtractionServiceTests {
                         exception ->
                                 assertThat(exception.getErrorCode())
                                         .isEqualTo(ErrorCode.OCR_UNSUPPORTED_IMAGE_FORMAT));
-        verifyNoInteractions(ocrResultRepository);
+        verify(ocrResultRepository, never()).save(any());
     }
 }

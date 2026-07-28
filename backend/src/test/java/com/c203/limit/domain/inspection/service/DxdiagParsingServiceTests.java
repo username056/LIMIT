@@ -176,6 +176,20 @@ class DxdiagParsingServiceTests {
     }
 
     @Test
+    void parseThrowsAlreadyParsedWhenResultAlreadyExists() {
+        Evidence evidence = readyEvidence(EvidenceType.DIAGNOSTIC_FILE);
+        when(evidenceRepository.findById(EVIDENCE_ID)).thenReturn(Optional.of(evidence));
+        stubOwnedListing();
+        when(dxdiagResultRepository.existsByEvidenceId(EVIDENCE_ID)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.parse(EVIDENCE_ID, SELLER_ID))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.ALREADY_PARSED));
+        verifyNoInteractions(dxdiagFileFetcher, dxdiagParser);
+    }
+
+    @Test
     void parseThrowsWhenEvidenceTypeIsNotDiagnosticFile() {
         Evidence evidence = readyEvidence(EvidenceType.PHOTO);
         when(evidenceRepository.findById(EVIDENCE_ID)).thenReturn(Optional.of(evidence));

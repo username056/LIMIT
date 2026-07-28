@@ -1,5 +1,6 @@
 package com.c203.limit.domain.inspection.entity;
 
+import com.c203.limit.domain.inspection.enums.DiagnosisFieldName;
 import com.c203.limit.domain.inspection.enums.ParseStatus;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -65,5 +66,22 @@ public class DxdiagResult {
         this.parserVersion = parserVersion;
         this.parseStatus = parseStatus;
         this.parsedAt = parsedAt;
+    }
+
+    /**
+     * 판매자가 필드 하나를 직접 고칠 때 사용한다. 별도 이력 테이블 없이 이 row의 컬럼을 그대로 덮어쓴다.
+     *
+     * @throws IllegalArgumentException dxdiag_result에 없는 필드명이면
+     */
+    public void correctField(DiagnosisFieldName fieldName, String value) {
+        switch (fieldName) {
+            case CPU -> this.cpu = value;
+            case RAM -> this.memory = value;
+            case GPU -> this.gpu = value;
+            case GPU_MEMORY -> this.gpuMemory = value;
+            case DRIVER_VERSION -> this.driverVersion = value;
+            case SOUND_DEVICE -> this.soundDevice = value;
+            default -> throw new IllegalArgumentException("dxdiag_result has no column for " + fieldName);
+        }
     }
 }

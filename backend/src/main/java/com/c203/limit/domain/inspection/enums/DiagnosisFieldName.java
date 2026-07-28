@@ -32,4 +32,17 @@ public enum DiagnosisFieldName {
             case OTHER -> null;
         };
     }
+
+    /** OCR 결과 row를 찾아 값을 고칠 때 필요한 역방향 매핑. OCR과 대응되지 않는 필드는 null. */
+    public OcrFieldType toOcrFieldType() {
+        return switch (this) {
+            case CPU -> OcrFieldType.CPU;
+            case RAM -> OcrFieldType.RAM;
+            case GPU -> OcrFieldType.GPU;
+            case MODEL_NAME -> OcrFieldType.MODEL_NAME;
+            case OS_VERSION -> OcrFieldType.OS_VERSION;
+            case STORAGE_CAPACITY -> OcrFieldType.STORAGE_CAPACITY;
+            default -> null;
+        };
+    }
 }
