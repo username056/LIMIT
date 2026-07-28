@@ -20,14 +20,21 @@ const router = useRouter()
 const product = computed(() => buildProductById(route.params.productId))
 
 const isLoggedIn = Boolean(getAccessToken())
+const showLoginRequiredModal = ref(!isLoggedIn)
 const useDefaultAddress = ref(false)
 const isLoadingDefaultAddress = ref(false)
 const defaultAddressError = ref('')
+const checkoutError = ref('')
+const isSubmitting = ref(false)
 
 const receiverName = ref('홍길동')
 const receiverPhone = ref('010-1234-5678')
 const address = ref({ zonecode: '', address: '서울시 강남구 테헤란로 123', addressDetail: '마크타워 5층 501호' })
 const deliveryMemo = ref('문 앞에 놓아주세요.')
+
+function goToLogin() {
+  router.push({ name: 'login', query: { redirect: route.fullPath } })
+}
 
 async function toggleUseDefaultAddress() {
   useDefaultAddress.value = !useDefaultAddress.value
@@ -67,12 +74,27 @@ const selectedPaymentLabel = computed(
 )
 
 // mock 주문 생성: 실제 주문 API가 준비되면 이 함수 대신 생성된 주문 응답을 사용하세요.
-function submitPayment() {
+function validateCheckout() {
+  if (!receiverName.value.trim() || !receiverPhone.value.trim()) {
+    checkoutError.value = '수령인 이름과 연락처를 입력해 주세요.'
+    return false
+  }
+  if (!address.value.address?.trim()) {
+    checkoutError.value = '배송 주소를 입력해 주세요.'
+    return false
+  }
+  return true
+}
+
+async function submitPayment() {
+  checkoutError.value = ''
+  if (!validateCheckout()) return
+  isSubmitting.value = true
   const now = new Date()
   const dateCode = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
   const orderNumber = `LMT-${dateCode}-${String(Math.floor(1000 + Math.random() * 9000))}`
 
-  router.push({
+  await router.push({
     name: 'purchase-success',
     params: { productId: route.params.productId },
     query: {
@@ -81,6 +103,7 @@ function submitPayment() {
       address: formatAddress(address.value),
     },
   })
+  isSubmitting.value = false
 }
 </script>
 
@@ -96,6 +119,13 @@ function submitPayment() {
 
       <div class="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div class="space-y-6">
+          <p
+            v-if="checkoutError"
+            role="alert"
+            class="rounded-md bg-red-50 px-4 py-3 text-sm text-red-700"
+          >
+            {{ checkoutError }}
+          </p>
           <BaseCard>
             <div class="flex flex-wrap items-center justify-between gap-3">
               <h2 class="text-base font-bold text-text-main">
@@ -206,6 +236,8 @@ function submitPayment() {
             <BaseButton
               block
               class="mt-5"
+              :disabled="isSubmitting"
+              :aria-busy="isSubmitting || undefined"
               @click="submitPayment"
             >
               {{ selectedPaymentLabel }}로 결제하기
@@ -217,6 +249,27 @@ function submitPayment() {
           </BaseCard>
         </div>
       </div>
+    </div>
+
+    <div
+      v-if="showLoginRequiredModal"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+    >
+      <BaseCard class="w-full max-w-sm text-center">
+        <h2 class="text-lg font-bold text-text-main">
+          로그인 후에 이용 가능합니다
+        </h2>
+        <p class="mt-2 text-sm text-text-sub">
+          구매를 진행하려면 먼저 로그인해 주세요.
+        </p>
+        <BaseButton
+          block
+          class="mt-5"
+          @click="goToLogin"
+        >
+          로그인하러 가기
+        </BaseButton>
+      </BaseCard>
     </div>
   </DefaultLayout>
 </template>
