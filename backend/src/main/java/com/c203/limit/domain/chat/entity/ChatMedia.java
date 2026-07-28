@@ -73,4 +73,39 @@ public class ChatMedia {
     private LocalDateTime verifiedAt;
 
     protected ChatMedia() {}
+
+    public static ChatMedia verified(
+            UUID mediaKey,
+            Long chatRoomId,
+            Long uploaderId,
+            MediaType type,
+            String objectKey,
+            String originalFilename,
+            String mimeType,
+            long fileSizeBytes) {
+        ChatMedia media = new ChatMedia();
+        media.mediaKey = mediaKey;
+        media.chatRoomId = chatRoomId;
+        media.uploaderId = uploaderId;
+        media.type = type;
+        media.uploadStatus = UploadStatus.VERIFIED;
+        media.bucketName = "local-chat-media";
+        media.objectKey = objectKey;
+        media.originalFilename = originalFilename;
+        media.mimeType = mimeType;
+        media.fileSizeBytes = fileSizeBytes;
+        media.uploadExpiresAt = LocalDateTime.now();
+        media.verifiedAt = LocalDateTime.now();
+        return media;
+    }
+
+    public Long getId() { return id; }
+    public Long getChatRoomId() { return chatRoomId; }
+    public Long getUploaderId() { return uploaderId; }
+    public MediaType getType() { return type; }
+    public UploadStatus getUploadStatus() { return uploadStatus; }
+    public String getObjectKey() { return objectKey; }
+    public String getOriginalFilename() { return originalFilename; }
+    public String getMimeType() { return mimeType; }
+    public Long getFileSizeBytes() { return fileSizeBytes; }
 }

@@ -5,6 +5,9 @@ import { apiClient } from './client'
  * @property {number} roomId
  * @property {number} listingId
  * @property {number} counterpartId
+ * @property {string|null} counterpartNickname
+ * @property {string|null} listingTitle
+ * @property {string|null} listingThumbnailUrl
  * @property {string} status
  * @property {number|null} lastMessageId
  * @property {number} lastMessageSequence
@@ -23,6 +26,7 @@ import { apiClient } from './client'
  * @property {string} content
  * @property {string} status - 'SENT' | 'DELETED'
  * @property {string} sentAt
+ * @property {Array<ChatMediaResponse>} media
  */
 
 function query(params) {
@@ -44,4 +48,18 @@ export function getChatMessages(roomId, params = {}) {
 
 export function createOrGetChatRoom(listingId) {
   return apiClient.post(`/listings/${listingId}/chat-rooms`, {})
+}
+
+export function sendChatMessage(roomId, payload) {
+  return apiClient.post(`/chat-rooms/${roomId}/messages`, payload)
+}
+
+export function uploadChatMedia(roomId, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return apiClient.upload(`/chat-rooms/${roomId}/media`, formData)
+}
+
+export function getChatMediaBlob(mediaId) {
+  return apiClient.getBlob(`/chat-media/${mediaId}/content`)
 }

@@ -36,7 +36,7 @@ const routes = [
   { path: '/calls/:callId/session', name: 'rtc-call', component: RtcCallPage, meta: { requiresAuth: true } },
   { path: '/purchase/:productId', name: 'purchase', component: PurchasePage },
   { path: '/purchase/:productId/success', name: 'purchase-success', component: PurchaseSuccessPage },
-  { path: '/chat/:roomId?', name: 'chat', component: ChatPage },
+  { path: '/chat/:roomId?', name: 'chat', component: ChatPage, meta: { requiresAuth: true } },
   { path: '/login', name: 'login', component: LoginPage },
   { path: '/signup', name: 'signup', component: SignupPage },
   { path: '/signup/social', name: 'social-signup', component: SocialSignupPage },
