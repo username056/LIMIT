@@ -6,6 +6,7 @@ import BaseButton from '../components/BaseButton.vue'
 import { addFavorite, getFavoriteStatus, removeFavorite } from '../api/favorites'
 import { getProduct } from '../api/products'
 import { createChatRoom, requestRtcCall } from '../api/rtc'
+import { createOrGetChatRoom } from '../api/chat'
 import { getAccessToken } from '../auth/session'
 
 const route = useRoute()
@@ -15,6 +16,7 @@ const isLoading = ref(true)
 const isFavorite = ref(false)
 const isUpdatingFavorite = ref(false)
 const isRequestingCall = ref(false)
+const isOpeningChat = ref(false)
 const errorMessage = ref('')
 
 const checklist = computed(() => product.value?.checklistSummary || {})
@@ -69,6 +71,20 @@ async function requestCall() {
     errorMessage.value = error.message || '영상 확인 요청을 보내지 못했습니다.'
   } finally {
     isRequestingCall.value = false
+  }
+}
+
+async function openChat() {
+  if (!await requireLogin()) return
+  isOpeningChat.value = true
+  errorMessage.value = ''
+  try {
+    const room = await createOrGetChatRoom(product.value.productId)
+    await router.push({ name: 'chat', params: { roomId: room.roomId } })
+  } catch (error) {
+    errorMessage.value = error.message || '채팅방을 열지 못했습니다.'
+  } finally {
+    isOpeningChat.value = false
   }
 }
 
@@ -152,9 +168,9 @@ onMounted(async () => {
       </div>
 
       <template v-else>
-        <div class="grid gap-10 lg:grid-cols-[1.08fr_0.92fr]">
+        <div class="grid gap-8 lg:grid-cols-[1.08fr_0.92fr] lg:gap-12">
           <section aria-label="상품 이미지">
-            <div class="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg border border-border bg-slate-50">
+            <div class="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-md bg-slate-50">
               <img
                 v-if="product.thumbnailUrl"
                 :src="product.thumbnailUrl"
@@ -168,7 +184,7 @@ onMounted(async () => {
                 <span class="text-6xl">▣</span>
                 <span class="mt-3 text-sm">등록된 상품 이미지가 없습니다.</span>
               </div>
-              <span class="absolute left-4 top-4 rounded-pill bg-surface/95 px-3 py-1.5 text-xs font-bold text-primary shadow-card">
+              <span class="absolute left-4 top-4 border-l-2 border-primary bg-surface/95 px-2.5 py-1 text-xs font-bold text-primary">
                 {{ statusLabel(product.status) }}
               </span>
             </div>
@@ -186,7 +202,7 @@ onMounted(async () => {
               {{ formatPrice(product.price) }}원
             </p>
 
-            <dl class="mt-7 grid grid-cols-2 gap-x-6 gap-y-5 rounded-lg border border-border bg-bg p-5 text-sm">
+            <dl class="mt-8 grid grid-cols-2 gap-x-6 gap-y-5 border-y border-border py-5 text-sm">
               <div>
                 <dt class="text-xs text-text-sub">
                   색상
@@ -223,9 +239,10 @@ onMounted(async () => {
 
             <div class="mt-5 grid grid-cols-[1fr_auto] gap-3">
               <BaseButton
-                :to="{ name: 'coming-soon', params: { feature: 'chat' } }"
+                :disabled="isOpeningChat"
+                @click="openChat"
               >
-                판매자에게 문의하기
+                {{ isOpeningChat ? '채팅방 여는 중…' : '판매자에게 문의하기' }}
               </BaseButton>
               <button
                 type="button"
@@ -258,8 +275,8 @@ onMounted(async () => {
           </section>
         </div>
 
-        <div class="mt-14 grid gap-8 lg:grid-cols-[1fr_360px]">
-          <section class="rounded-lg border border-border bg-surface p-6 sm:p-8">
+        <div class="mt-16 grid gap-10 lg:grid-cols-[1fr_360px]">
+          <section class="border-t border-border pt-6 sm:pt-8">
             <h2 class="text-lg font-bold text-text-main">
               상품 설명
             </h2>
@@ -268,7 +285,7 @@ onMounted(async () => {
             </p>
           </section>
 
-          <section class="rounded-lg border border-border bg-surface p-6">
+          <section class="border-l-2 border-primary bg-bg px-5 py-4">
             <div class="flex items-start justify-between">
               <div>
                 <p class="text-xs font-semibold text-primary">

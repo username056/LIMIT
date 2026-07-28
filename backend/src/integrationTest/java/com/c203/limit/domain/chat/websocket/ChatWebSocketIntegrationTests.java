@@ -2,9 +2,14 @@ package com.c203.limit.domain.chat.websocket;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 
 import java.lang.reflect.Type;
 import java.util.Set;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -32,7 +37,11 @@ import org.springframework.web.socket.messaging.WebSocketStompClient;
 
 import com.c203.limit.domain.chat.config.ChatWebSocketConfig;
 import com.c203.limit.domain.chat.dto.response.WebSocketErrorResponse;
+import com.c203.limit.domain.chat.dto.response.ChatEventResponse;
+import com.c203.limit.domain.chat.dto.response.ChatMessageResponse;
 import com.c203.limit.domain.chat.repository.ChatRoomParticipantRepository;
+import com.c203.limit.domain.chat.service.ChatRoomService;
+import com.c203.limit.domain.chat.service.ChatRoomService.ChatMessageSendResult;
 import com.c203.limit.global.security.JwtTokenProvider;
 import com.c203.limit.global.security.JwtTokenProvider.TokenClaims;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -62,7 +71,8 @@ class ChatWebSocketIntegrationTests {
         ChatWebSocketConfig.class,
         ChatWebSocketAuthInterceptor.class,
         ChatWebSocketErrorHandler.class,
-        ChatWebSocketErrorPublisher.class
+        ChatWebSocketErrorPublisher.class,
+        ChatMessageWebSocketController.class
     })
     static class TestApplication {
         @Bean
@@ -82,6 +92,7 @@ class ChatWebSocketIntegrationTests {
 
     @MockitoBean JwtTokenProvider tokenProvider;
     @MockitoBean ChatRoomParticipantRepository participantRepository;
+    @MockitoBean ChatRoomService chatRoomService;
 
     WebSocketStompClient stompClient;
     StompSession session;
@@ -92,13 +103,21 @@ class ChatWebSocketIntegrationTests {
                 .thenReturn(
                         new TokenClaims(
                                 "token-id", MEMBER_ID, "MEMBER", Set.of("MEMBER")));
+        when(tokenProvider.parse("buyer-token", "access"))
+                .thenReturn(new TokenClaims("buyer-jti", MEMBER_ID, "MEMBER", Set.of("MEMBER")));
+        when(tokenProvider.parse("seller-token", "access"))
+                .thenReturn(new TokenClaims("seller-jti", 11L, "MEMBER", Set.of("MEMBER")));
 
         stompClient = new WebSocketStompClient(new StandardWebSocketClient());
         stompClient.setMessageConverter(new JacksonJsonMessageConverter());
 
+        session = connect("access-token");
+    }
+
+    private StompSession connect(String accessToken) throws Exception {
         StompHeaders connectHeaders = new StompHeaders();
-        connectHeaders.add("Authorization", "Bearer access-token");
-        session = stompClient
+        connectHeaders.add("Authorization", "Bearer " + accessToken);
+        return stompClient
                 .connectAsync(
                         "ws://localhost:" + port + "/ws",
                         new WebSocketHttpHeaders(),
@@ -143,5 +162,59 @@ class ChatWebSocketIntegrationTests {
         assertThat(response.error().code()).isEqualTo("CHT004");
         assertThat(response.traceId()).isNotBlank();
         assertThat(session.isConnected()).isTrue();
+    }
+
+    @Test
+    void broadcastsMessageBetweenTwoAuthenticatedMembers() throws Exception {
+        StompSession buyer = connect("buyer-token");
+        StompSession seller = connect("seller-token");
+        try {
+            when(participantRepository.existsByChatRoomIdAndUserIdAndLeftAtIsNull(ROOM_ID, MEMBER_ID))
+                    .thenReturn(true);
+            CompletableFuture<Void> subscribed = new CompletableFuture<>();
+            when(participantRepository.existsByChatRoomIdAndUserIdAndLeftAtIsNull(ROOM_ID, 11L))
+                    .thenAnswer(invocation -> {
+                        subscribed.complete(null);
+                        return true;
+                    });
+            UUID clientMessageId = UUID.randomUUID();
+            ChatMessageResponse message = new ChatMessageResponse(
+                    501L, 1L, MEMBER_ID, clientMessageId, "TEXT", "안녕하세요",
+                    "SENT", null, List.of());
+            when(chatRoomService.sendMessage(eq(ROOM_ID), eq(MEMBER_ID), any()))
+                    .thenReturn(new ChatMessageSendResult(message, true));
+
+            CompletableFuture<ChatEventResponse> received = new CompletableFuture<>();
+            seller.subscribe(
+                    "/sub/chat-rooms/" + ROOM_ID,
+                    new StompFrameHandler() {
+                        @Override
+                        public Type getPayloadType(StompHeaders headers) {
+                            return ChatEventResponse.class;
+                        }
+
+                        @Override
+                        public void handleFrame(StompHeaders headers, Object payload) {
+                            received.complete((ChatEventResponse) payload);
+                        }
+                    });
+            subscribed.get(5, TimeUnit.SECONDS);
+
+            buyer.send(
+                    "/pub/chat-rooms/" + ROOM_ID + "/messages",
+                    Map.of(
+                            "clientMessageId", clientMessageId.toString(),
+                            "type", "TEXT",
+                            "content", "안녕하세요",
+                            "mediaIds", List.of()));
+
+            ChatEventResponse event = received.get(5, TimeUnit.SECONDS);
+            assertThat(event.type()).isEqualTo("MESSAGE");
+            assertThat(event.message().senderId()).isEqualTo(MEMBER_ID);
+            assertThat(event.message().content()).isEqualTo("안녕하세요");
+        } finally {
+            buyer.disconnect();
+            seller.disconnect();
+        }
     }
 }

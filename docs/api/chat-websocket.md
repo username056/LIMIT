@@ -5,7 +5,7 @@
 - 채팅 WebSocket은 STOMP over WebSocket을 사용한다.
 - REST 인증으로 발급받은 Access Token을 STOMP `CONNECT` 헤더에 전달한다.
 - 메시지 전송, 방 이벤트 수신, 사용자별 ACK와 오류 수신, 읽음 처리를 지원한다.
-- 현재 구현 범위는 `TEXT` 메시지다. `IMAGE`, `VIDEO`의 `mediaIds` 저장과 검증은 후속 작업이다.
+- `TEXT`, `IMAGE`, `VIDEO` 메시지를 지원한다. 미디어는 업로드 API에서 먼저 등록한 뒤 반환된 `mediaId`를 전송한다.
 
 ## 연결
 
@@ -37,6 +37,25 @@ Client sends:
   "mediaIds": []
 }
 ```
+
+## REST 전송
+
+WebSocket 재연결 중에도 같은 저장·중복 방지 계약을 사용할 수 있다.
+
+- `POST /api/v1/chat-rooms/{roomId}/messages`
+- 최초 저장: `201 Created`
+- 같은 `clientMessageId` 재요청: `200 OK`와 기존 메시지
+
+## 이미지·영상
+
+1. `POST /api/v1/chat-rooms/{roomId}/media`에 `multipart/form-data`의 `file`을 전송한다.
+2. 반환된 `mediaId` 하나를 `IMAGE` 또는 `VIDEO` 메시지의 `mediaIds`에 담아 전송한다.
+3. 참여자는 `GET /api/v1/chat-media/{mediaId}/content`로 파일을 조회한다.
+
+허용 형식은 JPEG, PNG, WebP, GIF(최대 20MB), MP4, WebM, QuickTime(최대 100MB)다.
+파일 저장 경로는 `LIMIT_CHAT_MEDIA_STORAGE_DIR`로 분리하며, 운영에서는 영속 볼륨 경로를 지정해야 한다.
+Servlet 업로드 제한도 `SPRING_SERVLET_MULTIPART_MAX_FILE_SIZE`,
+`SPRING_SERVLET_MULTIPART_MAX_REQUEST_SIZE`로 위 용량 이상 허용해야 한다.
 
 | Method | Destination | Request | ACK |
 | --- | --- | --- | --- |

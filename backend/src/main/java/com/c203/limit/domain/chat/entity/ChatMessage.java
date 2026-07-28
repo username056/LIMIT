@@ -76,6 +76,15 @@ public class ChatMessage {
         return message;
     }
 
+    public static ChatMessage sendMedia(
+            Long chatRoomId, long roomSequence, Long senderId, UUID clientMessageId,
+            MessageType type, String content, LocalDateTime sentAt) {
+        ChatMessage message = sendText(
+                chatRoomId, roomSequence, senderId, clientMessageId, content, sentAt);
+        message.type = type;
+        return message;
+    }
+
     public Long getId() { return id; }
     public Long getChatRoomId() { return chatRoomId; }
     public Long getRoomSequence() { return roomSequence; }

@@ -20,4 +20,15 @@ public class ChatMessageMedia {
     private LocalDateTime createdAt;
 
     protected ChatMessageMedia() {}
+
+    public static ChatMessageMedia create(Long messageId, Long mediaId, int displayOrder) {
+        ChatMessageMedia link = new ChatMessageMedia();
+        link.id = new ChatMessageMediaId(messageId, mediaId);
+        link.displayOrder = displayOrder;
+        link.createdAt = LocalDateTime.now();
+        return link;
+    }
+
+    public ChatMessageMediaId getId() { return id; }
+    public Integer getDisplayOrder() { return displayOrder; }
 }

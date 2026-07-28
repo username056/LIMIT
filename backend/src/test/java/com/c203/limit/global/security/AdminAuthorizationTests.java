@@ -65,6 +65,9 @@ class AdminAuthorizationTests {
     @MockitoBean ChatRoomRepository chatRoomRepository;
     @MockitoBean ChatRoomParticipantRepository chatRoomParticipantRepository;
     @MockitoBean ChatMessageRepository chatMessageRepository;
+    @MockitoBean com.c203.limit.domain.chat.repository.ChatMediaRepository chatMediaRepository;
+    @MockitoBean com.c203.limit.domain.chat.repository.ChatMessageMediaRepository chatMessageMediaRepository;
+    @MockitoBean com.c203.limit.domain.chat.repository.ChatRoomContextReader chatRoomContextReader;
     @MockitoBean ListingChatReader listingChatReader;
     @MockitoBean ListingRepository listingRepository;
     @MockitoBean WishlistRepository wishlistRepository;

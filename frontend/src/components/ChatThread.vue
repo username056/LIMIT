@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { getChatMessages } from '../api/chat'
+import { getChatMediaBlob, getChatMessages, uploadChatMedia } from '../api/chat'
 import { createChatSocket } from '../api/chatSocket'
 import { getProduct } from '../api/products'
 import { useAuthSession } from '../auth/session'
@@ -11,6 +11,7 @@ const props = defineProps({
     required: true, // ChatRoomSummaryResponse: roomId, listingId, counterpartId, status, unreadCount, lastMessageAt ...
   },
 })
+const emit = defineEmits(['room-updated'])
 
 const session = useAuthSession()
 const myMemberId = computed(() => session.value?.member?.memberId ?? null)
@@ -20,15 +21,37 @@ const messages = ref([])
 const isLoadingMessages = ref(true)
 const messagesError = ref('')
 const socketStatus = ref('connecting')
+const isUploading = ref(false)
+const fileInput = ref(null)
 let chatSocket = null
 let nextPendingMessageId = -1
+let connectionVersion = 0
+let reconnectTimer = null
+const mediaObjectUrls = new Set()
+
+async function attachMediaUrls(message) {
+  if (!message.media?.length) return message
+  const media = await Promise.all(message.media.map(async (item) => {
+    if (item.displayUrl) return item
+    try {
+      const blob = await getChatMediaBlob(item.mediaId)
+      if (typeof URL.createObjectURL !== 'function') return item
+      const displayUrl = URL.createObjectURL(blob)
+      mediaObjectUrls.add(displayUrl)
+      return { ...item, displayUrl }
+    } catch {
+      return item
+    }
+  }))
+  return { ...message, media }
+}
 
 async function loadMessages(roomId) {
   isLoadingMessages.value = true
   messagesError.value = ''
   try {
     const result = await getChatMessages(roomId, { size: 50 })
-    messages.value = (result?.content || []).slice().reverse()
+    messages.value = await Promise.all((result?.content || []).slice().reverse().map(attachMediaUrls))
     markRead()
   } catch (error) {
     messagesError.value = error.message || '메시지를 불러오지 못했습니다.'
@@ -37,14 +60,16 @@ async function loadMessages(roomId) {
   }
 }
 
-function upsertMessage(message) {
+async function upsertMessage(message) {
+  const hydrated = await attachMediaUrls(message)
   const indexByClientId = messages.value.findIndex((item) => item.clientMessageId === message.clientMessageId)
   if (indexByClientId >= 0) {
-    messages.value[indexByClientId] = { ...messages.value[indexByClientId], ...message, isPending: false }
+    messages.value[indexByClientId] = { ...messages.value[indexByClientId], ...hydrated, isPending: false }
     return
   }
   if (!messages.value.some((item) => item.messageId === message.messageId)) {
-    messages.value.push(message)
+    messages.value.push(hydrated)
+    messages.value.sort((first, second) => Number(first.roomSequence || Infinity) - Number(second.roomSequence || Infinity))
   }
 }
 
@@ -57,20 +82,38 @@ function markRead() {
   if (lastReadSeq > 0) chatSocket?.markRead(lastReadSeq)
 }
 
+async function recoverMissingMessages(roomId) {
+  const afterSeq = latestSequence()
+  if (afterSeq < 1) return
+  const result = await getChatMessages(roomId, { afterSeq, size: 100 })
+  for (const message of result?.content || []) await upsertMessage(message)
+}
+
 function connectSocket(roomId) {
+  const version = ++connectionVersion
   chatSocket?.close()
+  clearTimeout(reconnectTimer)
   socketStatus.value = 'connecting'
   chatSocket = createChatSocket({
     roomId,
-    onOpen: () => {
+    onOpen: async () => {
+      if (version !== connectionVersion) return
       socketStatus.value = 'connected'
       messagesError.value = ''
+      try {
+        await recoverMissingMessages(roomId)
+      } catch {
+        messagesError.value = '재접속 중 누락 메시지를 확인하지 못했습니다.'
+      }
       markRead()
+      emit('room-updated')
     },
-    onEvent: (event) => {
+    onEvent: async (event) => {
+      if (version !== connectionVersion) return
       if (event.type === 'MESSAGE' && event.message) {
-        upsertMessage(event.message)
+        await upsertMessage(event.message)
         markRead()
+        emit('room-updated')
       }
     },
     onAck: (ack) => {
@@ -87,11 +130,14 @@ function connectSocket(roomId) {
       }
     },
     onError: (error) => {
+      if (version !== connectionVersion) return
       messagesError.value = error?.error?.message || '채팅 처리 중 오류가 발생했습니다.'
       socketStatus.value = 'error'
     },
     onClose: () => {
-      if (socketStatus.value !== 'closed' && socketStatus.value !== 'error') socketStatus.value = 'disconnected'
+      if (version !== connectionVersion || socketStatus.value === 'closed') return
+      socketStatus.value = 'disconnected'
+      reconnectTimer = setTimeout(() => connectSocket(roomId), 1500)
     },
   })
 }
@@ -138,9 +184,41 @@ function sendMessage() {
     status: 'SENDING',
     sentAt: new Date().toISOString(),
     isPending: true,
+    media: [],
   })
   chatSocket?.sendMessage({ clientMessageId, type: 'TEXT', content: text, mediaIds: [] })
   messageInput.value = ''
+}
+
+async function selectMedia(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file || socketStatus.value !== 'connected' || myMemberId.value == null) return
+  isUploading.value = true
+  messagesError.value = ''
+  try {
+    const media = await uploadChatMedia(props.room.roomId, file)
+    const clientMessageId = createClientMessageId()
+    const type = media.type
+    const optimistic = await attachMediaUrls({
+      messageId: nextPendingMessageId--,
+      roomSequence: null,
+      senderId: myMemberId.value,
+      clientMessageId,
+      type,
+      content: file.name,
+      status: 'SENDING',
+      sentAt: new Date().toISOString(),
+      isPending: true,
+      media: [media],
+    })
+    messages.value.push(optimistic)
+    chatSocket?.sendMessage({ clientMessageId, type, content: file.name, mediaIds: [media.mediaId] })
+  } catch (error) {
+    messagesError.value = error.message || '파일을 전송하지 못했습니다.'
+  } finally {
+    isUploading.value = false
+  }
 }
 
 function formatTime(isoString) {
@@ -149,13 +227,16 @@ function formatTime(isoString) {
 }
 
 onBeforeUnmount(() => {
+  connectionVersion += 1
+  clearTimeout(reconnectTimer)
   socketStatus.value = 'closed'
   chatSocket?.close()
+  mediaObjectUrls.forEach((url) => URL.revokeObjectURL(url))
 })
 </script>
 
 <template>
-  <div class="flex h-full min-w-0 min-h-[520px] flex-col rounded-lg border border-border bg-surface">
+  <div class="flex h-full min-w-0 min-h-[520px] flex-col bg-surface">
     <div class="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
       <div class="flex items-center gap-3">
         <RouterLink
@@ -179,7 +260,7 @@ onBeforeUnmount(() => {
           </svg>
         </RouterLink>
         <p class="text-sm font-bold text-text-main">
-          상대 회원 #{{ room.counterpartId }}
+          {{ room.counterpartNickname || `회원 #${room.counterpartId}` }}
         </p>
         <span
           class="rounded-full px-2 py-0.5 text-[11px] font-semibold"
@@ -200,10 +281,19 @@ onBeforeUnmount(() => {
       v-if="product"
       class="flex items-center gap-3 border-b border-border px-5 py-3"
     >
-      <div class="h-10 w-10 shrink-0 rounded-md bg-primary-gradient" />
+      <img
+        v-if="room.listingThumbnailUrl"
+        :src="room.listingThumbnailUrl"
+        :alt="room.listingTitle || product?.name || '상품 이미지'"
+        class="h-10 w-10 shrink-0 rounded-md object-cover"
+      >
+      <div
+        v-else
+        class="h-10 w-10 shrink-0 rounded-md bg-primary-gradient"
+      />
       <div class="min-w-0 flex-1">
         <p class="truncate text-sm font-bold text-text-main">
-          {{ product.name }}
+          {{ room.listingTitle || product.name }}
         </p>
         <p class="truncate text-xs text-text-sub">
           ₩{{ Number(product.price).toLocaleString('ko-KR') }}
@@ -211,7 +301,7 @@ onBeforeUnmount(() => {
       </div>
       <RouterLink
         :to="{ name: 'product-detail', params: { productId: room.listingId } }"
-        class="whitespace-nowrap rounded-md border border-primary px-3 py-1.5 text-xs font-semibold text-primary hover:bg-accent"
+        class="whitespace-nowrap text-xs font-semibold text-primary hover:text-primary-dark"
       >
         상품 보기
       </RouterLink>
@@ -254,7 +344,25 @@ onBeforeUnmount(() => {
             class="max-w-[75%] rounded-lg px-4 py-2.5 text-sm leading-6"
             :class="message.senderId === myMemberId ? 'bg-primary-deep text-white' : 'bg-bg text-text-main'"
           >
-            {{ message.type === 'TEXT' || message.type === 'SYSTEM' ? message.content : `[${message.type}] ${message.content}` }}
+            <template v-if="message.type === 'TEXT' || message.type === 'SYSTEM'">
+              {{ message.content }}
+            </template>
+            <template v-else>
+              <img
+                v-if="message.type === 'IMAGE' && message.media?.[0]?.displayUrl"
+                :src="message.media[0].displayUrl"
+                :alt="message.content || '채팅 이미지'"
+                class="max-h-72 rounded-md object-contain"
+              >
+              <video
+                v-else-if="message.type === 'VIDEO' && message.media?.[0]?.displayUrl"
+                :src="message.media[0].displayUrl"
+                controls
+                preload="metadata"
+                class="max-h-72 rounded-md"
+              />
+              <span v-else>{{ message.content || '미디어 파일' }}</span>
+            </template>
           </div>
           <span class="mt-1 text-[11px] text-text-sub">
             {{ formatTime(message.sentAt) }}
@@ -269,6 +377,21 @@ onBeforeUnmount(() => {
         class="flex gap-2"
         @submit.prevent="sendMessage"
       >
+        <input
+          ref="fileInput"
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
+          class="hidden"
+          @change="selectMedia"
+        >
+        <button
+          type="button"
+          :disabled="socketStatus !== 'connected' || isUploading"
+          class="rounded-md border border-border px-3 text-sm font-semibold text-text-sub disabled:opacity-50"
+          @click="fileInput?.click()"
+        >
+          {{ isUploading ? '업로드 중…' : '사진·영상' }}
+        </button>
         <input
           v-model="messageInput"
           type="text"

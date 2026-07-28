@@ -14,7 +14,6 @@ import VerifyEmailPage from '../pages/VerifyEmailPage.vue'
 import EmailVerificationRequestedPage from '../pages/EmailVerificationRequestedPage.vue'
 import ForgotPasswordPage from '../pages/ForgotPasswordPage.vue'
 import ResetPasswordPage from '../pages/ResetPasswordPage.vue'
-import SocialAccountsPage from '../pages/SocialAccountsPage.vue'
 import TermsPage from '../pages/TermsPage.vue'
 import PrivacyPage from '../pages/PrivacyPage.vue'
 import ComingSoonPage from '../pages/ComingSoonPage.vue'
@@ -37,7 +36,7 @@ const routes = [
   { path: '/calls/:callId/session', name: 'rtc-call', component: RtcCallPage, meta: { requiresAuth: true } },
   { path: '/purchase/:productId', name: 'purchase', component: PurchasePage },
   { path: '/purchase/:productId/success', name: 'purchase-success', component: PurchaseSuccessPage },
-  { path: '/chat/:roomId?', name: 'chat', component: ChatPage },
+  { path: '/chat/:roomId?', name: 'chat', component: ChatPage, meta: { requiresAuth: true } },
   { path: '/login', name: 'login', component: LoginPage },
   { path: '/signup', name: 'signup', component: SignupPage },
   { path: '/signup/social', name: 'social-signup', component: SocialSignupPage },
@@ -55,12 +54,6 @@ const routes = [
     path: '/mypage/favorites',
     name: 'my-favorites',
     component: MyFavoritesPage,
-    meta: { requiresAuth: true },
-  },
-  {
-    path: '/mypage/social-accounts',
-    name: 'social-accounts',
-    component: SocialAccountsPage,
     meta: { requiresAuth: true },
   },
   { path: '/auth/callback/:provider', name: 'oauth-callback', component: OAuthCallbackPage },
