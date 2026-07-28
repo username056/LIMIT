@@ -67,6 +67,15 @@ class BackendApplicationTests {
     ChatMessageRepository chatMessageRepository;
 
     @MockitoBean
+    com.c203.limit.domain.chat.repository.ChatMediaRepository chatMediaRepository;
+
+    @MockitoBean
+    com.c203.limit.domain.chat.repository.ChatMessageMediaRepository chatMessageMediaRepository;
+
+    @MockitoBean
+    com.c203.limit.domain.chat.repository.ChatRoomContextReader chatRoomContextReader;
+
+    @MockitoBean
     ListingChatReader listingChatReader;
 
     @MockitoBean

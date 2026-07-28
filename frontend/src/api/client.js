@@ -20,7 +20,7 @@ export class ApiError extends Error {
 }
 
 async function request(path, options = {}) {
-  const { unwrapResponse = true, ...fetchOptions } = options
+  const { unwrapResponse = true, responseType = 'json', ...fetchOptions } = options
   const accessToken = getAccessToken()
   const method = fetchOptions.method || 'GET'
   let res
@@ -30,7 +30,7 @@ async function request(path, options = {}) {
       ...fetchOptions,
       credentials: 'include',
       headers: {
-        'Content-Type': 'application/json',
+        ...(fetchOptions.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         ...(fetchOptions.headers || {}),
       },
@@ -40,7 +40,9 @@ async function request(path, options = {}) {
     throw error
   }
 
-  const body = await res.json().catch(() => null)
+  const body = responseType === 'blob'
+    ? await res.blob()
+    : await res.json().catch(() => null)
 
   if (!res.ok) {
     const err = body?.error || {}
@@ -76,4 +78,6 @@ export const apiClient = {
   put: (path, payload) => request(path, { method: 'PUT', body: JSON.stringify(payload) }),
   patch: (path, payload) => request(path, { method: 'PATCH', body: JSON.stringify(payload) }),
   delete: (path) => request(path, { method: 'DELETE' }),
+  upload: (path, formData) => request(path, { method: 'POST', body: formData }),
+  getBlob: (path) => request(path, { method: 'GET', responseType: 'blob', unwrapResponse: false }),
 }

@@ -59,6 +59,8 @@ public enum ErrorCode {
     SELF_CHAT_NOT_ALLOWED("CHT002", HttpStatus.BAD_REQUEST, "본인의 매물에는 채팅방을 생성할 수 없습니다."),
     CHAT_ROOM_CREATION_NOT_ALLOWED("CHT003", HttpStatus.CONFLICT, "현재 상태의 매물에는 채팅방을 생성할 수 없습니다."),
     CHAT_ROOM_ACCESS_DENIED("CHT004", HttpStatus.FORBIDDEN, "채팅방에 접근할 권한이 없습니다."),
+    CHAT_MEDIA_INVALID("CHT005", HttpStatus.UNPROCESSABLE_ENTITY, "지원하지 않거나 허용 용량을 초과한 채팅 파일입니다."),
+    CHAT_MEDIA_NOT_FOUND("CHT006", HttpStatus.NOT_FOUND, "채팅 파일을 찾을 수 없습니다."),
 
     // ========== 실시간 확인 오류 ==========
     RTC_SESSION_NOT_FOUND("RTC001", HttpStatus.NOT_FOUND, "실시간 확인 세션을 찾을 수 없습니다."),

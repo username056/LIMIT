@@ -4,6 +4,7 @@ import ProductDetailPage from '../ProductDetailPage.vue'
 import { getProduct } from '../../api/products'
 import { getFavoriteStatus, removeFavorite } from '../../api/favorites'
 import { getAccessToken } from '../../auth/session'
+import { createOrGetChatRoom } from '../../api/chat'
 
 const push = vi.fn()
 
@@ -19,6 +20,8 @@ vi.mock('../../api/favorites', () => ({
   removeFavorite: vi.fn(),
 }))
 vi.mock('../../auth/session', () => ({ getAccessToken: vi.fn() }))
+vi.mock('../../api/chat', () => ({ createOrGetChatRoom: vi.fn() }))
+vi.mock('../../api/rtc', () => ({ createChatRoom: vi.fn(), requestRtcCall: vi.fn() }))
 
 const layoutStub = { template: '<main><slot /></main>' }
 const buttonStub = {
@@ -84,5 +87,28 @@ describe('ProductDetailPage', () => {
       name: 'login',
       query: { redirect: '/products/1001' },
     })
+  })
+
+  it('판매자 문의 버튼으로 실제 채팅방을 생성하고 이동한다', async () => {
+    getAccessToken.mockReturnValue('test-token')
+    getFavoriteStatus.mockResolvedValue({ favorite: false })
+    createOrGetChatRoom.mockResolvedValue({ roomId: 77 })
+    const wrapper = mount(ProductDetailPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    const inquiryButton = wrapper.findAll('button').find((button) => button.text().includes('판매자에게 문의하기'))
+    await inquiryButton.trigger('click')
+    await flushPromises()
+
+    expect(createOrGetChatRoom).toHaveBeenCalledWith(1001)
+    expect(push).toHaveBeenCalledWith({ name: 'chat', params: { roomId: 77 } })
   })
 })
