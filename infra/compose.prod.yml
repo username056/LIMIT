@@ -16,7 +16,7 @@ x-backend-environment: &backend-environment
   OAUTH_STATE_TTL: ${OAUTH_STATE_TTL:-10m}
   SOCIAL_SIGNUP_TTL: ${SOCIAL_SIGNUP_TTL:-15m}
   JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-  RTC_ALLOWED_ORIGIN_PATTERNS: ${RTC_ALLOWED_ORIGIN_PATTERNS:-https://l1mit.shop,https://www.l1mit.shop}
+  RTC_ALLOWED_ORIGIN_PATTERNS: ${RTC_ALLOWED_ORIGIN_PATTERNS:-http://localhost:5173,https://l1mit.shop,https://www.l1mit.shop}
   RTC_STUN_URL: ${RTC_STUN_URL:-stun:stun.l.google.com:19302}
   RTC_TURN_URL: ${RTC_TURN_URL:-turn:api.l1mit.shop:3478?transport=udp}
   RTC_TURN_USERNAME: ${RTC_TURN_USERNAME:?RTC_TURN_USERNAME is required}
