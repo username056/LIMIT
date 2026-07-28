@@ -85,6 +85,7 @@ class PaymentSecurityControllerTests {
     @MockitoBean WishlistRepository wishlistRepository;
     @MockitoBean ProductApplicationService productApplicationService;
     @MockitoBean ProductCatalogService productCatalogService;
+    @MockitoBean com.c203.limit.domain.seller.repository.SellerRepository sellerRepository;
     @MockitoBean PaymentService paymentService;
 
     @Autowired MockMvc mockMvc;

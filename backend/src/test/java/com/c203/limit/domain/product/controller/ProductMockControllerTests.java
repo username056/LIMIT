@@ -117,6 +117,9 @@ class ProductMockControllerTests {
     @MockitoBean
     PaymentService paymentService;
 
+    @MockitoBean
+    com.c203.limit.domain.seller.repository.SellerRepository sellerRepository;
+
     @Autowired
     MockMvc mockMvc;
 

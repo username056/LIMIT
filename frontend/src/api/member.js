@@ -9,6 +9,7 @@ import { apiClient } from './client'
  * @property {string} status
  * @property {string} authType
  * @property {string[]} roles
+ * @property {string|null} sellerStatus
  * @property {string|null} emailVerifiedAt
  * @property {string|null} lastLoginAt
  * @property {string} createdAt

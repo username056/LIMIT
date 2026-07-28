@@ -7,26 +7,32 @@ import com.c203.limit.domain.member.dto.response.MemberProfileResponse;
 import com.c203.limit.domain.member.dto.response.UpdateMemberResponse;
 import com.c203.limit.domain.member.entity.Member;
 import com.c203.limit.domain.member.repository.MemberRepository;
+import com.c203.limit.domain.seller.service.SellerStatusReader;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
-import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class MemberService {
+    private static final Logger log = LoggerFactory.getLogger(MemberService.class);
     private final MemberRepository memberRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthService authService;
+    private final SellerStatusReader sellerStatusReader;
 
     public MemberService(
             MemberRepository memberRepository,
             PasswordEncoder passwordEncoder,
-            AuthService authService) {
+            AuthService authService,
+            SellerStatusReader sellerStatusReader) {
         this.memberRepository = memberRepository;
         this.passwordEncoder = passwordEncoder;
         this.authService = authService;
+        this.sellerStatusReader = sellerStatusReader;
     }
 
     @Transactional(readOnly = true)
@@ -39,7 +45,8 @@ public class MemberService {
                 maskPhone(member.getPhone()),
                 member.getStatus().name(),
                 member.getPassword() == null ? "SOCIAL" : "LOCAL",
-                Set.of("MEMBER"),
+                sellerStatusReader.rolesFor(memberId),
+                sellerStatusReader.statusOf(memberId),
                 member.getEmailVerifiedAt(),
                 member.getLastLoginAt(),
                 member.getCreatedAt());
@@ -54,6 +61,7 @@ public class MemberService {
         }
         member.updateProfile(request.getNickname(), request.getPhone());
         memberRepository.flush();
+        log.info("member profile updated");
         return new UpdateMemberResponse(
                 member.getId(),
                 member.getNickname(),
@@ -75,6 +83,7 @@ public class MemberService {
         }
         member.changePassword(passwordEncoder.encode(request.getNewPassword()));
         authService.revokeAll(memberId);
+        log.info("member password changed and refresh tokens revoked");
     }
 
     private Member get(Long id) {

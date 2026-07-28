@@ -17,6 +17,7 @@ import com.c203.limit.domain.auth.dto.request.LoginRequest;
 import com.c203.limit.domain.auth.dto.request.SignupRequest;
 import com.c203.limit.domain.member.entity.Member;
 import com.c203.limit.domain.member.repository.MemberRepository;
+import com.c203.limit.domain.seller.service.SellerStatusReader;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import com.c203.limit.global.security.JwtTokenProvider;
@@ -26,6 +27,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 class AuthServiceTests {
     @Mock MemberRepository memberRepository;
     @Mock TermsAgreementService termsAgreementService;
+    @Mock SellerStatusReader sellerStatusReader;
     AuthService authService;
     BCryptPasswordEncoder encoder;
     JwtTokenProvider provider;
@@ -41,7 +43,8 @@ class AuthServiceTests {
                         encoder,
                         provider,
                         refreshTokens,
-                        termsAgreementService);
+                        termsAgreementService,
+                        sellerStatusReader);
     }
 
     @Test void signsUpWithNormalizedEmailAndEncodedPassword() {
@@ -70,6 +73,28 @@ class AuthServiceTests {
         var response = authService.login(new LoginRequest("user@example.com", "Password123"));
         assertThat(response.body().getAccessToken()).isNotBlank();
         assertThat(response.refreshToken()).isNotBlank();
+    }
+
+    @Test
+    void loginReflectsActiveSellerRoleFromDatabaseReader() {
+        Member member =
+                Member.createLocal(
+                        "seller@example.com", encoder.encode("Password123"), "seller", null);
+        member.verifyEmail();
+        ReflectionTestUtils.setField(member, "id", 2L);
+        when(memberRepository.findByEmailIgnoreCase("seller@example.com"))
+                .thenReturn(Optional.of(member));
+        when(sellerStatusReader.rolesFor(2L)).thenReturn(java.util.Set.of("MEMBER", "SELLER"));
+        when(sellerStatusReader.statusOf(2L)).thenReturn("ACTIVE");
+
+        var response =
+                authService.login(new LoginRequest("seller@example.com", "Password123"));
+        var claims = provider.parse(response.body().getAccessToken(), "access");
+
+        assertThat(claims.roles()).containsExactlyInAnyOrder("MEMBER", "SELLER");
+        assertThat(response.body().getMember().getRoles())
+                .containsExactlyInAnyOrder("MEMBER", "SELLER");
+        assertThat(response.body().getMember().getSellerStatus()).isEqualTo("ACTIVE");
     }
 
     @Test void rejectsWrongPasswordWithoutLeakingAccountDetails() {

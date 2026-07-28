@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 
-@Tag(name = "07. 결제", description = "매물 결제 요청 생성·조회 API")
+@Tag(name = "08. 결제", description = "매물 결제 요청 생성·조회 API")
 public interface PaymentApi {
 
     @Operation(

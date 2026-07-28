@@ -57,5 +57,5 @@ PG 웹훅 승인/거절 처리, 결제 재시도, 환불, 정산은 담당 범�
 
 ## Swagger 그룹
 
-`application.yml`의 `springdoc.group-configs`에 `07-payment` 그룹을 추가했다
-(`com.c203.limit.domain.payment.controller`). 태그는 `07. 결제`를 사용한다.
+`application.yml`의 `springdoc.group-configs`에 `08-payment` 그룹을 추가했다
+(`com.c203.limit.domain.payment.controller`). 태그는 `08. 결제`를 사용한다.

@@ -25,6 +25,7 @@ spotless {
                 'src/main/java/com/c203/limit/domain/call/**/*.java',
                 'src/main/java/com/c203/limit/domain/member/**/*.java',
                 'src/main/java/com/c203/limit/domain/rtc/**/*.java',
+                'src/main/java/com/c203/limit/domain/seller/**/*.java',
                 'src/main/java/com/c203/limit/global/security/**/*.java',
                 'src/main/java/com/c203/limit/global/exception/**/*.java',
                 'src/main/java/com/c203/limit/global/config/SecurityConfig.java',
