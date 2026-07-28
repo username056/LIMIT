@@ -163,6 +163,8 @@ class OpenApiContractTests {
                         .value("seller02"))
                 .andExpect(jsonPath("$.components.schemas.CreateSellerRequest").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/chat-rooms/{roomId}/calls'].post").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/calls/{callId}'].patch").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/calls/{callId}'].delete").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/rtc-sessions/{sessionId}/join'].post").exists())
                 .andExpect(jsonPath("$.components.schemas.EndRtcSessionRequest").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/payments'].post.operationId").value("payment01"))

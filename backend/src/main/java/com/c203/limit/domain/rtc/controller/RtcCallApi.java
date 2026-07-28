@@ -4,6 +4,7 @@ import com.c203.limit.domain.rtc.dto.request.CreateCallRequest;
 import com.c203.limit.domain.rtc.dto.request.EndRtcSessionRequest;
 import com.c203.limit.domain.rtc.dto.request.MarkRtcConnectedRequest;
 import com.c203.limit.domain.rtc.dto.request.RespondCallRequest;
+import com.c203.limit.domain.rtc.dto.request.UpdateCallRequest;
 import com.c203.limit.domain.rtc.dto.response.CallApiResponse;
 import com.c203.limit.domain.rtc.dto.response.CallListApiResponse;
 import com.c203.limit.domain.rtc.dto.response.CallResponse;
@@ -19,12 +20,14 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
 
 @Tag(name = "06. 선택적 1:1 실시간 확인")
 @SecurityRequirement(name = "bearerAuth")
@@ -63,6 +66,25 @@ public interface RtcCallApi {
     @RequestMapping(method = RequestMethod.POST, path = "/api/v1/calls/{callId}/response")
     ResponseEntity<ApiResponse<CallResponse>> respond(
             @PathVariable Long callId, @Valid @RequestBody RespondCallRequest request);
+
+    @Operation(summary = "제안한 영상 확인 약속 시간·메모 변경")
+    @ApiResponses(
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    content = @Content(schema = @Schema(implementation = CallApiResponse.class))))
+    @RequestMapping(method = RequestMethod.PATCH, path = "/api/v1/calls/{callId}")
+    ResponseEntity<ApiResponse<CallResponse>> update(
+            @PathVariable Long callId, @Valid @RequestBody UpdateCallRequest request);
+
+    @Operation(summary = "제안한 영상 확인 약속 취소")
+    @ApiResponses(
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    content = @Content(schema = @Schema(implementation = CallApiResponse.class))))
+    @RequestMapping(method = RequestMethod.DELETE, path = "/api/v1/calls/{callId}")
+    ResponseEntity<ApiResponse<CallResponse>> cancel(
+            @PathVariable Long callId,
+            @RequestParam(required = false) @Size(max = 500) String reason);
 
     @Operation(summary = "통화 화면 재입장을 포함한 단기 시그널링 토큰 발급")
     @ApiResponses(
