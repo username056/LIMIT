@@ -301,6 +301,7 @@ function saveAddress() {
 }
 
 function deleteAddress(id) {
+  if (!window.confirm('이 배송지를 삭제할까요?')) return
   const wasDefault = addressBook.value.find((item) => item.id === id)?.isDefault
   addressBook.value = addressBook.value.filter((item) => item.id !== id)
   if (wasDefault && addressBook.value.length) addressBook.value[0].isDefault = true
