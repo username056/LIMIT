@@ -37,6 +37,8 @@ run_backend_scripts() {
   sh -n scripts/apply-ec2-env-remote.test.sh
   sh -n scripts/check-backend-logging.sh
   sh -n scripts/check-backend-logging.test.sh
+  sh -n scripts/diagnose-seller-migration-remote.sh
+  bash -n scripts/diagnose-seller-migration-remote.test.sh
   bash -n scripts/deploy-monitoring.sh
   sh -n scripts/configure-rtc-turn.sh
   bash -n scripts/backup-datastores.sh
@@ -63,6 +65,7 @@ run_backend_scripts() {
   bash scripts/sync-deploy-files.test.sh
   bash scripts/rollback-blue-green.test.sh
   bash scripts/operational-readiness.test.sh
+  bash scripts/diagnose-seller-migration-remote.test.sh
   sh scripts/apply-ec2-env-remote.test.sh
 }
 
