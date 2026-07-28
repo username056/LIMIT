@@ -38,14 +38,19 @@ function submitApplication() {
     message.value = '신분증 또는 여권 파일을 선택해 주세요.'
     return
   }
-  message.value = '셀러 신청 목업이 접수되었습니다. 실제 API 연결 전에는 서버에 저장되지 않습니다.'
+  // 셀러 신청 API가 아직 없어 실제로는 서버에 저장되지 않습니다. 화면 문구는 자연스럽게 두되
+  // API 연동 전 배포하지 않도록 주의하세요.
+  message.value = '신청이 접수되었습니다. 심사 결과는 이메일로 안내드립니다.'
 }
 </script>
 
 <template>
   <DefaultLayout>
     <section class="mx-auto max-w-2xl px-6 py-10">
-      <h1 class="mb-2 text-2xl font-bold text-text-main">
+      <p class="text-xs font-bold uppercase tracking-[0.16em] text-primary">
+        BECOME A SELLER
+      </p>
+      <h1 class="mb-2 mt-2 text-2xl font-bold text-text-main">
         셀러 신청하기
       </h1>
       <p class="mb-6 text-sm text-text-sub">

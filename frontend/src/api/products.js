@@ -57,6 +57,22 @@ export function getChecklistTemplate(modelId) {
   return apiClient.get(`/device-models/${modelId}/checklist-template`)
 }
 
+export function getProductChecklist(productId) {
+  return apiClient.get(`/products/${productId}/checklist-items`)
+}
+
+export function createEvidenceUploadUrl(productId, checklistItemId, payload) {
+  return apiClient.post(`/products/${productId}/checklist-items/${checklistItemId}/upload-urls`, payload)
+}
+
+export function completeEvidence(productId, checklistItemId, payload) {
+  return apiClient.post(`/products/${productId}/checklist-items/${checklistItemId}/evidence`, payload)
+}
+
 export function getHandoverGuide(modelId) {
   return apiClient.get(`/device-models/${modelId}/handover-guide`)
+}
+
+export function requestRecapture(productId, checklistItemId, payload) {
+  return apiClient.post(`/products/${productId}/checklist-items/${checklistItemId}/recapture-requests`, payload)
 }

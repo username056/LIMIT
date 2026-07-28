@@ -87,7 +87,10 @@ function submitPayment() {
 <template>
   <DefaultLayout>
     <div class="mx-auto max-w-[1200px] px-6 py-10 lg:px-10">
-      <h1 class="mb-6 text-2xl font-bold text-text-main">
+      <p class="text-xs font-bold uppercase tracking-[0.16em] text-primary">
+        PURCHASE
+      </p>
+      <h1 class="mb-6 mt-2 text-2xl font-bold text-text-main">
         결제하기
       </h1>
 

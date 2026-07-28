@@ -309,7 +309,7 @@ onMounted(() => {
   <MyPageLayout>
     <div class="mb-6">
       <p class="text-[13px] font-semibold text-primary">
-        MY LIMIT
+        MY PAGE
       </p>
       <h1 class="mt-2 text-2xl font-bold text-text-main">
         마이페이지

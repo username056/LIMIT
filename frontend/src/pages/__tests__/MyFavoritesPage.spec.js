@@ -57,7 +57,7 @@ describe('MyFavoritesPage', () => {
 
     expect(removeFavorite).toHaveBeenCalledWith(1001)
     expect(wrapper.findAll('h2')).toHaveLength(0)
-    expect(wrapper.text()).toContain('관심 상품이 없습니다.')
+    expect(wrapper.text()).toContain('좋아요한 상품이 없습니다.')
   })
 
   it('조회 실패 시 오류와 재시도 동작을 제공한다', async () => {
@@ -83,6 +83,6 @@ describe('MyFavoritesPage', () => {
     await flushPromises()
 
     expect(getMyFavorites).toHaveBeenCalledTimes(2)
-    expect(wrapper.text()).toContain('관심 상품이 없습니다.')
+    expect(wrapper.text()).toContain('좋아요한 상품이 없습니다.')
   })
 })

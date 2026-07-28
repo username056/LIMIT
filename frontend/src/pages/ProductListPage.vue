@@ -147,7 +147,7 @@ watch(() => route.query.q, async (keyword) => {
       <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p class="text-xs font-bold uppercase tracking-[0.18em] text-primary">
-            Verified devices
+            VERIFIED DEVICES
           </p>
           <h1 class="mt-2 text-3xl font-bold tracking-tight text-text-main">
             상품 목록

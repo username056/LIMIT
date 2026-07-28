@@ -6,9 +6,8 @@ import BaseCard from '../components/BaseCard.vue'
 import ChatThread from '../components/ChatThread.vue'
 import { getChatRooms } from '../api/chat'
 
-// 방 목록/지난 메시지 조회는 실제 채팅 API를 사용합니다.
-// TODO(채팅 API 연동): 메시지 전송·실시간 수신 API는 백엔드에 아직 없어 ChatThread.vue 안에서만
-// mock으로 처리됩니다. 상대 회원 닉네임·상품 미리보기를 주는 API도 아직 없어 목록에는
+// 방 목록/지난 메시지 조회, 메시지 전송·실시간 수신 모두 실제 채팅 API/WebSocket을 사용합니다.
+// TODO(채팅 API 연동): 상대 회원 닉네임·상품 미리보기를 주는 API가 아직 없어 목록에는
 // 회원 ID/상품 ID만 표시합니다.
 
 const route = useRoute()
@@ -45,11 +44,9 @@ function formatTime(isoString) {
 <template>
   <DefaultLayout>
     <div class="mx-auto max-w-[1280px] px-4 py-7 sm:px-6 lg:px-10 lg:py-10">
-      <p class="mb-6 border-l-2 border-primary px-3 py-1 text-xs leading-5 text-text-sub">
-        실제 채팅 API로 방 목록과 지난 메시지를 불러옵니다. 메시지 전송·실시간 수신 API는 백엔드에
-        아직 없어 새로 보낸 메시지는 저장되지 않는 mock입니다.
+      <p class="mb-4 text-xs font-bold uppercase tracking-[0.16em] text-primary">
+        CHAT
       </p>
-
       <div class="grid min-h-[560px] grid-cols-1 overflow-hidden border-y border-border bg-surface lg:grid-cols-[320px_minmax(0,1fr)]">
         <BaseCard
           :padded="false"

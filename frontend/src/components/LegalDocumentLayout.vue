@@ -11,7 +11,7 @@ defineProps({
   <div class="mx-auto grid max-w-[1200px] gap-8 px-5 py-10 lg:grid-cols-[220px_minmax(0,1fr)] lg:px-10 lg:py-14">
     <aside class="h-fit rounded-lg border border-border bg-white p-5 lg:sticky lg:top-6">
       <p class="text-xs font-bold uppercase tracking-[0.16em] text-primary">
-        Policy
+        POLICY
       </p>
       <nav
         class="mt-4 flex gap-2 overflow-x-auto lg:flex-col"

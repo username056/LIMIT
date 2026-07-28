@@ -30,6 +30,9 @@ const currentPage = ref(1)
 
 <template>
   <SidebarLayout :sidebar-items="sidebarItems">
+    <p class="mb-1 text-xs font-bold uppercase tracking-[0.16em] text-primary">
+      SELLER CENTER
+    </p>
     <h1 class="mb-1 text-lg font-bold text-text-main">
       정산 및 통계
     </h1>

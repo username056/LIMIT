@@ -3,8 +3,9 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseButton from '../components/BaseButton.vue'
+import BaseCard from '../components/BaseCard.vue'
 import { addFavorite, getFavoriteStatus, removeFavorite } from '../api/favorites'
-import { getProduct } from '../api/products'
+import { getProduct, getProductChecklist, requestRecapture } from '../api/products'
 import { createChatRoom, requestRtcCall } from '../api/rtc'
 import { getAccessToken } from '../auth/session'
 
@@ -23,6 +24,56 @@ const checklistRate = computed(() => {
   const completed = Number(checklist.value.completed || 0)
   return required ? Math.min(100, Math.round((completed / required) * 100)) : 0
 })
+
+// 재촬영 요청 팝업
+const checklistItems = ref([])
+const isRecaptureModalOpen = ref(false)
+const checkedItemIds = ref([])
+const recaptureReason = ref('')
+const isSubmittingRecapture = ref(false)
+const recaptureError = ref('')
+const recaptureSubmitted = ref(false)
+
+async function openRecaptureModal() {
+  if (!await requireLogin()) return
+  checkedItemIds.value = []
+  recaptureReason.value = ''
+  recaptureError.value = ''
+  recaptureSubmitted.value = false
+  isRecaptureModalOpen.value = true
+}
+
+function toggleRecaptureItem(checklistItemId) {
+  const index = checkedItemIds.value.indexOf(checklistItemId)
+  if (index === -1) checkedItemIds.value.push(checklistItemId)
+  else checkedItemIds.value.splice(index, 1)
+}
+
+async function submitRecaptureRequest() {
+  recaptureError.value = ''
+  if (!checkedItemIds.value.length) {
+    recaptureError.value = '재촬영을 요청할 항목을 하나 이상 선택해 주세요.'
+    return
+  }
+  if (!recaptureReason.value.trim()) {
+    recaptureError.value = '어떤 부분이 궁금한지 자유롭게 적어 주세요.'
+    return
+  }
+
+  isSubmittingRecapture.value = true
+  try {
+    await Promise.all(checkedItemIds.value.map((checklistItemId) => requestRecapture(
+      product.value.productId,
+      checklistItemId,
+      { reasonCode: 'BUYER_REQUESTED', reason: recaptureReason.value.trim() },
+    )))
+    recaptureSubmitted.value = true
+  } catch (error) {
+    recaptureError.value = error.message || '재촬영 요청을 보내지 못했습니다.'
+  } finally {
+    isSubmittingRecapture.value = false
+  }
+}
 
 function formatPrice(price) {
   return Number(price || 0).toLocaleString('ko-KR')
@@ -78,6 +129,11 @@ onMounted(async () => {
     if (getAccessToken()) {
       const favoriteStatus = await getFavoriteStatus(route.params.productId)
       isFavorite.value = Boolean(favoriteStatus?.favorite)
+    }
+    try {
+      checklistItems.value = await getProductChecklist(product.value.productId)
+    } catch {
+      checklistItems.value = []
     }
   } catch (error) {
     errorMessage.value = error.message || '상품을 불러오지 못했습니다.'
@@ -299,7 +355,105 @@ onMounted(async () => {
             <p class="mt-4 text-xs leading-5 text-text-sub">
               원본 상태 자료는 상품과 연결된 체크리스트 기준으로 관리됩니다.
             </p>
+            <BaseButton
+              class="mt-4"
+              block
+              variant="outline"
+              @click="openRecaptureModal"
+            >
+              재촬영 요청
+            </BaseButton>
           </section>
+        </div>
+
+        <div
+          v-if="isRecaptureModalOpen"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+        >
+          <BaseCard class="w-full max-w-md">
+            <template v-if="!recaptureSubmitted">
+              <h2 class="text-lg font-bold text-text-main">
+                어떤 항목을 재촬영해 주셨으면 하나요?
+              </h2>
+              <p class="mt-1 text-sm text-text-sub">
+                궁금한 항목을 선택하고, 어떤 부분이 더 잘 보였으면 하는지 자유롭게 적어 주세요.
+              </p>
+
+              <ul class="mt-5 max-h-48 space-y-2 overflow-y-auto">
+                <li
+                  v-for="item in checklistItems"
+                  :key="item.checklistItemId"
+                >
+                  <label class="flex cursor-pointer items-center gap-3 rounded-md border border-border px-3 py-2.5 text-sm">
+                    <input
+                      type="checkbox"
+                      class="h-4 w-4 rounded border-border"
+                      :checked="checkedItemIds.includes(item.checklistItemId)"
+                      @change="toggleRecaptureItem(item.checklistItemId)"
+                    >
+                    <span class="font-semibold text-text-main">{{ item.name }}</span>
+                  </label>
+                </li>
+                <li
+                  v-if="!checklistItems.length"
+                  class="rounded-md bg-bg px-3 py-4 text-center text-sm text-text-sub"
+                >
+                  등록된 체크리스트 항목이 없습니다.
+                </li>
+              </ul>
+
+              <label class="mt-4 block text-sm font-semibold text-text-main">
+                요청 내용
+                <textarea
+                  v-model="recaptureReason"
+                  rows="4"
+                  maxlength="500"
+                  placeholder="예) 카메라 - 렌즈 부분이 잘 안 보여서 좀 더 잘 보이게 가능할까요?"
+                  class="mt-2 w-full rounded-md border border-border px-3 py-2.5 text-sm outline-none focus:border-primary"
+                />
+              </label>
+
+              <p
+                v-if="recaptureError"
+                role="alert"
+                class="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700"
+              >
+                {{ recaptureError }}
+              </p>
+
+              <div class="mt-5 flex justify-end gap-3">
+                <BaseButton
+                  type="button"
+                  variant="outline"
+                  @click="isRecaptureModalOpen = false"
+                >
+                  취소
+                </BaseButton>
+                <BaseButton
+                  type="button"
+                  :disabled="isSubmittingRecapture"
+                  @click="submitRecaptureRequest"
+                >
+                  {{ isSubmittingRecapture ? '요청 중…' : '요청 보내기' }}
+                </BaseButton>
+              </div>
+            </template>
+            <template v-else>
+              <p class="text-base font-bold text-text-main">
+                재촬영 요청을 보냈습니다.
+              </p>
+              <p class="mt-2 text-sm text-text-sub">
+                판매자가 확인 후 새로운 자료를 등록하면 알려드릴게요.
+              </p>
+              <BaseButton
+                class="mt-5"
+                block
+                @click="isRecaptureModalOpen = false"
+              >
+                확인
+              </BaseButton>
+            </template>
+          </BaseCard>
         </div>
       </template>
     </main>
