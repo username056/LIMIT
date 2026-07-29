@@ -302,9 +302,8 @@ public class ProductApplicationService {
             throw new BusinessException(ErrorCode.INVALID_PRODUCT_STATUS_TRANSITION);
         }
         if (target == ListingStatus.ON_SALE) {
-            if (required(listing.getId()) != completedRequired(listing.getId())) {
-                throw new BusinessException(ErrorCode.REQUIRED_EVIDENCE_INCOMPLETE);
-            }
+            // 판매 시작은 체크리스트 완료 여부로 막지 않는다. 등록을 마친 판매자가 다시 '판매 시작'을
+            // 눌러야 하는 흐름을 없애기 위한 정책이며, 남은 항목은 상세의 검증 진행률로 구매자에게 드러난다.
             listing.completePrecheck();
             listing.publish();
         } else if (target == ListingStatus.HIDDEN) {
@@ -396,6 +395,7 @@ public class ProductApplicationService {
                 checklistItemRepository.countByListingIdAndIsRequiredTrueAndCompletionStatus(
                         listingId, ChecklistItemCompletionStatus.COMPLETED));
     }
+
 
     private Map<Long, ProductMetrics> loadMetrics(List<Listing> listings) {
         if (listings.isEmpty()) return Map.of();

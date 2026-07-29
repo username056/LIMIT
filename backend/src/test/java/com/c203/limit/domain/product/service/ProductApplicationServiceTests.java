@@ -166,21 +166,22 @@ class ProductApplicationServiceTests {
     }
 
     @Test
-    void blocksPublishingUntilRequiredChecklistIsComplete() {
+    void publishesEvenWhenRequiredChecklistIsIncomplete() {
         Listing listing = listing();
         when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
                 .thenReturn(Optional.of(listing));
-        when(checklistItemRepository.countByListingIdAndIsRequiredTrue(1001L)).thenReturn(2L);
-        when(checklistItemRepository.countByListingIdAndIsRequiredTrueAndCompletionStatus(
-                        1001L, ChecklistItemCompletionStatus.COMPLETED))
-                .thenReturn(1L);
+        when(statusHistoryRepository.saveAndFlush(any(ListingStatusHistory.class)))
+                .thenAnswer(invocation -> {
+                    ListingStatusHistory history = invocation.getArgument(0);
+                    ReflectionTestUtils.setField(history, "id", 7002L);
+                    return history;
+                });
 
-        assertThatThrownBy(() -> service.transition(
-                55L, 1001L, new TransitionProductStatusRequest("ON_SALE", "등록")))
-                .isInstanceOfSatisfying(BusinessException.class,
-                        exception -> assertThat(exception.getErrorCode())
-                                .isEqualTo(ErrorCode.REQUIRED_EVIDENCE_INCOMPLETE));
-        assertThat(listing.getStatus()).isEqualTo(ListingStatus.DRAFT);
+        var result = service.transition(
+                55L, 1001L, new TransitionProductStatusRequest("ON_SALE", "등록 완료"));
+
+        assertThat(result.getCurrentStatus()).isEqualTo("ON_SALE");
+        assertThat(listing.getStatus()).isEqualTo(ListingStatus.ON_SALE);
     }
 
     @Test
@@ -188,10 +189,6 @@ class ProductApplicationServiceTests {
         Listing listing = listing();
         when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
                 .thenReturn(Optional.of(listing));
-        when(checklistItemRepository.countByListingIdAndIsRequiredTrue(1001L)).thenReturn(2L);
-        when(checklistItemRepository.countByListingIdAndIsRequiredTrueAndCompletionStatus(
-                        1001L, ChecklistItemCompletionStatus.COMPLETED))
-                .thenReturn(2L);
         when(statusHistoryRepository.saveAndFlush(any(ListingStatusHistory.class)))
                 .thenAnswer(invocation -> {
                     ListingStatusHistory history = invocation.getArgument(0);
