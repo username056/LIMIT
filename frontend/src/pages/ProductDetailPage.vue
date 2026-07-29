@@ -337,14 +337,6 @@ onMounted(async () => {
               </div>
               <div>
                 <dt class="text-xs text-text-sub">
-                  거래 지역
-                </dt>
-                <dd class="mt-1 font-semibold text-text-main">
-                  {{ product.tradeRegion || '협의' }}
-                </dd>
-              </div>
-              <div>
-                <dt class="text-xs text-text-sub">
                   상품 번호
                 </dt>
                 <dd class="mt-1 font-semibold text-text-main">

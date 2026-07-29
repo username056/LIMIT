@@ -165,6 +165,21 @@ describe('ProductDetailPage', () => {
     expect(purchaseButton.props('to')).toBe('')
   })
 
+  it('상세에서 거래 지역 항목을 보여주지 않는다', async () => {
+    const wrapper = mount(ProductDetailPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('거래 지역')
+  })
+
   it('본인이 등록한 상품에는 구매·문의 대신 수정 동선을 보여준다', async () => {
     getAccessToken.mockReturnValue('test-token')
     getSessionMember.mockReturnValue({ memberId: 55 })

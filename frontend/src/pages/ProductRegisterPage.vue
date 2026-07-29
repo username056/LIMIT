@@ -20,7 +20,6 @@ import {
 } from '../api/products'
 import { compressImage, compressVideo } from '../utils/mediaOptimize'
 import { MAX_PRICE_DIGITS, formatPriceDigits, toPriceDigits } from '../utils/priceInput'
-import { searchPlaces } from '../api/places'
 
 const WIZARD_STEPS = [
   { number: 1, label: '기기 등록' },
@@ -31,6 +30,13 @@ const WIZARD_STEPS = [
 
 // 체크리스트 항목 하나에 첨부할 수 있는 사진·영상 개수 상한입니다.
 const MAX_MEDIA_PER_ITEM = 3
+
+// TODO(대표 이미지): 필수 입력으로 두기로 했지만, S3 업로드 구현(feat/s3-media-storage)과
+// 같은 파일에서 충돌하므로 임시 미리보기 UI를 걷어냈습니다. 그 브랜치가 dev에 들어오면
+// listingImages 기반 업로드에 '최소 1장 필수' 규칙을 다시 붙이세요.
+// 화면에서 거래 지역을 받지 않기로 했지만 CreateProductRequest의 tradeRegion에 @NotBlank가 남아 있어
+// 값을 비우면 등록이 400으로 실패합니다. 백엔드에서 해당 제약이 풀리면 이 상수와 payload 항목을 함께 지우세요.
+const DEFAULT_TRADE_REGION = '협의'
 
 // 실제로 많이 쓰이는 용량만 골라 두고, 해당하지 않으면 직접 입력으로 넘어갑니다.
 const STORAGE_OPTIONS = [16, 32, 64, 128, 256, 512, 1024]
@@ -80,14 +86,10 @@ const draftProductId = ref(null)
 const activeStep = ref(1)
 const form = reactive({
   categoryId: '', deviceModelId: '', name: '', description: '', price: '',
-  color: '', storageGb: '', tradeRegion: '',
+  color: '', storageGb: '',
 })
 
-const tradeRegionResults = ref([])
-const isSearchingTradeRegion = ref(false)
-const showTradeRegionResults = ref(false)
-const hasSearchedTradeRegion = ref(false)
-let tradeRegionSearchTimer = null
+
 
 // 사용자가 직접 입력을 고른 상태. 수정 진입 시 목록에 없는 용량이면 자동으로 직접 입력으로 보여줍니다.
 const isCustomStorage = ref(false)
@@ -138,44 +140,6 @@ function onStorageSelect(event) {
   form.storageGb = value
 }
 
-function clearTradeRegion() {
-  form.tradeRegion = ''
-  tradeRegionResults.value = []
-  hasSearchedTradeRegion.value = false
-  showTradeRegionResults.value = false
-}
-
-function onTradeRegionInput() {
-  showTradeRegionResults.value = true
-  clearTimeout(tradeRegionSearchTimer)
-  const keyword = form.tradeRegion.trim()
-  if (keyword.length < 2) {
-    tradeRegionResults.value = []
-    hasSearchedTradeRegion.value = false
-    return
-  }
-  tradeRegionSearchTimer = setTimeout(async () => {
-    isSearchingTradeRegion.value = true
-    try {
-      tradeRegionResults.value = await searchPlaces(keyword)
-    } catch {
-      tradeRegionResults.value = []
-    } finally {
-      isSearchingTradeRegion.value = false
-      hasSearchedTradeRegion.value = true
-    }
-  }, 300)
-}
-
-function selectTradeRegion(place) {
-  const address = place.roadAddressName || place.addressName
-  form.tradeRegion = place.placeName && place.placeName !== address
-    ? `${place.placeName} (${address})`
-    : address
-  tradeRegionResults.value = []
-  hasSearchedTradeRegion.value = false
-  showTradeRegionResults.value = false
-}
 
 // 체크리스트 관련: templateItems는 항목 가이드/허용 형식을 보여주기 위한 모델 템플릿,
 // checklistItems는 상품 생성 시 고정된 실제 스냅샷(evidence API 호출에 필요한 checklistItemId 포함).
@@ -193,6 +157,24 @@ const confirmState = reactive({})
 const mediaPreview = ref(null)
 // 체크리스트를 덜 채운 채 다음 단계를 누르면 인라인 문구만으로는 놓치기 쉬워 팝업으로 알립니다.
 const alertMessage = ref('')
+// 확인을 누르면 그대로 진행할 동작. 진행 없이 알리기만 할 때는 null입니다.
+const alertProceed = ref(null)
+
+function openAlert(message, proceed = null) {
+  alertMessage.value = message
+  alertProceed.value = proceed
+}
+
+function closeAlert() {
+  alertMessage.value = ''
+  alertProceed.value = null
+}
+
+function confirmAlert() {
+  const proceed = alertProceed.value
+  closeAlert()
+  if (proceed) proceed()
+}
 let mediaKeySeq = 0
 
 function mediaOf(checklistItemId) {
@@ -320,7 +302,7 @@ function resetForm() {
   activeStep.value = 1
   Object.assign(form, {
     categoryId: '', deviceModelId: '', name: '', description: '', price: '',
-    color: '', storageGb: '', tradeRegion: '',
+    color: '', storageGb: '',
   })
   models.value = []
   templateItems.value = []
@@ -331,7 +313,6 @@ function resetForm() {
   activeCaptureItemId.value = null
   handoverGuide.value = null
   isCustomStorage.value = false
-  hasSearchedTradeRegion.value = false
   priceRejection.value = ''
   clearCaptureState()
   Object.keys(confirmState).forEach((key) => delete confirmState[key])
@@ -373,9 +354,14 @@ async function loadTemplatePreview() {
   }
 }
 
+// 기기 등록(1단계)이 실제 필수 구간입니다. 여기서 빠진 값이 있으면 다음 단계로 넘기지 않습니다.
+// 반대로 2단계 촬영 체크리스트는 필수가 아니어서 건너뛸 수 있습니다.
+// requireStorage: '다음 단계'는 저장 용량까지 요구하고, 중간 이탈용 '임시저장'은 요구하지 않습니다.
+// TODO(필수 항목): 저장 용량·대표 이미지를 필수로 두기로 했지만, S3 업로드 브랜치와 같은 구간이라
+// 병합 충돌을 줄이려고 검증을 미뤘습니다. 그 브랜치가 dev에 들어오면 여기에 다시 붙이세요.
 function validateSaleInfo() {
-  if (!form.name || form.price === '' || !form.tradeRegion) {
-    errorMessage.value = '상품명, 가격, 거래 지역을 입력해 주세요.'
+  if (!form.name || form.price === '') {
+    errorMessage.value = '상품명과 가격을 입력해 주세요.'
     return false
   }
   if (!Number.isFinite(Number(form.price)) || Number(form.price) < 1) {
@@ -389,47 +375,84 @@ function validateSaleInfo() {
   return true
 }
 
-async function goToStep2() {
+// 1단계 입력을 서버에 저장하고 체크리스트 스냅샷을 받아옵니다.
+// '다음 단계'와 '임시저장'이 같은 저장 경로를 쓰도록 분리했습니다.
+async function persistSaleInfo() {
+  const payload = {
+    name: form.name,
+    description: form.description || null,
+    price: Number(form.price),
+    color: form.color || null,
+    storageGb: form.storageGb ? Number(form.storageGb) : null,
+    tradeRegion: DEFAULT_TRADE_REGION,
+  }
+  let productId = editingId.value
+  if (productId) {
+    await updateProduct(productId, payload)
+  } else {
+    const created = await createProduct({
+      ...payload,
+      categoryId: Number(form.categoryId),
+      deviceModelId: Number(form.deviceModelId),
+      ...(supportsGeneratedChecklist.value
+        ? { confirmedFeatures: [...confirmedFeatures.value] }
+        : {}),
+    })
+    productId = created.productId
+    draftProductId.value = productId
+  }
+  checklistItems.value = await getProductChecklist(productId)
+  activeCaptureItemId.value = mediaChecklistItems.value[0]?.checklistItemId || null
+  return productId
+}
+
+function validateDeviceStep() {
   errorMessage.value = ''
   if (!form.categoryId || !form.deviceModelId) {
     errorMessage.value = '카테고리와 기기 모델을 선택해 주세요.'
-    return
+    return false
   }
-  if (!validateSaleInfo()) return
+  return validateSaleInfo()
+}
+
+async function goToStep2() {
+  if (!validateDeviceStep()) return
 
   isSaving.value = true
   try {
-    const payload = {
-      name: form.name,
-      description: form.description || null,
-      price: Number(form.price),
-      color: form.color || null,
-      storageGb: form.storageGb ? Number(form.storageGb) : null,
-      tradeRegion: form.tradeRegion,
-    }
-    let productId = editingId.value
-    if (productId) {
-      await updateProduct(productId, payload)
-    } else {
-      const created = await createProduct({
-        ...payload,
-        categoryId: Number(form.categoryId),
-        deviceModelId: Number(form.deviceModelId),
-        ...(supportsGeneratedChecklist.value
-          ? { confirmedFeatures: [...confirmedFeatures.value] }
-          : {}),
-      })
-      productId = created.productId
-      draftProductId.value = productId
-    }
-    checklistItems.value = await getProductChecklist(productId)
-    activeCaptureItemId.value = mediaChecklistItems.value[0]?.checklistItemId || null
+    await persistSaleInfo()
     setStep(2)
   } catch (error) {
     errorMessage.value = error.message || '상품 정보를 저장하지 못했습니다.'
   } finally {
     isSaving.value = false
   }
+}
+
+// 등록 중간에 이탈해야 할 때 쓰는 저장입니다. 지금까지 입력과 올린 사진은 그대로 남고,
+// 상품은 '임시 저장 중' 상태로 상품 관리 목록에 남습니다.
+async function saveDraft() {
+  errorMessage.value = ''
+  if (activeStep.value === 1) {
+    if (!validateDeviceStep()) return
+    isSaving.value = true
+    try {
+      await persistSaleInfo()
+    } catch (error) {
+      errorMessage.value = error.message || '임시 저장하지 못했습니다.'
+      return
+    } finally {
+      isSaving.value = false
+    }
+  }
+
+  if (!currentProductId.value) {
+    errorMessage.value = '아직 임시 저장할 내용이 없습니다.'
+    return
+  }
+
+  resetForm()
+  await router.push({ name: 'seller-products' })
 }
 
 async function loadHandoverGuide() {
@@ -451,34 +474,46 @@ async function loadHandoverGuide() {
   }
 }
 
+// 체크리스트 항목이 많아 전부 채우지 않고 등록하려는 판매자도 있습니다.
+// 남은 항목을 알려주되, 확인을 누르면 그대로 다음 단계로 넘어갈 수 있게 합니다.
 function goToStep3() {
   errorMessage.value = ''
+  const proceed = () => {
+    setStep(3)
+    loadHandoverGuide()
+  }
   const missingRequired = mediaChecklistItems.value.filter(
     (item) => isRequiredItem(item) && mediaOf(item.checklistItemId).length === 0,
   )
   if (missingRequired.length) {
-    alertMessage.value = `아직 촬영하지 않은 필수 항목이 ${missingRequired.length}개 있습니다.\n${missingRequired.map((item) => `· ${item.name}`).join('\n')}`
     activeCaptureItemId.value = missingRequired[0].checklistItemId
+    openAlert(
+      `아직 촬영하지 않은 필수 항목이 ${missingRequired.length}개 있습니다.\n${missingRequired.map((item) => `· ${item.name}`).join('\n')}\n\n지금 넘어가도 나중에 이어서 등록할 수 있지만, 자료가 많을수록 구매자의 신뢰를 얻기 쉽습니다.`,
+      proceed,
+    )
     return
   }
-  setStep(3)
-  loadHandoverGuide()
+  proceed()
 }
 
+// 개인정보 확인은 체크 몇 번이면 되는 일이고 기기를 넘긴 뒤에는 되돌릴 수 없어 필수로 둡니다.
+// 촬영 체크리스트와 달리 건너뛸 수 없습니다.
 function goToStep4() {
   errorMessage.value = ''
   const missingConfirm = confirmationChecklistItems.value.filter(
     (item) => isRequiredItem(item) && !confirmState[item.checklistItemId],
   )
   if (missingConfirm.length) {
-    alertMessage.value = `개인정보 정리 확인이 남아 있습니다.\n${missingConfirm.map((item) => `· ${item.name}`).join('\n')}`
+    openAlert(
+      `개인정보 정리 확인이 남아 있습니다.\n${missingConfirm.map((item) => `· ${item.name}`).join('\n')}\n\n기기를 넘기기 전에 반드시 초기화해야 하는 항목이라 건너뛸 수 없습니다.`,
+    )
     return
   }
   setStep(4)
 }
 
-// 등록을 마치면 '임시 저장 중'으로 남지 않도록 판매 상태로 올린 뒤,
-// 목록을 거치지 않고 방금 등록한 상품 상세로 바로 이동합니다.
+// 등록을 마치면 별도의 '판매 시작'을 누르지 않아도 바로 판매가 시작되게 합니다.
+// 임시 저장은 중간 이탈용이지, 등록을 끝낸 사용자가 한 번 더 눌러야 하는 단계가 아닙니다.
 async function finishWizard() {
   const productId = currentProductId.value
   if (!productId) {
@@ -603,7 +638,6 @@ async function startEdit(productId) {
       deviceModelId: product.device?.deviceModelId || '',
       name: product.name || '', description: product.description || '', price: product.price || '',
       color: product.device?.color || '', storageGb: product.device?.storageGb || '',
-      tradeRegion: product.tradeRegion || '',
     })
     if (form.categoryId) models.value = await getDeviceModels({ categoryId: form.categoryId, page: 0, size: 100 })
     if (form.deviceModelId) await loadTemplatePreview()
@@ -644,7 +678,7 @@ onMounted(async () => {
               {{ editingId ? '상품 수정' : '상품 등록' }}
             </h1>
             <p class="mt-1 text-sm text-text-sub">
-              기기 정보와 검증 체크리스트를 순서대로 완료하면 상품이 등록됩니다. 진행 중인 내용은 임시 저장됩니다.
+              기기 정보와 검증 체크리스트를 순서대로 완료하면 바로 판매가 시작됩니다. 중간에 나가야 하면 임시저장을 눌러 주세요.
             </p>
           </div>
           <RouterLink
@@ -682,7 +716,7 @@ onMounted(async () => {
               선택한 모델에 맞는 검증 체크리스트가 자동으로 연결됩니다. 다음 단계에서 항목별로 사진·영상을 등록하게 됩니다.
             </p>
             <div class="mt-6 grid gap-5 sm:grid-cols-2">
-              <label class="text-sm font-semibold text-text-main">카테고리
+              <label class="text-sm font-semibold text-text-main">카테고리<span class="ml-0.5 text-red-500">*</span>
                 <select
                   v-model="form.categoryId"
                   :disabled="Boolean(editingId)"
@@ -697,7 +731,7 @@ onMounted(async () => {
                   >{{ item.name }}</option>
                 </select>
               </label>
-              <label class="text-sm font-semibold text-text-main">기기 모델
+              <label class="text-sm font-semibold text-text-main">기기 모델<span class="ml-0.5 text-red-500">*</span>
                 <select
                   v-model="form.deviceModelId"
                   :disabled="Boolean(editingId) || !form.categoryId"
@@ -869,7 +903,7 @@ onMounted(async () => {
             </p>
 
             <div class="mt-6 grid gap-5 sm:grid-cols-2">
-              <label class="text-sm font-semibold text-text-main">상품명<input
+              <label class="text-sm font-semibold text-text-main">상품명<span class="ml-0.5 text-red-500">*</span><input
                 v-model.trim="form.name"
                 required
                 maxlength="100"
@@ -877,7 +911,7 @@ onMounted(async () => {
                 class="mt-2 w-full rounded-md border border-border px-3 py-3 font-normal outline-none focus:border-primary"
               ></label>
               <label class="text-sm font-semibold text-text-main">
-                가격
+                가격<span class="ml-0.5 text-red-500">*</span>
                 <div class="relative mt-2">
                   <input
                     :value="priceFormatted"
@@ -930,64 +964,6 @@ onMounted(async () => {
                   class="mt-2 w-full rounded-md border border-border px-3 py-3 font-normal outline-none focus:border-primary"
                 >
               </label>
-              <label class="relative text-sm font-semibold text-text-main sm:col-span-2">
-                거래 지역
-                <div class="relative mt-2">
-                  <input
-                    v-model.trim="form.tradeRegion"
-                    required
-                    maxlength="100"
-                    placeholder="역, 랜드마크로 검색 (예: 상동역)"
-                    autocomplete="off"
-                    class="w-full rounded-md border border-border px-3 py-3 pr-10 font-normal outline-none focus:border-primary"
-                    @input="onTradeRegionInput"
-                    @focus="showTradeRegionResults = true"
-                    @blur="showTradeRegionResults = false"
-                  >
-                  <button
-                    v-if="form.tradeRegion"
-                    type="button"
-                    class="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-text-sub transition hover:bg-bg hover:text-text-main"
-                    aria-label="거래 지역 지우기"
-                    @click="clearTradeRegion"
-                  >
-                    ×
-                  </button>
-                </div>
-                <span class="mt-1 block text-xs font-normal text-text-sub">
-                  두 글자 이상 입력하면 장소를 검색합니다. 검색 결과가 없으면 직접 적어도 됩니다.
-                </span>
-                <ul
-                  v-if="showTradeRegionResults && (tradeRegionResults.length || isSearchingTradeRegion || hasSearchedTradeRegion)"
-                  class="absolute z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-md border border-border bg-white text-left shadow-lg"
-                >
-                  <li
-                    v-if="isSearchingTradeRegion"
-                    class="px-3 py-2 text-xs font-normal text-text-sub"
-                  >
-                    검색 중...
-                  </li>
-                  <li
-                    v-else-if="!tradeRegionResults.length"
-                    class="px-3 py-2 text-xs font-normal text-text-sub"
-                  >
-                    검색 결과가 없습니다. 입력한 내용을 그대로 사용할 수 있습니다.
-                  </li>
-                  <li
-                    v-for="place in tradeRegionResults"
-                    :key="`${place.placeName}-${place.addressName}`"
-                  >
-                    <button
-                      type="button"
-                      class="w-full px-3 py-2 text-left text-sm font-normal hover:bg-accent"
-                      @mousedown.prevent="selectTradeRegion(place)"
-                    >
-                      <span class="block font-semibold text-text-main">{{ place.placeName || place.addressName }}</span>
-                      <span class="block text-xs text-text-sub">{{ place.roadAddressName || place.addressName }}</span>
-                    </button>
-                  </li>
-                </ul>
-              </label>
               <label class="text-sm font-semibold text-text-main sm:col-span-2">
                 상품 설명
                 <textarea
@@ -1017,7 +993,8 @@ onMounted(async () => {
                 현재 진행률: {{ mediaChecklistItems.length }}개 중 {{ capturedMediaCount }}개 촬영 완료
               </p>
 
-              <ul class="mt-4 space-y-3">
+              <!-- 항목이 많으면 화면이 길어져서 6개 정도만 보이고 나머지는 스크롤로 봅니다. -->
+              <ul class="mt-4 max-h-[32rem] space-y-3 overflow-y-auto pr-1">
                 <li
                   v-for="item in mediaChecklistItems"
                   :key="item.checklistItemId"
@@ -1284,7 +1261,7 @@ onMounted(async () => {
               체크리스트 등록이 완료되었습니다.
             </h2>
             <p class="mt-2 text-sm text-text-sub">
-              ‘{{ form.name }}’ 등록이 끝났어요. 완료를 누르면 등록한 상품 상세 페이지로 이동합니다.
+              ‘{{ form.name }}’ 등록이 끝났어요. 완료를 누르면 바로 판매가 시작되고 상품 상세 페이지로 이동합니다.
             </p>
 
             <dl class="mt-6 grid grid-cols-2 gap-4 rounded-lg border border-border bg-bg p-6 text-left text-sm">
@@ -1329,6 +1306,18 @@ onMounted(async () => {
               이전 단계로
             </BaseButton>
             <span v-else />
+
+            <!-- 등록 도중 이탈해야 할 때만 쓰는 버튼입니다. 등록을 끝내면 '완료'가 바로 판매를 시작합니다. -->
+            <BaseButton
+              v-if="activeStep < 4"
+              type="button"
+              variant="ghost"
+              class="ml-auto mr-3 px-3 py-2 text-sm"
+              :disabled="isSaving"
+              @click="saveDraft"
+            >
+              임시저장
+            </BaseButton>
 
             <BaseButton
               v-if="activeStep === 1"
@@ -1385,22 +1374,31 @@ onMounted(async () => {
         role="alertdialog"
         aria-modal="true"
         aria-label="확인 필요"
-        @click.self="alertMessage = ''"
+        @click.self="closeAlert"
       >
         <div class="w-full max-w-sm rounded-lg bg-surface p-6 text-center shadow-elevated">
           <div class="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-accent text-xl font-bold text-primary">
             !
           </div>
-          <p class="mt-4 whitespace-pre-line text-sm leading-6 text-text-main">
+          <p class="mt-4 whitespace-pre-line text-left text-sm leading-6 text-text-main">
             {{ alertMessage }}
           </p>
-          <BaseButton
-            block
-            class="mt-5"
-            @click="alertMessage = ''"
-          >
-            확인
-          </BaseButton>
+          <div class="mt-5 flex gap-3">
+            <BaseButton
+              v-if="alertProceed"
+              variant="outline"
+              class="flex-1"
+              @click="closeAlert"
+            >
+              계속 작성하기
+            </BaseButton>
+            <BaseButton
+              class="flex-1"
+              @click="confirmAlert"
+            >
+              확인
+            </BaseButton>
+          </div>
         </div>
       </div>
 

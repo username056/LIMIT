@@ -72,7 +72,7 @@ async function fillDeviceStep(wrapper) {
 
   await wrapper.find('input[placeholder="예: 갤럭시 S24 256GB 자급제"]').setValue('갤럭시 북 테스트 상품')
   await wrapper.find('input[placeholder="판매 가격"]').setValue('850000')
-  await wrapper.find('input[placeholder="역, 랜드마크로 검색 (예: 상동역)"]').setValue('광주광역시 광산구')
+  await wrapper.find('select[aria-label="저장 용량 선택"]').setValue('256')
 }
 
 async function goToCaptureStep(wrapper) {
@@ -89,6 +89,8 @@ const templateItems = [
 describe('ProductRegisterPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // clearAllMocks는 호출 기록만 지우고 구현은 남기므로, 테스트마다 기본 동작을 다시 세웁니다.
+    transitionProductStatus.mockResolvedValue({})
     // jsdom에는 scrollTo 구현이 없어 단계 이동 시 예외가 나므로 스텁으로 대체합니다.
     window.scrollTo = vi.fn()
     global.fetch = vi.fn().mockResolvedValue({ ok: true })
@@ -145,7 +147,8 @@ describe('ProductRegisterPage', () => {
       price: 850000,
       color: '그라파이트',
       storageGb: 512,
-      tradeRegion: '광주광역시 광산구',
+      // 화면에서는 거래 지역을 받지 않지만 백엔드 @NotBlank 때문에 기본값을 채워 보냅니다.
+      tradeRegion: '협의',
     })
     expect(getProductChecklist).toHaveBeenCalledWith(1001)
     expect(wrapper.text()).toContain('검수용 기기 촬영')
@@ -271,6 +274,32 @@ describe('ProductRegisterPage', () => {
     expect(priceInput.element.value).toBe('123,456,789,012')
   })
 
+  it('등록 폼에서 거래 지역을 받지 않는다', async () => {
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('거래 지역')
+    expect(wrapper.find('input[placeholder="역, 랜드마크로 검색 (예: 상동역)"]').exists()).toBe(false)
+  })
+
+  it('임시저장은 저장 용량 없이도 저장된다', async () => {
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+
+    await wrapper.findAll('select')[0].setValue('10')
+    await flushPromises()
+    await wrapper.findAll('select')[1].setValue('101')
+    await flushPromises()
+    await wrapper.find('input[placeholder="예: 갤럭시 S24 256GB 자급제"]').setValue('갤럭시 북')
+    await wrapper.find('input[placeholder="판매 가격"]').setValue('850000')
+
+    await buttonByText(wrapper, '임시저장').trigger('click')
+    await flushPromises()
+
+    expect(createProduct).toHaveBeenCalledWith(expect.objectContaining({ storageGb: null }))
+    expect(routerPushMock).toHaveBeenCalledWith({ name: 'seller-products' })
+  })
+
   it('저장 용량은 드롭다운으로 고르거나 직접 입력할 수 있다', async () => {
     const wrapper = mount(ProductRegisterPage, { global: globalOptions })
     await flushPromises()
@@ -279,19 +308,20 @@ describe('ProductRegisterPage', () => {
     expect(wrapper.text()).toContain('1TB')
     expect(wrapper.find('input[aria-label="저장 용량 직접 입력"]').exists()).toBe(false)
 
+    // fillDeviceStep이 드롭다운으로 용량을 채우므로, 직접 입력은 그 뒤에 설정합니다.
+    await fillDeviceStep(wrapper)
     await storageSelect.setValue('custom')
     const customInput = wrapper.find('input[aria-label="저장 용량 직접 입력"]')
     expect(customInput.exists()).toBe(true)
 
     await customInput.setValue('384')
-    await fillDeviceStep(wrapper)
     await buttonByText(wrapper, '다음 단계').trigger('click')
     await flushPromises()
 
     expect(createProduct).toHaveBeenCalledWith(expect.objectContaining({ storageGb: 384 }))
   })
 
-  it('필수 촬영 항목이 남으면 팝업으로 알리고 단계를 넘기지 않는다', async () => {
+  it('필수 촬영 항목이 남으면 팝업으로 알리되 계속 작성하기를 누르면 그 단계에 머문다', async () => {
     const wrapper = mount(ProductRegisterPage, { global: globalOptions })
     await flushPromises()
     await goToCaptureStep(wrapper)
@@ -301,10 +331,52 @@ describe('ProductRegisterPage', () => {
 
     expect(wrapper.find('[role="alertdialog"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('아직 촬영하지 않은 필수 항목이 1개 있습니다.')
-    expect(wrapper.text()).toContain('검수용 기기 촬영')
 
-    await buttonByText(wrapper, '확인').trigger('click')
+    await buttonByText(wrapper, '계속 작성하기').trigger('click')
+    await flushPromises()
+
     expect(wrapper.find('[role="alertdialog"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('검수용 기기 촬영')
+    expect(wrapper.text()).not.toContain('개인정보를 정리했는지 확인해 주세요.')
+  })
+
+  it('필수 촬영 항목이 남아도 확인을 누르면 다음 단계로 넘어간다', async () => {
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await goToCaptureStep(wrapper)
+
+    await buttonByText(wrapper, '다음 단계로').trigger('click')
+    await flushPromises()
+    await buttonByText(wrapper, '확인').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[role="alertdialog"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('개인정보를 정리했는지 확인해 주세요.')
+  })
+
+  it('개인정보 확인은 필수라서 건너뛸 수 없다', async () => {
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await goToCaptureStep(wrapper)
+
+    // 촬영은 건너뛸 수 있다
+    await buttonByText(wrapper, '다음 단계로').trigger('click')
+    await flushPromises()
+    await buttonByText(wrapper, '확인').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('개인정보를 정리했는지 확인해 주세요.')
+
+    // 개인정보 확인은 건너뛸 수 없다 — 진행 버튼이 없고 4단계로 넘어가지 않는다
+    await buttonByText(wrapper, '다음 단계로').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('건너뛸 수 없습니다')
+    expect(buttonByText(wrapper, '계속 작성하기')).toBeUndefined()
+    await buttonByText(wrapper, '확인').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('체크리스트 등록이 완료되었습니다.')
+    expect(wrapper.text()).toContain('개인정보를 정리했는지 확인해 주세요.')
   })
 
   it('체크리스트 항목당 사진은 3개까지만 첨부할 수 있다', async () => {
@@ -364,5 +436,30 @@ describe('ProductRegisterPage', () => {
       name: 'product-detail',
       params: { productId: 1001 },
     })
+  })
+
+  it('1단계에서 임시저장을 누르면 상품을 저장하고 상품 관리로 나간다', async () => {
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await fillDeviceStep(wrapper)
+
+    await buttonByText(wrapper, '임시저장').trigger('click')
+    await flushPromises()
+
+    expect(createProduct).toHaveBeenCalledTimes(1)
+    expect(transitionProductStatus).not.toHaveBeenCalled()
+    expect(routerPushMock).toHaveBeenCalledWith({ name: 'seller-products' })
+  })
+
+  it('촬영 단계에서 임시저장을 누르면 판매를 시작하지 않고 나간다', async () => {
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await goToCaptureStep(wrapper)
+
+    await buttonByText(wrapper, '임시저장').trigger('click')
+    await flushPromises()
+
+    expect(transitionProductStatus).not.toHaveBeenCalled()
+    expect(routerPushMock).toHaveBeenCalledWith({ name: 'seller-products' })
   })
 })
