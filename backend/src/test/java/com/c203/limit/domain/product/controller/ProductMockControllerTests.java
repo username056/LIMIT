@@ -36,6 +36,8 @@ import com.c203.limit.domain.inspection.repository.EvidenceRepository;
 import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
 import com.c203.limit.domain.inspection.repository.ListingOwnerReader;
 import com.c203.limit.domain.inspection.repository.OcrResultRepository;
+import com.c203.limit.domain.inspection.reinspection.repository.ReinspectionRequestItemRepository;
+import com.c203.limit.domain.inspection.reinspection.repository.ReinspectionRequestRepository;
 import com.c203.limit.domain.product.repository.ListingRepository;
 import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
 import com.c203.limit.domain.product.repository.WishlistRepository;
@@ -130,6 +132,12 @@ class ProductMockControllerTests {
 
     @MockitoBean
     BatteryReportResultRepository batteryReportResultRepository;
+
+    @MockitoBean
+    ReinspectionRequestRepository reinspectionRequestRepository;
+
+    @MockitoBean
+    ReinspectionRequestItemRepository reinspectionRequestItemRepository;
 
     @MockitoBean
     WishlistRepository wishlistRepository;

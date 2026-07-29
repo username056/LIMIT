@@ -21,6 +21,8 @@ import com.c203.limit.domain.inspection.repository.EvidenceRepository;
 import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
 import com.c203.limit.domain.inspection.repository.ListingOwnerReader;
 import com.c203.limit.domain.inspection.repository.OcrResultRepository;
+import com.c203.limit.domain.inspection.reinspection.repository.ReinspectionRequestItemRepository;
+import com.c203.limit.domain.inspection.reinspection.repository.ReinspectionRequestRepository;
 import com.c203.limit.domain.product.repository.ListingRepository;
 import com.c203.limit.domain.product.repository.WishlistRepository;
 import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
@@ -127,6 +129,12 @@ class BackendApplicationTests {
 
     @MockitoBean
     BatteryReportResultRepository batteryReportResultRepository;
+
+    @MockitoBean
+    ReinspectionRequestRepository reinspectionRequestRepository;
+
+    @MockitoBean
+    ReinspectionRequestItemRepository reinspectionRequestItemRepository;
 
     @Test
     void contextLoads() {

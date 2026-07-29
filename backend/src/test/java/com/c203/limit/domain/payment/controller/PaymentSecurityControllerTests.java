@@ -25,6 +25,8 @@ import com.c203.limit.domain.inspection.repository.EvidenceRepository;
 import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
 import com.c203.limit.domain.inspection.repository.ListingOwnerReader;
 import com.c203.limit.domain.inspection.repository.OcrResultRepository;
+import com.c203.limit.domain.inspection.reinspection.repository.ReinspectionRequestItemRepository;
+import com.c203.limit.domain.inspection.reinspection.repository.ReinspectionRequestRepository;
 import com.c203.limit.domain.member.repository.MemberRepository;
 import com.c203.limit.domain.member.repository.MemberTermsAgreementRepository;
 import com.c203.limit.domain.payment.entity.PaymentMethod;
@@ -101,6 +103,8 @@ class PaymentSecurityControllerTests {
     @MockitoBean BatteryReportResultRepository batteryReportResultRepository;
     @MockitoBean ListingChecklistItemRepository listingChecklistItemRepository;
     @MockitoBean ListingOwnerReader listingOwnerReader;
+    @MockitoBean ReinspectionRequestRepository reinspectionRequestRepository;
+    @MockitoBean ReinspectionRequestItemRepository reinspectionRequestItemRepository;
     @MockitoBean PaymentService paymentService;
 
     @Autowired MockMvc mockMvc;

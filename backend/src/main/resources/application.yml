@@ -158,7 +158,9 @@ springdoc:
     - group: 08-payment
       packages-to-scan: com.c203.limit.domain.payment.controller
     - group: 09-inspection
-      packages-to-scan: com.c203.limit.domain.inspection.controller
+      packages-to-scan:
+        - com.c203.limit.domain.inspection.controller
+        - com.c203.limit.domain.inspection.reinspection.controller
     - group: 10-place
       packages-to-scan: com.c203.limit.domain.place.controller
   swagger-ui:

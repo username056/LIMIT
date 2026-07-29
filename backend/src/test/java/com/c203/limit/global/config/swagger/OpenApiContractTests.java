@@ -36,6 +36,8 @@ import com.c203.limit.domain.inspection.repository.EvidenceRepository;
 import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
 import com.c203.limit.domain.inspection.repository.ListingOwnerReader;
 import com.c203.limit.domain.inspection.repository.OcrResultRepository;
+import com.c203.limit.domain.inspection.reinspection.repository.ReinspectionRequestItemRepository;
+import com.c203.limit.domain.inspection.reinspection.repository.ReinspectionRequestRepository;
 import com.c203.limit.domain.product.repository.ListingRepository;
 import com.c203.limit.domain.product.repository.WishlistRepository;
 import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
@@ -145,6 +147,12 @@ class OpenApiContractTests {
 
     @MockitoBean
     BatteryReportResultRepository batteryReportResultRepository;
+
+    @MockitoBean
+    ReinspectionRequestRepository reinspectionRequestRepository;
+
+    @MockitoBean
+    ReinspectionRequestItemRepository reinspectionRequestItemRepository;
 
     @Autowired
     MockMvc mockMvc;
@@ -285,6 +293,10 @@ class OpenApiContractTests {
                 .value("diagnosisValue01"))
             .andExpect(jsonPath("$.paths['/api/v1/inspections/products/{productId}/diagnosis-summary'].get.operationId")
                 .value("productDiagnosisSummary01"))
+            .andExpect(jsonPath("$.paths['/api/v1/listings/{listingId}/reinspection-requests'].post.operationId")
+                .value("reinspection01"))
+            .andExpect(jsonPath("$.paths['/api/v1/reinspection-requests/{requestKey}/complete'].post.operationId")
+                .value("reinspection02"))
             .andExpect(jsonPath("$.paths['/api/v1/auth/sessions']").doesNotExist());
 
         mockMvc.perform(get("/v3/api-docs/10-place"))

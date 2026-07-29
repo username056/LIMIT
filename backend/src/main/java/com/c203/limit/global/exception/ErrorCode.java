@@ -139,7 +139,14 @@ public enum ErrorCode {
     ITEM_NOT_FOUND("INS012", HttpStatus.NOT_FOUND, "체크리스트 항목을 찾을 수 없습니다."),
     FIELD_NOT_EDITABLE("INS013", HttpStatus.BAD_REQUEST, "수정할 수 없는 필드입니다."),
     PRODUCT_NOT_FOUND("INS014", HttpStatus.NOT_FOUND, "상품을 찾을 수 없습니다."),
-    ALREADY_PARSED("INS015", HttpStatus.CONFLICT, "이미 파싱된 증거입니다.");
+    ALREADY_PARSED("INS015", HttpStatus.CONFLICT, "이미 파싱된 증거입니다."),
+    REINSPECTION_SELF_REQUEST_NOT_ALLOWED(
+            "INS016", HttpStatus.BAD_REQUEST, "본인 매물에는 재검수를 요청할 수 없습니다."),
+    REINSPECTION_ITEM_LISTING_MISMATCH(
+            "INS017", HttpStatus.BAD_REQUEST, "선택한 체크리스트 항목이 해당 매물 소속이 아닙니다."),
+    REINSPECTION_REQUEST_NOT_FOUND("INS018", HttpStatus.NOT_FOUND, "재검수 요청을 찾을 수 없습니다."),
+    REINSPECTION_ACCESS_DENIED("INS019", HttpStatus.FORBIDDEN, "해당 재검수 요청을 처리할 권한이 없습니다."),
+    REINSPECTION_ALREADY_PROCESSED("INS020", HttpStatus.CONFLICT, "이미 처리된 재검수 요청입니다.");
 
     private final String code;
     private final HttpStatus status;

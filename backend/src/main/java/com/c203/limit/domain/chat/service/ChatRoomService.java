@@ -76,6 +76,17 @@ public class ChatRoomService {
                 .orElseGet(() -> create(listing, buyerId));
     }
 
+    /**
+     * 검수 도메인(재검수 등)이 거래 채팅방을 확보할 때 쓰는 진입점. {@link #createOrGet}과 달리 매물
+     * 상태가 `ON_SALE`이 아니어도(결제 이후 시점) 호출된다는 전제다.
+     *
+     * TODO(채팅 담당): 없으면 생성, 있으면 기존 방 ID 반환하도록 구현. 지금은 실제 채팅방을 조회·생성하지
+     * 않고 고정값만 반환하는 스텁이라, 호출부가 받는 chatRoomId는 실존하는 채팅방을 가리키지 않는다.
+     */
+    public Long getOrCreateChatRoom(Long listingId, Long buyerId, Long sellerId) {
+        return -1L;
+    }
+
     @Transactional(readOnly = true)
     public CursorResponse<ChatRoomSummaryResponse> findRooms(Long memberId, Long cursor, int size) {
         if (size < 1 || size > MAX_PAGE_SIZE) {
