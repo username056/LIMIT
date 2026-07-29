@@ -70,9 +70,14 @@ OCR·DxDiag·배터리 리포트 코드와 같은 계층 구조를 따른다.
 | `INS018` REINSPECTION_BUYER_REQUIRED | 403 | 요청자(buyerId)가 매물 판매자 본인임 |
 | `INS019` REINSPECTION_SELLER_REQUIRED | 403 | 완료 요청자가 해당 요청의 판매자가 아님 |
 | `INS020` REINSPECTION_INVALID_STATE | 409 | `REQUESTED`가 아닌 요청을 다시 완료 처리하려 함 |
-| `INS021` REINSPECTION_CHAT_ROOM_NOT_FOUND | 409 | 재검수 알림을 보낼 채팅방을 찾지 못함 |
+| `INS021` REINSPECTION_CHAT_ROOM_NOT_FOUND | 404 | 재검수 알림을 보낼 채팅방을 찾지 못함 |
 | `PRD014` PRODUCT_NOT_FOUND | 404 | `listingId`에 해당하는 매물이 없음 |
 | `CHT002` SELF_CHAT_NOT_ALLOWED | 400 | `getOrCreateChatRoom` 내부에서 buyer==seller 재확인 시 |
+
+`INS021`은 두 API 응답으로는 나가지 않는다 — `ReinspectionChatNotificationService`가 커밋 이후
+이벤트 리스너 안에서만 던지는 예외라서, `POST .../reinspection-requests`나 `.../complete` 호출자는
+이 코드를 절대 못 본다(그래서 `ReinspectionRequestApi`의 `@ApiResponses`에도 올리지 않았다). 404로
+맞춘 건 다른 `*_NOT_FOUND` 코드와의 일관성 때문이지, 클라이언트가 분기할 값이라서가 아니다.
 
 ## 도메인 이벤트 (채팅 도메인 연동)
 
@@ -104,12 +109,31 @@ Kafka/RabbitMQ 등 외부 브로커는 쓰지 않고, 채팅 도메인의
 
 리스너 쪽 처리(`ReinspectionChatNotificationService` + `ReinspectionNotificationEventListener`):
 
-1. `reinspection_request_message`(PK: `reinspection_request_id` + `event_type`, `chat_message_id`에
-   유니크 제약)에 먼저 저장을 시도해 같은 요청·같은 타입 이벤트가 중복 처리되지 않게 막는다
-   (`V20260803__create_reinspection_request_message.sql`).
-2. 이미 처리된 이벤트면 조용히 무시하고, 새로 처리하는 경우에만 `chat_message`(SYSTEM)를 만들고
-   `/sub/chat-rooms/{chatRoomId}`로 WebSocket 알림을 보낸다.
-3. `chat_outbox_event`에 발행 완료 처리를 기록한다.
+1. `ChatMessage.clientMessageId`를 `event.eventId()`로 써서 `(chatRoomId, clientMessageId)`로
+   기존 메시지가 있는지 먼저 조회한다. 있으면 그대로 반환하고 아래 2~3단계는 건너뛴다(중복 처리
+   방지의 1차 방어선).
+2. 없으면 새 트랜잭션(`REQUIRES_NEW`)에서 `chat_message`(SYSTEM)·`reinspection_request_message`·
+   `chat_outbox_event`를 한 번에 저장한다. `reinspection_request_message`는 PK가
+   `(reinspection_request_id, event_type)`이고 `chat_message_id`에 유니크 제약이 있어
+   (`V20260803__create_reinspection_request_message.sql`), 1번 조회가 경합으로 놓친 동시 중복
+   삽입 시도는 여기서 DB 유니크 제약 위반으로 걸러진다(2차 방어선).
+3. 저장이 끝나면 `/sub/chat-rooms/{chatRoomId}`로 WebSocket 알림을 보내고
+   `chat_outbox_event`를 발행 완료로 표시한다.
+
+**배포 토폴로지·장애 시나리오에서의 한계 (알려진 갭, 아직 해결 안 됨)**
+
+- **다중 인스턴스 배포**: `ApplicationEventPublisher`/`@TransactionalEventListener`는 인프로세스라
+  이벤트 발행·소비가 같은 JVM(같은 요청을 받은 인스턴스) 안에서 끝난다. 여러 인스턴스로 스케일 아웃해도
+  이벤트 자체가 인스턴스 간에 중복 발행될 일은 없다. 다만 WebSocket 브로드캐스트는
+  `ChatWebSocketConfig`의 Spring 인메모리 `SimpleBroker`를 그대로 쓰기 때문에, 알림을 받아야 할
+  클라이언트가 이벤트를 처리한 인스턴스가 아닌 **다른 인스턴스**에 WebSocket으로 연결돼 있으면 실시간
+  전달을 못 받는다. 이건 재검수 기능만의 문제가 아니라 채팅 전체가 이미 갖고 있던 제약이고, 다중
+  인스턴스에서 풀려면 외부 STOMP 릴레이 브로커(RabbitMQ 등)로 교체해야 한다.
+- **리스너 처리 중 DB 실패**: `saveNew()`가 예외를 던지면(DB 커넥션 끊김 등) `@TransactionalEventListener`는
+  자동 재시도를 하지 않는다. 예외는 로그로만 남고 이벤트는 유실된다 — 즉 재검수 요청/완료 API 자체는
+  이미 200/201로 성공 응답을 준 뒤라서, 알림 저장만 조용히 실패할 수 있다. 현재는 재시도·데드레터
+  큐가 없다. `chat_outbox_event`가 이런 실패를 감지·재발행하는 용도로 설계된 테이블이지만, 그 테이블을
+  주기적으로 훑어 미발행 건을 재시도하는 배치/워커는 아직 없다.
 
 ## 데이터
 
