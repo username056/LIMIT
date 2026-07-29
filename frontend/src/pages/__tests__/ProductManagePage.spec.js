@@ -72,8 +72,10 @@ describe('ProductManagePage', () => {
       })),
       aiSuggestions: [{
         featureCode: 'CAMERA',
+        featureName: '내장 카메라',
         evidenceStatus: 'VERIFIED',
         reason: '공식 사양에서 카메라를 확인했습니다.',
+        checkGuide: '카메라 앱을 실행해 영상 출력 상태를 확인하세요.',
         sourceUrl: 'https://www.samsung.com/example',
         sourceTitle: 'Galaxy Book 공식 사양',
       }],
@@ -83,6 +85,15 @@ describe('ProductManagePage', () => {
     getProductChecklist.mockResolvedValue([
       { checklistItemId: 7001, itemCode: 'EXT-001', name: '전면·후면·측면 외관', evidenceType: 'PHOTO', isRequired: true, status: 'PENDING' },
       { checklistItemId: 7002, itemCode: 'PRV-004', name: '계정 제거 및 초기화', evidenceType: 'SELLER_CONFIRMATION', isRequired: true, status: 'PENDING' },
+      {
+        checklistItemId: 7003,
+        itemCode: 'LAP-FTR-CAM',
+        name: '내장 카메라',
+        guide: '카메라 앱을 실행해 영상 출력 상태를 확인하세요.',
+        evidenceType: 'PHOTO',
+        isRequired: false,
+        status: 'PENDING',
+      },
     ])
   })
 
@@ -110,6 +121,10 @@ describe('ProductManagePage', () => {
       confirmedFeatures: [],
     })
     expect(wrapper.text()).toContain('AI 공식자료 확인 후보')
+    expect(wrapper.text()).toContain('내장 카메라')
+    expect(wrapper.text()).toContain('선정 이유')
+    expect(wrapper.text()).toContain('점검 방법')
+    expect(wrapper.text()).toContain('카메라 앱을 실행해 영상 출력 상태를 확인하세요.')
     await wrapper.find('input[type="checkbox"][value="CAMERA"]').setValue(true)
 
     await wrapper.find('input[placeholder="예: 갤럭시 S24 256GB 자급제"]').setValue('갤럭시 북 테스트 상품')
@@ -134,6 +149,8 @@ describe('ProductManagePage', () => {
     })
     expect(getProductChecklist).toHaveBeenCalledWith(1001)
     expect(wrapper.text()).toContain('검수용 기기 촬영')
+    expect(wrapper.text()).toContain('내장 카메라')
+    expect(wrapper.text()).toContain('카메라 앱을 실행해 영상 출력 상태를 확인하세요.')
   })
 
   it('0원 상품은 촬영 단계로 진행하지 않는다', async () => {

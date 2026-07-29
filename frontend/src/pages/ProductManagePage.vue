@@ -165,6 +165,10 @@ function templateFor(itemCode) {
   return templateItems.value.find((item) => item.itemCode === itemCode) || null
 }
 
+function guideFor(item) {
+  return item?.guide || templateFor(item?.itemCode)?.guide || ''
+}
+
 function evidenceTypeLabel(type) {
   return {
     PHOTO: '사진',
@@ -684,12 +688,21 @@ onMounted(async () => {
                   >
                   <span class="min-w-0 flex-1">
                     <span class="flex flex-wrap items-center gap-2">
-                      <span class="text-sm font-bold text-text-main">{{ suggestion.featureCode }}</span>
+                      <span class="text-sm font-bold text-text-main">
+                        {{ suggestion.featureName || suggestion.featureCode }}
+                      </span>
                       <BaseBadge :variant="suggestion.evidenceStatus === 'VERIFIED' ? 'primary' : 'gray'">
                         {{ evidenceStatusLabel(suggestion.evidenceStatus) }}
                       </BaseBadge>
                     </span>
-                    <span class="mt-1 block text-xs leading-5 text-text-sub">{{ suggestion.reason }}</span>
+                    <span class="mt-2 block text-xs leading-5 text-text-sub">
+                      <strong class="font-bold text-text-main">선정 이유</strong>
+                      {{ suggestion.reason }}
+                    </span>
+                    <span class="mt-1 block text-xs leading-5 text-text-sub">
+                      <strong class="font-bold text-text-main">점검 방법</strong>
+                      {{ suggestion.checkGuide }}
+                    </span>
                     <a
                       v-if="suggestion.sourceUrl"
                       :href="suggestion.sourceUrl"
@@ -710,8 +723,9 @@ onMounted(async () => {
             v-if="checklistGeneration?.reviewCandidates?.length"
             class="mt-3 rounded-md bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800"
           >
-            승인 목록 밖의 기능은 자동 추가하지 않았습니다:
-            {{ checklistGeneration.reviewCandidates.join(', ') }}
+            <strong class="block font-bold">추가 검토가 필요한 기능</strong>
+            AI가 공식 자료에서 찾았지만 아직 서비스에 전용 점검 방법이 정의되지 않아 체크리스트에는 넣지 않았습니다.
+            관리자 검토 후보: {{ checklistGeneration.reviewCandidates.join(', ') }}
           </p>
 
           <div class="mt-6 grid gap-5 sm:grid-cols-2">
@@ -829,7 +843,7 @@ onMounted(async () => {
                         {{ item.name }}
                       </p>
                       <p class="mt-1 text-xs text-text-sub">
-                        {{ templateFor(item.itemCode)?.guide }}
+                        {{ guideFor(item) }}
                       </p>
                     </div>
                     <span
@@ -909,8 +923,8 @@ onMounted(async () => {
               <p class="mb-1 font-bold text-text-main">
                 촬영 꿀팁 가이드
               </p>
-              <p v-if="templateFor(activeCaptureItem?.itemCode)?.guide">
-                • {{ templateFor(activeCaptureItem.itemCode).guide }}
+              <p v-if="guideFor(activeCaptureItem)">
+                • {{ guideFor(activeCaptureItem) }}
               </p>
               <p>• 흔들림을 예방하기 위해 촬영 순간 숨을 참고 1초간 유지해 주세요.</p>
             </div>
@@ -983,7 +997,7 @@ onMounted(async () => {
                       class="ml-1 text-red-500"
                     >*</span>
                   </span>
-                  <span class="mt-1 block text-xs text-text-sub">{{ templateFor(item.itemCode)?.guide }}</span>
+                  <span class="mt-1 block text-xs text-text-sub">{{ guideFor(item) }}</span>
                 </span>
               </label>
             </li>

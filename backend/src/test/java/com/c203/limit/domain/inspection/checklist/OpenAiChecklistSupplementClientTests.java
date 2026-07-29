@@ -26,6 +26,7 @@ class OpenAiChecklistSupplementClientTests {
                       "featureCode": "CAMERA",
                       "evidenceStatus": "VERIFIED",
                       "reason": "official specification",
+                      "checkGuide": "open the camera app",
                       "sourceUrl": "https://www.samsung.com/sec/support/model/NT960/",
                       "sourceTitle": "Samsung support"
                     },
@@ -33,6 +34,7 @@ class OpenAiChecklistSupplementClientTests {
                       "featureCode": "OLED",
                       "evidenceStatus": "LIKELY",
                       "reason": "untrusted",
+                      "checkGuide": "check the display",
                       "sourceUrl": "https://example.com/product",
                       "sourceTitle": "Other"
                     }
@@ -48,6 +50,13 @@ class OpenAiChecklistSupplementClientTests {
         assertThat(result.suggestions())
                 .extracting(ChecklistSuggestion::featureCode)
                 .containsExactly(LaptopFeatureCode.CAMERA);
+        assertThat(result.suggestions())
+                .singleElement()
+                .satisfies(suggestion -> {
+                    assertThat(suggestion.reason()).contains("제조사 공식 자료");
+                    assertThat(suggestion.checkGuide()).isEqualTo(
+                            LaptopFeatureCode.CAMERA.defaultCheckGuideKo());
+                });
         assertThat(result.reviewCandidates()).containsExactly("ambient light sensor");
     }
 }
