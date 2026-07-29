@@ -165,34 +165,6 @@ describe('ProductDetailPage', () => {
     expect(purchaseButton.props('to')).toBe('')
   })
 
-  it('등록 단계의 체크리스트를 상세에서도 같은 목록으로 보여준다', async () => {
-    getProductChecklist.mockResolvedValue([
-      { checklistItemId: 7001, name: '전면·후면·측면 외관', evidenceType: 'PHOTO', isRequired: true, status: 'COMPLETED' },
-      { checklistItemId: 7002, name: '화면 밝기', evidenceType: 'VIDEO', isRequired: true, status: 'PENDING' },
-      { checklistItemId: 7003, name: '계정 제거 및 초기화', evidenceType: 'SELLER_CONFIRMATION', isRequired: false, status: 'PENDING' },
-    ])
-
-    const wrapper = mount(ProductDetailPage, {
-      global: {
-        stubs: {
-          DefaultLayout: layoutStub,
-          BaseButton: buttonStub,
-          RouterLink: { template: '<a><slot /></a>' },
-        },
-      },
-    })
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('전면·후면·측면 외관')
-    expect(wrapper.text()).toContain('화면 밝기')
-    expect(wrapper.text()).toContain('자료 확인')
-    expect(wrapper.text()).toContain('미등록')
-
-    // 항목이 많아도 화면이 길어지지 않도록 스크롤 영역에 담습니다.
-    const list = wrapper.findAll('ul').find((node) => node.text().includes('전면·후면·측면 외관'))
-    expect(list.classes()).toContain('overflow-y-auto')
-  })
-
   it('상세에서 거래 지역 항목을 보여주지 않는다', async () => {
     const wrapper = mount(ProductDetailPage, {
       global: {

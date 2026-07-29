@@ -46,25 +46,6 @@ const purchaseButtonLabel = computed(() => {
 
 // 재촬영 요청 팝업
 const checklistItems = ref([])
-
-// 등록 단계에서 판매자가 채운 체크리스트를 구매자에게도 같은 항목으로 보여줍니다.
-function evidenceTypeLabel(type) {
-  return {
-    PHOTO: '사진',
-    VIDEO: '영상',
-    DIAGNOSTIC_FILE: '진단파일',
-    SELLER_CONFIRMATION: '확인',
-  }[type] || type
-}
-
-// 자동 생성 체크리스트는 required, 기존 템플릿은 isRequired를 씁니다.
-function isRequiredItem(item) {
-  return item.required ?? item.isRequired ?? false
-}
-
-function isCheckedItem(item) {
-  return item.status === 'COMPLETED' || Boolean(item.latestEvidenceId)
-}
 const isRecaptureModalOpen = ref(false)
 const checkedItemIds = ref([])
 const recaptureReason = ref('')
@@ -450,41 +431,7 @@ onMounted(async () => {
             >
               추가 확인이 필요한 항목이 {{ checklist.recaptureRequested }}개 있습니다.
             </p>
-            <!-- 판매자가 등록 단계에서 채운 체크리스트와 같은 목록입니다. 미등록 항목도 함께 보여야
-                 구매자가 무엇을 재촬영 요청할지 판단할 수 있습니다.
-                 항목이 많아도 화면이 길어지지 않게 6개 정도만 보이고 나머지는 스크롤로 봅니다. -->
-            <ul
-              v-if="checklistItems.length"
-              class="mt-4 max-h-72 space-y-2 overflow-y-auto pr-1"
-            >
-              <li
-                v-for="item in checklistItems"
-                :key="item.checklistItemId"
-                class="flex items-start gap-2 rounded-md bg-surface px-3 py-2"
-              >
-                <span
-                  class="mt-0.5 shrink-0 text-xs font-bold"
-                  :class="isCheckedItem(item) ? 'text-primary' : 'text-text-sub'"
-                  aria-hidden="true"
-                >{{ isCheckedItem(item) ? '✓' : '·' }}</span>
-                <span class="min-w-0 flex-1">
-                  <span class="block text-xs font-semibold text-text-main">
-                    {{ item.name }}<span
-                      v-if="isRequiredItem(item)"
-                      class="ml-1 text-red-500"
-                    >*</span>
-                  </span>
-                  <span class="mt-0.5 block text-[11px] text-text-sub">
-                    {{ evidenceTypeLabel(item.evidenceType) }}
-                    · {{ isCheckedItem(item) ? '자료 확인' : '미등록' }}
-                  </span>
-                </span>
-              </li>
-            </ul>
-            <p
-              v-else
-              class="mt-4 text-xs leading-5 text-text-sub"
-            >
+            <p class="mt-4 text-xs leading-5 text-text-sub">
               원본 상태 자료는 상품과 연결된 체크리스트 기준으로 관리됩니다.
             </p>
             <BaseButton

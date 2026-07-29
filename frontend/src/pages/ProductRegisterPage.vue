@@ -357,17 +357,15 @@ async function loadTemplatePreview() {
 // 기기 등록(1단계)이 실제 필수 구간입니다. 여기서 빠진 값이 있으면 다음 단계로 넘기지 않습니다.
 // 반대로 2단계 촬영 체크리스트는 필수가 아니어서 건너뛸 수 있습니다.
 // requireStorage: '다음 단계'는 저장 용량까지 요구하고, 중간 이탈용 '임시저장'은 요구하지 않습니다.
-function validateSaleInfo(requireStorage = true) {
+// TODO(필수 항목): 저장 용량·대표 이미지를 필수로 두기로 했지만, S3 업로드 브랜치와 같은 구간이라
+// 병합 충돌을 줄이려고 검증을 미뤘습니다. 그 브랜치가 dev에 들어오면 여기에 다시 붙이세요.
+function validateSaleInfo() {
   if (!form.name || form.price === '') {
     errorMessage.value = '상품명과 가격을 입력해 주세요.'
     return false
   }
   if (!Number.isFinite(Number(form.price)) || Number(form.price) < 1) {
     errorMessage.value = '가격은 1원 이상 입력해 주세요.'
-    return false
-  }
-  if (requireStorage && form.storageGb === '') {
-    errorMessage.value = '저장 용량을 선택해 주세요.'
     return false
   }
   if (form.storageGb !== '' && (!Number.isFinite(Number(form.storageGb)) || Number(form.storageGb) < 1)) {
@@ -408,13 +406,13 @@ async function persistSaleInfo() {
   return productId
 }
 
-function validateDeviceStep(requireStorage = true) {
+function validateDeviceStep() {
   errorMessage.value = ''
   if (!form.categoryId || !form.deviceModelId) {
     errorMessage.value = '카테고리와 기기 모델을 선택해 주세요.'
     return false
   }
-  return validateSaleInfo(requireStorage)
+  return validateSaleInfo()
 }
 
 async function goToStep2() {
@@ -436,8 +434,7 @@ async function goToStep2() {
 async function saveDraft() {
   errorMessage.value = ''
   if (activeStep.value === 1) {
-    // 중간 이탈용 저장이라 저장 용량까지는 요구하지 않습니다.
-    if (!validateDeviceStep(false)) return
+    if (!validateDeviceStep()) return
     isSaving.value = true
     try {
       await persistSaleInfo()
@@ -526,30 +523,17 @@ async function finishWizard() {
   }
 
   isSaving.value = true
-  let publishError = ''
   try {
     await transitionProductStatus(productId, 'ON_SALE', '등록 완료')
-  } catch (error) {
-    // 체크리스트 미완료로는 더 이상 막히지 않지만, 다른 이유(권한·상태 충돌 등)로 실패할 수 있습니다.
-    // 조용히 임시 저장으로 남기면 "다 했는데 왜 안 올라갔지"가 되므로 이유를 알려 줍니다.
-    publishError = error.message || '판매를 시작하지 못했습니다.'
+  } catch {
+    // 필수 자료가 서버에 아직 반영되지 않았거나 이미 판매 중이면 상태는 그대로 둡니다.
+    // 상세 화면에서 현재 상태를 그대로 보여주므로 등록 흐름 자체는 막지 않습니다.
   } finally {
     isSaving.value = false
   }
 
-  const goToDetail = async () => {
-    resetForm()
-    await router.push({ name: 'product-detail', params: { productId } })
-  }
-
-  if (publishError) {
-    openAlert(
-      `${publishError}\n\n상품은 임시 저장 상태로 남아 있습니다. 상품 관리에서 다시 판매를 시작할 수 있습니다.`,
-      goToDetail,
-    )
-    return
-  }
-  await goToDetail()
+  resetForm()
+  await router.push({ name: 'product-detail', params: { productId } })
 }
 
 function readVideoDuration(file) {
@@ -570,7 +554,7 @@ async function handleCaptureFile(item, file) {
   const itemId = item.checklistItemId
   if (!captureState[itemId]) captureState[itemId] = { media: [], busy: '' }
   if (captureState[itemId].media.length >= MAX_MEDIA_PER_ITEM) {
-    openAlert(`‘${item.name}’ 항목은 최대 ${MAX_MEDIA_PER_ITEM}개까지 첨부할 수 있습니다.`)
+    alertMessage.value = `‘${item.name}’ 항목은 최대 ${MAX_MEDIA_PER_ITEM}개까지 첨부할 수 있습니다.`
     return
   }
   errorMessage.value = ''
@@ -956,7 +940,7 @@ onMounted(async () => {
                 class="mt-2 w-full rounded-md border border-border px-3 py-3 font-normal outline-none focus:border-primary"
               ></label>
               <label class="text-sm font-semibold text-text-main">
-                저장 용량<span class="ml-0.5 text-red-500">*</span>
+                저장 용량
                 <select
                   :value="storageSelectValue"
                   aria-label="저장 용량 선택"

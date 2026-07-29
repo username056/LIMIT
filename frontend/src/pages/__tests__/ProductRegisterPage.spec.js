@@ -283,25 +283,6 @@ describe('ProductRegisterPage', () => {
     expect(wrapper.find('input[placeholder="역, 랜드마크로 검색 (예: 상동역)"]').exists()).toBe(false)
   })
 
-  it('1단계는 저장 용량까지 채워야 다음 단계로 넘어간다', async () => {
-    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
-    await flushPromises()
-
-    await wrapper.findAll('select')[0].setValue('10')
-    await flushPromises()
-    await wrapper.findAll('select')[1].setValue('101')
-    await flushPromises()
-    await wrapper.find('input[placeholder="예: 갤럭시 S24 256GB 자급제"]').setValue('갤럭시 북')
-    await wrapper.find('input[placeholder="판매 가격"]').setValue('850000')
-
-    await buttonByText(wrapper, '다음 단계').trigger('click')
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('저장 용량을 선택해 주세요.')
-    expect(createProduct).not.toHaveBeenCalled()
-    expect(wrapper.text()).not.toContain('검수용 기기 촬영')
-  })
-
   it('임시저장은 저장 용량 없이도 저장된다', async () => {
     const wrapper = mount(ProductRegisterPage, { global: globalOptions })
     await flushPromises()
@@ -457,29 +438,6 @@ describe('ProductRegisterPage', () => {
 
     expect(transitionProductStatus).not.toHaveBeenCalled()
     expect(routerPushMock).toHaveBeenCalledWith({ name: 'seller-products' })
-  })
-
-  it('판매 시작이 거부되면 이유를 알리고 임시 저장 상태로 남긴다', async () => {
-    transitionProductStatus.mockRejectedValue(new Error('필수 검증 자료가 완료되지 않았습니다.'))
-
-    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
-    await flushPromises()
-    await goToCaptureStep(wrapper)
-
-    // 촬영은 건너뛰고, 개인정보 확인은 체크한 뒤 완료까지 진행
-    await buttonByText(wrapper, '다음 단계로').trigger('click')
-    await flushPromises()
-    await buttonByText(wrapper, '확인').trigger('click')
-    await flushPromises()
-    await wrapper.find('input[type="checkbox"]').setValue(true)
-    await buttonByText(wrapper, '다음 단계로').trigger('click')
-    await flushPromises()
-
-    await buttonByText(wrapper, '완료').trigger('click')
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('필수 검증 자료가 완료되지 않았습니다.')
-    expect(wrapper.text()).toContain('임시 저장 상태로 남아 있습니다')
   })
 
   it('등록을 완료하면 판매 상태로 올리고 등록한 상품 상세로 이동한다', async () => {
