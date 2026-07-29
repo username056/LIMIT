@@ -121,6 +121,8 @@ tasks.register('infrastructureTest', Test) {
 
 tasks.named('test') {
     useJUnitPlatform()
+    // 단위·슬라이스 테스트에서 예약 만료 @Scheduled 자동 실행이 직접 호출과 경합하지 않도록 끈다.
+    systemProperty 'limit.payment.reservation-expiration.enabled', 'false'
 }
 
 tasks.named('jacocoTestReport') {
