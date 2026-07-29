@@ -18,8 +18,8 @@ if [ "${PUSH_IMAGE:-false}" = "true" ]; then
     --file "$dockerfile" \
     --tag "$image_ref" \
     --cache-from "type=registry,ref=${IMAGE_REPOSITORY}:buildcache"
-  # 애플리케이션 JAR는 매 커밋 달라지므로 일반 빌드에서 registry cache를 다시
-  # 내보내도 재사용 이득이 없다. Dockerfile이 바뀐 파이프라인에서만 갱신한다.
+  # 일반 소스 커밋은 application layer만 달라지므로 registry cache를 다시
+  # 내보내지 않는다. Dockerfile·Gradle 입력 변경 때만 의존성 cache를 갱신한다.
   if [ "${UPDATE_BUILD_CACHE:-false}" = "true" ]; then
     set -- "$@" --cache-to "type=registry,ref=${IMAGE_REPOSITORY}:buildcache,mode=max"
   fi

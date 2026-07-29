@@ -19,6 +19,7 @@ import com.c203.limit.domain.product.repository.ListingRepository;
 import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
+import com.c203.limit.testsupport.AbstractMySqlIntegrationTest;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -31,18 +32,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.mysql.MySQLContainer;
-import org.testcontainers.utility.DockerImageName;
 
 /**
  * 결제 요청 생성/조회 유스케이스를 실제 MySQL 위에서 검증한다. 멱등키 재사용, 본인 매물 결제
  * 시도의 예약 롤백은 Mockito로는 확인할 수 없는 실제 트랜잭션·유니크 제약 동작이라 여기서 다룬다.
  */
-@Testcontainers(disabledWithoutDocker = true)
 @SpringBootTest(
         properties =
                 "spring.autoconfigure.exclude="
@@ -50,22 +44,7 @@ import org.testcontainers.utility.DockerImageName;
                         + "org.springframework.boot.data.mongodb.autoconfigure.DataMongoRepositoriesAutoConfiguration,"
                         + "org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration,"
                         + "org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration")
-class PaymentIntegrationTests {
-
-    @Container
-    static final MySQLContainer MYSQL =
-            new MySQLContainer(DockerImageName.parse("mysql:8.4"))
-                    .withDatabaseName("limit")
-                    .withUsername("limit")
-                    .withPassword("test-only-password");
-
-    @DynamicPropertySource
-    static void databaseProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
-    }
+class PaymentIntegrationTests extends AbstractMySqlIntegrationTest {
 
     @Autowired PaymentService paymentService;
     @Autowired PaymentRepository paymentRepository;

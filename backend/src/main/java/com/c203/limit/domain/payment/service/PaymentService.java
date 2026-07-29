@@ -33,6 +33,8 @@ public class PaymentService {
     private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
     private static final ZoneId PAYMENT_TIME_ZONE = ZoneId.of("Asia/Seoul");
     private static final int MAX_CREATE_ATTEMPTS = 3;
+    private static final int IDEMPOTENCY_RECOVERY_ATTEMPTS = 5;
+    private static final long RETRY_BACKOFF_MILLIS = 50L;
 
     private final PaymentRepository paymentRepository;
     private final MemberRepository memberRepository;
@@ -75,6 +77,7 @@ public class PaymentService {
                 return recoverOrConflict(buyerId, request);
             } catch (DataAccessException exception) {
                 lastFailure = exception;
+                pauseBeforeRetry(attempt);
             }
         }
 
@@ -88,10 +91,31 @@ public class PaymentService {
     }
 
     private PaymentResponse recoverOrConflict(Long buyerId, CreatePaymentRequest request) {
-        return paymentRepository
-                .findByBuyerIdAndIdempotencyKey(buyerId, request.getIdempotencyKey())
-                .map(existing -> toResponseOrConflict(existing, request))
-                .orElseThrow(() -> new BusinessException(ErrorCode.IDEMPOTENCY_KEY_CONFLICT));
+        for (int attempt = 1; attempt <= IDEMPOTENCY_RECOVERY_ATTEMPTS; attempt++) {
+            Optional<Payment> existing =
+                    paymentRepository.findByBuyerIdAndIdempotencyKey(
+                            buyerId, request.getIdempotencyKey());
+            if (existing.isPresent()) {
+                return toResponseOrConflict(existing.get(), request);
+            }
+            pause(attempt, IDEMPOTENCY_RECOVERY_ATTEMPTS);
+        }
+        throw new BusinessException(ErrorCode.IDEMPOTENCY_KEY_CONFLICT);
+    }
+
+    private void pauseBeforeRetry(int attempt) {
+        pause(attempt, MAX_CREATE_ATTEMPTS);
+    }
+
+    private void pause(int attempt, int maxAttempts) {
+        if (attempt >= maxAttempts) {
+            return;
+        }
+        try {
+            Thread.sleep(RETRY_BACKOFF_MILLIS * attempt);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private PaymentResponse createPayment(Long buyerId, CreatePaymentRequest request) {

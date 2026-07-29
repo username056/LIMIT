@@ -177,6 +177,8 @@ class PaymentServiceTests {
         ReflectionTestUtils.setField(existing, "id", PAYMENT_ID);
         when(paymentRepository.findByBuyerIdAndIdempotencyKey(BUYER_ID, "idem-1"))
                 .thenReturn(Optional.empty())
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.empty())
                 .thenReturn(Optional.of(existing));
         when(listingService.get(LISTING_ID)).thenReturn(listingView(SELLER_ID));
         when(listingService.reserve(LISTING_ID, BUYER_ID)).thenReturn(listingView(SELLER_ID));

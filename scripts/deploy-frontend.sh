@@ -33,8 +33,10 @@ promote_directory() {
   }
 
   if test -d "$source_dir/assets"; then
-    aws s3 cp "$source_dir/assets/" "s3://$bucket/assets/" \
-      --recursive \
+    # Vite asset 이름은 content hash를 포함한다. 같은 이름과 크기의 FFmpeg WASM
+    # 등은 이미 동일한 불변 객체이므로 매 release마다 다시 전송하지 않는다.
+    aws s3 sync "$source_dir/assets/" "s3://$bucket/assets/" \
+      --size-only \
       --only-show-errors \
       --cache-control "public,max-age=31536000,immutable"
   fi
@@ -86,7 +88,10 @@ case "$action" in
       exit 66
     }
 
+    # rollback entrypoint는 root의 불변 hash asset을 그대로 참조한다. release마다
+    # 수십 MB asset을 복제하지 않고 HTML과 비-asset 파일만 보관한다.
     aws s3 sync "$dist_dir/" "s3://$bucket/releases/$release_id/" \
+      --exclude "assets/*" \
       --only-show-errors \
       --cache-control "private,no-cache,no-store,must-revalidate"
     promote_directory "$dist_dir" "$bucket"
