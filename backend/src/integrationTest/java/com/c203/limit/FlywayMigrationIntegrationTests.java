@@ -3,6 +3,7 @@ package com.c203.limit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.c203.limit.testsupport.MySqlTestServer;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.sql.DriverManager;
@@ -14,40 +15,21 @@ import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.FlywayException;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.mysql.MySQLContainer;
-import org.testcontainers.utility.DockerImageName;
 
-@Testcontainers(disabledWithoutDocker = true)
 class FlywayMigrationIntegrationTests {
 
-    @Container
-    static final MySQLContainer MYSQL =
-            new MySQLContainer(DockerImageName.parse("mysql:8.4"))
-                    .withDatabaseName("limit_legacy")
-                    .withUsername("limit")
-                    .withPassword("test-only-password");
-
-    @Container
-    static final MySQLContainer PRODUCTION_HISTORY_MYSQL =
-            new MySQLContainer(DockerImageName.parse("mysql:8.4"))
-                    .withDatabaseName("limit_production_history")
-                    .withUsername("limit")
-                    .withPassword("test-only-password");
-
-    @Container
-    static final MySQLContainer FAILED_SELLER_MIGRATION_MYSQL =
-            new MySQLContainer(DockerImageName.parse("mysql:8.4"))
-                    .withDatabaseName("limit_failed_seller_migration")
-                    .withUsername("limit")
-                    .withPassword("test-only-password");
+    static final MySqlTestServer.Database MYSQL =
+            MySqlTestServer.database("limit_legacy");
+    static final MySqlTestServer.Database PRODUCTION_HISTORY_MYSQL =
+            MySqlTestServer.database("limit_production_history");
+    static final MySqlTestServer.Database FAILED_SELLER_MIGRATION_MYSQL =
+            MySqlTestServer.database("limit_failed_seller_migration");
 
     @BeforeAll
     static void migrateLegacySchema() throws SQLException {
         try (var connection =
                         DriverManager.getConnection(
-                                MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
+                                MYSQL.jdbcUrl(), MYSQL.username(), MYSQL.password());
                 var statement = connection.createStatement()) {
             statement.execute(
                     """
@@ -119,7 +101,7 @@ class FlywayMigrationIntegrationTests {
         }
 
         Flyway.configure()
-                .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
+                .dataSource(MYSQL.jdbcUrl(), MYSQL.username(), MYSQL.password())
                 .locations("classpath:db/migration")
                 .baselineOnMigrate(true)
                 .baselineVersion("1")
@@ -246,9 +228,9 @@ class FlywayMigrationIntegrationTests {
 
         Flyway.configure()
                 .dataSource(
-                        FAILED_SELLER_MIGRATION_MYSQL.getJdbcUrl(),
-                        FAILED_SELLER_MIGRATION_MYSQL.getUsername(),
-                        FAILED_SELLER_MIGRATION_MYSQL.getPassword())
+                        FAILED_SELLER_MIGRATION_MYSQL.jdbcUrl(),
+                        FAILED_SELLER_MIGRATION_MYSQL.username(),
+                        FAILED_SELLER_MIGRATION_MYSQL.password())
                 .locations("classpath:db/migration")
                 .baselineOnMigrate(true)
                 .baselineVersion("1")
@@ -260,9 +242,9 @@ class FlywayMigrationIntegrationTests {
         var flyway =
                 Flyway.configure()
                         .dataSource(
-                                FAILED_SELLER_MIGRATION_MYSQL.getJdbcUrl(),
-                                FAILED_SELLER_MIGRATION_MYSQL.getUsername(),
-                                FAILED_SELLER_MIGRATION_MYSQL.getPassword())
+                                FAILED_SELLER_MIGRATION_MYSQL.jdbcUrl(),
+                                FAILED_SELLER_MIGRATION_MYSQL.username(),
+                                FAILED_SELLER_MIGRATION_MYSQL.password())
                         .locations("classpath:db/migration")
                         .cleanDisabled(true)
                         .load();
@@ -320,9 +302,9 @@ class FlywayMigrationIntegrationTests {
     private static void createFailedSellerMigrationSchema() throws SQLException {
         try (var connection =
                         DriverManager.getConnection(
-                                FAILED_SELLER_MIGRATION_MYSQL.getJdbcUrl(),
-                                FAILED_SELLER_MIGRATION_MYSQL.getUsername(),
-                                FAILED_SELLER_MIGRATION_MYSQL.getPassword());
+                                FAILED_SELLER_MIGRATION_MYSQL.jdbcUrl(),
+                                FAILED_SELLER_MIGRATION_MYSQL.username(),
+                                FAILED_SELLER_MIGRATION_MYSQL.password());
                 var statement = connection.createStatement()) {
             statement.execute(
                     """
@@ -402,24 +384,24 @@ class FlywayMigrationIntegrationTests {
         }
     }
 
-    private static void execute(MySQLContainer container, String sql) throws SQLException {
+    private static void execute(MySqlTestServer.Database database, String sql) throws SQLException {
         try (var connection =
                         DriverManager.getConnection(
-                                container.getJdbcUrl(),
-                                container.getUsername(),
-                                container.getPassword());
+                                database.jdbcUrl(),
+                                database.username(),
+                                database.password());
                 var statement = connection.createStatement()) {
             statement.execute(sql);
         }
     }
 
-    private static void migrateTo(MySQLContainer container, String target) {
+    private static void migrateTo(MySqlTestServer.Database database, String target) {
         var configuration =
                 Flyway.configure()
                         .dataSource(
-                                container.getJdbcUrl(),
-                                container.getUsername(),
-                                container.getPassword())
+                                database.jdbcUrl(),
+                                database.username(),
+                                database.password())
                         .locations("classpath:db/migration")
                         .cleanDisabled(true);
         if (target != null) {
@@ -463,12 +445,13 @@ class FlywayMigrationIntegrationTests {
         return singleLong(MYSQL, sql);
     }
 
-    private static long singleLong(MySQLContainer container, String sql) throws SQLException {
+    private static long singleLong(MySqlTestServer.Database database, String sql)
+            throws SQLException {
         try (var connection =
                         DriverManager.getConnection(
-                                container.getJdbcUrl(),
-                                container.getUsername(),
-                                container.getPassword());
+                                database.jdbcUrl(),
+                                database.username(),
+                                database.password());
                 Statement statement = connection.createStatement();
                 ResultSet resultSet = statement.executeQuery(sql)) {
             resultSet.next();
@@ -480,12 +463,13 @@ class FlywayMigrationIntegrationTests {
         return singleString(MYSQL, sql);
     }
 
-    private static String singleString(MySQLContainer container, String sql) throws SQLException {
+    private static String singleString(MySqlTestServer.Database database, String sql)
+            throws SQLException {
         try (var connection =
                         DriverManager.getConnection(
-                                container.getJdbcUrl(),
-                                container.getUsername(),
-                                container.getPassword());
+                                database.jdbcUrl(),
+                                database.username(),
+                                database.password());
                 Statement statement = connection.createStatement();
                 ResultSet resultSet = statement.executeQuery(sql)) {
             resultSet.next();

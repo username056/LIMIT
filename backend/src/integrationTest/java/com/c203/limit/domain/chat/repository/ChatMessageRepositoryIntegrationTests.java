@@ -2,6 +2,7 @@ package com.c203.limit.domain.chat.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.c203.limit.testsupport.AbstractMySqlIntegrationTest;
 import java.util.List;
 import java.util.UUID;
 
@@ -11,15 +12,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.annotation.Transactional;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.mysql.MySQLContainer;
-import org.testcontainers.utility.DockerImageName;
 
-@Testcontainers(disabledWithoutDocker = true)
 @SpringBootTest(
         properties =
                 "spring.autoconfigure.exclude="
@@ -28,30 +22,15 @@ import org.testcontainers.utility.DockerImageName;
                         + "org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration,"
                         + "org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration")
 @Transactional
-class ChatMessageRepositoryIntegrationTests {
+class ChatMessageRepositoryIntegrationTests extends AbstractMySqlIntegrationTest {
 
     private static final long BUYER_ID = 91_001L;
     private static final long SELLER_ID = 91_002L;
     private static final long ROOM_ID = 92_001L;
     private static final long OTHER_ROOM_ID = 92_002L;
 
-    @Container
-    static final MySQLContainer MYSQL =
-            new MySQLContainer(DockerImageName.parse("mysql:8.4"))
-                    .withDatabaseName("limit")
-                    .withUsername("limit")
-                    .withPassword("test-only-password");
-
     @Autowired ChatMessageRepository repository;
     @Autowired JdbcTemplate jdbcTemplate;
-
-    @DynamicPropertySource
-    static void databaseProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
-    }
 
     @BeforeEach
     void setUp() {

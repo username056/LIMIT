@@ -18,6 +18,8 @@ import com.c203.limit.domain.product.entity.ListingStatus;
 import com.c203.limit.domain.product.repository.CategoryRepository;
 import com.c203.limit.domain.product.repository.ListingRepository;
 import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
+import com.c203.limit.testsupport.AbstractMySqlIntegrationTest;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -25,45 +27,21 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.mysql.MySQLContainer;
-import org.testcontainers.utility.DockerImageName;
 
 /**
  * 예약 유예 시간이 지난 미결제 매물을 스케줄러가 실제 MySQL 위에서 정리하는지 검증한다.
  * {@code @Scheduled} 주기 실행 자체는 검증하지 않고, 배치 메서드를 직접 호출해 트랜잭션·영속성
  * 동작만 확인한다.
  */
-@Testcontainers(disabledWithoutDocker = true)
 @SpringBootTest(
-        properties = {
-            "spring.autoconfigure.exclude="
-                    + "org.springframework.boot.mongodb.autoconfigure.MongoAutoConfiguration,"
-                    + "org.springframework.boot.data.mongodb.autoconfigure.DataMongoRepositoriesAutoConfiguration,"
-                    + "org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration,"
-                    + "org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration",
-            "limit.payment.reservation-expiration.initial-delay-ms=999999999"
-        })
-class PaymentReservationExpirationIntegrationTests {
-
-    @Container
-    static final MySQLContainer MYSQL =
-            new MySQLContainer(DockerImageName.parse("mysql:8.4"))
-                    .withDatabaseName("limit")
-                    .withUsername("limit")
-                    .withPassword("test-only-password");
-
-    @DynamicPropertySource
-    static void databaseProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
-    }
+        properties =
+                "spring.autoconfigure.exclude="
+                        + "org.springframework.boot.mongodb.autoconfigure.MongoAutoConfiguration,"
+                        + "org.springframework.boot.data.mongodb.autoconfigure.DataMongoRepositoriesAutoConfiguration,"
+                        + "org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration,"
+                        + "org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration")
+class PaymentReservationExpirationIntegrationTests extends AbstractMySqlIntegrationTest {
 
     @Autowired PaymentService paymentService;
     @Autowired PaymentReservationExpirationScheduler scheduler;
@@ -72,6 +50,7 @@ class PaymentReservationExpirationIntegrationTests {
     @Autowired ListingStatusHistoryRepository listingStatusHistoryRepository;
     @Autowired CategoryRepository categoryRepository;
     @Autowired MemberRepository memberRepository;
+    @Autowired Clock clock;
 
     private Long sellerId;
     private Long buyerId;
@@ -113,8 +92,9 @@ class PaymentReservationExpirationIntegrationTests {
 
     private void makeOverdue(Long listingId) {
         Listing listing = listingRepository.findById(listingId).orElseThrow();
-        ReflectionTestUtils.setField(listing, "reservedUntil", LocalDateTime.now().minusMinutes(1));
-        listingRepository.save(listing);
+        ReflectionTestUtils.setField(
+                listing, "reservedUntil", LocalDateTime.now(clock).minusMinutes(1));
+        listingRepository.saveAndFlush(listing);
     }
 
     @Test
