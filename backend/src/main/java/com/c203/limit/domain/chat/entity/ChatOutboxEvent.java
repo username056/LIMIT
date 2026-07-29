@@ -54,4 +54,32 @@ public class ChatOutboxEvent {
     private LocalDateTime createdAt;
 
     protected ChatOutboxEvent() {}
+
+    public static ChatOutboxEvent pending(
+            UUID eventId,
+            String aggregateType,
+            Long aggregateId,
+            String eventType,
+            String payload,
+            LocalDateTime createdAt) {
+        ChatOutboxEvent event = new ChatOutboxEvent();
+        event.eventId = eventId;
+        event.aggregateType = aggregateType;
+        event.aggregateId = aggregateId;
+        event.eventType = eventType;
+        event.payload = payload;
+        event.status = OutboxStatus.PENDING;
+        event.retryCount = 0;
+        event.createdAt = createdAt;
+        return event;
+    }
+
+    public void markPublished(LocalDateTime publishedAt) {
+        this.status = OutboxStatus.PUBLISHED;
+        this.publishedAt = publishedAt;
+    }
+
+    public Long getId() {
+        return id;
+    }
 }

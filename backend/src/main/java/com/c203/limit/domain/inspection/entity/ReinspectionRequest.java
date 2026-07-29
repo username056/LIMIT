@@ -2,6 +2,8 @@ package com.c203.limit.domain.inspection.entity;
 
 import com.c203.limit.domain.inspection.enums.ReinspectionStatus;
 import com.c203.limit.global.common.BaseTimeEntity;
+import com.c203.limit.global.exception.BusinessException;
+import com.c203.limit.global.exception.ErrorCode;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
@@ -73,6 +75,9 @@ public class ReinspectionRequest extends BaseTimeEntity {
     }
 
     public void complete() {
+        if (this.status != ReinspectionStatus.REQUESTED) {
+            throw new BusinessException(ErrorCode.REINSPECTION_INVALID_STATE);
+        }
         this.status = ReinspectionStatus.COMPLETED;
         this.completedAt = LocalDateTime.now();
     }
