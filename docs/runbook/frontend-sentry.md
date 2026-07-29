@@ -33,8 +33,9 @@ Variables에 등록한다.
 
 ## 확인 방법
 
-1. 변경 사항을 `dev`에 병합하고 `frontend_verify`, `frontend_deploy_prod`,
-   `frontend_smoke_prod`가 성공했는지 확인한다.
+1. 변경 사항을 `dev`에 병합하고 `frontend_lint`, `frontend_test`,
+   `frontend_build`, `frontend_deploy_prod`, `frontend_smoke_prod`가
+   성공했는지 확인한다.
 2. Sentry의 **Issues**에서 Environment를 `production`으로 선택한다.
 3. 신규 오류에 release commit SHA와 원본 Vue/JavaScript 파일·행 번호가
    표시되는지 확인한다.

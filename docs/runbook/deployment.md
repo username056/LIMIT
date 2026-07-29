@@ -131,7 +131,7 @@ Spring Boot 4의 MongoDB 연결 속성은 `spring.mongodb.uri`를 사용한다. 
 
 ## 6. Blue-Green 배포와 rollback
 
-`dev` 또는 `main`에 변경이 병합되어 push pipeline이 생성되면 관련 영역의 검증 잡 이후 배포 잡이 자동 실행된다. 백엔드는 `backend_image`와 `container_scan`을 통과한 digest를 `deploy_prod`가 동일한 `limit-prod` 스택에 배포하고, 프론트엔드는 `frontend_verify` 산출물을 `frontend_deploy_prod`가 배포한다.
+`dev` 또는 `main`에 변경이 병합되어 push pipeline이 생성되면 관련 영역의 검증 잡 이후 배포 잡이 자동 실행된다. 백엔드는 소스에서 `bootJar`와 계층형 이미지를 한 번에 만드는 `backend_image`와 `container_scan`을 통과한 digest를 `deploy_prod`가 동일한 `limit-prod` 스택에 배포한다. 프론트엔드는 병렬 `frontend_lint`, `frontend_test`, `frontend_build`가 모두 성공한 뒤 `frontend_build` 산출물을 `frontend_deploy_prod`가 배포한다.
 
 백엔드 배포 파일 동기화 단계는 `infra/admin`의 운영 포털 정적 파일도 `/var/www/limit-admin`에 갱신한다.
 
@@ -190,13 +190,16 @@ MySQL exporter 전용 최소권한 계정 생성도 운영 DB 변경 승인 후 
 - Docker Hub에 private backend repository를 만들고 `DOCKERHUB_IMAGE=<namespace>/<repository>`를 protected variable로 등록한다.
 - `DOCKERHUB_USERNAME`은 protected variable, read/write 권한의 `DOCKERHUB_TOKEN`은 masked/protected variable로 등록한다.
 - EC2 배포 사용자는 CI token과 분리된 read-only Docker Hub token으로 `docker login`을 완료한다.
-- `backend_unit_test`와 `backend_integration_test`를 병렬 실행하고 각각의 JaCoCo execution data를 artifact로 전달한다.
-- `backend_coverage`가 두 execution data를 합산해 coverage report와 검증 완료 JAR을 생성하고, `backend/Dockerfile.ci`가 해당 JAR을 이미지에 넣는다. CI 이미지 단계에서 Gradle 빌드를 다시 실행하지 않는다.
-- `backend_image`는 unit, integration, coverage 작업이 모두 성공해야 시작하며 SonarQube 완료는 기다리지 않는다.
+- `backend_unit_test`, `backend_integration_core_test`, `backend_integration_support_test`를 병렬 실행한다. DB 중심 core shard는 MySQL만 사용하고, 나머지 support shard가 MySQL·Redis와 이후 추가되는 비-core 통합 테스트를 담당한다.
+- 짧은 unit·integration JVM은 `-XX:TieredStopAtLevel=1`로 C1까지만 사용한다. 로컬 강제 실행 기준 core는 51.13초에서 41.24초로 줄었고 support는 41.22초에서 42.63초로 비슷해, 두 shard의 병렬 임계값은 약 9초 감소했다. 운영 JVM과 장시간 dependency scan에는 적용하지 않는다.
+- `backend_unit_test`는 이미 기동한 계약 테스트 Context에서 OpenAPI를 함께 내보내며, 별도 OpenAPI export job을 실행하지 않는다. Merge Request에서는 같은 Gradle 호출에 `bootJar`도 포함해 별도 package job을 만들지 않는다.
+- `secret_guard`는 MR base 또는 직전 push 이후 commit만 Gitleaks로 검사하고 비교 기준이 없는 신규 branch에서는 전체 이력으로 fallback한다. 백엔드 로깅 검사는 같은 이미지와 checkout에서 이어 실행해 별도 guard job과 runner slot을 사용하지 않는다.
+- `backend_image`는 테스트와 동시에 소스 기반 다단계 빌드를 시작한다. Dockerfile·Gradle 입력은 registry build cache를 갱신하고 일반 소스 변경은 작은 application layer만 다시 전송한다. `jdeps`로 필요한 Java module을 검증한 Alpine custom JRE를 사용하며 2026-07-29 로컬 기준 최종 이미지는 301MB에서 178MB로 줄었다. 테스트·Secret 검사·이미지 스캔이 하나라도 실패하면 `deploy_prod`가 시작되지 않는다.
+- MongoDB·Redis는 Template와 readiness health를 유지하되 Repository 구현이 없으므로 Repository 후보 스캔을 비활성화한다. 2026-07-29 격리된 운영 profile smoke 기준 readiness는 13.02초에서 12.04초로 줄었다.
 - `dependency_check`는 Merge Request에서는 실행되지 않으며 오직 GitLab Pipeline Schedule(예: 매주 1회)로만 동작하므로 프로젝트 설정에서 Schedule을 등록해야 한다. 새 의존성의 취약점은 다음 스케줄 실행 시 발견되어 최대 1주 지연될 수 있다. NVD 캐시(`.gradle/dependency-check-data`)는 최초 실행 시에만 느리고 이후에는 변경분만 받는다.
 - `NVD_API_KEY`는 미국 NVD 취약점 데이터 API 호출 한도를 높이기 위한 키다. NVD에서 발급받아 GitLab의 masked/protected CI/CD 변수로 등록하며 저장소나 서버 `.env`에는 넣지 않는다.
 - PR Agent는 strategy가 없는 child pipeline에서 비동기로 실행한다. child 실패·취소는 부모 MR pipeline과 병합을 막지 않으며, 긴급한 경우 pipeline 변수 `SKIP_PR_AGENT=true`로 child 생성을 생략한다.
-- 2026-07-20 로컬 `--rerun-tasks` 기준 기존 직렬 test+integration+coverage는 81초였다. 분리 후 unit 48초와 integration 53초를 병렬 실행하고 coverage/JAR 12초를 이어 실행해 예상 critical path는 약 65초로, 약 20% 단축됐다. 실제 Runner 시간은 Merge Request pipeline에서 계속 기록한다.
+- 2026-07-29 로컬 `--rerun-tasks` 및 외부 MySQL·Redis 기준 unit+integration+coverage+JAR 전체 검증은 기존 124.46초, CI용 C1 실행은 96.85초였다. shard 병렬 임계값은 42.63초이고 일반 소스 변경의 image build-stage는 약 34초라, image scan과 배포를 포함한 반복 pipeline은 약 2분 안팎을 목표로 한다. Dockerfile·Gradle 입력을 바꿔 registry build cache를 갱신하는 첫 pipeline은 더 오래 걸릴 수 있으며 실제 Runner 시간을 계속 기록한다.
 - `sonar-project.properties`만 변경되면 전체 테스트 대신 Sonar 분석에 필요한 `classes`만 생성한다. Secret guard는 생략하지 않고 테스트 job과 병렬로 실행한다.
 - 배포 job은 원격 실행 전에 `scripts/sync-deploy-files.sh`로 배포 스크립트, Compose 정의와 모니터링 설정을 동기화한다. 서버 전용 `infra/.env`, `infra/secrets`, `infra/state`는 전송하거나 덮어쓰지 않는다.
 - 데이터, 활성 백엔드와 관측 컨테이너는 `restart: unless-stopped`로 Docker 재시작 이후 복구한다. Blue/Green 전환 중 명시적으로 중지된 이전 색상은 자동 재시작하지 않는다.
@@ -240,7 +243,7 @@ terraform apply tfplan
 
 GitLab은 장기 access key 대신 OIDC ID token으로 `AWS_DEPLOY_ROLE_ARN`을 assume한다. IAM trust의 `sub`는 해당 프로젝트의 보호된 `dev`, `main` 브랜치만 허용하고 audience는 CI와 동일한 `sts.amazonaws.com`으로 설정한다. Terraform output의 bucket·distribution·role 값을 protected variable로 등록한다. `VITE_API_BASE_URL`은 브라우저에서 접근 가능한 운영 API의 `/api/v1` 주소이며 Secret이 아니다. 실제 IAM trust 변경은 별도 승인 후 수행한다.
 
-보호된 `dev`, `main` push에서 `frontend_verify`가 만든 `frontend/dist`만 `frontend_deploy_prod`로 자동 배포한다. `scripts/deploy-frontend.sh`는 먼저 `releases/<commit-sha>/`에 복구본을 보존하고 해시 asset을 1년 immutable로 올린 다음 `index.html`을 no-store로 마지막에 교체한다. CloudFront invalidation은 `/`와 `/index.html`만 수행한다. 사용 중인 이전 해시 asset은 즉시 삭제하지 않으며 S3 versioning과 lifecycle을 함께 사용한다.
+보호된 `dev`, `main` push에서 병렬 lint·test를 통과하고 `frontend_build`가 만든 `frontend/dist`만 `frontend_deploy_prod`로 자동 배포한다. `scripts/deploy-frontend.sh`는 `releases/<commit-sha>/`에 entrypoint와 비-asset 파일을 보존하고, content hash가 붙은 root asset은 같은 이름·크기일 때 재전송하지 않는다. 해시 asset을 1년 immutable로 올린 다음 `index.html`을 no-store로 마지막에 교체하며 CloudFront invalidation은 `/`와 `/index.html`만 수행한다. rollback release의 entrypoint가 참조하는 이전 해시 asset은 release 보존 기간보다 오래 유지하고 즉시 삭제하지 않으며, S3 versioning과 lifecycle을 함께 사용한다.
 
 배포 job은 invalidation 완료까지 기다리고 `frontend_smoke_prod`가 실제 프론트 URL과 API origin의 `/health` 응답 성공을 확인한다. 주요 라우트와 사용자 흐름은 별도로 확인한다. 실패하면 GitLab manual job에 이전 commit SHA를 `FRONTEND_ROLLBACK_RELEASE`로 입력해 `frontend_rollback_prod`를 실행한다. release 기본 보존 기간은 30일이며 CloudFront에서는 `/releases/` 직접 접근을 차단한다.
 
