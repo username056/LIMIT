@@ -80,7 +80,7 @@ class ChatRoomControllerTests {
     void returnsCurrentMembersChatRooms() throws Exception {
         ChatRoomSummaryResponse summary = new ChatRoomSummaryResponse(
                 ROOM_ID, LISTING_ID, SELLER_ID, "판매자", "상품", "https://cdn/image.jpg",
-                "ACTIVE", 50L, 7L, null, 2L, null);
+                "ACTIVE", 50L, 7L, null, 2L, 5L, null);
         when(currentUser.memberId()).thenReturn(BUYER_ID);
         when(chatRoomService.findRooms(BUYER_ID, 100L, 10))
                 .thenReturn(new CursorResponse<>(List.of(summary), "40", true));
@@ -94,6 +94,7 @@ class ChatRoomControllerTests {
                 .andExpect(jsonPath("$.data.content[0].counterpartNickname").value("판매자"))
                 .andExpect(jsonPath("$.data.content[0].listingTitle").value("상품"))
                 .andExpect(jsonPath("$.data.content[0].unreadCount").value(2))
+                .andExpect(jsonPath("$.data.content[0].counterpartLastReadSequence").value(5))
                 .andExpect(jsonPath("$.data.nextCursor").value("40"))
                 .andExpect(jsonPath("$.data.hasNext").value(true));
     }

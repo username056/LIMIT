@@ -39,11 +39,11 @@ function formatTime(isoString) {
 
 <template>
   <DefaultLayout>
-    <div class="mx-auto max-w-[1280px] px-4 py-7 sm:px-6 lg:px-10 lg:py-10">
-      <div class="grid min-h-[560px] grid-cols-1 overflow-hidden border-y border-border bg-surface lg:grid-cols-[320px_minmax(0,1fr)]">
+    <div class="mx-auto w-full max-w-[1280px] px-4 py-7 sm:px-6 lg:h-[calc(100dvh-72px)] lg:min-h-0 lg:px-10 lg:py-4">
+      <div class="grid min-h-[560px] grid-cols-1 overflow-hidden border-y border-border bg-surface lg:h-full lg:min-h-0 lg:grid-cols-[320px_minmax(0,1fr)]">
         <BaseCard
           :padded="false"
-          class="rounded-none border-0 border-b shadow-none lg:border-b-0 lg:border-r"
+          class="rounded-none border-0 border-b shadow-none lg:flex lg:min-h-0 lg:flex-col lg:border-b-0 lg:border-r"
         >
           <h1 class="border-b border-border px-5 py-4 text-lg font-bold text-text-main">
             채팅
@@ -65,7 +65,7 @@ function formatTime(isoString) {
 
           <div
             v-else-if="rooms.length"
-            class="divide-y divide-border"
+            class="divide-y divide-border lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
           >
             <RouterLink
               v-for="room in rooms"
@@ -123,7 +123,7 @@ function formatTime(isoString) {
         />
         <BaseCard
           v-else
-          class="flex min-h-[520px] items-center justify-center rounded-none border-0 shadow-none"
+          class="flex min-h-[520px] items-center justify-center rounded-none border-0 shadow-none lg:min-h-0"
         >
           <div class="max-w-sm text-center">
             <div class="mx-auto flex h-10 w-10 items-center justify-center text-primary">

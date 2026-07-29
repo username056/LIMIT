@@ -6,13 +6,19 @@ import BaseButton from '../components/BaseButton.vue'
 import BaseCard from '../components/BaseCard.vue'
 import BaseBadge from '../components/BaseBadge.vue'
 import BaseTabs from '../components/BaseTabs.vue'
-import { getMyRtcCalls, respondRtcCall } from '../api/rtc'
+import { cancelRtcCall, getMyRtcCalls, respondRtcCall, updateRtcCall } from '../api/rtc'
 
 const router = useRouter()
 const activeTab = ref('실시간 확인')
 
 const calls = ref([])
 const isLoading = ref(true)
+const pendingCallId = ref(null)
+const editingCallId = ref(null)
+const cancelingCallId = ref(null)
+const editScheduledAt = ref('')
+const editMemo = ref('')
+const cancelReason = ref('')
 const errorMessage = ref('')
 
 async function load() {
@@ -28,6 +34,7 @@ async function load() {
 }
 
 async function respond(call, accepted) {
+  pendingCallId.value = call.callId
   try {
     const updated = await respondRtcCall(call.callId, accepted, accepted ? null : '요청 거절')
     await load()
@@ -36,6 +43,53 @@ async function respond(call, accepted) {
     }
   } catch (error) {
     errorMessage.value = error.message || '요청을 처리하지 못했습니다.'
+  } finally {
+    pendingCallId.value = null
+  }
+}
+
+function startEdit(call) {
+  cancelingCallId.value = null
+  editingCallId.value = call.callId
+  editScheduledAt.value = call.scheduledAt?.slice(0, 16) || ''
+  editMemo.value = call.memo || ''
+}
+
+async function saveEdit(call) {
+  if (!editScheduledAt.value) return
+  pendingCallId.value = call.callId
+  errorMessage.value = ''
+  try {
+    await updateRtcCall(call.callId, {
+      scheduledAt: `${editScheduledAt.value}:00`,
+      memo: editMemo.value.trim() || null,
+    })
+    editingCallId.value = null
+    await load()
+  } catch (error) {
+    errorMessage.value = error.message || '통화 약속을 변경하지 못했습니다.'
+  } finally {
+    pendingCallId.value = null
+  }
+}
+
+function startCancel(call) {
+  editingCallId.value = null
+  cancelingCallId.value = call.callId
+  cancelReason.value = ''
+}
+
+async function confirmCancel(call) {
+  pendingCallId.value = call.callId
+  errorMessage.value = ''
+  try {
+    await cancelRtcCall(call.callId, cancelReason.value.trim())
+    cancelingCallId.value = null
+    await load()
+  } catch (error) {
+    errorMessage.value = error.message || '통화 약속을 취소하지 못했습니다.'
+  } finally {
+    pendingCallId.value = null
   }
 }
 
@@ -168,6 +222,20 @@ function formatPrice(price) {
                     거절
                   </BaseButton>
                 </template>
+                <template v-if="call.status === 'PROPOSED' && !call.incoming">
+                  <BaseButton
+                    variant="outline"
+                    @click="startEdit(call)"
+                  >
+                    약속 변경
+                  </BaseButton>
+                  <BaseButton
+                    variant="ghost"
+                    @click="startCancel(call)"
+                  >
+                    약속 취소
+                  </BaseButton>
+                </template>
                 <BaseButton
                   v-if="call.rtcSessionId && ['ACCEPTED', 'COMPLETED'].includes(call.status)"
                   :disabled="call.status === 'COMPLETED'"
@@ -177,6 +245,75 @@ function formatPrice(price) {
                 </BaseButton>
               </div>
             </div>
+
+            <form
+              v-if="editingCallId === call.callId"
+              class="mt-5 grid gap-3 border-t border-border pt-5"
+              @submit.prevent="saveEdit(call)"
+            >
+              <label class="grid gap-1 text-sm font-medium text-text-main">
+                통화 시간
+                <input
+                  v-model="editScheduledAt"
+                  type="datetime-local"
+                  required
+                  class="rounded-md border border-border px-3 py-2"
+                >
+              </label>
+              <label class="grid gap-1 text-sm font-medium text-text-main">
+                메모
+                <textarea
+                  v-model="editMemo"
+                  maxlength="500"
+                  rows="3"
+                  class="rounded-md border border-border px-3 py-2"
+                />
+              </label>
+              <div class="flex justify-end gap-2">
+                <BaseButton
+                  variant="ghost"
+                  @click="editingCallId = null"
+                >
+                  닫기
+                </BaseButton>
+                <BaseButton
+                  type="submit"
+                  :disabled="pendingCallId === call.callId"
+                >
+                  변경 저장
+                </BaseButton>
+              </div>
+            </form>
+
+            <form
+              v-if="cancelingCallId === call.callId"
+              class="mt-5 grid gap-3 border-t border-border pt-5"
+              @submit.prevent="confirmCancel(call)"
+            >
+              <label class="grid gap-1 text-sm font-medium text-text-main">
+                취소 사유 (선택)
+                <textarea
+                  v-model="cancelReason"
+                  maxlength="500"
+                  rows="3"
+                  class="rounded-md border border-border px-3 py-2"
+                />
+              </label>
+              <div class="flex justify-end gap-2">
+                <BaseButton
+                  variant="ghost"
+                  @click="cancelingCallId = null"
+                >
+                  닫기
+                </BaseButton>
+                <BaseButton
+                  type="submit"
+                  :disabled="pendingCallId === call.callId"
+                >
+                  취소 확인
+                </BaseButton>
+              </div>
+            </form>
           </BaseCard>
           <BaseCard
             v-if="!calls.length"

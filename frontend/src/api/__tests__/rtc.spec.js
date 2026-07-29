@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createChatRoom, issueRtcJoinToken, requestRtcCall, signalingSocketUrl } from '../rtc'
+import {
+  cancelRtcCall,
+  createChatRoom,
+  issueRtcJoinToken,
+  requestRtcCall,
+  signalingSocketUrl,
+  updateRtcCall,
+} from '../rtc'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 const ok = (data) => ({ ok: true, json: vi.fn().mockResolvedValue({ data, meta: null }) })
@@ -26,5 +33,27 @@ describe('rtc api', () => {
 
     await expect(issueRtcJoinToken(55)).resolves.toEqual(join)
     expect(signalingSocketUrl(join)).toContain('/ws/rtc?token=%3Cone-time-token%3E')
+  })
+
+  it('updates and cancels a proposed call appointment', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(ok({ callId: 20, status: 'PROPOSED' }))
+      .mockResolvedValueOnce(ok({ callId: 20, status: 'CANCELED' }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const payload = { scheduledAt: '2026-08-01T15:30:00', memo: '시간 변경' }
+    await updateRtcCall(20, payload)
+    await cancelRtcCall(20, '일정 변경')
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      `${API_BASE_URL}/calls/20`,
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify(payload) }),
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      `${API_BASE_URL}/calls/20?reason=${encodeURIComponent('일정 변경')}`,
+      expect.objectContaining({ method: 'DELETE' }),
+    )
   })
 })

@@ -14,5 +14,6 @@ public interface ChatRoomSummaryProjection {
     long getLastMessageSeq();
     LocalDateTime getLastMessageAt();
     long getLastReadSeq();
+    long getCounterpartLastReadSeq();
     LocalDateTime getCreatedAt();
 }

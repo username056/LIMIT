@@ -20,6 +20,15 @@ export function respondRtcCall(callId, accepted, reason = null) {
   return apiClient.post(`/calls/${callId}/response`, { accepted, reason })
 }
 
+export function updateRtcCall(callId, payload) {
+  return apiClient.patch(`/calls/${callId}`, payload)
+}
+
+export function cancelRtcCall(callId, reason = '') {
+  const query = reason ? `?reason=${encodeURIComponent(reason)}` : ''
+  return apiClient.delete(`/calls/${callId}${query}`)
+}
+
 export function getRtcSession(sessionId) {
   return apiClient.get(`/rtc-sessions/${sessionId}`)
 }

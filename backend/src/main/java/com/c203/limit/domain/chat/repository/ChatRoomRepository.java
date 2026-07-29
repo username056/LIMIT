@@ -29,11 +29,16 @@ public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
                    room.lastMessageSeq AS lastMessageSeq,
                    room.lastMessageAt AS lastMessageAt,
                    participant.lastReadSeq AS lastReadSeq,
+                   counterpart.lastReadSeq AS counterpartLastReadSeq,
                    room.createdAt AS createdAt
-              FROM ChatRoom room, ChatRoomParticipant participant
-             WHERE participant.chatRoomId = room.id
-               AND participant.userId = :memberId
+              FROM ChatRoom room
+              JOIN ChatRoomParticipant participant ON participant.chatRoomId = room.id
+              JOIN ChatRoomParticipant counterpart ON counterpart.chatRoomId = room.id
+             WHERE participant.userId = :memberId
                AND participant.leftAt IS NULL
+               AND ((room.buyerId = :memberId AND counterpart.userId = room.sellerId)
+                    OR (room.sellerId = :memberId AND counterpart.userId = room.buyerId))
+               AND counterpart.leftAt IS NULL
                AND (:cursor IS NULL OR room.id < :cursor)
              ORDER BY room.id DESC
             """)
