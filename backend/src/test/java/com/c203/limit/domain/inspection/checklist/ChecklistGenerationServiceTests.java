@@ -42,16 +42,18 @@ class ChecklistGenerationServiceTests {
                                 LaptopFeatureCode.CAMERA,
                                 ChecklistEvidenceStatus.VERIFIED,
                                 "official specification",
+                                "카메라 앱에서 영상을 확인하세요.",
                                 "https://www.samsung.com/sec/support/model/NT960/",
                                 "Samsung support")),
-                        List.of()));
+                        List.of("RJ45_PORT", "MICROSD_SLOT", "조도 센서")));
 
         GeneratedChecklist result =
                 service.generateForModel(201L, Set.of(LaptopFeatureCode.CAMERA));
 
         assertThat(result.aiApplied()).isTrue();
-        assertThat(result.items()).hasSize(12);
+        assertThat(result.items()).hasSize(13);
         assertThat(result.aiSuggestions()).hasSize(1);
+        assertThat(result.reviewCandidates()).containsExactly("조도 센서");
         assertThat(result.items())
                 .filteredOn(item -> item.featureCode() == LaptopFeatureCode.CAMERA)
                 .singleElement()
@@ -72,7 +74,7 @@ class ChecklistGenerationServiceTests {
         GeneratedChecklist result = service.generateForModel(201L, Set.of());
 
         assertThat(result.aiApplied()).isFalse();
-        assertThat(result.items()).hasSize(11);
+        assertThat(result.items()).hasSize(12);
         assertThat(result.aiSuggestions()).isEmpty();
     }
 
@@ -86,7 +88,7 @@ class ChecklistGenerationServiceTests {
 
         assertThat(result.deviceModelId()).isNull();
         assertThat(result.osFamily()).isEqualTo(OsFamily.LINUX);
-        assertThat(result.items()).hasSize(11);
+        assertThat(result.items()).hasSize(12);
     }
 
     @Test

@@ -14,7 +14,15 @@ class LaptopChecklistPolicyTests {
     void createsWindowsDiagnosticsAsRequiredFiles() {
         var items = policy.generate(OsFamily.WINDOWS, Set.of());
 
-        assertThat(items).hasSize(11);
+        assertThat(items).hasSize(12);
+        assertThat(items)
+                .filteredOn(item -> item.itemCode().equals("LAP-HNG-012"))
+                .singleElement()
+                .satisfies(item -> {
+                    assertThat(item.name()).isEqualTo("힌지 상태");
+                    assertThat(item.evidenceType()).isEqualTo(EvidenceType.VIDEO);
+                    assertThat(item.required()).isTrue();
+                });
         assertThat(items)
                 .filteredOn(item -> item.itemCode().equals("LAP-BAT-010"))
                 .singleElement()
@@ -34,7 +42,7 @@ class LaptopChecklistPolicyTests {
     void createsLinuxFallbackEvidenceWithoutWindowsParsers() {
         var items = policy.generate(OsFamily.LINUX, Set.of());
 
-        assertThat(items).hasSize(11);
+        assertThat(items).hasSize(12);
         assertThat(items)
                 .filteredOn(item -> item.itemCode().equals("LAP-BAT-010")
                         || item.itemCode().equals("LAP-SYS-011"))
@@ -55,7 +63,7 @@ class LaptopChecklistPolicyTests {
                         LaptopFeatureCode.OLED,
                         LaptopFeatureCode.NUMPAD));
 
-        assertThat(items).hasSize(16);
+        assertThat(items).hasSize(17);
         assertThat(items.stream()
                         .filter(item -> item.featureCode() != null)
                         .map(GeneratedChecklistItem::featureCode))
@@ -65,5 +73,30 @@ class LaptopChecklistPolicyTests {
                         LaptopFeatureCode.BLUETOOTH,
                         LaptopFeatureCode.OLED,
                         LaptopFeatureCode.NUMPAD);
+    }
+
+    @Test
+    void addsRj45AndMicroSdAsSeparateConfirmedFeatures() {
+        var items = policy.generate(
+                OsFamily.WINDOWS,
+                Set.of(LaptopFeatureCode.RJ45_PORT, LaptopFeatureCode.MICROSD_SLOT));
+
+        assertThat(items).hasSize(14);
+        assertThat(items.stream()
+                        .filter(item -> item.featureCode() != null)
+                        .map(GeneratedChecklistItem::featureCode))
+                .containsExactlyInAnyOrder(
+                        LaptopFeatureCode.RJ45_PORT,
+                        LaptopFeatureCode.MICROSD_SLOT);
+        assertThat(items)
+                .filteredOn(item -> item.featureCode() == LaptopFeatureCode.RJ45_PORT)
+                .singleElement()
+                .extracting(GeneratedChecklistItem::name)
+                .isEqualTo("유선 LAN(RJ45) 포트");
+        assertThat(items)
+                .filteredOn(item -> item.featureCode() == LaptopFeatureCode.MICROSD_SLOT)
+                .singleElement()
+                .extracting(GeneratedChecklistItem::name)
+                .isEqualTo("microSD 카드 슬롯");
     }
 }

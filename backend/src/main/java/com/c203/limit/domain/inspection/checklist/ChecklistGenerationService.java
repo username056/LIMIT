@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -126,6 +127,8 @@ public class ChecklistGenerationService {
                 suggestions,
                 supplement.reviewCandidates().stream()
                         .filter(value -> value != null && !value.isBlank())
+                        .map(String::trim)
+                        .filter(value -> !isSupportedFeatureCode(value))
                         .distinct()
                         .limit(LaptopChecklistPolicy.MAX_ADDITIONAL_ITEMS)
                         .toList());
@@ -197,6 +200,16 @@ public class ChecklistGenerationService {
         try {
             URI uri = URI.create(sourceUrl);
             return "https".equalsIgnoreCase(uri.getScheme()) && !isBlank(uri.getHost());
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
+    }
+
+    private boolean isSupportedFeatureCode(String value) {
+        try {
+            LaptopFeatureCode featureCode =
+                    LaptopFeatureCode.valueOf(value.toUpperCase(Locale.ROOT));
+            return policy.supports(featureCode);
         } catch (IllegalArgumentException exception) {
             return false;
         }
