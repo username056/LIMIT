@@ -76,6 +76,9 @@ class AdminAuthorizationTests {
     @MockitoBean com.c203.limit.domain.chat.repository.ChatMessageMediaRepository chatMessageMediaRepository;
     @MockitoBean com.c203.limit.domain.chat.repository.ChatRoomContextReader chatRoomContextReader;
     @MockitoBean ListingChatReader listingChatReader;
+    @MockitoBean
+    com.c203.limit.domain.payment.repository.ExpiredReservationCandidateReader
+            expiredReservationCandidateReader;
     @MockitoBean ListingRepository listingRepository;
     @MockitoBean WishlistRepository wishlistRepository;
     @MockitoBean ProductApplicationService productApplicationService;
@@ -85,6 +88,7 @@ class AdminAuthorizationTests {
             checklistGenerationService;
     @MockitoBean ListingStatusHistoryRepository listingStatusHistoryRepository;
     @MockitoBean PaymentService paymentService;
+    @MockitoBean com.c203.limit.domain.payment.repository.PaymentRepository paymentRepository;
     @MockitoBean EvidenceRepository evidenceRepository;
     @MockitoBean OcrResultRepository ocrResultRepository;
     @MockitoBean ListingOwnerReader listingOwnerReader;

@@ -16,6 +16,10 @@ import com.c203.limit.domain.product.repository.ListingRepository;
 import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,6 +33,9 @@ class ListingServiceTests {
 
     private static final Long LISTING_ID = 100L;
     private static final Long BUYER_ID = 2L;
+    private static final long RESERVATION_TTL_MINUTES = 30;
+    private static final Clock FIXED_CLOCK =
+            Clock.fixed(Instant.parse("2026-07-28T00:00:00Z"), ZoneId.systemDefault());
 
     @Mock ListingRepository listingRepository;
     @Mock ListingStatusHistoryRepository listingStatusHistoryRepository;
@@ -37,7 +44,11 @@ class ListingServiceTests {
 
     @BeforeEach
     void setUp() {
-        service = new ListingService(listingRepository, listingStatusHistoryRepository);
+        service = new ListingService(
+                listingRepository,
+                listingStatusHistoryRepository,
+                FIXED_CLOCK,
+                RESERVATION_TTL_MINUTES);
     }
 
     private Listing listingWithStatus(ListingStatus status) {
@@ -57,6 +68,8 @@ class ListingServiceTests {
 
         assertThat(listing.getStatus()).isEqualTo(ListingStatus.RESERVED);
         assertThat(listing.getBuyerId()).isEqualTo(BUYER_ID);
+        assertThat(listing.getReservedUntil())
+                .isEqualTo(LocalDateTime.now(FIXED_CLOCK).plusMinutes(RESERVATION_TTL_MINUTES));
         assertThat(result.sellerId()).isEqualTo(listing.getSellerId());
         assertThat(result.price()).isEqualTo(listing.getPrice());
         verify(listingStatusHistoryRepository).save(any(ListingStatusHistory.class));
