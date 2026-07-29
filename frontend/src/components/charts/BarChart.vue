@@ -1,4 +1,5 @@
 <script setup>
+import { computed } from 'vue'
 import { Bar } from 'vue-chartjs'
 import {
   Chart as ChartJS,
@@ -16,7 +17,8 @@ const props = defineProps({
   values: { type: Array, required: true }, // [12, 18, 25, ...]
 })
 
-const chartData = {
+// 데이터가 비동기로 채워질 수 있어 computed로 두어야 갱신이 반영됩니다.
+const chartData = computed(() => ({
   labels: props.labels,
   datasets: [
     {
@@ -27,7 +29,7 @@ const chartData = {
       maxBarThickness: 28,
     },
   ],
-}
+}))
 
 const chartOptions = {
   responsive: true,

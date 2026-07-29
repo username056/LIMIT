@@ -2,6 +2,7 @@
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { registerSeller } from '../api/seller'
+import { legalVersion, sellerTermsSections } from '../legal/documents'
 import { restoreAuthSession } from '../auth/session'
 import BaseButton from '../components/BaseButton.vue'
 import BaseInput from '../components/BaseInput.vue'
@@ -11,6 +12,7 @@ import MyPageLayout from '../layouts/MyPageLayout.vue'
 const router = useRouter()
 const isSubmitting = ref(false)
 const errorMessage = ref('')
+const isTermsModalOpen = ref(false)
 const form = reactive({
   sellerType: 'INDIVIDUAL',
   countryCode: 'KR',
@@ -30,6 +32,12 @@ const countryOptions = [
   { label: '미국', value: 'US' },
   { label: '일본', value: 'JP' },
 ]
+
+function agreeFromModal() {
+  form.sellerTermsAccepted = true
+  isTermsModalOpen.value = false
+  errorMessage.value = ''
+}
 
 async function submitRegistration() {
   errorMessage.value = ''
@@ -143,14 +151,28 @@ async function submitRegistration() {
           </p>
         </div>
 
-        <label class="flex items-start gap-3 rounded-md bg-bg p-4 text-sm text-text-main">
-          <input
-            v-model="form.sellerTermsAccepted"
-            type="checkbox"
-            class="mt-0.5 h-4 w-4 accent-primary"
-          >
-          <span>판매 상품과 정산 정보에 대한 책임 및 판매자 이용 조건에 동의합니다.</span>
-        </label>
+        <div class="rounded-md bg-bg p-4">
+          <label class="flex items-start gap-3 text-sm text-text-main">
+            <input
+              v-model="form.sellerTermsAccepted"
+              type="checkbox"
+              class="mt-0.5 h-4 w-4 accent-primary"
+            >
+            <span>
+              <span class="font-semibold">(필수)</span>
+              판매 상품과 정산 정보에 대한 책임 및 판매자 이용 조건에 동의합니다.
+            </span>
+          </label>
+          <div class="mt-2 pl-7">
+            <button
+              type="button"
+              class="text-xs font-semibold text-primary underline"
+              @click="isTermsModalOpen = true"
+            >
+              판매자 이용 조건 전문 보기
+            </button>
+          </div>
+        </div>
 
         <p
           v-if="errorMessage"
@@ -169,5 +191,75 @@ async function submitRegistration() {
         </BaseButton>
       </form>
     </section>
+
+    <div
+      v-if="isTermsModalOpen"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="판매자 이용 조건"
+      @click.self="isTermsModalOpen = false"
+    >
+      <div class="flex max-h-[80vh] w-full max-w-lg flex-col rounded-lg bg-surface shadow-elevated">
+        <div class="flex items-start justify-between gap-4 border-b border-border px-6 py-4">
+          <div>
+            <h2 class="text-base font-bold text-text-main">
+              판매자 이용 조건
+            </h2>
+            <p class="mt-1 text-xs text-text-sub">
+              시행일 {{ legalVersion }}
+            </p>
+          </div>
+          <button
+            type="button"
+            class="text-xl leading-none text-text-sub hover:text-text-main"
+            aria-label="판매자 이용 조건 닫기"
+            @click="isTermsModalOpen = false"
+          >
+            ×
+          </button>
+        </div>
+
+        <div class="flex-1 space-y-5 overflow-y-auto px-6 py-5">
+          <section
+            v-for="section in sellerTermsSections"
+            :key="section.id"
+          >
+            <h3 class="text-sm font-bold text-text-main">
+              {{ section.title }}
+            </h3>
+            <ul class="mt-2 space-y-1.5">
+              <li
+                v-for="item in section.items"
+                :key="item"
+                class="text-xs leading-6 text-text-sub"
+              >
+                · {{ item }}
+              </li>
+            </ul>
+          </section>
+          <p class="text-xs text-text-sub">
+            전체 이용약관은
+            <RouterLink
+              :to="{ name: 'terms-service' }"
+              class="font-semibold text-primary underline"
+            >
+              이용약관 페이지
+            </RouterLink>
+            에서 확인할 수 있습니다.
+          </p>
+        </div>
+
+        <div class="border-t border-border px-6 py-4">
+          <BaseButton
+            block
+            type="button"
+            @click="agreeFromModal"
+          >
+            동의하고 닫기
+          </BaseButton>
+        </div>
+      </div>
+    </div>
   </MyPageLayout>
 </template>
