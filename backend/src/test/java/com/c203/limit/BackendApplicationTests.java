@@ -86,6 +86,10 @@ class BackendApplicationTests {
     ListingChatReader listingChatReader;
 
     @MockitoBean
+    com.c203.limit.domain.payment.repository.ExpiredReservationCandidateReader
+            expiredReservationCandidateReader;
+
+    @MockitoBean
     ListingRepository listingRepository;
 
     @MockitoBean
@@ -98,10 +102,17 @@ class BackendApplicationTests {
     ProductCatalogService productCatalogService;
 
     @MockitoBean
+    com.c203.limit.domain.inspection.checklist.ChecklistGenerationService
+            checklistGenerationService;
+
+    @MockitoBean
     ListingStatusHistoryRepository listingStatusHistoryRepository;
 
     @MockitoBean
     PaymentService paymentService;
+
+    @MockitoBean
+    com.c203.limit.domain.payment.repository.PaymentRepository paymentRepository;
 
     @MockitoBean
     com.c203.limit.domain.seller.repository.SellerRepository sellerRepository;

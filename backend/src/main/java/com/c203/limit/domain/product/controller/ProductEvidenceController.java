@@ -17,6 +17,7 @@ import com.c203.limit.domain.product.dto.response.EvidenceResponse;
 import com.c203.limit.domain.product.dto.response.EvidenceUploadUrlResponse;
 import com.c203.limit.domain.product.dto.response.ProductChecklistItemResponse;
 import com.c203.limit.domain.product.dto.response.RecaptureRequestResponse;
+import com.c203.limit.domain.product.service.ProductChecklistService;
 import com.c203.limit.global.response.ApiResponse;
 
 @RestController
@@ -24,6 +25,11 @@ public class ProductEvidenceController implements ProductEvidenceApi {
 
     private static final OffsetDateTime CAPTURED_AT = OffsetDateTime.parse("2026-07-22T12:01:00+09:00");
     private static final OffsetDateTime UPLOADED_AT = OffsetDateTime.parse("2026-07-22T12:03:00+09:00");
+    private final ProductChecklistService productChecklistService;
+
+    public ProductEvidenceController(ProductChecklistService productChecklistService) {
+        this.productChecklistService = productChecklistService;
+    }
 
     @Override
     public ResponseEntity<ApiResponse<List<ProductChecklistItemResponse>>> getProductChecklist(
@@ -31,11 +37,8 @@ public class ProductEvidenceController implements ProductEvidenceApi {
             String status,
             boolean requiredOnly
     ) {
-        List<ProductChecklistItemResponse> items = List.of(
-                new ProductChecklistItemResponse(7001L, "SP-EXT-001", "전면·후면·측면 외관", "PHOTO", true, "COMPLETED", 9001L, 1),
-                new ProductChecklistItemResponse(7002L, "SP-DSP-002", "화면 전체 터치", "VIDEO", true, "RECAPTURE_REQUESTED", 9002L, 1)
-        );
-        return ResponseEntity.ok(ApiResponse.ok(items));
+        return ResponseEntity.ok(
+                ApiResponse.ok(productChecklistService.findAll(productId, status, requiredOnly)));
     }
 
     @Override

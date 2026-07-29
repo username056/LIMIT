@@ -146,6 +146,8 @@ bash scripts/rollback-blue-green.sh https://api.example.com
 
 `deploy_prod`와 `rollback_prod`는 모두 `resource_group: limit-prod`와 `interruptible: false`를 사용하므로 동시에 실행되지 않는다. 이전 컨테이너나 digest가 없으면 전환 전에 실패한다. readiness 실패 시 이전 컨테이너만 정리하고 기존 upstream을 유지하며, upstream 전환 후 smoke 실패 시 기존 upstream을 복구한다. 성공한 경우에만 `prod.active`를 이전 색상으로 갱신하고 기존 활성 컨테이너를 중지한다.
 
+전환 중에는 비활성 색상이 readiness를 통과할 때까지 기존 색상과 신규 색상이 짧게 동시에 실행된다. 백엔드의 `PaymentReservationExpirationScheduler`(예약 만료 배치)처럼 `@Scheduled`로 도는 배치는 이 구간에서 두 인스턴스가 같은 대상을 동시에 처리하려 시도할 수 있다. 대상 건별 낙관적 락으로 최종 데이터 정합성은 보장되지만 한쪽은 경합 실패 경고 로그를 남긴다 — 정상 동작이며 별도 조치는 필요 없다. 특정 인스턴스에서만 배치를 완전히 끄고 싶으면 `limit.payment.reservation-expiration.enabled=false` 환경변수로 개별 인스턴스를 제어할 수 있다.
+
 이미지 rollback은 애플리케이션 컨테이너만 복구한다. destructive DB migration은 되돌리지 않으므로 Flyway migration은 expand-and-contract 방식으로 작성하고 병합 전 코드리뷰에서 승인받는다.
 
 Flyway 마이그레이션이 포함된 MR은 병합 즉시 운영 DB에 적용되므로 리뷰어는 마이그레이션 파일을 반드시 확인한 뒤 승인한다. 별도 사후 배포 승인 단계는 없다.

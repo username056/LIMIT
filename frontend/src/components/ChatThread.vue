@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { getChatMediaBlob, getChatMessages, uploadChatMedia } from '../api/chat'
 import { createChatSocket } from '../api/chatSocket'
 import { getProduct } from '../api/products'
+import { getMyRtcCalls, requestRtcCall, respondRtcCall } from '../api/rtc'
 import { useAuthSession } from '../auth/session'
 
 const props = defineProps({
@@ -22,12 +23,23 @@ const isLoadingMessages = ref(true)
 const messagesError = ref('')
 const socketStatus = ref('connecting')
 const isUploading = ref(false)
+const counterpartLastReadSeq = ref(0)
+const isCallFormOpen = ref(false)
+const isRequestingCall = ref(false)
+const callScheduledAt = ref('')
+const callMemo = ref('')
+const callMessage = ref('')
+const appointments = ref([])
+const pendingAppointmentId = ref(null)
+const appointmentAnchorSequence = ref(0)
+const anchoredAppointmentId = ref(null)
 const fileInput = ref(null)
 let chatSocket = null
 let nextPendingMessageId = -1
 let connectionVersion = 0
 let reconnectTimer = null
 const mediaObjectUrls = new Set()
+const LAST_TIMELINE_ORDER = 2147483647
 
 async function attachMediaUrls(message) {
   if (!message.media?.length) return message
@@ -77,6 +89,18 @@ function latestSequence() {
   return messages.value.reduce((max, message) => Math.max(max, Number(message.roomSequence || 0)), 0)
 }
 
+function messageTimelineOrder(roomSequence) {
+  const sequence = Number(roomSequence)
+  if (!Number.isSafeInteger(sequence) || sequence < 1) return LAST_TIMELINE_ORDER
+  return Math.min(sequence * 2, LAST_TIMELINE_ORDER - 1)
+}
+
+function appointmentTimelineOrder() {
+  const sequence = Number(appointmentAnchorSequence.value)
+  if (!Number.isSafeInteger(sequence) || sequence < 0) return LAST_TIMELINE_ORDER - 2
+  return Math.min(sequence * 2 + 1, LAST_TIMELINE_ORDER - 1)
+}
+
 function markRead() {
   const lastReadSeq = latestSequence()
   if (lastReadSeq > 0) chatSocket?.markRead(lastReadSeq)
@@ -114,6 +138,11 @@ function connectSocket(roomId) {
         await upsertMessage(event.message)
         markRead()
         emit('room-updated')
+      } else if (event.type === 'READ' && event.readerId !== myMemberId.value) {
+        counterpartLastReadSeq.value = Math.max(
+          counterpartLastReadSeq.value,
+          Number(event.lastReadSeq || 0),
+        )
       }
     },
     onAck: (ack) => {
@@ -151,17 +180,83 @@ async function loadProduct(listingId) {
   }
 }
 
+async function loadAppointments(roomId) {
+  try {
+    const result = await getMyRtcCalls()
+    appointments.value = (result || [])
+      .filter((appointment) => Number(appointment.chatRoomId) === Number(roomId))
+      .sort((first, second) => Number(second.callId) - Number(first.callId))
+    const appointmentId = appointments.value[0]?.callId ?? null
+    if (appointmentId !== anchoredAppointmentId.value) {
+      anchoredAppointmentId.value = appointmentId
+      appointmentAnchorSequence.value = latestSequence()
+    }
+  } catch (error) {
+    callMessage.value = error.message || '통화 약속을 불러오지 못했습니다.'
+  }
+}
+
+const latestAppointment = computed(() => appointments.value[0] || null)
+
 watch(
   () => props.room.roomId,
-  (roomId) => {
-    loadMessages(roomId)
+  async (roomId) => {
+    counterpartLastReadSeq.value = Number(props.room.counterpartLastReadSequence || 0)
+    anchoredAppointmentId.value = null
+    appointmentAnchorSequence.value = 0
+    await loadMessages(roomId)
+    await loadAppointments(roomId)
     loadProduct(props.room.listingId)
     connectSocket(roomId)
   },
   { immediate: true },
 )
 
+watch(
+  () => props.room.counterpartLastReadSequence,
+  (sequence) => {
+    counterpartLastReadSeq.value = Math.max(counterpartLastReadSeq.value, Number(sequence || 0))
+  },
+)
+
 const messageInput = ref('')
+
+async function requestCallAppointment() {
+  if (!callScheduledAt.value || isRequestingCall.value) return
+  isRequestingCall.value = true
+  callMessage.value = ''
+  try {
+    await requestRtcCall(props.room.roomId, {
+      scheduledAt: `${callScheduledAt.value}:00`,
+      memo: callMemo.value.trim() || null,
+    })
+    await loadAppointments(props.room.roomId)
+    callMessage.value = '통화 약속을 요청했습니다.'
+    isCallFormOpen.value = false
+    callScheduledAt.value = ''
+    callMemo.value = ''
+  } catch (error) {
+    callMessage.value = error.message || '통화 약속을 요청하지 못했습니다.'
+  } finally {
+    isRequestingCall.value = false
+  }
+}
+
+async function respondAppointment(accepted) {
+  const appointment = latestAppointment.value
+  if (!appointment || pendingAppointmentId.value) return
+  pendingAppointmentId.value = appointment.callId
+  callMessage.value = ''
+  try {
+    await respondRtcCall(appointment.callId, accepted, accepted ? null : '요청 거절')
+    await loadAppointments(props.room.roomId)
+    callMessage.value = accepted ? '통화 약속을 수락했습니다.' : '통화 약속을 거절했습니다.'
+  } catch (error) {
+    callMessage.value = error.message || '통화 약속을 처리하지 못했습니다.'
+  } finally {
+    pendingAppointmentId.value = null
+  }
+}
 
 function createClientMessageId() {
   if (crypto.randomUUID) return crypto.randomUUID()
@@ -221,9 +316,25 @@ async function selectMedia(event) {
   }
 }
 
+function openMediaPicker() {
+  fileInput.value?.click()
+}
+
 function formatTime(isoString) {
   if (!isoString) return ''
   return new Date(isoString).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+function formatAppointmentTime(isoString) {
+  if (!isoString) return '시간 미정'
+  return new Intl.DateTimeFormat('ko-KR', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    weekday: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(isoString))
 }
 
 onBeforeUnmount(() => {
@@ -236,7 +347,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="flex h-full min-w-0 min-h-[520px] flex-col bg-surface">
+  <div class="flex h-full min-w-0 min-h-[520px] flex-col bg-surface lg:min-h-0">
     <div class="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
       <div class="flex items-center gap-3">
         <RouterLink
@@ -269,12 +380,6 @@ onBeforeUnmount(() => {
           {{ socketStatus === 'connected' ? '실시간 연결됨' : '연결 확인 중' }}
         </span>
       </div>
-      <RouterLink
-        :to="{ name: 'calls' }"
-        class="rounded-md border border-primary px-3 py-1.5 text-xs font-semibold text-primary hover:bg-accent"
-      >
-        실시간 검증 요청하기
-      </RouterLink>
     </div>
 
     <div
@@ -322,23 +427,26 @@ onBeforeUnmount(() => {
         {{ messagesError }}
       </p>
       <p
-        v-else-if="!messages.length"
+        v-else-if="!messages.length && !latestAppointment"
         class="py-10 text-center text-sm text-text-sub"
       >
         아직 주고받은 메시지가 없습니다.
       </p>
 
       <TransitionGroup
-        v-else
+        v-if="messages.length || latestAppointment"
         name="msg"
         tag="div"
-        class="space-y-3"
+        class="flex flex-col gap-3"
       >
         <div
           v-for="message in messages"
           :key="message.messageId"
+          :data-message-sequence="message.roomSequence"
+          :data-testid="message.isPending ? 'pending-message' : undefined"
           class="flex flex-col"
           :class="message.senderId === myMemberId ? 'items-end' : 'items-start'"
+          :style="{ order: messageTimelineOrder(message.roomSequence) }"
         >
           <div
             class="max-w-[75%] rounded-lg px-4 py-2.5 text-sm leading-6"
@@ -366,13 +474,186 @@ onBeforeUnmount(() => {
           </div>
           <span class="mt-1 text-[11px] text-text-sub">
             {{ formatTime(message.sentAt) }}
-            <template v-if="message.isPending">· 전송 중</template>
+            <template v-if="message.isPending"> · 전송 중</template>
+            <template
+              v-else-if="
+                message.senderId === myMemberId
+                  && message.roomSequence
+                  && Number(message.roomSequence) <= counterpartLastReadSeq
+              "
+            >
+              · 읽음
+            </template>
           </span>
+        </div>
+
+        <div
+          v-if="latestAppointment && ['PROPOSED', 'ACCEPTED'].includes(latestAppointment.status)"
+          :key="`appointment-${latestAppointment.callId}`"
+          data-testid="appointment-card"
+          class="mx-auto w-full max-w-sm rounded-xl bg-white p-4 shadow-sm"
+          :class="latestAppointment.status === 'ACCEPTED' ? 'border-2 border-primary' : 'border border-primary'"
+          :style="{ order: appointmentTimelineOrder() }"
+        >
+          <div class="flex items-center gap-2">
+            <svg
+              class="h-5 w-5 shrink-0 text-primary"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <rect
+                x="3"
+                y="5"
+                width="18"
+                height="16"
+                rx="2"
+              />
+              <path d="M16 3v4M8 3v4M3 10h18" />
+              <path
+                v-if="latestAppointment.status === 'ACCEPTED'"
+                d="m8 15 2.5 2.5L16 12"
+              />
+            </svg>
+            <p class="font-bold text-text-main">
+              {{ latestAppointment.status === 'ACCEPTED' ? '실시간 화상 검증 일정 확정' : '실시간 화상 검증 일정 제안' }}
+            </p>
+          </div>
+          <div class="mt-3 rounded-lg bg-bg px-3 py-3">
+            <p class="text-xs text-text-sub">
+              {{ latestAppointment.status === 'ACCEPTED' ? '확정된 일정' : '제안 시간' }}
+            </p>
+            <p class="mt-1 text-sm font-bold text-text-main">
+              {{ formatAppointmentTime(latestAppointment.scheduledAt) }}
+            </p>
+            <p
+              v-if="latestAppointment.memo"
+              class="mt-1 text-xs text-text-sub"
+            >
+              {{ latestAppointment.memo }}
+            </p>
+          </div>
+          <div
+            v-if="latestAppointment.status === 'PROPOSED' && latestAppointment.incoming"
+            class="mt-3 grid grid-cols-2 gap-3"
+          >
+            <button
+              type="button"
+              :disabled="pendingAppointmentId === latestAppointment.callId"
+              class="rounded-lg border border-border px-4 py-2.5 text-sm font-semibold text-text-sub disabled:opacity-50"
+              @click="respondAppointment(false)"
+            >
+              거절
+            </button>
+            <button
+              type="button"
+              :disabled="pendingAppointmentId === latestAppointment.callId"
+              class="rounded-lg bg-primary-gradient px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+              @click="respondAppointment(true)"
+            >
+              수락하기
+            </button>
+          </div>
+          <p
+            v-else-if="latestAppointment.status === 'PROPOSED'"
+            class="mt-3 text-center text-xs font-semibold text-primary"
+          >
+            상대방의 응답을 기다리고 있습니다.
+          </p>
+          <RouterLink
+            v-else
+            :to="{ name: 'rtc-call', params: { callId: latestAppointment.callId } }"
+            class="mt-3 block rounded-lg bg-primary-gradient px-4 py-2.5 text-center text-sm font-semibold text-white"
+          >
+            실시간 검증 입장하기
+          </RouterLink>
         </div>
       </TransitionGroup>
     </div>
 
     <div class="border-t border-border p-4">
+      <div class="mb-3">
+        <div class="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 rounded-lg border border-primary px-3 py-2 text-sm font-semibold text-primary hover:bg-accent"
+            @click="isCallFormOpen = !isCallFormOpen"
+          >
+            <svg
+              class="h-4 w-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <rect
+                x="3"
+                y="5"
+                width="18"
+                height="16"
+                rx="2"
+              />
+              <path d="M16 3v4M8 3v4M3 10h18" />
+            </svg>
+            실시간 검증 일정 잡기
+          </button>
+          <p class="text-xs text-text-sub">
+            * 상호 조율 하에 라이브 WebRTC 성능 테스트 시간대를 제안해보세요.
+          </p>
+        </div>
+
+        <form
+          v-if="isCallFormOpen"
+          class="mt-3 grid gap-3 rounded-xl border border-primary bg-white p-4 sm:grid-cols-2"
+          @submit.prevent="requestCallAppointment"
+        >
+          <label class="grid gap-1 text-xs font-semibold text-text-main">
+            제안 시간
+            <input
+              v-model="callScheduledAt"
+              type="datetime-local"
+              required
+              class="rounded-md border border-border bg-surface px-3 py-2 text-sm font-normal"
+            >
+          </label>
+          <label class="grid gap-1 text-xs font-semibold text-text-main">
+            메모
+            <input
+              v-model="callMemo"
+              type="text"
+              maxlength="500"
+              placeholder="확인할 내용을 입력하세요."
+              class="rounded-md border border-border bg-surface px-3 py-2 text-sm font-normal"
+            >
+          </label>
+          <div class="flex justify-end gap-2 sm:col-span-2">
+            <button
+              type="button"
+              class="rounded-md border border-border px-4 py-2 text-sm font-semibold text-text-sub"
+              @click="isCallFormOpen = false"
+            >
+              닫기
+            </button>
+            <button
+              type="submit"
+              :disabled="isRequestingCall"
+              class="rounded-md bg-primary-gradient px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {{ isRequestingCall ? '요청 중…' : '일정 제안하기' }}
+            </button>
+          </div>
+        </form>
+        <p
+          v-if="callMessage"
+          role="status"
+          class="mt-2 text-xs text-text-sub"
+        >
+          {{ callMessage }}
+        </p>
+      </div>
       <form
         class="flex gap-2"
         @submit.prevent="sendMessage"
@@ -387,10 +668,37 @@ onBeforeUnmount(() => {
         <button
           type="button"
           :disabled="socketStatus !== 'connected' || isUploading"
-          class="rounded-md border border-border px-3 text-sm font-semibold text-text-sub disabled:opacity-50"
-          @click="fileInput?.click()"
+          :aria-label="isUploading ? '사진 또는 영상 업로드 중' : '사진 또는 영상 첨부'"
+          :title="isUploading ? '업로드 중' : '사진 또는 영상 첨부'"
+          class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border text-text-sub transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+          @click="openMediaPicker"
         >
-          {{ isUploading ? '업로드 중…' : '사진·영상' }}
+          <svg
+            class="h-5 w-5"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            aria-hidden="true"
+          >
+            <rect
+              x="3"
+              y="5"
+              width="18"
+              height="14"
+              rx="2"
+            />
+            <circle
+              cx="8.5"
+              cy="10"
+              r="1.5"
+            />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="m5 17 4.5-4.5 3 3 2-2L19 17"
+            />
+          </svg>
         </button>
         <input
           v-model="messageInput"

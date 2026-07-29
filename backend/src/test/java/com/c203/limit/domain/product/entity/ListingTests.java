@@ -6,10 +6,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.c203.limit.domain.inspection.enums.DeviceType;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
+import java.time.LocalDateTime;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class ListingTests {
+
+    private static final LocalDateTime RESERVED_UNTIL = LocalDateTime.of(2026, 7, 28, 0, 30);
 
     private Listing onSaleListing() {
         Category category = Category.createTopLevel("스마트폰", DeviceType.SMARTPHONE, 0);
@@ -22,11 +25,12 @@ class ListingTests {
     void reserveMovesOnSaleListingToReserved() {
         Listing listing = onSaleListing();
 
-        listing.reserve(2L);
+        listing.reserve(2L, RESERVED_UNTIL);
 
         assertThat(listing.getStatus()).isEqualTo(ListingStatus.RESERVED);
         assertThat(listing.getBuyerId()).isEqualTo(2L);
         assertThat(listing.getReservedAt()).isNotNull();
+        assertThat(listing.getReservedUntil()).isEqualTo(RESERVED_UNTIL);
     }
 
     @Test
@@ -34,7 +38,7 @@ class ListingTests {
         Category category = Category.createTopLevel("스마트폰", DeviceType.SMARTPHONE, 0);
         Listing draft = Listing.createDraft(1L, category, "갤럭시 S24", "설명", 650_000, 10L);
 
-        assertThatThrownBy(() -> draft.reserve(2L))
+        assertThatThrownBy(() -> draft.reserve(2L, RESERVED_UNTIL))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         exception ->
@@ -45,9 +49,9 @@ class ListingTests {
     @Test
     void reserveRejectsDuplicateCallOnAlreadyReservedListing() {
         Listing listing = onSaleListing();
-        listing.reserve(2L);
+        listing.reserve(2L, RESERVED_UNTIL);
 
-        assertThatThrownBy(() -> listing.reserve(3L))
+        assertThatThrownBy(() -> listing.reserve(3L, RESERVED_UNTIL))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         exception ->
@@ -58,7 +62,7 @@ class ListingTests {
     @Test
     void cancelReservationReturnsListingToOnSaleAndClearsBuyer() {
         Listing listing = onSaleListing();
-        listing.reserve(2L);
+        listing.reserve(2L, RESERVED_UNTIL);
 
         listing.cancelReservation();
 
@@ -82,12 +86,14 @@ class ListingTests {
     @Test
     void expireReservationReturnsListingToOnSaleAndClearsBuyer() {
         Listing listing = onSaleListing();
-        listing.reserve(2L);
+        listing.reserve(2L, RESERVED_UNTIL);
 
         listing.expireReservation();
 
         assertThat(listing.getStatus()).isEqualTo(ListingStatus.ON_SALE);
         assertThat(listing.getBuyerId()).isNull();
+        assertThat(listing.getReservedAt()).isNull();
+        assertThat(listing.getReservedUntil()).isNull();
     }
 
     @Test
@@ -113,7 +119,7 @@ class ListingTests {
                                 assertThat(exception.getErrorCode())
                                         .isEqualTo(ErrorCode.LISTING_NOT_RESERVED));
 
-        listing.reserve(2L);
+        listing.reserve(2L, RESERVED_UNTIL);
         listing.markPaid();
 
         assertThat(listing.getStatus()).isEqualTo(ListingStatus.PAID);
@@ -131,7 +137,7 @@ class ListingTests {
                                 assertThat(exception.getErrorCode())
                                         .isEqualTo(ErrorCode.LISTING_NOT_PAID));
 
-        listing.reserve(2L);
+        listing.reserve(2L, RESERVED_UNTIL);
         listing.markPaid();
         listing.markInspecting();
 
@@ -141,7 +147,7 @@ class ListingTests {
     @Test
     void confirmRequiresInspectingListing() {
         Listing listing = onSaleListing();
-        listing.reserve(2L);
+        listing.reserve(2L, RESERVED_UNTIL);
         listing.markPaid();
 
         assertThatThrownBy(listing::confirm)
@@ -161,7 +167,7 @@ class ListingTests {
     @Test
     void settleRequiresConfirmedListing() {
         Listing listing = onSaleListing();
-        listing.reserve(2L);
+        listing.reserve(2L, RESERVED_UNTIL);
         listing.markPaid();
         listing.markInspecting();
 

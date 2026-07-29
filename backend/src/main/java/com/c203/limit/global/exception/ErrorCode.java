@@ -108,14 +108,18 @@ public enum ErrorCode {
     DEVICE_MODEL_NOT_FOUND("PRD010", HttpStatus.NOT_FOUND, "기기 모델을 찾을 수 없습니다."),
     CHECKLIST_TEMPLATE_NOT_FOUND("PRD011", HttpStatus.NOT_FOUND, "게시된 체크리스트 템플릿을 찾을 수 없습니다."),
     PRODUCT_ACCESS_DENIED("PRD012", HttpStatus.FORBIDDEN, "해당 상품을 변경할 권한이 없습니다."),
+    CHECKLIST_DEVICE_TYPE_NOT_SUPPORTED(
+            "PRD013", HttpStatus.BAD_REQUEST, "현재 자동 체크리스트 생성은 노트북만 지원합니다."),
+    CHECKLIST_OS_NOT_SUPPORTED(
+            "PRD014", HttpStatus.BAD_REQUEST, "노트북 체크리스트는 Windows와 Linux만 지원합니다."),
 
     // ========== 결제 에러 ==========
     PAYMENT_NOT_FOUND("PAY001", HttpStatus.NOT_FOUND, "결제 내역을 찾을 수 없습니다."),
     SELF_PURCHASE_NOT_ALLOWED("PAY002", HttpStatus.BAD_REQUEST, "본인의 매물은 결제할 수 없습니다."),
     PAYMENT_ACCESS_DENIED("PAY003", HttpStatus.FORBIDDEN, "해당 결제 내역을 조회할 권한이 없습니다."),
     IDEMPOTENCY_KEY_CONFLICT("PAY004", HttpStatus.CONFLICT, "동일한 멱등키로 다른 내용의 결제 요청이 이미 존재합니다."),
-    PAYMENT_REQUEST_CONFLICT(
-            "PAY005", HttpStatus.CONFLICT, "결제 요청이 다른 요청과 경합해 처리하지 못했습니다. 잠시 후 다시 시도해 주세요."),
+    PAYMENT_REQUEST_CONFLICT("PAY005", HttpStatus.CONFLICT, "결제 요청이 다른 요청과 경합해 처리하지 못했습니다. 잠시 후 다시 시도해 주세요."),
+    PAYMENT_NOT_EXPIRABLE("PAY006", HttpStatus.CONFLICT, "요청 상태의 결제만 만료 처리할 수 있습니다."),
 
     // ========== 장소 검색 에러 ==========
     PLACE_SEARCH_UNAVAILABLE("PLC001", HttpStatus.SERVICE_UNAVAILABLE, "장소 검색 설정을 확인해 주세요."),

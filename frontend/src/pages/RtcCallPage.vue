@@ -1,108 +1,320 @@
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
-import BaseButton from '../components/BaseButton.vue'
-import BaseCard from '../components/BaseCard.vue'
+import { getChatMessages, getChatRooms } from '../api/chat'
+import { createChatSocket } from '../api/chatSocket'
 import {
-  endRtcSession, getRtcCall, getRtcSession, issueRtcJoinToken,
-  markRtcConnected, respondRtcCall, signalingSocketUrl,
+  endRtcSession,
+  getRtcCall,
+  getRtcSession,
+  issueRtcJoinToken,
+  markRtcConnected,
+  respondRtcCall,
+  signalingSocketUrl,
 } from '../api/rtc'
+import { useAuthSession } from '../auth/session'
 
 const route = useRoute()
 const router = useRouter()
+const authSession = useAuthSession()
 const call = ref(null)
-const session = ref(null)
-const localVideo = ref(null)
-const remoteVideo = ref(null)
+const rtcSession = ref(null)
+const sellerVideo = ref(null)
 const status = ref('loading')
 const errorMessage = ref('')
 const requestMessage = ref('')
-const overallMemo = ref('')
-const checklist = reactive([])
-let socket
+const messages = ref([])
+const chatRoom = ref(null)
+const messageInput = ref('')
+const chatStatus = ref('connecting')
+const chatError = ref('')
+const elapsedSeconds = ref(0)
+let signalingSocket
+let chatSocket
 let peer
 let localStream
+let remoteStream
 let joinInfo
 let connectedRecorded = false
+let reconnectTimer
+let elapsedTimer
+let nextPendingMessageId = -1
+let pendingSignals = []
+const MAX_PENDING_SIGNALS = 50
 
-function send(type, payload = {}) {
-  if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type, payload }))
+const myMemberId = computed(() => authSession.value?.member?.memberId ?? null)
+const isSeller = computed(() => Number(rtcSession.value?.sellerId) === Number(myMemberId.value))
+const counterpartId = computed(() => (
+  isSeller.value ? rtcSession.value?.buyerId : rtcSession.value?.sellerId
+))
+const counterpartName = computed(() => {
+  return chatRoom.value?.counterpartNickname || `회원 #${counterpartId.value}`
+})
+const counterpartInitial = computed(() => counterpartName.value.trim().charAt(0) || '회')
+const connectionLabel = computed(() => {
+  if (status.value === 'connected') return '연결 양호 - HD 1080p'
+  if (status.value === 'reconnecting') return '재연결 중'
+  if (status.value === 'waiting-peer') return '상대방 접속 대기 중'
+  return '연결 확인 중'
+})
+const formattedElapsed = computed(() => {
+  const minutes = Math.floor(elapsedSeconds.value / 60).toString().padStart(2, '0')
+  const seconds = (elapsedSeconds.value % 60).toString().padStart(2, '0')
+  return `${minutes}:${seconds}`
+})
+
+function sendSignal(type, payload = {}) {
+  const message = JSON.stringify({ type, payload })
+  if (signalingSocket?.readyState === WebSocket.OPEN) {
+    signalingSocket.send(message)
+    return
+  }
+  if (pendingSignals.length >= MAX_PENDING_SIGNALS) pendingSignals.shift()
+  pendingSignals.push(message)
+}
+
+function flushPendingSignals() {
+  if (signalingSocket?.readyState !== WebSocket.OPEN) return
+  pendingSignals.forEach((message) => signalingSocket.send(message))
+  pendingSignals = []
+}
+
+async function attachSellerStream() {
+  await nextTick()
+  if (!sellerVideo.value || !('srcObject' in sellerVideo.value)) return
+  sellerVideo.value.srcObject = isSeller.value ? localStream : remoteStream
 }
 
 async function createOffer(iceRestart = false) {
   const offer = await peer.createOffer({ iceRestart })
   await peer.setLocalDescription(offer)
-  send('offer', offer)
+  sendSignal('offer', offer)
 }
 
 async function handleSignal(event) {
-  const message = JSON.parse(event.data)
-  if (message.type === 'peer-ready' && joinInfo.offerer) await createOffer()
-  if (message.type === 'offer') {
-    await peer.setRemoteDescription(message.payload)
-    const answer = await peer.createAnswer()
-    await peer.setLocalDescription(answer)
-    send('answer', answer)
+  let message
+  try {
+    message = JSON.parse(event.data)
+  } catch {
+    return
   }
-  if (message.type === 'answer') await peer.setRemoteDescription(message.payload)
-  if (message.type === 'ice-candidate' && message.payload?.candidate) {
-    await peer.addIceCandidate(message.payload)
+  const peerSignalTypes = ['peer-ready', 'offer', 'answer', 'ice-candidate', 'ice-restart']
+  if (peerSignalTypes.includes(message.type) && !peer) return
+  try {
+    if (message.type === 'peer-ready' && joinInfo?.offerer) await createOffer()
+    if (message.type === 'offer') {
+      await peer.setRemoteDescription(message.payload)
+      const answer = await peer.createAnswer()
+      await peer.setLocalDescription(answer)
+      sendSignal('answer', answer)
+    }
+    if (message.type === 'answer') await peer.setRemoteDescription(message.payload)
+    if (message.type === 'ice-candidate' && message.payload?.candidate) {
+      await peer.addIceCandidate(message.payload)
+    }
+    if (message.type === 'ice-restart' && joinInfo?.offerer) await createOffer(true)
+    if (message.type === 'inspection-request') {
+      requestMessage.value = message.payload?.instruction || ''
+    }
+    if (message.type === 'peer-left') status.value = 'reconnecting'
+    if (message.type === 'hangup') status.value = 'peer-ended'
+  } catch (error) {
+    showError(error)
   }
-  if (message.type === 'ice-restart' && joinInfo.offerer) await createOffer(true)
-  if (message.type === 'inspection-request') requestMessage.value = message.payload?.instruction || ''
-  if (message.type === 'peer-left') status.value = 'reconnecting'
-  if (message.type === 'hangup') status.value = 'peer-ended'
 }
 
-function cleanup() {
-  socket?.close()
-  peer?.close()
+function cleanupRtc() {
+  if (signalingSocket) {
+    signalingSocket.onopen = null
+    signalingSocket.onmessage = null
+    signalingSocket.onerror = null
+    signalingSocket.onclose = null
+    signalingSocket.close()
+  }
+  if (peer) {
+    peer.ontrack = null
+    peer.onicecandidate = null
+    peer.onconnectionstatechange = null
+    peer.close()
+  }
   localStream?.getTracks().forEach((track) => track.stop())
-  socket = null
+  remoteStream?.getTracks().forEach((track) => track.stop())
+  signalingSocket = null
   peer = null
   localStream = null
+  remoteStream = null
+  pendingSignals = []
 }
 
-async function connect() {
-  cleanup()
+async function connectRtc() {
+  cleanupRtc()
   status.value = 'media-request'
   errorMessage.value = ''
   try {
-    joinInfo = await issueRtcJoinToken(session.value.sessionId)
+    joinInfo = await issueRtcJoinToken(rtcSession.value.sessionId)
     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-    await nextTick()
-    localVideo.value.srcObject = localStream
     peer = new RTCPeerConnection({
       iceServers: joinInfo.iceServers.map((server) => ({
-        urls: server.urls, username: server.username || undefined, credential: server.credential || undefined,
+        urls: server.urls,
+        username: server.username || undefined,
+        credential: server.credential || undefined,
       })),
     })
     localStream.getTracks().forEach((track) => peer.addTrack(track, localStream))
-    peer.ontrack = (event) => { remoteVideo.value.srcObject = event.streams[0] }
-    peer.onicecandidate = (event) => { if (event.candidate) send('ice-candidate', event.candidate) }
+    peer.ontrack = async (event) => {
+      remoteStream = event.streams[0]
+      await attachSellerStream()
+    }
+    peer.onicecandidate = (event) => {
+      if (event.candidate) sendSignal('ice-candidate', event.candidate)
+    }
     peer.onconnectionstatechange = async () => {
       status.value = peer.connectionState
       if (peer.connectionState === 'connected' && !connectedRecorded) {
         connectedRecorded = true
-        await markRtcConnected(session.value.sessionId, 'P2P')
+        try {
+          await markRtcConnected(rtcSession.value.sessionId, 'P2P')
+        } catch (error) {
+          connectedRecorded = false
+          showError(error)
+        }
       }
       if (peer.connectionState === 'failed') {
         status.value = 'reconnecting'
-        peer.restartIce()
-        send('ice-restart')
-        if (joinInfo.offerer) await createOffer(true)
+        try {
+          peer.restartIce()
+          sendSignal('ice-restart')
+          if (joinInfo?.offerer) await createOffer(true)
+        } catch (error) {
+          status.value = 'connection-failed'
+          showError(error)
+        }
       }
     }
-    socket = new WebSocket(signalingSocketUrl(joinInfo))
-    socket.onopen = () => { status.value = 'waiting-peer' }
-    socket.onmessage = (event) => { handleSignal(event).catch(showError) }
-    socket.onerror = () => { status.value = 'connection-failed' }
-    socket.onclose = () => { if (!['ended', 'peer-ended'].includes(status.value)) status.value = 'reconnecting' }
+    await attachSellerStream()
+    signalingSocket = new WebSocket(signalingSocketUrl(joinInfo))
+    signalingSocket.onopen = () => {
+      status.value = 'waiting-peer'
+      flushPendingSignals()
+    }
+    signalingSocket.onmessage = (event) => { handleSignal(event).catch(showError) }
+    signalingSocket.onerror = () => { status.value = 'connection-failed' }
+    signalingSocket.onclose = () => {
+      if (!['ended', 'peer-ended'].includes(status.value)) status.value = 'reconnecting'
+    }
   } catch (error) {
     showError(error)
     status.value = 'connection-failed'
   }
+}
+
+function latestSequence() {
+  return messages.value.reduce(
+    (max, message) => Math.max(max, Number(message.roomSequence || 0)),
+    0,
+  )
+}
+
+async function upsertMessage(message) {
+  const clientIndex = messages.value.findIndex(
+    (item) => item.clientMessageId === message.clientMessageId,
+  )
+  if (clientIndex >= 0) {
+    messages.value[clientIndex] = { ...messages.value[clientIndex], ...message, isPending: false }
+    return
+  }
+  if (!messages.value.some((item) => item.messageId === message.messageId)) {
+    messages.value.push(message)
+    messages.value.sort(
+      (first, second) => Number(first.roomSequence || Infinity) - Number(second.roomSequence || Infinity),
+    )
+  }
+}
+
+async function loadMessages() {
+  try {
+    const [result, roomResult] = await Promise.all([
+      getChatMessages(call.value.chatRoomId, { size: 50 }),
+      getChatRooms({ size: 100 }).catch(() => null),
+    ])
+    messages.value = (result?.content || []).slice().reverse()
+    chatRoom.value = (roomResult?.content || []).find(
+      (room) => Number(room.roomId) === Number(call.value.chatRoomId),
+    ) || null
+  } catch (error) {
+    chatError.value = error.message || '채팅 내역을 불러오지 못했습니다.'
+  }
+}
+
+function connectChat() {
+  chatSocket?.close()
+  clearTimeout(reconnectTimer)
+  chatStatus.value = 'connecting'
+  chatSocket = createChatSocket({
+    roomId: call.value.chatRoomId,
+    onOpen: () => {
+      chatStatus.value = 'connected'
+      chatError.value = ''
+      const lastReadSeq = latestSequence()
+      if (lastReadSeq > 0) chatSocket?.markRead(lastReadSeq)
+    },
+    onEvent: async (event) => {
+      if (event.type !== 'MESSAGE' || !event.message) return
+      await upsertMessage(event.message)
+      const lastReadSeq = latestSequence()
+      if (lastReadSeq > 0) chatSocket?.markRead(lastReadSeq)
+    },
+    onAck: (ack) => { upsertMessage(ack) },
+    onError: (error) => {
+      chatError.value = error?.error?.message || '채팅 처리 중 오류가 발생했습니다.'
+      chatStatus.value = 'error'
+    },
+    onClose: () => {
+      if (chatStatus.value === 'closed') return
+      chatStatus.value = 'disconnected'
+      reconnectTimer = setTimeout(connectChat, 1500)
+    },
+  })
+}
+
+function createClientMessageId() {
+  if (crypto.randomUUID) return crypto.randomUUID()
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+async function sendMessage() {
+  const content = messageInput.value.trim()
+  if (!content || chatStatus.value !== 'connected' || myMemberId.value == null) return
+  const clientMessageId = createClientMessageId()
+  const optimisticMessage = {
+    messageId: nextPendingMessageId--,
+    roomSequence: null,
+    senderId: myMemberId.value,
+    clientMessageId,
+    type: 'TEXT',
+    content,
+    sentAt: new Date().toISOString(),
+    isPending: true,
+  }
+  messages.value.push(optimisticMessage)
+  try {
+    if (!chatSocket || typeof chatSocket.sendMessage !== 'function') {
+      throw new Error('채팅 연결이 없습니다.')
+    }
+    await chatSocket.sendMessage({ clientMessageId, type: 'TEXT', content, mediaIds: [] })
+    messageInput.value = ''
+  } catch (error) {
+    messages.value = messages.value.filter(
+      (message) => message.clientMessageId !== clientMessageId,
+    )
+    chatError.value = error?.message || '메시지를 전송하지 못했습니다. 연결 상태를 확인해 주세요.'
+  }
+}
+
+function formatTime(value) {
+  if (!value) return ''
+  return new Date(value).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
 }
 
 function goToChat() {
@@ -113,26 +325,21 @@ function showError(error) {
   errorMessage.value = error.message || '통화 연결 중 오류가 발생했습니다.'
 }
 
-function requestInspection(item) {
-  const instruction = `${item.name} 부위 또는 작동 과정을 화면 가까이에서 보여 주세요.`
-  requestMessage.value = instruction
-  send('inspection-request', { checklistItemId: item.checklistItemId, instruction })
-}
-
 async function finish() {
+  if (!rtcSession.value) return
   try {
-    session.value = await endRtcSession(session.value.sessionId, {
+    rtcSession.value = await endRtcSession(rtcSession.value.sessionId, {
       endReason: 'COMPLETED',
-      memo: overallMemo.value || null,
-      checklistResults: checklist.map((item) => ({
+      memo: null,
+      checklistResults: rtcSession.value.checklistItems.map((item) => ({
         checklistItemId: item.checklistItemId,
         confirmed: item.confirmed,
         note: item.note || null,
       })),
     })
-    send('hangup')
+    sendSignal('hangup')
     status.value = 'ended'
-    cleanup()
+    cleanupRtc()
   } catch (error) {
     showError(error)
   }
@@ -145,127 +352,250 @@ async function load() {
       call.value = await respondRtcCall(call.value.callId, true)
     }
     if (!call.value.rtcSessionId) throw new Error('상대방의 수락을 기다리고 있습니다.')
-    session.value = await getRtcSession(call.value.rtcSessionId)
-    checklist.splice(0, checklist.length, ...session.value.checklistItems.map((item) => ({ ...item })))
-    overallMemo.value = session.value.memo || ''
-    if (session.value.status === 'ENDED') status.value = 'ended'
-    else await connect()
+    rtcSession.value = await getRtcSession(call.value.rtcSessionId)
+    await loadMessages()
+    connectChat()
+    if (rtcSession.value.status === 'ENDED') status.value = 'ended'
+    else await connectRtc()
   } catch (error) {
     showError(error)
     status.value = 'connection-failed'
   }
 }
 
-onMounted(load)
-onBeforeUnmount(cleanup)
+onMounted(() => {
+  elapsedTimer = setInterval(() => { elapsedSeconds.value += 1 }, 1000)
+  load()
+})
+
+onBeforeUnmount(() => {
+  cleanupRtc()
+  clearInterval(elapsedTimer)
+  clearTimeout(reconnectTimer)
+  chatStatus.value = 'closed'
+  chatSocket?.close()
+})
 </script>
 
 <template>
   <DefaultLayout>
-    <main class="mx-auto max-w-[1200px] px-5 py-8">
-      <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p class="text-xs font-bold uppercase tracking-[0.16em] text-primary">
-            LIVE CALL
-          </p>
-          <h1 class="mt-2 text-2xl font-bold text-text-main">
-            1:1 상품 실시간 확인
-          </h1><p class="text-sm text-text-sub">
-            상태: {{ status }} · 전체 통화는 녹화되지 않습니다.
-          </p>
-        </div>
-        <div class="flex gap-2">
-          <BaseButton
-            v-if="status === 'connection-failed' || status === 'reconnecting'"
-            variant="outline"
-            @click="connect"
-          >
-            재입장
-          </BaseButton><BaseButton
-            v-if="session && status !== 'ended'"
-            @click="finish"
-          >
-            확인 저장 후 종료
-          </BaseButton><BaseButton
-            v-if="status === 'ended' || status === 'peer-ended'"
-            variant="outline"
-            @click="goToChat"
-          >
-            채팅으로 돌아가기
-          </BaseButton>
-        </div>
-      </div>
-      <p
-        v-if="errorMessage"
-        role="alert"
-        class="mb-4 rounded-md bg-red-50 p-3 text-red-700"
-      >
-        {{ errorMessage }}
-      </p>
+    <main class="mx-auto w-full max-w-[1440px] px-6 py-6">
       <p
         v-if="requestMessage"
-        class="mb-4 rounded-md bg-blue-50 p-3 font-medium text-blue-800"
+        class="mb-4 rounded-lg bg-accent p-3 text-sm font-medium text-primary-dark"
       >
         실시간 요청: {{ requestMessage }}
       </p>
-      <div class="grid gap-5 lg:grid-cols-[1.5fr_1fr]">
-        <section class="grid gap-4 sm:grid-cols-2">
-          <div class="relative aspect-video overflow-hidden rounded-xl bg-black">
-            <video
-              ref="remoteVideo"
-              autoplay
-              playsinline
-              class="h-full w-full object-cover"
-            /><span class="absolute bottom-2 left-2 rounded bg-black/60 px-2 py-1 text-xs text-white">상대 화면</span>
-          </div>
-          <div class="relative aspect-video overflow-hidden rounded-xl bg-black">
-            <video
-              ref="localVideo"
-              autoplay
-              muted
-              playsinline
-              class="h-full w-full object-cover"
-            /><span class="absolute bottom-2 left-2 rounded bg-black/60 px-2 py-1 text-xs text-white">내 화면</span>
-          </div>
-        </section>
-        <BaseCard class="p-5">
-          <h2 class="font-bold text-text-main">
-            확인 체크리스트
-          </h2>
-          <div class="mt-4 max-h-[520px] space-y-4 overflow-y-auto">
-            <div
-              v-for="item in checklist"
-              :key="item.checklistItemId"
-              class="rounded-lg border border-border p-3"
+      <p
+        v-if="errorMessage && !rtcSession"
+        role="alert"
+        class="rounded-lg bg-red-50 p-3 text-sm text-red-700"
+      >
+        {{ errorMessage }}
+      </p>
+
+      <div
+        v-if="rtcSession"
+        class="grid gap-6 xl:grid-cols-[minmax(0,2.15fr)_minmax(340px,1fr)]"
+      >
+        <section class="min-w-0">
+          <div class="mb-5 flex min-h-11 items-center">
+            <p
+              v-if="errorMessage"
+              role="alert"
+              class="w-full rounded-lg bg-red-50 p-3 text-sm text-red-700"
             >
-              <label class="flex items-start gap-2"><input
-                v-model="item.confirmed"
-                type="checkbox"
-                class="mt-1"
-              ><span><strong>{{ item.name }}</strong><small class="mt-1 block text-text-sub">{{ item.captureGuide }}</small></span></label>
-              <input
-                v-model.trim="item.note"
-                maxlength="500"
-                placeholder="확인 메모"
-                class="mt-3 w-full rounded border border-border px-3 py-2 text-sm"
+              {{ errorMessage }}
+            </p>
+            <div
+              v-else
+              data-testid="counterpart-profile"
+              class="flex items-center gap-3"
+            >
+              <span class="flex h-11 w-11 items-center justify-center rounded-full bg-accent text-sm font-bold text-primary">
+                {{ counterpartInitial }}
+              </span>
+              <p
+                data-testid="counterpart-nickname"
+                class="font-bold text-text-main"
               >
-              <BaseButton
-                class="mt-2"
-                variant="outline"
-                @click="requestInspection(item)"
-              >
-                이 부위 실시간 요청
-              </BaseButton>
+                {{ counterpartName }}
+              </p>
             </div>
           </div>
-          <textarea
-            v-model.trim="overallMemo"
-            maxlength="1000"
-            rows="3"
-            placeholder="통화 전체 메모"
-            class="mt-4 w-full rounded border border-border p-3 text-sm"
-          />
-        </BaseCard>
+          <div class="relative aspect-video overflow-hidden rounded-xl bg-slate-950">
+            <video
+              ref="sellerVideo"
+              autoplay
+              :muted="isSeller"
+              playsinline
+              class="h-full w-full object-cover"
+            />
+            <div class="absolute left-4 top-4 flex items-center gap-2">
+              <span class="rounded-md bg-black/60 px-3 py-2 text-xs font-bold text-white">
+                판매자 라이브 화면
+              </span>
+              <span class="rounded-md bg-primary px-3 py-2 text-xs font-bold text-white">
+                {{ formattedElapsed }}
+              </span>
+            </div>
+            <div class="absolute bottom-4 left-4 flex rounded-full bg-black/50 p-2 text-white">
+              <svg
+                class="h-5 w-5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M11 5 6 9H2v6h4l5 4V5Z" />
+                <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+                <path d="M18 6a9 9 0 0 1 0 12" />
+              </svg>
+            </div>
+          </div>
+          <div class="mt-4 rounded-lg border border-primary/30 bg-accent/60 px-4 py-3 text-sm text-primary">
+            안내: 체크리스트를 참고해 상품 상태를 확인하고, 세부 요청은 오른쪽 채팅으로 전달해 주세요.
+          </div>
+        </section>
+
+        <aside class="flex min-h-0 flex-col gap-5">
+          <div class="flex min-h-11 flex-wrap items-center justify-end gap-4">
+            <div class="flex items-center gap-2 text-sm font-semibold text-text-main">
+              <span
+                class="h-2 w-2 rounded-full"
+                :class="status === 'connected' ? 'bg-emerald-500' : 'bg-amber-400'"
+              />
+              {{ connectionLabel }}
+            </div>
+            <button
+              v-if="!['ended', 'peer-ended'].includes(status)"
+              type="button"
+              class="rounded-lg bg-red-50 px-5 py-2.5 text-sm font-bold text-red-500 hover:bg-red-100"
+              @click="finish"
+            >
+              세션 종료
+            </button>
+            <button
+              v-else
+              type="button"
+              class="rounded-lg border border-border px-5 py-2.5 text-sm font-bold text-text-sub"
+              @click="goToChat"
+            >
+              채팅으로 돌아가기
+            </button>
+          </div>
+          <section class="rounded-xl border border-border bg-white p-5">
+            <h2 class="text-lg font-bold text-text-main">
+              상품 검증 체크리스트
+            </h2>
+            <ul class="mt-4 space-y-3">
+              <li
+                v-for="item in rtcSession.checklistItems"
+                :key="item.checklistItemId"
+                class="flex gap-3 rounded-lg border border-border px-4 py-3 text-sm text-text-sub"
+              >
+                <span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                <span>
+                  <strong class="block font-semibold text-text-main">{{ item.name }}</strong>
+                  <small
+                    v-if="item.captureGuide"
+                    class="mt-1 block leading-5 text-text-sub"
+                  >{{ item.captureGuide }}</small>
+                </span>
+              </li>
+              <li
+                v-if="!rtcSession.checklistItems.length"
+                class="text-sm text-text-sub"
+              >
+                등록된 체크리스트가 없습니다.
+              </li>
+            </ul>
+          </section>
+
+          <section class="flex h-[330px] flex-col overflow-hidden rounded-xl border border-border bg-white sm:h-[350px]">
+            <div class="border-b border-border px-5 py-4">
+              <h2 class="font-bold text-text-main">
+                실시간 1:1 채팅
+              </h2>
+            </div>
+            <div class="flex-1 space-y-3 overflow-y-auto px-5 py-4">
+              <p
+                v-if="chatError"
+                role="alert"
+                class="text-center text-xs text-red-600"
+              >
+                {{ chatError }}
+              </p>
+              <p
+                v-else-if="!messages.length"
+                class="py-8 text-center text-sm text-text-sub"
+              >
+                채팅으로 확인할 내용을 요청해 보세요.
+              </p>
+              <div
+                v-for="message in messages"
+                :key="message.messageId"
+                class="flex"
+                :class="Number(message.senderId) === Number(myMemberId) ? 'justify-end' : 'justify-start'"
+              >
+                <div class="max-w-[82%]">
+                  <div
+                    class="rounded-xl px-3 py-2 text-sm leading-5"
+                    :class="Number(message.senderId) === Number(myMemberId)
+                      ? 'rounded-br-none bg-primary-gradient text-white'
+                      : 'rounded-bl-none bg-bg text-text-main'"
+                  >
+                    {{ message.content }}
+                  </div>
+                  <p
+                    class="mt-1 text-[10px] text-text-sub"
+                    :class="Number(message.senderId) === Number(myMemberId) ? 'text-right' : 'text-left'"
+                  >
+                    {{ formatTime(message.sentAt) }}
+                    <span v-if="message.isPending"> · 전송 중</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+            <form
+              class="flex gap-2 border-t border-border p-4"
+              @submit.prevent="sendMessage"
+            >
+              <input
+                v-model="messageInput"
+                type="text"
+                maxlength="2000"
+                placeholder="메시지를 입력하세요..."
+                class="min-w-0 flex-1 rounded-lg border border-border px-3 py-2.5 text-sm outline-none focus:border-primary"
+              >
+              <button
+                type="submit"
+                :disabled="chatStatus !== 'connected' || !messageInput.trim()"
+                aria-label="메시지 전송"
+                class="inline-flex h-11 w-11 items-center justify-center rounded-lg bg-primary text-white disabled:opacity-40"
+              >
+                <svg
+                  class="h-5 w-5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="m22 2-7 20-4-9-9-4 20-7Z"
+                  />
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M22 2 11 13"
+                  />
+                </svg>
+              </button>
+            </form>
+          </section>
+        </aside>
       </div>
     </main>
   </DefaultLayout>

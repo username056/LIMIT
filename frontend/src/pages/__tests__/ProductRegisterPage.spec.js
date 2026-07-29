@@ -5,6 +5,7 @@ import {
   completeEvidence,
   createEvidenceUploadUrl,
   createProduct,
+  generateChecklist,
   getChecklistTemplate,
   getDeviceCategories,
   getDeviceModels,
@@ -28,6 +29,7 @@ vi.mock('../../api/products', () => ({
   completeEvidence: vi.fn(),
   createEvidenceUploadUrl: vi.fn(),
   createProduct: vi.fn(),
+  generateChecklist: vi.fn(),
   getChecklistTemplate: vi.fn(),
   getDeviceCategories: vi.fn(),
   getDeviceModels: vi.fn(),
@@ -106,6 +108,16 @@ describe('ProductRegisterPage', () => {
     }])
     createProduct.mockResolvedValue({ productId: 1001 })
     getChecklistTemplate.mockResolvedValue({ items: templateItems })
+    generateChecklist.mockResolvedValue({
+      deviceModelId: 101,
+      manufacturer: 'Samsung',
+      modelName: 'Galaxy Book',
+      osFamily: 'WINDOWS',
+      aiApplied: true,
+      items: templateItems.map((item) => ({ ...item, required: item.isRequired })),
+      aiSuggestions: [],
+      reviewCandidates: [],
+    })
     getProductChecklist.mockResolvedValue([
       { checklistItemId: 7001, itemCode: 'EXT-001', name: '전면·후면·측면 외관', evidenceType: 'PHOTO', isRequired: true, status: 'PENDING' },
       { checklistItemId: 7002, itemCode: 'PRV-004', name: '계정 제거 및 초기화', evidenceType: 'SELLER_CONFIRMATION', isRequired: true, status: 'PENDING' },
@@ -137,6 +149,58 @@ describe('ProductRegisterPage', () => {
     })
     expect(getProductChecklist).toHaveBeenCalledWith(1001)
     expect(wrapper.text()).toContain('검수용 기기 촬영')
+  })
+
+  it('Windows 모델은 자동 생성 체크리스트와 AI 확인 후보를 보여주고 선택한 기능을 함께 보낸다', async () => {
+    getDeviceModels.mockResolvedValue([{
+      deviceModelId: 101,
+      manufacturerName: 'Samsung',
+      modelName: 'Galaxy Book',
+      defaultOs: 'WINDOWS',
+    }])
+    generateChecklist.mockResolvedValue({
+      deviceModelId: 101,
+      manufacturer: 'Samsung',
+      modelName: 'Galaxy Book',
+      osFamily: 'WINDOWS',
+      aiApplied: true,
+      items: templateItems.map((item) => ({ ...item, required: item.isRequired })),
+      aiSuggestions: [{
+        featureCode: 'CAMERA',
+        featureName: '내장 카메라',
+        evidenceStatus: 'VERIFIED',
+        reason: '공식 사양에서 카메라를 확인했습니다.',
+        checkGuide: '카메라 앱을 실행해 영상 출력 상태를 확인하세요.',
+        sourceUrl: 'https://www.samsung.com/example',
+        sourceTitle: 'Galaxy Book 공식 사양',
+      }],
+      reviewCandidates: ['FINGERPRINT'],
+    })
+
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await fillDeviceStep(wrapper)
+
+    expect(generateChecklist).toHaveBeenCalledWith({
+      deviceModelId: 101,
+      confirmedFeatures: [],
+    })
+    expect(getChecklistTemplate).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('자동 생성 체크리스트')
+    expect(wrapper.text()).toContain('AI 공식자료 반영')
+    expect(wrapper.text()).toContain('AI 공식자료 확인 후보')
+    expect(wrapper.text()).toContain('내장 카메라')
+    expect(wrapper.text()).toContain('선정 이유')
+    expect(wrapper.text()).toContain('점검 방법')
+    expect(wrapper.text()).toContain('추가 검토가 필요한 기능')
+
+    await wrapper.find('input[type="checkbox"][value="CAMERA"]').setValue(true)
+    await buttonByText(wrapper, '다음 단계').trigger('click')
+    await flushPromises()
+
+    expect(createProduct).toHaveBeenCalledWith(expect.objectContaining({
+      confirmedFeatures: ['CAMERA'],
+    }))
   })
 
   it('0원 상품은 촬영 단계로 진행하지 않는다', async () => {

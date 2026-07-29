@@ -176,12 +176,17 @@ public class Listing extends BaseTimeEntity {
         this.status = ListingStatus.HIDDEN;
     }
 
-    /** ON_SALE 매물을 구매자에게 예약 처리한다. */
-    public void reserve(Long buyerId) {
+    /**
+     * ON_SALE 매물을 구매자에게 예약 처리한다. 예약 유예 만료 시각은 Entity가 직접 계산하지 않고
+     * 호출자(ListingService)가 Clock 기반으로 계산해 전달한다 — 테스트에서 시간을 결정적으로
+     * 제어하기 위함이다.
+     */
+    public void reserve(Long buyerId, LocalDateTime reservedUntil) {
         requireStatus(ListingStatus.ON_SALE, ErrorCode.LISTING_NOT_ON_SALE);
         this.buyerId = buyerId;
         this.status = ListingStatus.RESERVED;
         this.reservedAt = LocalDateTime.now();
+        this.reservedUntil = reservedUntil;
     }
 
     /** 구매자/판매자 요청으로 예약을 취소하고 다시 판매중 상태로 되돌린다. */
@@ -199,6 +204,7 @@ public class Listing extends BaseTimeEntity {
     private void releaseReservation() {
         this.buyerId = null;
         this.reservedAt = null;
+        this.reservedUntil = null;
         this.status = ListingStatus.ON_SALE;
     }
 

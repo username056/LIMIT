@@ -10,6 +10,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.c203.limit.domain.inspection.repository.ListingChecklistCountProjection;
+import com.c203.limit.domain.inspection.checklist.GeneratedChecklist;
+import com.c203.limit.domain.inspection.checklist.LaptopChecklistPolicy;
+import com.c203.limit.domain.inspection.checklist.LaptopFeatureCode;
 import com.c203.limit.domain.inspection.entity.ChecklistTemplate;
 import com.c203.limit.domain.inspection.entity.ChecklistTemplateItem;
 import com.c203.limit.domain.inspection.enums.AutomationType;
@@ -41,6 +44,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -95,6 +99,58 @@ class ProductApplicationServiceTests {
         assertThat(result.getProductId()).isEqualTo(1001L);
         assertThat(result.getStatus()).isEqualTo("DRAFT");
         assertThat(result.getRequiredItemCount()).isEqualTo(1);
+        verify(checklistItemRepository).saveAll(any());
+    }
+
+    @Test
+    void createsListingSpecificSnapshotForGeneratedLaptopChecklist() {
+        Category model = laptopModel();
+        var generatedItems =
+                new LaptopChecklistPolicy()
+                        .generate(OsFamily.WINDOWS, Set.of(LaptopFeatureCode.CAMERA));
+        var generated = new GeneratedChecklist(
+                201L,
+                "Samsung",
+                "Galaxy Book4 Pro",
+                OsFamily.WINDOWS,
+                1,
+                false,
+                generatedItems,
+                List.of(),
+                List.of());
+        when(categoryRepository.findById(201L)).thenReturn(Optional.of(model));
+        when(templateRepository.saveAndFlush(any(ChecklistTemplate.class)))
+                .thenAnswer(invocation -> {
+                    ChecklistTemplate template = invocation.getArgument(0);
+                    ReflectionTestUtils.setField(template, "id", 601L);
+                    return template;
+                });
+        when(templateItemRepository.saveAllAndFlush(any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(listingRepository.saveAndFlush(any(Listing.class)))
+                .thenAnswer(invocation -> {
+                    Listing listing = invocation.getArgument(0);
+                    ReflectionTestUtils.setField(listing, "id", 2001L);
+                    return listing;
+                });
+
+        var result = service.create(
+                55L,
+                new CreateProductRequest(
+                        2L,
+                        201L,
+                        "Galaxy Book4 Pro",
+                        "상태 양호",
+                        BigDecimal.valueOf(950000),
+                        "Gray",
+                        512,
+                        "서울"),
+                generated);
+
+        assertThat(result.getProductId()).isEqualTo(2001L);
+        assertThat(result.getRequiredItemCount()).isEqualTo(13);
+        verify(templateRepository).saveAndFlush(any(ChecklistTemplate.class));
+        verify(templateItemRepository).saveAllAndFlush(any());
         verify(checklistItemRepository).saveAll(any());
     }
 
@@ -260,6 +316,22 @@ class ProductApplicationServiceTests {
                 parent, "Galaxy S24", DeviceType.SMARTPHONE, "Samsung", OsFamily.ANDROID,
                 "SM-S921", List.of(128, 256, 512), 1);
         ReflectionTestUtils.setField(model, "id", 101L);
+        return model;
+    }
+
+    private Category laptopModel() {
+        Category parent = Category.createTopLevel("Laptop", DeviceType.LAPTOP, 1);
+        ReflectionTestUtils.setField(parent, "id", 2L);
+        Category model = Category.createLeaf(
+                parent,
+                "Galaxy Book4 Pro",
+                DeviceType.LAPTOP,
+                "Samsung",
+                OsFamily.WINDOWS,
+                "NT960",
+                List.of(512, 1024),
+                1);
+        ReflectionTestUtils.setField(model, "id", 201L);
         return model;
     }
 

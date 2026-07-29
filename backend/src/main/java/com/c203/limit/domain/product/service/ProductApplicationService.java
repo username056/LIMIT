@@ -3,6 +3,8 @@ package com.c203.limit.domain.product.service;
 import com.c203.limit.domain.inspection.entity.ChecklistTemplate;
 import com.c203.limit.domain.inspection.entity.ChecklistTemplateItem;
 import com.c203.limit.domain.inspection.entity.ListingChecklistItem;
+import com.c203.limit.domain.inspection.checklist.GeneratedChecklist;
+import com.c203.limit.domain.inspection.checklist.GeneratedChecklistItem;
 import com.c203.limit.domain.inspection.enums.ChecklistItemCompletionStatus;
 import com.c203.limit.domain.inspection.enums.ChecklistTemplateStatus;
 import com.c203.limit.domain.inspection.repository.ChecklistTemplateItemRepository;
@@ -87,17 +89,36 @@ public class ProductApplicationService {
 
     @Transactional
     public ProductCreatedResponse create(Long sellerId, CreateProductRequest request) {
+        return create(sellerId, request, null);
+    }
+
+    @Transactional
+    public ProductCreatedResponse create(
+            Long sellerId, CreateProductRequest request, GeneratedChecklist generatedChecklist) {
         Category model = categoryRepository
                 .findById(request.getDeviceModelId())
                 .filter(Category::isActive)
                 .orElseThrow(() -> new BusinessException(ErrorCode.DEVICE_MODEL_NOT_FOUND));
         validateModelCategory(model, request.getCategoryId());
-        ChecklistTemplate template = templateRepository
-                .findFirstByCategoryIdAndStatusOrderByVersionDesc(
-                        model.getId(), ChecklistTemplateStatus.PUBLISHED)
-                .orElseThrow(() -> new BusinessException(ErrorCode.CHECKLIST_TEMPLATE_NOT_FOUND));
-        List<ChecklistTemplateItem> templateItems =
-                templateItemRepository.findByChecklistTemplateIdOrderByDisplayOrderAsc(template.getId());
+        ChecklistTemplate template;
+        List<ChecklistTemplateItem> templateItems;
+        if (generatedChecklist == null) {
+            template = templateRepository
+                    .findFirstByCategoryIdAndStatusOrderByVersionDesc(
+                            model.getId(), ChecklistTemplateStatus.PUBLISHED)
+                    .orElseThrow(
+                            () -> new BusinessException(ErrorCode.CHECKLIST_TEMPLATE_NOT_FOUND));
+            templateItems = templateItemRepository
+                    .findByChecklistTemplateIdOrderByDisplayOrderAsc(template.getId());
+        } else {
+            validateGeneratedChecklist(model, generatedChecklist);
+            template = templateRepository.saveAndFlush(ChecklistTemplate.createDraft(
+                    model.getId(), generatedChecklist.templateVersion()));
+            List<ChecklistTemplateItem> generatedItems = generatedChecklist.items().stream()
+                    .map(item -> generatedTemplateItem(template, item))
+                    .toList();
+            templateItems = templateItemRepository.saveAllAndFlush(generatedItems);
+        }
         Listing listing = listingRepository.saveAndFlush(
                 Listing.createDraft(
                         sellerId,
@@ -127,6 +148,29 @@ public class ProductApplicationService {
                 required,
                 0,
                 offset(listing.getCreatedAt()));
+    }
+
+    private void validateGeneratedChecklist(
+            Category model, GeneratedChecklist generatedChecklist) {
+        if (!model.getId().equals(generatedChecklist.deviceModelId())
+                || generatedChecklist.items().isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+    }
+
+    private ChecklistTemplateItem generatedTemplateItem(
+            ChecklistTemplate template, GeneratedChecklistItem item) {
+        return ChecklistTemplateItem.createGenerated(
+                template,
+                item.itemCode(),
+                item.name(),
+                item.purpose(),
+                item.guide(),
+                item.evidenceType(),
+                item.automationType(),
+                item.parserType(),
+                item.required(),
+                item.displayOrder());
     }
 
     @Transactional
