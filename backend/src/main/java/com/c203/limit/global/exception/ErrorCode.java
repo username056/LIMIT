@@ -146,7 +146,13 @@ public enum ErrorCode {
     REINSPECTION_BUYER_REQUIRED("INS018", HttpStatus.FORBIDDEN, "구매자만 재검수를 요청할 수 있습니다."),
     REINSPECTION_SELLER_REQUIRED("INS019", HttpStatus.FORBIDDEN, "판매자만 재검수를 완료할 수 있습니다."),
     REINSPECTION_INVALID_STATE("INS020", HttpStatus.CONFLICT, "현재 상태에서는 재검수를 완료할 수 없습니다."),
-    REINSPECTION_CHAT_ROOM_NOT_FOUND("INS021", HttpStatus.CONFLICT, "재검수 알림을 보낼 채팅방이 없습니다.");
+    REINSPECTION_CHAT_ROOM_NOT_FOUND("INS021", HttpStatus.NOT_FOUND, "재검수 알림을 보낼 채팅방이 없습니다."),
+    REINSPECTION_SELF_REQUEST_NOT_ALLOWED(
+            "INS022", HttpStatus.BAD_REQUEST, "본인 매물에는 재검수를 요청할 수 없습니다."),
+    REINSPECTION_ITEM_LISTING_MISMATCH(
+            "INS023", HttpStatus.BAD_REQUEST, "선택한 체크리스트 항목이 해당 매물 소속이 아닙니다."),
+    REINSPECTION_ACCESS_DENIED("INS024", HttpStatus.FORBIDDEN, "해당 재검수 요청을 처리할 권한이 없습니다."),
+    REINSPECTION_ALREADY_PROCESSED("INS025", HttpStatus.CONFLICT, "이미 처리된 재검수 요청입니다.");
 
     private final String code;
     private final HttpStatus status;
