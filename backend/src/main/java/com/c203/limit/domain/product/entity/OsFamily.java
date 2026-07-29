@@ -5,5 +5,6 @@ public enum OsFamily {
     IOS,
     ANDROID,
     WINDOWS,
-    MACOS
+    MACOS,
+    LINUX
 }

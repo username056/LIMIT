@@ -1,6 +1,7 @@
 package com.c203.limit.domain.product.controller;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.mockito.Mockito.when;
@@ -17,6 +18,7 @@ import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.http.MediaType;
 
 import com.c203.limit.domain.admin.repository.AdminAccountRepository;
 import com.c203.limit.domain.admin.repository.AdminActionLogRepository;
@@ -113,6 +115,10 @@ class ProductMockControllerTests {
 
     @MockitoBean
     ProductCatalogService productCatalogService;
+
+    @MockitoBean
+    com.c203.limit.domain.inspection.checklist.ChecklistGenerationService
+            checklistGenerationService;
 
     @MockitoBean
     PaymentService paymentService;
@@ -228,6 +234,14 @@ class ProductMockControllerTests {
     @Test
     void requiresAuthenticationForMyFavorites() throws Exception {
         mockMvc.perform(get("/api/v1/members/me/favorites"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void requiresAuthenticationForChecklistGeneration() throws Exception {
+        mockMvc.perform(post("/api/v1/checklist-generations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"deviceModelId\":201}"))
                 .andExpect(status().isUnauthorized());
     }
 }
