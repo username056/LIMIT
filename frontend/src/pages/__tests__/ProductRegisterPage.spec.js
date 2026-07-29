@@ -193,8 +193,12 @@ describe('ProductRegisterPage', () => {
     expect(wrapper.text()).toContain('선정 이유')
     expect(wrapper.text()).toContain('점검 방법')
     expect(wrapper.text()).toContain('추가 검토가 필요한 기능')
+    expect(wrapper.text()).not.toContain('/ 5개 선택')
+    expect(wrapper.text()).not.toContain('0개 선택')
 
     await wrapper.find('input[type="checkbox"][value="CAMERA"]').setValue(true)
+    expect(wrapper.text()).toContain('1개 선택')
+    expect(wrapper.text()).not.toContain('/ 5개 선택')
     await buttonByText(wrapper, '다음 단계').trigger('click')
     await flushPromises()
 

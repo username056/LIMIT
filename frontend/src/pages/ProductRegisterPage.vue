@@ -829,8 +829,11 @@ onMounted(async () => {
                     실제 기기에 있는 기능만 선택해 주세요. 선택한 기능은 촬영 체크리스트에 추가됩니다.
                   </p>
                 </div>
-                <span class="text-xs font-semibold text-primary">
-                  {{ confirmedFeatures.length }} / 5개 선택
+                <span
+                  v-if="confirmedFeatures.length"
+                  class="text-xs font-semibold text-primary"
+                >
+                  {{ confirmedFeatures.length }}개 선택
                 </span>
               </div>
 
