@@ -1,0 +1,10 @@
+title = "S15P11C203 gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known false positives: fake UUID test fixtures, not real secrets"
+regexes = [
+  '''b3b1c7a2-3c1a-4b1a-9c1a-1a2b3c4d5e6f''',
+]
