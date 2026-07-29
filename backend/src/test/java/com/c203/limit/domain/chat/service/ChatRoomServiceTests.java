@@ -154,6 +154,7 @@ class ChatRoomServiceTests {
         assertThat(result.content().get(0).counterpartNickname()).isEqualTo("판매자");
         assertThat(result.content().get(0).listingTitle()).isEqualTo("상품");
         assertThat(result.content().get(0).unreadCount()).isEqualTo(5L);
+        assertThat(result.content().get(0).counterpartLastReadSequence()).isEqualTo(2L);
         assertThat(result.nextCursor()).isEqualTo("100");
         assertThat(result.hasNext()).isTrue();
     }
@@ -285,6 +286,7 @@ class ChatRoomServiceTests {
             public long getLastMessageSeq() { return lastMessageSeq; }
             public LocalDateTime getLastMessageAt() { return null; }
             public long getLastReadSeq() { return lastReadSeq; }
+            public long getCounterpartLastReadSeq() { return 2L; }
             public LocalDateTime getCreatedAt() { return LocalDateTime.of(2026, 7, 22, 12, 0); }
         };
     }

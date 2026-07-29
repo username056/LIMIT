@@ -13,6 +13,7 @@ import { apiClient } from './client'
  * @property {number} lastMessageSequence
  * @property {string|null} lastMessageAt
  * @property {number} unreadCount
+ * @property {number} counterpartLastReadSequence
  * @property {string} createdAt
  */
 

@@ -17,5 +17,6 @@ public record ChatRoomSummaryResponse(
         long lastMessageSequence,
         LocalDateTime lastMessageAt,
         long unreadCount,
+        long counterpartLastReadSequence,
         LocalDateTime createdAt) {
 }

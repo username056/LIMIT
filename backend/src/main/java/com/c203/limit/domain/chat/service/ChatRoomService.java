@@ -238,7 +238,7 @@ public class ChatRoomService {
                 context == null ? null : context.listingThumbnailUrl(),
                 row.getStatus().name(),
                 row.getLastMessageId(), row.getLastMessageSeq(), row.getLastMessageAt(),
-                unreadCount, row.getCreatedAt());
+                unreadCount, row.getCounterpartLastReadSeq(), row.getCreatedAt());
     }
 
     private ChatRoomCreateResult create(ListingChatInfo listing, Long buyerId) {
