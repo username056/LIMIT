@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createProduct,
   deleteProduct,
+  generateChecklist,
   getDeviceModels,
   getMyProduct,
   getMyProducts,
@@ -30,12 +31,13 @@ describe('products api', () => {
     expect(fetchMock.mock.calls[1][0]).toBe(`${API_BASE_URL}/device-models?categoryId=1&keyword=Galaxy`)
   })
 
-  it('상품 생성·조회·수정·상태 전환·삭제 경로를 사용한다', async () => {
+  it('상품 생성·체크리스트 생성·조회·수정·상태 전환·삭제 경로를 사용한다', async () => {
     const fetchMock = vi.fn().mockResolvedValue(ok({ productId: 1001 }))
     vi.stubGlobal('fetch', fetchMock)
     const payload = { categoryId: 1, deviceModelId: 101, name: 'Galaxy S24' }
 
     await createProduct(payload)
+    await generateChecklist({ deviceModelId: 101, confirmedFeatures: [] })
     await getProduct(1001)
     await getMyProduct(1001)
     await updateProduct(1001, { name: '수정 상품' })
@@ -44,6 +46,7 @@ describe('products api', () => {
 
     expect(fetchMock.mock.calls.map(([url, options]) => [url, options.method])).toEqual([
       [`${API_BASE_URL}/products`, 'POST'],
+      [`${API_BASE_URL}/checklist-generations`, 'POST'],
       [`${API_BASE_URL}/products/1001`, 'GET'],
       [`${API_BASE_URL}/members/me/products/1001`, 'GET'],
       [`${API_BASE_URL}/products/1001`, 'PATCH'],

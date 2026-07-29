@@ -16,6 +16,13 @@ x-backend-environment: &backend-environment
   OAUTH_STATE_TTL: ${OAUTH_STATE_TTL:-10m}
   SOCIAL_SIGNUP_TTL: ${SOCIAL_SIGNUP_TTL:-15m}
   JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+  AI_CHECKLIST_ENABLED: ${AI_CHECKLIST_ENABLED:-false}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  OPENAI_RESPONSES_ENDPOINT: ${OPENAI_RESPONSES_ENDPOINT:-https://api.openai.com/v1/responses}
+  OPENAI_CHECKLIST_MODEL: ${OPENAI_CHECKLIST_MODEL:-gpt-5.6-luna}
+  AI_CHECKLIST_ALLOWED_DOMAINS: ${AI_CHECKLIST_ALLOWED_DOMAINS:-samsung.com,lg.com,microsoft.com,lenovo.com,dell.com,hp.com,asus.com,acer.com,msi.com}
+  AI_CHECKLIST_CONNECT_TIMEOUT: ${AI_CHECKLIST_CONNECT_TIMEOUT:-5s}
+  AI_CHECKLIST_READ_TIMEOUT: ${AI_CHECKLIST_READ_TIMEOUT:-30s}
   RTC_ALLOWED_ORIGIN_PATTERNS: ${RTC_ALLOWED_ORIGIN_PATTERNS:-http://localhost:5173,https://l1mit.shop,https://www.l1mit.shop}
   RTC_STUN_URL: ${RTC_STUN_URL:-stun:stun.l.google.com:19302}
   RTC_TURN_URL: ${RTC_TURN_URL:-turn:api.l1mit.shop:3478?transport=udp}

@@ -29,6 +29,10 @@ export function createProduct(payload) {
   return apiClient.post('/products', payload)
 }
 
+export function generateChecklist(payload) {
+  return apiClient.post('/checklist-generations', payload)
+}
+
 export function updateProduct(productId, payload) {
   return apiClient.patch(`/products/${productId}`, payload)
 }

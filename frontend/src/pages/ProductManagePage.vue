@@ -9,6 +9,7 @@ import {
   createEvidenceUploadUrl,
   createProduct,
   deleteProduct,
+  generateChecklist,
   getChecklistTemplate,
   getDeviceCategories,
   getDeviceModels,
@@ -112,6 +113,9 @@ function selectTradeRegion(place) {
 // 체크리스트 관련: templateItems는 항목 가이드/허용 형식을 보여주기 위한 모델 템플릿,
 // checklistItems는 상품 생성 시 고정된 실제 스냅샷(evidence API 호출에 필요한 checklistItemId 포함).
 const templateItems = ref([])
+const checklistGeneration = ref(null)
+const confirmedFeatures = ref([])
+const isGeneratingChecklist = ref(false)
 const checklistItems = ref([])
 const activeCaptureItemId = ref(null)
 // 백엔드 증거 업로드 API가 아직 스텁이라(항상 더미 응답) 실제 진행 상태를 신뢰할 수 없어
@@ -122,6 +126,13 @@ const handoverGuide = ref(null)
 const isLoadingHandoverGuide = ref(false)
 
 const currentProductId = computed(() => editingId.value || draftProductId.value)
+const selectedModel = computed(
+  () => models.value.find((item) => String(item.deviceModelId) === String(form.deviceModelId)) || null,
+)
+const supportsGeneratedChecklist = computed(
+  () => ['WINDOWS', 'LINUX'].includes(selectedModel.value?.defaultOs),
+)
+const confirmedFeatureLimitReached = computed(() => confirmedFeatures.value.length >= 5)
 const mediaChecklistItems = computed(
   () => checklistItems.value.filter((item) => item.evidenceType !== 'SELLER_CONFIRMATION'),
 )
@@ -163,6 +174,19 @@ function evidenceTypeLabel(type) {
   }[type] || type
 }
 
+function evidenceStatusLabel(status) {
+  return {
+    VERIFIED: '공식 확인',
+    LIKELY: '제품군 확인',
+    UNKNOWN: '근거 부족',
+    CONFLICTED: '자료 충돌',
+  }[status] || status
+}
+
+function isRequiredItem(item) {
+  return item.required ?? item.isRequired ?? false
+}
+
 function captureAccept(item) {
   if (!item) return ''
   if (item.evidenceType === 'VIDEO') return 'video/*'
@@ -180,6 +204,9 @@ function resetForm() {
   })
   models.value = []
   templateItems.value = []
+  checklistGeneration.value = null
+  confirmedFeatures.value = []
+  isGeneratingChecklist.value = false
   checklistItems.value = []
   activeCaptureItemId.value = null
   handoverGuide.value = null
@@ -190,6 +217,8 @@ function resetForm() {
 async function loadModels() {
   form.deviceModelId = ''
   templateItems.value = []
+  checklistGeneration.value = null
+  confirmedFeatures.value = []
   models.value = form.categoryId
     ? await getDeviceModels({ categoryId: form.categoryId, page: 0, size: 100 })
     : []
@@ -197,12 +226,27 @@ async function loadModels() {
 
 async function loadTemplatePreview() {
   templateItems.value = []
+  checklistGeneration.value = null
+  confirmedFeatures.value = []
   if (!form.deviceModelId) return
+  isGeneratingChecklist.value = true
+  errorMessage.value = ''
   try {
-    const template = await getChecklistTemplate(form.deviceModelId)
-    templateItems.value = template.items || []
+    if (supportsGeneratedChecklist.value) {
+      const generated = await generateChecklist({
+        deviceModelId: Number(form.deviceModelId),
+        confirmedFeatures: [],
+      })
+      checklistGeneration.value = generated
+      templateItems.value = generated.items || []
+    } else {
+      const template = await getChecklistTemplate(form.deviceModelId)
+      templateItems.value = template.items || []
+    }
   } catch (error) {
-    errorMessage.value = error.message || '체크리스트 템플릿을 불러오지 못했습니다.'
+    errorMessage.value = error.message || '체크리스트를 불러오지 못했습니다.'
+  } finally {
+    isGeneratingChecklist.value = false
   }
 }
 
@@ -248,6 +292,9 @@ async function goToStep2() {
         ...payload,
         categoryId: Number(form.categoryId),
         deviceModelId: Number(form.deviceModelId),
+        ...(supportsGeneratedChecklist.value
+          ? { confirmedFeatures: [...confirmedFeatures.value] }
+          : {}),
       })
       productId = created.productId
       draftProductId.value = productId
@@ -284,7 +331,7 @@ async function loadHandoverGuide() {
 function goToStep3() {
   errorMessage.value = ''
   const missingRequired = mediaChecklistItems.value.some(
-    (item) => item.isRequired && captureState[item.checklistItemId]?.status !== 'captured',
+    (item) => isRequiredItem(item) && captureState[item.checklistItemId]?.status !== 'captured',
   )
   if (missingRequired) {
     errorMessage.value = '필수 촬영 항목을 모두 완료해 주세요.'
@@ -297,7 +344,7 @@ function goToStep3() {
 function goToStep4() {
   errorMessage.value = ''
   const missingConfirm = confirmationChecklistItems.value.some(
-    (item) => item.isRequired && !confirmState[item.checklistItemId],
+    (item) => isRequiredItem(item) && !confirmState[item.checklistItemId],
   )
   if (missingConfirm) {
     errorMessage.value = '개인정보 정리 항목을 모두 확인해 주세요.'
@@ -410,10 +457,7 @@ async function startEdit(productId) {
       tradeRegion: product.tradeRegion || '',
     })
     if (form.categoryId) models.value = await getDeviceModels({ categoryId: form.categoryId, page: 0, size: 100 })
-    if (form.deviceModelId) {
-      const template = await getChecklistTemplate(form.deviceModelId)
-      templateItems.value = template.items || []
-    }
+    if (form.deviceModelId) await loadTemplatePreview()
     checklistItems.value = await getProductChecklist(productId)
     activeCaptureItemId.value = mediaChecklistItems.value[0]?.checklistItemId || null
     Object.keys(captureState).forEach((key) => delete captureState[key])
@@ -544,6 +588,47 @@ onMounted(async () => {
             </label>
           </div>
 
+          <p
+            v-if="isGeneratingChecklist"
+            role="status"
+            class="mt-5 rounded-lg border border-border bg-bg px-4 py-5 text-center text-sm text-text-sub"
+          >
+            선택한 모델의 체크리스트와 공식 기능 자료를 확인하고 있습니다…
+          </p>
+
+          <div
+            v-else-if="checklistGeneration"
+            class="mt-5 rounded-lg border border-primary/30 bg-accent/60 p-4"
+          >
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 class="text-sm font-bold text-text-main">
+                  자동 생성 체크리스트
+                </h3>
+                <p class="mt-1 text-xs text-text-sub">
+                  {{ checklistGeneration.manufacturer }} {{ checklistGeneration.modelName }}
+                  · {{ checklistGeneration.osFamily }}
+                  · {{ templateItems.length }}개 항목
+                </p>
+              </div>
+              <BaseBadge :variant="checklistGeneration.aiApplied ? 'primary' : 'gray'">
+                {{ checklistGeneration.aiApplied ? 'AI 공식자료 반영' : '기본 정책 적용' }}
+              </BaseBadge>
+            </div>
+            <p
+              v-if="!checklistGeneration.aiApplied"
+              class="mt-3 rounded-md bg-white/80 px-3 py-2 text-xs leading-5 text-text-sub"
+            >
+              AI 연결 없이 검증된 Windows·Linux 기본 정책으로 생성했습니다. 상품 등록은 그대로 진행할 수 있습니다.
+            </p>
+            <p
+              v-if="editingId"
+              class="mt-3 rounded-md bg-white/80 px-3 py-2 text-xs leading-5 text-text-sub"
+            >
+              수정 중인 상품에는 최초 등록 시 고정된 체크리스트 스냅샷이 유지됩니다.
+            </p>
+          </div>
+
           <ul
             v-if="templateItems.length"
             class="mt-5 grid gap-2 sm:grid-cols-2"
@@ -558,12 +643,76 @@ onMounted(async () => {
               </BaseBadge>
               <span class="text-text-main">
                 {{ item.name }}<span
-                  v-if="item.isRequired"
+                  v-if="isRequiredItem(item)"
                   class="text-red-500"
                 >*</span>
               </span>
             </li>
           </ul>
+
+          <section
+            v-if="checklistGeneration?.aiSuggestions?.length && !editingId"
+            class="mt-5 rounded-lg border border-border p-4"
+          >
+            <div class="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <h3 class="text-sm font-bold text-text-main">
+                  AI 공식자료 확인 후보
+                </h3>
+                <p class="mt-1 text-xs leading-5 text-text-sub">
+                  실제 기기에 있는 기능만 선택해 주세요. 선택한 기능은 촬영 체크리스트에 추가됩니다.
+                </p>
+              </div>
+              <span class="text-xs font-semibold text-primary">
+                {{ confirmedFeatures.length }} / 5개 선택
+              </span>
+            </div>
+
+            <ul class="mt-3 space-y-3">
+              <li
+                v-for="suggestion in checklistGeneration.aiSuggestions"
+                :key="suggestion.featureCode"
+                class="rounded-md border border-border bg-bg p-3"
+              >
+                <label class="flex cursor-pointer items-start gap-3">
+                  <input
+                    v-model="confirmedFeatures"
+                    type="checkbox"
+                    :value="suggestion.featureCode"
+                    :disabled="confirmedFeatureLimitReached && !confirmedFeatures.includes(suggestion.featureCode)"
+                    class="mt-1 h-4 w-4 rounded border-border"
+                  >
+                  <span class="min-w-0 flex-1">
+                    <span class="flex flex-wrap items-center gap-2">
+                      <span class="text-sm font-bold text-text-main">{{ suggestion.featureCode }}</span>
+                      <BaseBadge :variant="suggestion.evidenceStatus === 'VERIFIED' ? 'primary' : 'gray'">
+                        {{ evidenceStatusLabel(suggestion.evidenceStatus) }}
+                      </BaseBadge>
+                    </span>
+                    <span class="mt-1 block text-xs leading-5 text-text-sub">{{ suggestion.reason }}</span>
+                    <a
+                      v-if="suggestion.sourceUrl"
+                      :href="suggestion.sourceUrl"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="mt-1 inline-block text-xs font-semibold text-primary underline underline-offset-2"
+                      @click.stop
+                    >
+                      {{ suggestion.sourceTitle || '공식 자료 보기' }}
+                    </a>
+                  </span>
+                </label>
+              </li>
+            </ul>
+          </section>
+
+          <p
+            v-if="checklistGeneration?.reviewCandidates?.length"
+            class="mt-3 rounded-md bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800"
+          >
+            승인 목록 밖의 기능은 자동 추가하지 않았습니다:
+            {{ checklistGeneration.reviewCandidates.join(', ') }}
+          </p>
 
           <div class="mt-6 grid gap-5 sm:grid-cols-2">
             <label class="text-sm font-semibold text-text-main">상품명<input
@@ -830,7 +979,7 @@ onMounted(async () => {
                 <span>
                   <span class="block text-sm font-bold text-text-main">
                     {{ item.name }}<span
-                      v-if="item.isRequired"
+                      v-if="isRequiredItem(item)"
                       class="ml-1 text-red-500"
                     >*</span>
                   </span>
@@ -919,10 +1068,10 @@ onMounted(async () => {
           <BaseButton
             v-if="activeStep === 1"
             type="button"
-            :disabled="isSaving"
+            :disabled="isSaving || isGeneratingChecklist"
             @click="goToStep2"
           >
-            {{ isSaving ? '저장 중…' : '다음 단계' }}
+            {{ isGeneratingChecklist ? '체크리스트 생성 중…' : isSaving ? '저장 중…' : '다음 단계' }}
           </BaseButton>
           <BaseButton
             v-else-if="activeStep === 2"
