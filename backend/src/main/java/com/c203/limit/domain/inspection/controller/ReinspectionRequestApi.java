@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 public interface ReinspectionRequestApi {
 
     @Operation(
+            operationId = "reinspection01",
             summary = "재검수 요청",
             description = "구매자가 체크리스트 항목별 재검수를 요청하고 커밋 후 판매자 채팅방에 알립니다.",
             security = @SecurityRequirement(name = "bearerAuth"))
@@ -24,9 +25,7 @@ public interface ReinspectionRequestApi {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "201", description = "재검수 요청 생성"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "403", description = "REINSPECTION_BUYER_REQUIRED"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "409", description = "REINSPECTION_CHAT_ROOM_NOT_FOUND")
+                responseCode = "403", description = "REINSPECTION_BUYER_REQUIRED")
     })
     @PostMapping("/api/v1/listings/{listingId}/reinspection-requests")
     ResponseEntity<ApiResponse<ReinspectionRequestResponse>> create(
@@ -34,6 +33,7 @@ public interface ReinspectionRequestApi {
             @Valid @RequestBody ReinspectionRequestCreateRequest request);
 
     @Operation(
+            operationId = "reinspection02",
             summary = "재검수 승인 및 완료",
             description = "판매자가 재검수를 완료하고 커밋 후 구매자 채팅방에 알립니다.",
             security = @SecurityRequirement(name = "bearerAuth"))

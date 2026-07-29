@@ -312,6 +312,10 @@ class OpenApiContractTests {
                 .value("diagnosisValue01"))
             .andExpect(jsonPath("$.paths['/api/v1/inspections/products/{productId}/diagnosis-summary'].get.operationId")
                 .value("productDiagnosisSummary01"))
+            .andExpect(jsonPath("$.paths['/api/v1/listings/{listingId}/reinspection-requests'].post.operationId")
+                .value("reinspection01"))
+            .andExpect(jsonPath("$.paths['/api/v1/reinspection-requests/{requestKey}/complete'].post.operationId")
+                .value("reinspection02"))
             .andExpect(jsonPath("$.paths['/api/v1/auth/sessions']").doesNotExist());
 
         mockMvc.perform(get("/v3/api-docs/10-place"))
