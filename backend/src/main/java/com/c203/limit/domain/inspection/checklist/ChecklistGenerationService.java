@@ -45,13 +45,13 @@ public class ChecklistGenerationService {
                 confirmedFeatures));
     }
 
-    public Optional<GeneratedChecklist> generateIfLaptop(
+    public Optional<GeneratedChecklist> generateSnapshotIfLaptop(
             Long deviceModelId, Set<LaptopFeatureCode> confirmedFeatures) {
         Category model = activeModel(deviceModelId);
         if (model.getDeviceType() != DeviceType.LAPTOP) {
             return Optional.empty();
         }
-        return Optional.of(generate(context(
+        return Optional.of(generatePolicyOnly(context(
                 model.getId(),
                 model.getManufacturer(),
                 model.getName(),
@@ -132,6 +132,19 @@ public class ChecklistGenerationService {
                         .distinct()
                         .limit(LaptopChecklistPolicy.MAX_ADDITIONAL_ITEMS)
                         .toList());
+    }
+
+    private GeneratedChecklist generatePolicyOnly(ChecklistGenerationContext context) {
+        return new GeneratedChecklist(
+                context.deviceModelId(),
+                context.manufacturer(),
+                context.modelName(),
+                context.osFamily(),
+                1,
+                false,
+                policy.generate(context.osFamily(), context.confirmedFeatures()),
+                List.of(),
+                List.of());
     }
 
     private Category activeModel(Long deviceModelId) {

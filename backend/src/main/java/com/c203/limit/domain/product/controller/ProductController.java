@@ -48,7 +48,8 @@ public class ProductController implements ProductApi {
             CreateProductRequest request) {
         Long sellerId = currentSellerMemberId();
         GeneratedChecklist checklist = checklistGenerationService
-                .generateIfLaptop(request.getDeviceModelId(), request.getConfirmedFeatures())
+                .generateSnapshotIfLaptop(
+                        request.getDeviceModelId(), request.getConfirmedFeatures())
                 .orElse(null);
         ProductCreatedResponse response = productService.create(sellerId, request, checklist);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));

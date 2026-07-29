@@ -50,12 +50,14 @@ class ProductChecklistServiceTests {
                 ChecklistItemCompletionStatus.PENDING);
         Evidence first = mock(Evidence.class);
         when(first.getUploadedAt()).thenReturn(LocalDateTime.of(2026, 7, 29, 10, 0));
-        Evidence latest = evidence(9002L, LocalDateTime.of(2026, 7, 29, 10, 5));
+        when(first.getListingChecklistItem()).thenReturn(camera);
+        Evidence latest =
+                evidence(9002L, LocalDateTime.of(2026, 7, 29, 10, 5), camera);
         when(listingRepository.findByIdAndDeletedAtIsNull(1001L))
                 .thenReturn(Optional.of(mock(Listing.class)));
         when(checklistItemRepository.findByListingIdOrderByDisplayOrderAsc(1001L))
                 .thenReturn(List.of(camera));
-        when(evidenceRepository.findAllByListingChecklistItem_Id(7003L))
+        when(evidenceRepository.findAllByListingId(1001L))
                 .thenReturn(List.of(first, latest));
 
         var result = service.findAll(1001L, null, false);
@@ -66,6 +68,7 @@ class ProductChecklistServiceTests {
                 .isEqualTo("카메라 앱을 실행해 영상 출력 상태를 확인하세요.");
         assertThat(result.get(0).getLatestEvidenceId()).isEqualTo(9002L);
         assertThat(result.get(0).getAttemptCount()).isEqualTo(2);
+        verify(evidenceRepository).findAllByListingId(1001L);
     }
 
     @Test
@@ -82,7 +85,7 @@ class ProductChecklistServiceTests {
         when(checklistItemRepository
                         .findByListingIdAndIsRequiredTrueOrderByDisplayOrderAsc(1001L))
                 .thenReturn(List.of(completedHinge));
-        when(evidenceRepository.findAllByListingChecklistItem_Id(7001L))
+        when(evidenceRepository.findAllByListingId(1001L))
                 .thenReturn(List.of());
 
         var result = service.findAll(1001L, "completed", true);
@@ -134,10 +137,12 @@ class ProductChecklistServiceTests {
         return item;
     }
 
-    private Evidence evidence(Long id, LocalDateTime uploadedAt) {
+    private Evidence evidence(
+            Long id, LocalDateTime uploadedAt, ListingChecklistItem checklistItem) {
         Evidence evidence = mock(Evidence.class);
         when(evidence.getId()).thenReturn(id);
         when(evidence.getUploadedAt()).thenReturn(uploadedAt);
+        when(evidence.getListingChecklistItem()).thenReturn(checklistItem);
         return evidence;
     }
 }
