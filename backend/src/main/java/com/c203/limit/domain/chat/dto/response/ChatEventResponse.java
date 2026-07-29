@@ -5,13 +5,30 @@ public record ChatEventResponse(
         Long roomId,
         ChatMessageResponse message,
         Long readerId,
-        Long lastReadSeq) {
+        Long lastReadSeq,
+        ReinspectionNotificationResponse reinspection) {
 
     public static ChatEventResponse message(Long roomId, ChatMessageResponse message) {
-        return new ChatEventResponse("MESSAGE", roomId, message, null, null);
+        return new ChatEventResponse("MESSAGE", roomId, message, null, null, null);
     }
 
     public static ChatEventResponse read(Long roomId, Long readerId, Long lastReadSeq) {
-        return new ChatEventResponse("READ", roomId, null, readerId, lastReadSeq);
+        return new ChatEventResponse("READ", roomId, null, readerId, lastReadSeq, null);
+    }
+
+    public static ChatEventResponse reinspectionRequested(
+            Long roomId,
+            ChatMessageResponse message,
+            ReinspectionNotificationResponse reinspection) {
+        return new ChatEventResponse(
+                "REINSPECTION_REQUESTED", roomId, message, null, null, reinspection);
+    }
+
+    public static ChatEventResponse reinspectionCompleted(
+            Long roomId,
+            ChatMessageResponse message,
+            ReinspectionNotificationResponse reinspection) {
+        return new ChatEventResponse(
+                "REINSPECTION_COMPLETED", roomId, message, null, null, reinspection);
     }
 }

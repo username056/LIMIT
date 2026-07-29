@@ -16,6 +16,8 @@ public interface ListingChecklistItemRepository
 
     Optional<ListingChecklistItem> findByIdAndListingId(Long id, Long listingId);
 
+    List<ListingChecklistItem> findAllByIdInAndListingId(List<Long> ids, Long listingId);
+
     long countByListingIdAndIsRequiredTrue(Long listingId);
 
     long countByListingIdAndIsRequiredTrueAndCompletionStatus(

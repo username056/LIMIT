@@ -7,9 +7,12 @@ import com.c203.limit.domain.product.repository.ListingRepository;
 import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,12 +27,18 @@ public class ListingService {
 
     private final ListingRepository listingRepository;
     private final ListingStatusHistoryRepository listingStatusHistoryRepository;
+    private final Clock clock;
+    private final long reservationTtlMinutes;
 
     public ListingService(
             ListingRepository listingRepository,
-            ListingStatusHistoryRepository listingStatusHistoryRepository) {
+            ListingStatusHistoryRepository listingStatusHistoryRepository,
+            Clock clock,
+            @Value("${limit.product.reservation-ttl-minutes:30}") long reservationTtlMinutes) {
         this.listingRepository = listingRepository;
         this.listingStatusHistoryRepository = listingStatusHistoryRepository;
+        this.clock = clock;
+        this.reservationTtlMinutes = reservationTtlMinutes;
     }
 
     @Transactional(readOnly = true)
@@ -42,8 +51,13 @@ public class ListingService {
 
     @Transactional
     public ListingReservationView reserve(Long listingId, Long buyerId) {
+        LocalDateTime reservedUntil = LocalDateTime.now(clock).plusMinutes(reservationTtlMinutes);
         return toReservationView(
-                transition(listingId, buyerId, null, listing -> listing.reserve(buyerId)));
+                transition(
+                        listingId,
+                        buyerId,
+                        null,
+                        listing -> listing.reserve(buyerId, reservedUntil)));
     }
 
     @Transactional

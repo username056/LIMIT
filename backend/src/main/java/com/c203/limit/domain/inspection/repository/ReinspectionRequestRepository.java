@@ -1,4 +1,4 @@
-package com.c203.limit.domain.inspection.reinspection.repository;
+package com.c203.limit.domain.inspection.repository;
 
 import com.c203.limit.domain.inspection.entity.ReinspectionRequest;
 import com.c203.limit.domain.inspection.enums.ReinspectionStatus;

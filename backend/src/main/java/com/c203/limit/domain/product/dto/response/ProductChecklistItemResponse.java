@@ -18,6 +18,9 @@ public class ProductChecklistItemResponse {
     @Schema(example = "화면 전체 터치")
     private final String name;
 
+    @Schema(example = "화면 전체 격자를 끊김 없이 드래그하세요.")
+    private final String guide;
+
     @Schema(example = "VIDEO")
     private final String evidenceType;
 

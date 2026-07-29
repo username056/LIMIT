@@ -120,6 +120,7 @@ public enum ErrorCode {
     IDEMPOTENCY_KEY_CONFLICT("PAY004", HttpStatus.CONFLICT, "동일한 멱등키로 다른 내용의 결제 요청이 이미 존재합니다."),
     PAYMENT_REQUEST_CONFLICT(
             "PAY005", HttpStatus.CONFLICT, "결제 요청이 다른 요청과 경합해 처리하지 못했습니다. 잠시 후 다시 시도해 주세요."),
+    PAYMENT_NOT_EXPIRABLE("PAY006", HttpStatus.CONFLICT, "요청 상태의 결제만 만료 처리할 수 있습니다."),
 
     // ========== 장소 검색 에러 ==========
     PLACE_SEARCH_UNAVAILABLE("PLC001", HttpStatus.SERVICE_UNAVAILABLE, "장소 검색 설정을 확인해 주세요."),
@@ -140,13 +141,18 @@ public enum ErrorCode {
     FIELD_NOT_EDITABLE("INS013", HttpStatus.BAD_REQUEST, "수정할 수 없는 필드입니다."),
     PRODUCT_NOT_FOUND("INS014", HttpStatus.NOT_FOUND, "상품을 찾을 수 없습니다."),
     ALREADY_PARSED("INS015", HttpStatus.CONFLICT, "이미 파싱된 증거입니다."),
+    REINSPECTION_REQUEST_NOT_FOUND("INS016", HttpStatus.NOT_FOUND, "재검수 요청을 찾을 수 없습니다."),
+    REINSPECTION_ITEM_NOT_FOUND("INS017", HttpStatus.BAD_REQUEST, "매물에 속하지 않은 체크리스트 항목입니다."),
+    REINSPECTION_BUYER_REQUIRED("INS018", HttpStatus.FORBIDDEN, "구매자만 재검수를 요청할 수 있습니다."),
+    REINSPECTION_SELLER_REQUIRED("INS019", HttpStatus.FORBIDDEN, "판매자만 재검수를 완료할 수 있습니다."),
+    REINSPECTION_INVALID_STATE("INS020", HttpStatus.CONFLICT, "현재 상태에서는 재검수를 완료할 수 없습니다."),
+    REINSPECTION_CHAT_ROOM_NOT_FOUND("INS021", HttpStatus.CONFLICT, "재검수 알림을 보낼 채팅방이 없습니다."),
     REINSPECTION_SELF_REQUEST_NOT_ALLOWED(
-            "INS016", HttpStatus.BAD_REQUEST, "본인 매물에는 재검수를 요청할 수 없습니다."),
+            "INS022", HttpStatus.BAD_REQUEST, "본인 매물에는 재검수를 요청할 수 없습니다."),
     REINSPECTION_ITEM_LISTING_MISMATCH(
-            "INS017", HttpStatus.BAD_REQUEST, "선택한 체크리스트 항목이 해당 매물 소속이 아닙니다."),
-    REINSPECTION_REQUEST_NOT_FOUND("INS018", HttpStatus.NOT_FOUND, "재검수 요청을 찾을 수 없습니다."),
-    REINSPECTION_ACCESS_DENIED("INS019", HttpStatus.FORBIDDEN, "해당 재검수 요청을 처리할 권한이 없습니다."),
-    REINSPECTION_ALREADY_PROCESSED("INS020", HttpStatus.CONFLICT, "이미 처리된 재검수 요청입니다.");
+            "INS023", HttpStatus.BAD_REQUEST, "선택한 체크리스트 항목이 해당 매물 소속이 아닙니다."),
+    REINSPECTION_ACCESS_DENIED("INS024", HttpStatus.FORBIDDEN, "해당 재검수 요청을 처리할 권한이 없습니다."),
+    REINSPECTION_ALREADY_PROCESSED("INS025", HttpStatus.CONFLICT, "이미 처리된 재검수 요청입니다.");
 
     private final String code;
     private final HttpStatus status;

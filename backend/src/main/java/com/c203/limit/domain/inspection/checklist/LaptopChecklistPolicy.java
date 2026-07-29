@@ -52,8 +52,14 @@ public class LaptopChecklistPolicy {
                         "LAP-EXT-002",
                         "외관 상태",
                         "찍힘, 균열, 휨과 사용 흔적을 확인합니다.",
-                        "상판, 하판, 네 모서리와 힌지를 밝은 곳에서 차례로 촬영하세요.",
+                        "상판, 하판과 네 모서리를 밝은 곳에서 차례로 촬영하세요.",
                         EvidenceType.PHOTO),
+                required(
+                        "LAP-HNG-012",
+                        "힌지 상태",
+                        "화면을 지지하는 힌지의 유격, 소음, 파손과 고정력을 확인합니다.",
+                        "덮개를 천천히 완전히 열고 닫아 좌우 힌지의 흔들림, 소음, 들뜸과 화면 고정 상태가 보이도록 촬영하세요.",
+                        EvidenceType.VIDEO),
                 required(
                         "LAP-DSP-003",
                         "디스플레이 상태",
@@ -142,6 +148,22 @@ public class LaptopChecklistPolicy {
                         "외부 포트",
                         "USB, HDMI 등 외부 포트 동작을 확인합니다.",
                         "지원하는 포트마다 장치를 연결해 인식되는 화면과 연결 상태를 촬영하세요.",
+                        EvidenceType.VIDEO));
+        items.put(
+                LaptopFeatureCode.RJ45_PORT,
+                feature(
+                        "LAP-FTR-RJ45",
+                        "유선 LAN(RJ45) 포트",
+                        "유선 네트워크 연결과 포트의 물리적 고정 상태를 확인합니다.",
+                        "랜선을 연결해 커넥터가 고정되는 모습과 유선 네트워크로 웹 페이지가 열리는 과정을 촬영하세요.",
+                        EvidenceType.VIDEO));
+        items.put(
+                LaptopFeatureCode.MICROSD_SLOT,
+                feature(
+                        "LAP-FTR-MSD",
+                        "microSD 카드 슬롯",
+                        "microSD 카드 삽입과 읽기 기능을 확인합니다.",
+                        "microSD 카드를 삽입한 뒤 운영체제에서 카드와 파일 목록이 인식되는 과정을 촬영하세요.",
                         EvidenceType.VIDEO));
         items.put(
                 LaptopFeatureCode.CAMERA,
@@ -359,6 +381,8 @@ public class LaptopChecklistPolicy {
         private static LaptopFeatureCode featureFromCode(String code) {
             return switch (code) {
                 case "LAP-FTR-PORT" -> LaptopFeatureCode.PORTS;
+                case "LAP-FTR-RJ45" -> LaptopFeatureCode.RJ45_PORT;
+                case "LAP-FTR-MSD" -> LaptopFeatureCode.MICROSD_SLOT;
                 case "LAP-FTR-CAM" -> LaptopFeatureCode.CAMERA;
                 case "LAP-FTR-MIC" -> LaptopFeatureCode.MICROPHONE;
                 case "LAP-FTR-SPK" -> LaptopFeatureCode.SPEAKERS;

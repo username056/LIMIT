@@ -148,7 +148,7 @@ class ProductApplicationServiceTests {
                 generated);
 
         assertThat(result.getProductId()).isEqualTo(2001L);
-        assertThat(result.getRequiredItemCount()).isEqualTo(12);
+        assertThat(result.getRequiredItemCount()).isEqualTo(13);
         verify(templateRepository).saveAndFlush(any(ChecklistTemplate.class));
         verify(templateItemRepository).saveAllAndFlush(any());
         verify(checklistItemRepository).saveAll(any());

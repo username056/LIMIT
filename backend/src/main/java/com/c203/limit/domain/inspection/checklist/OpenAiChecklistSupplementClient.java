@@ -99,10 +99,18 @@ public class OpenAiChecklistSupplementClient implements ChecklistSupplementClien
                         ChecklistEvidenceStatus.valueOf(node.path("evidenceStatus").asText());
                 String sourceUrl = node.path("sourceUrl").asText();
                 if (isAllowedSource(sourceUrl)) {
+                    String reason = koreanOrFallback(
+                            node.path("reason").asText(),
+                            "제조사 공식 자료에서 %s 지원이 확인되어 실제 기기의 동작 여부를 확인해야 합니다."
+                                    .formatted(featureCode.displayNameKo()));
+                    String checkGuide = koreanOrFallback(
+                            node.path("checkGuide").asText(),
+                            featureCode.defaultCheckGuideKo());
                     suggestions.add(new ChecklistSuggestion(
                             featureCode,
                             status,
-                            node.path("reason").asText(),
+                            reason,
+                            checkGuide,
                             sourceUrl,
                             node.path("sourceTitle").asText()));
                 }
@@ -163,7 +171,17 @@ public class OpenAiChecklistSupplementClient implements ChecklistSupplementClien
                 LIKELY means an official source supports the model family but exact variant is unclear.
                 UNKNOWN means evidence is insufficient. CONFLICTED means official sources disagree.
                 Only use these approved feature codes: %s
-                Put an official feature outside that library into reviewCandidates instead.
+                PORTS means built-in USB, HDMI, DisplayPort, or audio ports. Use RJ45_PORT and
+                MICROSD_SLOT separately when those exact built-in slots are documented.
+                CAMERA means the laptop's built-in webcam only. A connected smartphone camera,
+                accessory camera, or ecosystem software feature is not CAMERA.
+                CONVERTIBLE_HINGE means a documented 360-degree convertible hinge. Ordinary laptop
+                hinges are already covered by the required base checklist and must not be suggested.
+                Write reason and checkGuide in natural Korean.
+                reason must explain why this exact laptop feature was selected from the official source.
+                checkGuide must tell a seller what physical function to test and how to verify it.
+                Put an official feature outside that library into reviewCandidates as a short Korean
+                user-facing feature name, never as an internal enum-style code.
 
                 Manufacturer: %s
                 Model name: %s
@@ -205,6 +223,8 @@ public class OpenAiChecklistSupplementClient implements ChecklistSupplementClien
                                         .toList()),
                         "reason",
                         Map.of("type", "string"),
+                        "checkGuide",
+                        Map.of("type", "string"),
                         "sourceUrl",
                         Map.of("type", "string"),
                         "sourceTitle",
@@ -215,6 +235,7 @@ public class OpenAiChecklistSupplementClient implements ChecklistSupplementClien
                         "featureCode",
                         "evidenceStatus",
                         "reason",
+                        "checkGuide",
                         "sourceUrl",
                         "sourceTitle"));
 
@@ -272,5 +293,18 @@ public class OpenAiChecklistSupplementClient implements ChecklistSupplementClien
         } catch (IllegalArgumentException exception) {
             return false;
         }
+    }
+
+    private String koreanOrFallback(String value, String fallback) {
+        if (value != null && value.codePoints().anyMatch(this::isHangulCodePoint)) {
+            return value.trim();
+        }
+        return fallback;
+    }
+
+    private boolean isHangulCodePoint(int codePoint) {
+        return (codePoint >= 0xAC00 && codePoint <= 0xD7A3)
+                || (codePoint >= 0x1100 && codePoint <= 0x11FF)
+                || (codePoint >= 0x3130 && codePoint <= 0x318F);
     }
 }

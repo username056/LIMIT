@@ -24,6 +24,8 @@ import com.c203.limit.domain.auth.repository.SocialAccountRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomParticipantRepository;
 import com.c203.limit.domain.chat.repository.ChatMessageRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomRepository;
+import com.c203.limit.domain.chat.repository.ChatOutboxEventRepository;
+import com.c203.limit.domain.chat.repository.ReinspectionRequestMessageRepository;
 import com.c203.limit.domain.chat.repository.ListingChatReader;
 import com.c203.limit.domain.member.repository.MemberRepository;
 import com.c203.limit.domain.member.repository.MemberTermsAgreementRepository;
@@ -34,10 +36,10 @@ import com.c203.limit.domain.inspection.repository.BatteryReportResultRepository
 import com.c203.limit.domain.inspection.repository.DxdiagResultRepository;
 import com.c203.limit.domain.inspection.repository.EvidenceRepository;
 import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
+import com.c203.limit.domain.inspection.repository.ReinspectionRequestItemRepository;
+import com.c203.limit.domain.inspection.repository.ReinspectionRequestRepository;
 import com.c203.limit.domain.inspection.repository.ListingOwnerReader;
 import com.c203.limit.domain.inspection.repository.OcrResultRepository;
-import com.c203.limit.domain.inspection.reinspection.repository.ReinspectionRequestItemRepository;
-import com.c203.limit.domain.inspection.reinspection.repository.ReinspectionRequestRepository;
 import com.c203.limit.domain.product.repository.ListingRepository;
 import com.c203.limit.domain.product.repository.WishlistRepository;
 import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
@@ -94,6 +96,12 @@ class OpenApiContractTests {
     ChatMessageRepository chatMessageRepository;
 
     @MockitoBean
+    ChatOutboxEventRepository chatOutboxEventRepository;
+
+    @MockitoBean
+    ReinspectionRequestMessageRepository reinspectionRequestMessageRepository;
+
+    @MockitoBean
     com.c203.limit.domain.chat.repository.ChatMediaRepository chatMediaRepository;
 
     @MockitoBean
@@ -104,6 +112,10 @@ class OpenApiContractTests {
 
     @MockitoBean
     ListingChatReader listingChatReader;
+
+    @MockitoBean
+    com.c203.limit.domain.payment.repository.ExpiredReservationCandidateReader
+            expiredReservationCandidateReader;
 
     @MockitoBean
     ListingRepository listingRepository;
@@ -128,6 +140,9 @@ class OpenApiContractTests {
     PaymentService paymentService;
 
     @MockitoBean
+    com.c203.limit.domain.payment.repository.PaymentRepository paymentRepository;
+
+    @MockitoBean
     com.c203.limit.domain.seller.repository.SellerRepository sellerRepository;
 
     @MockitoBean
@@ -143,16 +158,16 @@ class OpenApiContractTests {
     ListingChecklistItemRepository listingChecklistItemRepository;
 
     @MockitoBean
-    DxdiagResultRepository dxdiagResultRepository;
-
-    @MockitoBean
-    BatteryReportResultRepository batteryReportResultRepository;
-
-    @MockitoBean
     ReinspectionRequestRepository reinspectionRequestRepository;
 
     @MockitoBean
     ReinspectionRequestItemRepository reinspectionRequestItemRepository;
+
+    @MockitoBean
+    DxdiagResultRepository dxdiagResultRepository;
+
+    @MockitoBean
+    BatteryReportResultRepository batteryReportResultRepository;
 
     @Autowired
     MockMvc mockMvc;
@@ -192,6 +207,10 @@ class OpenApiContractTests {
                 .andExpect(jsonPath("$.paths['/api/v1/products'].post.operationId").value("product01"))
                 .andExpect(jsonPath("$.paths['/api/v1/checklist-generations'].post.operationId")
                         .value("productChecklist01"))
+                .andExpect(jsonPath("$.components.schemas.ChecklistSuggestionResponse.properties.featureName")
+                        .exists())
+                .andExpect(jsonPath("$.components.schemas.ChecklistSuggestionResponse.properties.checkGuide")
+                        .exists())
                 .andExpect(jsonPath("$.paths['/api/v1/products'].get.operationId").value("product04"))
                 .andExpect(jsonPath("$.components.schemas.CreateProductRequest").exists())
                 .andExpect(jsonPath("$.components.schemas.ProductDetailResponse").exists())
@@ -294,9 +313,9 @@ class OpenApiContractTests {
             .andExpect(jsonPath("$.paths['/api/v1/inspections/products/{productId}/diagnosis-summary'].get.operationId")
                 .value("productDiagnosisSummary01"))
             .andExpect(jsonPath("$.paths['/api/v1/listings/{listingId}/reinspection-requests'].post.operationId")
-                .value("reinspection01"))
+                .value("create"))
             .andExpect(jsonPath("$.paths['/api/v1/reinspection-requests/{requestKey}/complete'].post.operationId")
-                .value("reinspection02"))
+                .value("complete"))
             .andExpect(jsonPath("$.paths['/api/v1/auth/sessions']").doesNotExist());
 
         mockMvc.perform(get("/v3/api-docs/10-place"))

@@ -101,6 +101,36 @@ class ChatRoomServiceTests {
     }
 
     @Test
+    void returnsExistingRoomForReinspection() {
+        ChatRoom room = room(100L);
+        when(listingReader.findById(LISTING_ID))
+                .thenReturn(Optional.of(new ListingChatInfo(LISTING_ID, SELLER_ID, "PAID")));
+        when(chatRoomRepository.findByListingIdAndBuyerIdAndSellerId(
+                        LISTING_ID, BUYER_ID, SELLER_ID))
+                .thenReturn(Optional.of(room));
+
+        Long roomId = service.getOrCreateChatRoom(LISTING_ID, BUYER_ID, SELLER_ID);
+
+        assertThat(roomId).isEqualTo(100L);
+        verifyNoInteractions(creator);
+    }
+
+    @Test
+    void createsRoomForReinspectionWhenRoomDoesNotExist() {
+        ChatRoom room = room(100L);
+        when(listingReader.findById(LISTING_ID))
+                .thenReturn(Optional.of(new ListingChatInfo(LISTING_ID, SELLER_ID, "PAID")));
+        when(chatRoomRepository.findByListingIdAndBuyerIdAndSellerId(
+                        LISTING_ID, BUYER_ID, SELLER_ID))
+                .thenReturn(Optional.empty());
+        when(creator.create(LISTING_ID, BUYER_ID, SELLER_ID)).thenReturn(room);
+
+        Long roomId = service.getOrCreateChatRoom(LISTING_ID, BUYER_ID, SELLER_ID);
+
+        assertThat(roomId).isEqualTo(100L);
+    }
+
+    @Test
     void returnsRoomCreatedByConcurrentRequest() {
         ListingChatInfo listing = new ListingChatInfo(LISTING_ID, SELLER_ID, "ON_SALE");
         ChatRoom room = room(100L);

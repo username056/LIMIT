@@ -9,6 +9,8 @@ import com.c203.limit.domain.auth.repository.SocialAccountRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomParticipantRepository;
 import com.c203.limit.domain.chat.repository.ChatMessageRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomRepository;
+import com.c203.limit.domain.chat.repository.ChatOutboxEventRepository;
+import com.c203.limit.domain.chat.repository.ReinspectionRequestMessageRepository;
 import com.c203.limit.domain.chat.repository.ListingChatReader;
 import com.c203.limit.domain.member.repository.MemberRepository;
 import com.c203.limit.domain.member.repository.MemberTermsAgreementRepository;
@@ -21,8 +23,8 @@ import com.c203.limit.domain.inspection.repository.EvidenceRepository;
 import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
 import com.c203.limit.domain.inspection.repository.ListingOwnerReader;
 import com.c203.limit.domain.inspection.repository.OcrResultRepository;
-import com.c203.limit.domain.inspection.reinspection.repository.ReinspectionRequestItemRepository;
-import com.c203.limit.domain.inspection.reinspection.repository.ReinspectionRequestRepository;
+import com.c203.limit.domain.inspection.repository.ReinspectionRequestItemRepository;
+import com.c203.limit.domain.inspection.repository.ReinspectionRequestRepository;
 import com.c203.limit.domain.product.repository.ListingRepository;
 import com.c203.limit.domain.product.repository.WishlistRepository;
 import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
@@ -76,6 +78,12 @@ class BackendApplicationTests {
     ChatMessageRepository chatMessageRepository;
 
     @MockitoBean
+    ChatOutboxEventRepository chatOutboxEventRepository;
+
+    @MockitoBean
+    ReinspectionRequestMessageRepository reinspectionRequestMessageRepository;
+
+    @MockitoBean
     com.c203.limit.domain.chat.repository.ChatMediaRepository chatMediaRepository;
 
     @MockitoBean
@@ -86,6 +94,10 @@ class BackendApplicationTests {
 
     @MockitoBean
     ListingChatReader listingChatReader;
+
+    @MockitoBean
+    com.c203.limit.domain.payment.repository.ExpiredReservationCandidateReader
+            expiredReservationCandidateReader;
 
     @MockitoBean
     ListingRepository listingRepository;
@@ -110,6 +122,9 @@ class BackendApplicationTests {
     PaymentService paymentService;
 
     @MockitoBean
+    com.c203.limit.domain.payment.repository.PaymentRepository paymentRepository;
+
+    @MockitoBean
     com.c203.limit.domain.seller.repository.SellerRepository sellerRepository;
 
     @MockitoBean
@@ -125,16 +140,16 @@ class BackendApplicationTests {
     ListingChecklistItemRepository listingChecklistItemRepository;
 
     @MockitoBean
-    DxdiagResultRepository dxdiagResultRepository;
-
-    @MockitoBean
-    BatteryReportResultRepository batteryReportResultRepository;
-
-    @MockitoBean
     ReinspectionRequestRepository reinspectionRequestRepository;
 
     @MockitoBean
     ReinspectionRequestItemRepository reinspectionRequestItemRepository;
+
+    @MockitoBean
+    DxdiagResultRepository dxdiagResultRepository;
+
+    @MockitoBean
+    BatteryReportResultRepository batteryReportResultRepository;
 
     @Test
     void contextLoads() {

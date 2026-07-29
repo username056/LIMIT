@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +28,8 @@ import com.c203.limit.domain.auth.repository.SocialAccountRepository;
 import com.c203.limit.domain.chat.repository.ChatMessageRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomParticipantRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomRepository;
+import com.c203.limit.domain.chat.repository.ChatOutboxEventRepository;
+import com.c203.limit.domain.chat.repository.ReinspectionRequestMessageRepository;
 import com.c203.limit.domain.chat.repository.ListingChatReader;
 import com.c203.limit.domain.member.repository.MemberRepository;
 import com.c203.limit.domain.member.repository.MemberTermsAgreementRepository;
@@ -34,19 +37,22 @@ import com.c203.limit.domain.inspection.repository.BatteryReportResultRepository
 import com.c203.limit.domain.inspection.repository.DxdiagResultRepository;
 import com.c203.limit.domain.inspection.repository.EvidenceRepository;
 import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
+import com.c203.limit.domain.inspection.repository.ReinspectionRequestItemRepository;
+import com.c203.limit.domain.inspection.repository.ReinspectionRequestRepository;
 import com.c203.limit.domain.inspection.repository.ListingOwnerReader;
 import com.c203.limit.domain.inspection.repository.OcrResultRepository;
-import com.c203.limit.domain.inspection.reinspection.repository.ReinspectionRequestItemRepository;
-import com.c203.limit.domain.inspection.reinspection.repository.ReinspectionRequestRepository;
 import com.c203.limit.domain.product.repository.ListingRepository;
 import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
 import com.c203.limit.domain.product.repository.WishlistRepository;
 import com.c203.limit.domain.product.dto.response.ChecklistTemplateResponse;
+import com.c203.limit.domain.product.dto.response.ProductChecklistItemResponse;
 import com.c203.limit.domain.product.dto.response.ProductDetailResponse;
 import com.c203.limit.domain.product.service.ProductApplicationService;
 import com.c203.limit.domain.product.service.ProductApplicationService.ProductPage;
 import com.c203.limit.domain.product.service.ProductCatalogService;
+import com.c203.limit.domain.product.service.ProductChecklistService;
 import com.c203.limit.domain.payment.service.PaymentService;
+import com.c203.limit.global.security.JwtTokenProvider;
 
 @SpringBootTest(properties = {
         "management.endpoint.health.validate-group-membership=false",
@@ -98,6 +104,12 @@ class ProductMockControllerTests {
     ChatMessageRepository chatMessageRepository;
 
     @MockitoBean
+    ChatOutboxEventRepository chatOutboxEventRepository;
+
+    @MockitoBean
+    ReinspectionRequestMessageRepository reinspectionRequestMessageRepository;
+
+    @MockitoBean
     com.c203.limit.domain.chat.repository.ChatMediaRepository chatMediaRepository;
 
     @MockitoBean
@@ -108,6 +120,10 @@ class ProductMockControllerTests {
 
     @MockitoBean
     ListingChatReader listingChatReader;
+
+    @MockitoBean
+    com.c203.limit.domain.payment.repository.ExpiredReservationCandidateReader
+            expiredReservationCandidateReader;
 
     @MockitoBean
     ListingRepository listingRepository;
@@ -128,16 +144,16 @@ class ProductMockControllerTests {
     ListingChecklistItemRepository listingChecklistItemRepository;
 
     @MockitoBean
-    DxdiagResultRepository dxdiagResultRepository;
-
-    @MockitoBean
-    BatteryReportResultRepository batteryReportResultRepository;
-
-    @MockitoBean
     ReinspectionRequestRepository reinspectionRequestRepository;
 
     @MockitoBean
     ReinspectionRequestItemRepository reinspectionRequestItemRepository;
+
+    @MockitoBean
+    DxdiagResultRepository dxdiagResultRepository;
+
+    @MockitoBean
+    BatteryReportResultRepository batteryReportResultRepository;
 
     @MockitoBean
     WishlistRepository wishlistRepository;
@@ -149,6 +165,9 @@ class ProductMockControllerTests {
     ProductCatalogService productCatalogService;
 
     @MockitoBean
+    ProductChecklistService productChecklistService;
+
+    @MockitoBean
     com.c203.limit.domain.inspection.checklist.ChecklistGenerationService
             checklistGenerationService;
 
@@ -156,10 +175,16 @@ class ProductMockControllerTests {
     PaymentService paymentService;
 
     @MockitoBean
+    com.c203.limit.domain.payment.repository.PaymentRepository paymentRepository;
+
+    @MockitoBean
     com.c203.limit.domain.seller.repository.SellerRepository sellerRepository;
 
     @Autowired
     MockMvc mockMvc;
+
+    @Autowired
+    JwtTokenProvider tokens;
 
     @Test
     void returnsPublicProductListMock() throws Exception {
@@ -249,6 +274,37 @@ class ProductMockControllerTests {
                 .andExpect(jsonPath("$.data.deviceModelId").value(101))
                 .andExpect(jsonPath("$.data.version").value(1))
                 .andExpect(jsonPath("$.data.items.length()").value(0));
+    }
+
+    @Test
+    void returnsListingChecklistSnapshotWithCaptureGuide() throws Exception {
+        when(productChecklistService.findAll(1001L, null, false))
+                .thenReturn(List.of(new ProductChecklistItemResponse(
+                        7003L,
+                        "LAP-FTR-CAM",
+                        "내장 카메라",
+                        "카메라 앱을 실행해 영상 출력 상태를 확인하세요.",
+                        "VIDEO",
+                        false,
+                        "PENDING",
+                        null,
+                        0)));
+
+        mockMvc.perform(get("/api/v1/products/1001/checklist-items")
+                        .header(
+                                "Authorization",
+                                "Bearer "
+                                        + tokens.issueAccess(
+                                                        55L,
+                                                        "MEMBER",
+                                                        Set.of("MEMBER", "SELLER"))
+                                                .value()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].itemCode").value("LAP-FTR-CAM"))
+                .andExpect(jsonPath("$.data[0].name").value("내장 카메라"))
+                .andExpect(jsonPath("$.data[0].guide")
+                        .value("카메라 앱을 실행해 영상 출력 상태를 확인하세요."))
+                .andExpect(jsonPath("$.data[0].status").value("PENDING"));
     }
 
     @Test

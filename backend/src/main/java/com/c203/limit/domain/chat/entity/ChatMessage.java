@@ -85,6 +85,15 @@ public class ChatMessage {
         return message;
     }
 
+    public static ChatMessage sendSystem(
+            Long chatRoomId, long roomSequence, Long actorId, UUID eventId,
+            String content, LocalDateTime sentAt) {
+        ChatMessage message = sendText(
+                chatRoomId, roomSequence, actorId, eventId, content, sentAt);
+        message.type = MessageType.SYSTEM;
+        return message;
+    }
+
     public Long getId() { return id; }
     public Long getChatRoomId() { return chatRoomId; }
     public Long getRoomSequence() { return roomSequence; }
