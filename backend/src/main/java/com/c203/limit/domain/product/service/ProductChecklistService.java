@@ -12,6 +12,8 @@ import com.c203.limit.global.exception.ErrorCode;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -51,16 +53,28 @@ public class ProductChecklistService {
                         .findByListingIdAndIsRequiredTrueOrderByDisplayOrderAsc(productId)
                 : checklistItemRepository.findByListingIdOrderByDisplayOrderAsc(productId);
 
-        return items.stream()
+        List<ListingChecklistItem> filteredItems = items.stream()
                 .filter(item ->
                         completionStatus == null || item.getCompletionStatus() == completionStatus)
-                .map(this::response)
+                .toList();
+        if (filteredItems.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, List<Evidence>> evidenceByItemId = evidenceRepository
+                .findAllByListingId(productId)
+                .stream()
+                .collect(Collectors.groupingBy(
+                        evidence -> evidence.getListingChecklistItem().getId()));
+
+        return filteredItems.stream()
+                .map(item -> response(
+                        item, evidenceByItemId.getOrDefault(item.getId(), List.of())))
                 .toList();
     }
 
-    private ProductChecklistItemResponse response(ListingChecklistItem item) {
-        List<Evidence> evidenceHistory =
-                evidenceRepository.findAllByListingChecklistItem_Id(item.getId());
+    private ProductChecklistItemResponse response(
+            ListingChecklistItem item, List<Evidence> evidenceHistory) {
         Long latestEvidenceId = evidenceHistory.stream()
                 .max(Comparator.comparing(
                                 Evidence::getUploadedAt,

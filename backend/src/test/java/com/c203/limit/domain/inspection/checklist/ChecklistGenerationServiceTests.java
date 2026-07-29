@@ -3,6 +3,7 @@ package com.c203.limit.domain.inspection.checklist;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.c203.limit.domain.inspection.enums.DeviceType;
@@ -76,6 +77,25 @@ class ChecklistGenerationServiceTests {
         assertThat(result.aiApplied()).isFalse();
         assertThat(result.items()).hasSize(12);
         assertThat(result.aiSuggestions()).isEmpty();
+    }
+
+    @Test
+    void createsProductSnapshotWithoutCallingAiAgain() {
+        when(categoryRepository.findById(201L))
+                .thenReturn(Optional.of(laptop(OsFamily.WINDOWS)));
+
+        GeneratedChecklist result = service.generateSnapshotIfLaptop(
+                        201L, Set.of(LaptopFeatureCode.CAMERA))
+                .orElseThrow();
+
+        assertThat(result.aiApplied()).isFalse();
+        assertThat(result.items()).hasSize(13);
+        assertThat(result.items())
+                .extracting(GeneratedChecklistItem::featureCode)
+                .contains(LaptopFeatureCode.CAMERA);
+        assertThat(result.aiSuggestions()).isEmpty();
+        assertThat(result.reviewCandidates()).isEmpty();
+        verifyNoInteractions(supplementClient);
     }
 
     @Test
