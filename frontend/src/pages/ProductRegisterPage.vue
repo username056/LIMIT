@@ -388,13 +388,24 @@ async function loadTemplatePreview() {
   }
 }
 
-function validateSaleInfo() {
+// 기기 등록(1단계)이 실제 필수 구간입니다. 여기서 빠진 값이 있으면 다음 단계로 넘기지 않습니다.
+// 반대로 2단계 촬영 체크리스트는 필수가 아니어서 건너뛸 수 있습니다.
+// requireStorage: '다음 단계'는 저장 용량까지 요구하고, 중간 이탈용 '임시저장'은 요구하지 않습니다.
+function validateSaleInfo(requireStorage = true) {
   if (!form.name || form.price === '') {
     errorMessage.value = '상품명과 가격을 입력해 주세요.'
     return false
   }
   if (!Number.isFinite(Number(form.price)) || Number(form.price) < 1) {
     errorMessage.value = '가격은 1원 이상 입력해 주세요.'
+    return false
+  }
+  if (requireStorage && form.storageGb === '') {
+    errorMessage.value = '저장 용량을 선택해 주세요.'
+    return false
+  }
+  if (requireStorage && !thumbnail.value) {
+    errorMessage.value = '대표 이미지를 등록해 주세요.'
     return false
   }
   if (form.storageGb !== '' && (!Number.isFinite(Number(form.storageGb)) || Number(form.storageGb) < 1)) {
@@ -404,47 +415,85 @@ function validateSaleInfo() {
   return true
 }
 
-async function goToStep2() {
+// 1단계 입력을 서버에 저장하고 체크리스트 스냅샷을 받아옵니다.
+// '다음 단계'와 '임시저장'이 같은 저장 경로를 쓰도록 분리했습니다.
+async function persistSaleInfo() {
+  const payload = {
+    name: form.name,
+    description: form.description || null,
+    price: Number(form.price),
+    color: form.color || null,
+    storageGb: form.storageGb ? Number(form.storageGb) : null,
+    tradeRegion: DEFAULT_TRADE_REGION,
+  }
+  let productId = editingId.value
+  if (productId) {
+    await updateProduct(productId, payload)
+  } else {
+    const created = await createProduct({
+      ...payload,
+      categoryId: Number(form.categoryId),
+      deviceModelId: Number(form.deviceModelId),
+      ...(supportsGeneratedChecklist.value
+        ? { confirmedFeatures: [...confirmedFeatures.value] }
+        : {}),
+    })
+    productId = created.productId
+    draftProductId.value = productId
+  }
+  checklistItems.value = await getProductChecklist(productId)
+  activeCaptureItemId.value = mediaChecklistItems.value[0]?.checklistItemId || null
+  return productId
+}
+
+function validateDeviceStep(requireStorage = true) {
   errorMessage.value = ''
   if (!form.categoryId || !form.deviceModelId) {
     errorMessage.value = '카테고리와 기기 모델을 선택해 주세요.'
-    return
+    return false
   }
-  if (!validateSaleInfo()) return
+  return validateSaleInfo(requireStorage)
+}
+
+async function goToStep2() {
+  if (!validateDeviceStep()) return
 
   isSaving.value = true
   try {
-    const payload = {
-      name: form.name,
-      description: form.description || null,
-      price: Number(form.price),
-      color: form.color || null,
-      storageGb: form.storageGb ? Number(form.storageGb) : null,
-      tradeRegion: DEFAULT_TRADE_REGION,
-    }
-    let productId = editingId.value
-    if (productId) {
-      await updateProduct(productId, payload)
-    } else {
-      const created = await createProduct({
-        ...payload,
-        categoryId: Number(form.categoryId),
-        deviceModelId: Number(form.deviceModelId),
-        ...(supportsGeneratedChecklist.value
-          ? { confirmedFeatures: [...confirmedFeatures.value] }
-          : {}),
-      })
-      productId = created.productId
-      draftProductId.value = productId
-    }
-    checklistItems.value = await getProductChecklist(productId)
-    activeCaptureItemId.value = mediaChecklistItems.value[0]?.checklistItemId || null
+    await persistSaleInfo()
     setStep(2)
   } catch (error) {
     errorMessage.value = error.message || '상품 정보를 저장하지 못했습니다.'
   } finally {
     isSaving.value = false
   }
+}
+
+// 등록 중간에 이탈해야 할 때 쓰는 저장입니다. 지금까지 입력과 올린 사진은 그대로 남고,
+// 상품은 '임시 저장 중' 상태로 상품 관리 목록에 남습니다.
+async function saveDraft() {
+  errorMessage.value = ''
+  if (activeStep.value === 1) {
+    // 중간 이탈용 저장이라 저장 용량까지는 요구하지 않습니다.
+    if (!validateDeviceStep(false)) return
+    isSaving.value = true
+    try {
+      await persistSaleInfo()
+    } catch (error) {
+      errorMessage.value = error.message || '임시 저장하지 못했습니다.'
+      return
+    } finally {
+      isSaving.value = false
+    }
+  }
+
+  if (!currentProductId.value) {
+    errorMessage.value = '아직 임시 저장할 내용이 없습니다.'
+    return
+  }
+
+  resetForm()
+  await router.push({ name: 'seller-products' })
 }
 
 async function loadHandoverGuide() {
@@ -488,6 +537,8 @@ function goToStep3() {
   proceed()
 }
 
+// 개인정보 확인은 체크 몇 번이면 되는 일이고 기기를 넘긴 뒤에는 되돌릴 수 없어 필수로 둡니다.
+// 촬영 체크리스트와 달리 건너뛸 수 없습니다.
 function goToStep4() {
   errorMessage.value = ''
   const missingConfirm = confirmationChecklistItems.value.filter(
@@ -495,16 +546,15 @@ function goToStep4() {
   )
   if (missingConfirm.length) {
     openAlert(
-      `개인정보 정리 확인이 남아 있습니다.\n${missingConfirm.map((item) => `· ${item.name}`).join('\n')}\n\n기기를 넘기기 전에 반드시 초기화해 주세요.`,
-      () => setStep(4),
+      `개인정보 정리 확인이 남아 있습니다.\n${missingConfirm.map((item) => `· ${item.name}`).join('\n')}\n\n기기를 넘기기 전에 반드시 초기화해야 하는 항목이라 건너뛸 수 없습니다.`,
     )
     return
   }
   setStep(4)
 }
 
-// 등록을 마치면 '임시 저장 중'으로 남지 않도록 판매 상태로 올린 뒤,
-// 목록을 거치지 않고 방금 등록한 상품 상세로 바로 이동합니다.
+// 등록을 마치면 별도의 '판매 시작'을 누르지 않아도 바로 판매가 시작되게 합니다.
+// 임시 저장은 중간 이탈용이지, 등록을 끝낸 사용자가 한 번 더 눌러야 하는 단계가 아닙니다.
 async function finishWizard() {
   const productId = currentProductId.value
   if (!productId) {
@@ -514,17 +564,30 @@ async function finishWizard() {
   }
 
   isSaving.value = true
+  let publishError = ''
   try {
     await transitionProductStatus(productId, 'ON_SALE', '등록 완료')
-  } catch {
-    // 필수 자료가 서버에 아직 반영되지 않았거나 이미 판매 중이면 상태는 그대로 둡니다.
-    // 상세 화면에서 현재 상태를 그대로 보여주므로 등록 흐름 자체는 막지 않습니다.
+  } catch (error) {
+    // 체크리스트 미완료로는 더 이상 막히지 않지만, 다른 이유(권한·상태 충돌 등)로 실패할 수 있습니다.
+    // 조용히 임시 저장으로 남기면 "다 했는데 왜 안 올라갔지"가 되므로 이유를 알려 줍니다.
+    publishError = error.message || '판매를 시작하지 못했습니다.'
   } finally {
     isSaving.value = false
   }
 
-  resetForm()
-  await router.push({ name: 'product-detail', params: { productId } })
+  const goToDetail = async () => {
+    resetForm()
+    await router.push({ name: 'product-detail', params: { productId } })
+  }
+
+  if (publishError) {
+    openAlert(
+      `${publishError}\n\n상품은 임시 저장 상태로 남아 있습니다. 상품 관리에서 다시 판매를 시작할 수 있습니다.`,
+      goToDetail,
+    )
+    return
+  }
+  await goToDetail()
 }
 
 function readVideoDuration(file) {
@@ -669,7 +732,7 @@ onMounted(async () => {
               {{ editingId ? '상품 수정' : '상품 등록' }}
             </h1>
             <p class="mt-1 text-sm text-text-sub">
-              기기 정보와 검증 체크리스트를 순서대로 완료하면 상품이 등록됩니다. 진행 중인 내용은 임시 저장됩니다.
+              기기 정보와 검증 체크리스트를 순서대로 완료하면 바로 판매가 시작됩니다. 중간에 나가야 하면 임시저장을 눌러 주세요.
             </p>
           </div>
           <RouterLink
@@ -707,7 +770,7 @@ onMounted(async () => {
               선택한 모델에 맞는 검증 체크리스트가 자동으로 연결됩니다. 다음 단계에서 항목별로 사진·영상을 등록하게 됩니다.
             </p>
             <div class="mt-6 grid gap-5 sm:grid-cols-2">
-              <label class="text-sm font-semibold text-text-main">카테고리
+              <label class="text-sm font-semibold text-text-main">카테고리<span class="ml-0.5 text-red-500">*</span>
                 <select
                   v-model="form.categoryId"
                   :disabled="Boolean(editingId)"
@@ -722,7 +785,7 @@ onMounted(async () => {
                   >{{ item.name }}</option>
                 </select>
               </label>
-              <label class="text-sm font-semibold text-text-main">기기 모델
+              <label class="text-sm font-semibold text-text-main">기기 모델<span class="ml-0.5 text-red-500">*</span>
                 <select
                   v-model="form.deviceModelId"
                   :disabled="Boolean(editingId) || !form.categoryId"
@@ -894,7 +957,7 @@ onMounted(async () => {
             </p>
 
             <div class="mt-6 grid gap-5 sm:grid-cols-2">
-              <label class="text-sm font-semibold text-text-main">상품명<input
+              <label class="text-sm font-semibold text-text-main">상품명<span class="ml-0.5 text-red-500">*</span><input
                 v-model.trim="form.name"
                 required
                 maxlength="100"
@@ -902,7 +965,7 @@ onMounted(async () => {
                 class="mt-2 w-full rounded-md border border-border px-3 py-3 font-normal outline-none focus:border-primary"
               ></label>
               <label class="text-sm font-semibold text-text-main">
-                가격
+                가격<span class="ml-0.5 text-red-500">*</span>
                 <div class="relative mt-2">
                   <input
                     :value="priceFormatted"
@@ -931,7 +994,7 @@ onMounted(async () => {
                 class="mt-2 w-full rounded-md border border-border px-3 py-3 font-normal outline-none focus:border-primary"
               ></label>
               <label class="text-sm font-semibold text-text-main">
-                저장 용량
+                저장 용량<span class="ml-0.5 text-red-500">*</span>
                 <select
                   :value="storageSelectValue"
                   aria-label="저장 용량 선택"
@@ -968,7 +1031,7 @@ onMounted(async () => {
 
               <div class="sm:col-span-2">
                 <p class="text-sm font-semibold text-text-main">
-                  대표 이미지
+                  대표 이미지<span class="ml-0.5 text-red-500">*</span>
                 </p>
                 <p class="mt-1 text-xs text-text-sub">
                   목록과 상세에서 가장 먼저 보이는 사진입니다. 1장만 등록할 수 있습니다.
@@ -1310,7 +1373,7 @@ onMounted(async () => {
               체크리스트 등록이 완료되었습니다.
             </h2>
             <p class="mt-2 text-sm text-text-sub">
-              ‘{{ form.name }}’ 등록이 끝났어요. 완료를 누르면 등록한 상품 상세 페이지로 이동합니다.
+              ‘{{ form.name }}’ 등록이 끝났어요. 완료를 누르면 바로 판매가 시작되고 상품 상세 페이지로 이동합니다.
             </p>
 
             <dl class="mt-6 grid grid-cols-2 gap-4 rounded-lg border border-border bg-bg p-6 text-left text-sm">
@@ -1355,6 +1418,18 @@ onMounted(async () => {
               이전 단계로
             </BaseButton>
             <span v-else />
+
+            <!-- 등록 도중 이탈해야 할 때만 쓰는 버튼입니다. 등록을 끝내면 '완료'가 바로 판매를 시작합니다. -->
+            <BaseButton
+              v-if="activeStep < 4"
+              type="button"
+              variant="ghost"
+              class="ml-auto mr-3 px-3 py-2 text-sm"
+              :disabled="isSaving"
+              @click="saveDraft"
+            >
+              임시저장
+            </BaseButton>
 
             <BaseButton
               v-if="activeStep === 1"
