@@ -76,6 +76,21 @@ public class ChatRoomService {
                 .orElseGet(() -> create(listing, buyerId));
     }
 
+    public Long getOrCreateChatRoom(Long listingId, Long buyerId, Long sellerId) {
+        ListingChatInfo listing = listingReader.findById(listingId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.LISTING_NOT_FOUND));
+        if (!listing.sellerId().equals(sellerId)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+        if (buyerId.equals(sellerId)) {
+            throw new BusinessException(ErrorCode.SELF_CHAT_NOT_ALLOWED);
+        }
+        return chatRoomRepository
+                .findByListingIdAndBuyerIdAndSellerId(listingId, buyerId, sellerId)
+                .map(ChatRoom::getId)
+                .orElseGet(() -> createForReinspection(listingId, buyerId, sellerId));
+    }
+
     @Transactional(readOnly = true)
     public CursorResponse<ChatRoomSummaryResponse> findRooms(Long memberId, Long cursor, int size) {
         if (size < 1 || size > MAX_PAGE_SIZE) {
@@ -251,6 +266,24 @@ public class ChatRoomService {
                             listing.listingId(), buyerId, listing.sellerId())
                     .orElseThrow(() -> exception);
             return ChatRoomCreateResult.existing(ChatRoomResponse.from(room));
+        }
+    }
+
+    private Long createForReinspection(Long listingId, Long buyerId, Long sellerId) {
+        try {
+            ChatRoom room = creator.create(listingId, buyerId, sellerId);
+            log.info(
+                    "chat room created for reinspection: roomId={}, listingId={}, buyerId={}, sellerId={}",
+                    room.getId(),
+                    listingId,
+                    buyerId,
+                    sellerId);
+            return room.getId();
+        } catch (DataIntegrityViolationException exception) {
+            return chatRoomRepository
+                    .findByListingIdAndBuyerIdAndSellerId(listingId, buyerId, sellerId)
+                    .map(ChatRoom::getId)
+                    .orElseThrow(() -> exception);
         }
     }
 
