@@ -2,6 +2,8 @@ package com.c203.limit.domain.payment.entity;
 
 import com.c203.limit.domain.member.entity.Member;
 import com.c203.limit.global.common.BaseTimeEntity;
+import com.c203.limit.global.exception.BusinessException;
+import com.c203.limit.global.exception.ErrorCode;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -115,6 +117,18 @@ public class Payment extends BaseTimeEntity {
     public void fail(String failedReason) {
         this.status = PaymentStatus.FAILED;
         this.failedReason = failedReason;
+    }
+
+    /**
+     * 예약 유예 시간 안에 결제가 완료되지 않아 시스템이 요청을 만료 처리할 때 호출한다. 이미
+     * 승인·거절·환불 등으로 진행된 결제는 만료 대상이 아니므로 REQUESTED 상태에서만 허용한다.
+     */
+    public void expire(String reason) {
+        if (this.status != PaymentStatus.REQUESTED) {
+            throw new BusinessException(ErrorCode.PAYMENT_NOT_EXPIRABLE);
+        }
+        this.status = PaymentStatus.EXPIRED;
+        this.failedReason = reason;
     }
 
     public void markWebhookVerified() {
