@@ -31,6 +31,9 @@ const WIZARD_STEPS = [
 // 체크리스트 항목 하나에 첨부할 수 있는 사진·영상 개수 상한입니다.
 const MAX_MEDIA_PER_ITEM = 3
 
+// TODO(대표 이미지): 필수 입력으로 두기로 했지만, S3 업로드 구현(feat/s3-media-storage)과
+// 같은 파일에서 충돌하므로 임시 미리보기 UI를 걷어냈습니다. 그 브랜치가 dev에 들어오면
+// listingImages 기반 업로드에 '최소 1장 필수' 규칙을 다시 붙이세요.
 // 화면에서 거래 지역을 받지 않기로 했지만 CreateProductRequest의 tradeRegion에 @NotBlank가 남아 있어
 // 값을 비우면 등록이 400으로 실패합니다. 백엔드에서 해당 제약이 풀리면 이 상수와 payload 항목을 함께 지우세요.
 const DEFAULT_TRADE_REGION = '협의'
@@ -87,42 +90,6 @@ const form = reactive({
 })
 
 
-// TODO(대표 이미지 저장 연동): listing_image(THUMBNAIL) 등록 API가 아직 없습니다.
-// 목록·상세는 이미 thumbnailUrl을 읽어 표시하므로, 업로드 URL 발급과 등록 엔드포인트가 생기면
-// 아래 thumbnail 상태를 그 API로 올리고 goToStep2의 payload 또는 후속 호출에 연결하면 됩니다.
-const MAX_THUMBNAIL_BYTES = 10 * 1024 * 1024
-const thumbnail = ref(null)
-const isOptimizingThumbnail = ref(false)
-
-function removeThumbnail() {
-  if (thumbnail.value) URL.revokeObjectURL(thumbnail.value.previewUrl)
-  thumbnail.value = null
-}
-
-async function onThumbnailInput(event) {
-  const file = event.target.files?.[0]
-  event.target.value = ''
-  if (!file) return
-  if (!file.type.startsWith('image/')) {
-    openAlert('이미지 파일만 대표 이미지로 등록할 수 있습니다.')
-    return
-  }
-  if (file.size > MAX_THUMBNAIL_BYTES) {
-    openAlert('대표 이미지는 10MB 이하만 등록할 수 있습니다.')
-    return
-  }
-
-  isOptimizingThumbnail.value = true
-  let optimized = file
-  try {
-    optimized = await compressImage(file)
-  } catch {
-    optimized = file
-  }
-  removeThumbnail()
-  thumbnail.value = { previewUrl: URL.createObjectURL(optimized), name: optimized.name }
-  isOptimizingThumbnail.value = false
-}
 
 // 사용자가 직접 입력을 고른 상태. 수정 진입 시 목록에 없는 용량이면 자동으로 직접 입력으로 보여줍니다.
 const isCustomStorage = ref(false)
@@ -347,7 +314,6 @@ function resetForm() {
   handoverGuide.value = null
   isCustomStorage.value = false
   priceRejection.value = ''
-  removeThumbnail()
   clearCaptureState()
   Object.keys(confirmState).forEach((key) => delete confirmState[key])
 }
@@ -402,10 +368,6 @@ function validateSaleInfo(requireStorage = true) {
   }
   if (requireStorage && form.storageGb === '') {
     errorMessage.value = '저장 용량을 선택해 주세요.'
-    return false
-  }
-  if (requireStorage && !thumbnail.value) {
-    errorMessage.value = '대표 이미지를 등록해 주세요.'
     return false
   }
   if (form.storageGb !== '' && (!Number.isFinite(Number(form.storageGb)) || Number(form.storageGb) < 1)) {
@@ -1028,64 +990,6 @@ onMounted(async () => {
                   class="mt-2 w-full rounded-md border border-border px-3 py-3 font-normal outline-none focus:border-primary"
                 />
               </label>
-
-              <div class="sm:col-span-2">
-                <p class="text-sm font-semibold text-text-main">
-                  대표 이미지<span class="ml-0.5 text-red-500">*</span>
-                </p>
-                <p class="mt-1 text-xs text-text-sub">
-                  목록과 상세에서 가장 먼저 보이는 사진입니다. 1장만 등록할 수 있습니다.
-                </p>
-                <div class="mt-2 flex items-start gap-4">
-                  <div class="flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-bg">
-                    <img
-                      v-if="thumbnail"
-                      :src="thumbnail.previewUrl"
-                      alt="대표 이미지 미리보기"
-                      class="h-full w-full object-cover"
-                    >
-                    <span
-                      v-else
-                      class="px-2 text-center text-[11px] text-text-sub"
-                    >미등록</span>
-                  </div>
-                  <div class="min-w-0 flex-1">
-                    <label class="inline-block">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        class="hidden"
-                        aria-label="대표 이미지 선택"
-                        :disabled="isOptimizingThumbnail"
-                        @change="onThumbnailInput"
-                      >
-                      <span
-                        class="inline-block rounded-md border border-border px-3 py-2 text-sm font-semibold text-text-main transition hover:border-primary"
-                        :class="isOptimizingThumbnail ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'"
-                      >
-                        {{ isOptimizingThumbnail ? '처리 중…' : thumbnail ? '다른 이미지 선택' : '이미지 선택' }}
-                      </span>
-                    </label>
-                    <button
-                      v-if="thumbnail"
-                      type="button"
-                      class="ml-2 text-xs font-semibold text-red-600"
-                      @click="removeThumbnail"
-                    >
-                      삭제
-                    </button>
-                    <p
-                      v-if="thumbnail"
-                      class="mt-2 truncate text-xs text-text-sub"
-                    >
-                      {{ thumbnail.name }}
-                    </p>
-                    <p class="mt-2 text-[11px] leading-4 text-amber-700">
-                      아직 이미지 저장 API가 연결되지 않아, 지금은 이 화면에서만 미리 확인할 수 있습니다.
-                    </p>
-                  </div>
-                </div>
-              </div>
             </div>
           </section>
 

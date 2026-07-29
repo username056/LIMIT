@@ -72,13 +72,8 @@ async function fillDeviceStep(wrapper) {
 
   await wrapper.find('input[placeholder="예: 갤럭시 S24 256GB 자급제"]').setValue('갤럭시 북 테스트 상품')
   await wrapper.find('input[placeholder="판매 가격"]').setValue('850000')
-  // 1단계는 필수 구간이라 저장 용량과 대표 이미지까지 채워야 다음 단계로 넘어갑니다.
+  // 1단계는 필수 구간이라 저장 용량까지 채워야 다음 단계로 넘어갑니다.
   await wrapper.find('select[aria-label="저장 용량 선택"]').setValue('256')
-  await attachFile(
-    wrapper.find('input[aria-label="대표 이미지 선택"]'),
-    new File(['x'], 'thumb.jpg', { type: 'image/jpeg' }),
-  )
-  await flushPromises()
 }
 
 async function goToCaptureStep(wrapper) {
@@ -288,37 +283,6 @@ describe('ProductRegisterPage', () => {
     expect(wrapper.find('input[placeholder="역, 랜드마크로 검색 (예: 상동역)"]').exists()).toBe(false)
   })
 
-  it('대표 이미지는 미리보기로 확인하고 삭제할 수 있다', async () => {
-    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('대표 이미지')
-    expect(wrapper.text()).toContain('미등록')
-    expect(wrapper.find('img[alt="대표 이미지 미리보기"]').exists()).toBe(false)
-
-    const input = wrapper.find('input[aria-label="대표 이미지 선택"]')
-    await attachFile(input, new File(['x'], 'thumb.jpg', { type: 'image/jpeg' }))
-    await flushPromises()
-
-    expect(wrapper.find('img[alt="대표 이미지 미리보기"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain('thumb.jpg')
-
-    await buttonByText(wrapper, '삭제').trigger('click')
-    expect(wrapper.find('img[alt="대표 이미지 미리보기"]').exists()).toBe(false)
-  })
-
-  it('대표 이미지는 이미지 파일만 받는다', async () => {
-    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
-    await flushPromises()
-
-    const input = wrapper.find('input[aria-label="대표 이미지 선택"]')
-    await attachFile(input, new File(['x'], 'spec.pdf', { type: 'application/pdf' }))
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('이미지 파일만 대표 이미지로 등록할 수 있습니다.')
-    expect(wrapper.find('img[alt="대표 이미지 미리보기"]').exists()).toBe(false)
-  })
-
   it('1단계는 저장 용량까지 채워야 다음 단계로 넘어간다', async () => {
     const wrapper = mount(ProductRegisterPage, { global: globalOptions })
     await flushPromises()
@@ -433,25 +397,6 @@ describe('ProductRegisterPage', () => {
 
     expect(wrapper.text()).not.toContain('체크리스트 등록이 완료되었습니다.')
     expect(wrapper.text()).toContain('개인정보를 정리했는지 확인해 주세요.')
-  })
-
-  it('대표 이미지가 없으면 다음 단계로 넘어가지 않는다', async () => {
-    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
-    await flushPromises()
-
-    await wrapper.findAll('select')[0].setValue('10')
-    await flushPromises()
-    await wrapper.findAll('select')[1].setValue('101')
-    await flushPromises()
-    await wrapper.find('input[placeholder="예: 갤럭시 S24 256GB 자급제"]').setValue('갤럭시 북')
-    await wrapper.find('input[placeholder="판매 가격"]').setValue('850000')
-    await wrapper.find('select[aria-label="저장 용량 선택"]').setValue('256')
-
-    await buttonByText(wrapper, '다음 단계').trigger('click')
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('대표 이미지를 등록해 주세요.')
-    expect(createProduct).not.toHaveBeenCalled()
   })
 
   it('체크리스트 항목당 사진은 3개까지만 첨부할 수 있다', async () => {
