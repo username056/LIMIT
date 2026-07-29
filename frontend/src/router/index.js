@@ -6,6 +6,7 @@ import SellerDashboardPage from '../pages/SellerDashboardPage.vue'
 import MyOrdersPage from '../pages/MyOrdersPage.vue'
 import SellerApplyPage from '../pages/SellerApplyPage.vue'
 import ProductManagePage from '../pages/ProductManagePage.vue'
+import ProductRegisterPage from '../pages/ProductRegisterPage.vue'
 import AdminPage from '../pages/AdminPage.vue'
 import DevToolsPage from '../pages/DevToolsPage.vue'
 import SignupPage from '../pages/SignupPage.vue'
@@ -82,6 +83,18 @@ const routes = [
     path: '/seller/products',
     name: 'seller-products',
     component: ProductManagePage,
+    meta: { requiresAuth: true, requiresRole: 'SELLER' },
+  },
+  {
+    path: '/seller/products/new',
+    name: 'seller-product-new',
+    component: ProductRegisterPage,
+    meta: { requiresAuth: true, requiresRole: 'SELLER' },
+  },
+  {
+    path: '/seller/products/:productId/edit',
+    name: 'seller-product-edit',
+    component: ProductRegisterPage,
     meta: { requiresAuth: true, requiresRole: 'SELLER' },
   },
   { path: '/admin', name: 'admin', component: AdminPage },

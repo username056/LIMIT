@@ -265,7 +265,7 @@ function formatPrice(price) {
                   </BaseBadge>
                   <BaseButton
                     v-if="item.status === 'PENDING'"
-                    :to="{ name: 'seller-products' }"
+                    :to="{ name: 'seller-product-edit', params: { productId: item.productId } }"
                   >
                     재촬영 진행하기
                   </BaseButton>
