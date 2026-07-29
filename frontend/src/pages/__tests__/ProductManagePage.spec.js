@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ProductManagePage from '../ProductManagePage.vue'
 import {
   createProduct,
+  generateChecklist,
   getChecklistTemplate,
   getDeviceCategories,
   getDeviceModels,
@@ -15,6 +16,7 @@ vi.mock('../../api/products', () => ({
   createEvidenceUploadUrl: vi.fn(),
   createProduct: vi.fn(),
   deleteProduct: vi.fn(),
+  generateChecklist: vi.fn(),
   getChecklistTemplate: vi.fn(),
   getDeviceCategories: vi.fn(),
   getDeviceModels: vi.fn(),
@@ -51,12 +53,32 @@ describe('ProductManagePage', () => {
       deviceModelId: 101,
       manufacturerName: 'Samsung',
       modelName: 'Galaxy Book',
+      defaultOs: 'WINDOWS',
     }])
     getMyProducts.mockResolvedValue({
       data: [],
       meta: { page: 0, totalPages: 0, hasNext: false },
     })
     createProduct.mockResolvedValue({ productId: 1001 })
+    generateChecklist.mockResolvedValue({
+      deviceModelId: 101,
+      manufacturer: 'Samsung',
+      modelName: 'Galaxy Book',
+      osFamily: 'WINDOWS',
+      aiApplied: true,
+      items: templateItems.map((item) => ({
+        ...item,
+        required: item.isRequired,
+      })),
+      aiSuggestions: [{
+        featureCode: 'CAMERA',
+        evidenceStatus: 'VERIFIED',
+        reason: '공식 사양에서 카메라를 확인했습니다.',
+        sourceUrl: 'https://www.samsung.com/example',
+        sourceTitle: 'Galaxy Book 공식 사양',
+      }],
+      reviewCandidates: [],
+    })
     getChecklistTemplate.mockResolvedValue({ items: templateItems })
     getProductChecklist.mockResolvedValue([
       { checklistItemId: 7001, itemCode: 'EXT-001', name: '전면·후면·측면 외관', evidenceType: 'PHOTO', isRequired: true, status: 'PENDING' },
@@ -83,14 +105,18 @@ describe('ProductManagePage', () => {
     await wrapper.findAll('select')[1].setValue('101')
     await flushPromises()
 
-    expect(getChecklistTemplate).toHaveBeenCalledWith(101)
+    expect(generateChecklist).toHaveBeenCalledWith({
+      deviceModelId: 101,
+      confirmedFeatures: [],
+    })
+    expect(wrapper.text()).toContain('AI 공식자료 확인 후보')
+    await wrapper.find('input[type="checkbox"][value="CAMERA"]').setValue(true)
 
-    const inputs = wrapper.findAll('input')
-    await inputs[0].setValue('갤럭시 북 테스트 상품')
-    await inputs[1].setValue('850000')
-    await inputs[2].setValue('그라파이트')
-    await inputs[3].setValue('512')
-    await inputs[4].setValue('광주광역시 광산구')
+    await wrapper.find('input[placeholder="예: 갤럭시 S24 256GB 자급제"]').setValue('갤럭시 북 테스트 상품')
+    await wrapper.find('input[placeholder="판매 가격"]').setValue('850000')
+    await wrapper.find('input[placeholder="예: 오닉스 블랙"]').setValue('그라파이트')
+    await wrapper.find('input[placeholder="예: 256"]').setValue('512')
+    await wrapper.find('input[placeholder^="역, 랜드마크로 검색"]').setValue('광주광역시 광산구')
     await wrapper.find('textarea').setValue('상태가 좋은 테스트 상품입니다.')
     await buttonByText(wrapper, '다음 단계').trigger('click')
     await flushPromises()
@@ -104,6 +130,7 @@ describe('ProductManagePage', () => {
       color: '그라파이트',
       storageGb: 512,
       tradeRegion: '광주광역시 광산구',
+      confirmedFeatures: ['CAMERA'],
     })
     expect(getProductChecklist).toHaveBeenCalledWith(1001)
     expect(wrapper.text()).toContain('검수용 기기 촬영')
@@ -127,10 +154,9 @@ describe('ProductManagePage', () => {
     await wrapper.findAll('select')[1].setValue('101')
     await flushPromises()
 
-    const inputs = wrapper.findAll('input')
-    await inputs[0].setValue('가격 오류 상품')
-    await inputs[1].setValue('0')
-    await inputs[4].setValue('광주광역시 광산구')
+    await wrapper.find('input[placeholder="예: 갤럭시 S24 256GB 자급제"]').setValue('가격 오류 상품')
+    await wrapper.find('input[placeholder="판매 가격"]').setValue('0')
+    await wrapper.find('input[placeholder^="역, 랜드마크로 검색"]').setValue('광주광역시 광산구')
     await buttonByText(wrapper, '다음 단계').trigger('click')
     await flushPromises()
 
