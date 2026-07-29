@@ -108,6 +108,10 @@ public enum ErrorCode {
     DEVICE_MODEL_NOT_FOUND("PRD010", HttpStatus.NOT_FOUND, "기기 모델을 찾을 수 없습니다."),
     CHECKLIST_TEMPLATE_NOT_FOUND("PRD011", HttpStatus.NOT_FOUND, "게시된 체크리스트 템플릿을 찾을 수 없습니다."),
     PRODUCT_ACCESS_DENIED("PRD012", HttpStatus.FORBIDDEN, "해당 상품을 변경할 권한이 없습니다."),
+    CHECKLIST_DEVICE_TYPE_NOT_SUPPORTED(
+            "PRD013", HttpStatus.BAD_REQUEST, "현재 자동 체크리스트 생성은 노트북만 지원합니다."),
+    CHECKLIST_OS_NOT_SUPPORTED(
+            "PRD014", HttpStatus.BAD_REQUEST, "노트북 체크리스트는 Windows와 Linux만 지원합니다."),
 
     // ========== 결제 에러 ==========
     PAYMENT_NOT_FOUND("PAY001", HttpStatus.NOT_FOUND, "결제 내역을 찾을 수 없습니다."),

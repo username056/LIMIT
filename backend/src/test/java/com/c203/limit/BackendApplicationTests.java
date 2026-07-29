@@ -98,6 +98,10 @@ class BackendApplicationTests {
     ProductCatalogService productCatalogService;
 
     @MockitoBean
+    com.c203.limit.domain.inspection.checklist.ChecklistGenerationService
+            checklistGenerationService;
+
+    @MockitoBean
     ListingStatusHistoryRepository listingStatusHistoryRepository;
 
     @MockitoBean

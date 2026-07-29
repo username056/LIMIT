@@ -116,6 +116,10 @@ class OpenApiContractTests {
     ProductCatalogService productCatalogService;
 
     @MockitoBean
+    com.c203.limit.domain.inspection.checklist.ChecklistGenerationService
+            checklistGenerationService;
+
+    @MockitoBean
     ListingStatusHistoryRepository listingStatusHistoryRepository;
 
     @MockitoBean
@@ -178,6 +182,8 @@ class OpenApiContractTests {
                 .andExpect(jsonPath("$.paths['/api/v1/auth/password-reset-requests']").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/auth/password-resets']").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/products'].post.operationId").value("product01"))
+                .andExpect(jsonPath("$.paths['/api/v1/checklist-generations'].post.operationId")
+                        .value("productChecklist01"))
                 .andExpect(jsonPath("$.paths['/api/v1/products'].get.operationId").value("product04"))
                 .andExpect(jsonPath("$.components.schemas.CreateProductRequest").exists())
                 .andExpect(jsonPath("$.components.schemas.ProductDetailResponse").exists())

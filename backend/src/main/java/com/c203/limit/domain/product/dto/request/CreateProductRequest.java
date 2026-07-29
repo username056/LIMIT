@@ -1,7 +1,10 @@
 package com.c203.limit.domain.product.dto.request;
 
 import java.math.BigDecimal;
+import java.util.Set;
 
+import com.c203.limit.domain.inspection.checklist.LaptopFeatureCode;
+import com.fasterxml.jackson.annotation.JsonCreator;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -12,7 +15,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
 @Getter
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor_ = @JsonCreator)
 @Schema(name = "CreateProductRequest", description = "중고 전자기기 상품 초안 등록 요청")
 public class CreateProductRequest {
 
@@ -50,4 +53,29 @@ public class CreateProductRequest {
     @NotBlank
     @Size(max = 100)
     private final String tradeRegion;
+
+    @Schema(description = "판매자가 확인한 노트북 지원 기능. 최대 5개")
+    @Size(max = 5)
+    private final Set<LaptopFeatureCode> confirmedFeatures;
+
+    public CreateProductRequest(
+            Long categoryId,
+            Long deviceModelId,
+            String name,
+            String description,
+            BigDecimal price,
+            String color,
+            Integer storageGb,
+            String tradeRegion) {
+        this(
+                categoryId,
+                deviceModelId,
+                name,
+                description,
+                price,
+                color,
+                storageGb,
+                tradeRegion,
+                Set.of());
+    }
 }

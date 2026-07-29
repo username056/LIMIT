@@ -1,6 +1,8 @@
 package com.c203.limit.domain.product.controller;
 
 import com.c203.limit.domain.product.dto.request.CreateProductRequest;
+import com.c203.limit.domain.inspection.checklist.ChecklistGenerationService;
+import com.c203.limit.domain.inspection.checklist.GeneratedChecklist;
 import com.c203.limit.domain.product.dto.request.TransitionProductStatusRequest;
 import com.c203.limit.domain.product.dto.request.UpdateProductRequest;
 import com.c203.limit.domain.product.dto.response.MyProductSummaryResponse;
@@ -27,21 +29,28 @@ public class ProductController implements ProductApi {
     private final ProductApplicationService productService;
     private final CurrentUser currentUser;
     private final SellerStatusReader sellerStatusReader;
+    private final ChecklistGenerationService checklistGenerationService;
 
     public ProductController(
             ProductApplicationService productService,
             CurrentUser currentUser,
-            SellerStatusReader sellerStatusReader) {
+            SellerStatusReader sellerStatusReader,
+            ChecklistGenerationService checklistGenerationService) {
         this.productService = productService;
         this.currentUser = currentUser;
         this.sellerStatusReader = sellerStatusReader;
+        this.checklistGenerationService = checklistGenerationService;
     }
 
     @Override
     @PreAuthorize("hasRole('SELLER')")
     public ResponseEntity<ApiResponse<ProductCreatedResponse>> createProduct(
             CreateProductRequest request) {
-        ProductCreatedResponse response = productService.create(currentSellerMemberId(), request);
+        Long sellerId = currentSellerMemberId();
+        GeneratedChecklist checklist = checklistGenerationService
+                .generateIfLaptop(request.getDeviceModelId(), request.getConfirmedFeatures())
+                .orElse(null);
+        ProductCreatedResponse response = productService.create(sellerId, request, checklist);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
     }
 

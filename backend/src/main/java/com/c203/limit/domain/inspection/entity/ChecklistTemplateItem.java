@@ -102,4 +102,48 @@ public class ChecklistTemplateItem {
         item.displayOrder = displayOrder;
         return item;
     }
+
+    public static ChecklistTemplateItem createGenerated(
+            ChecklistTemplate checklistTemplate,
+            String itemCode,
+            String name,
+            String purpose,
+            String captureGuide,
+            EvidenceType evidenceType,
+            AutomationType automationType,
+            String parserType,
+            boolean isRequired,
+            int displayOrder) {
+        ChecklistTemplateItem item = create(
+                checklistTemplate,
+                itemCode,
+                name,
+                purpose,
+                captureGuide,
+                evidenceType,
+                automationType,
+                isRequired,
+                displayOrder);
+        item.parserType = parserType;
+        if (evidenceType == EvidenceType.PHOTO) {
+            item.allowedFormats = "jpg,jpeg,png";
+            item.minCount = 1;
+            item.maxCount = 5;
+            item.maxFileSizeMb = 20;
+        } else if (evidenceType == EvidenceType.VIDEO) {
+            item.allowedFormats = "mp4,mov";
+            item.minCount = 1;
+            item.maxCount = 1;
+            item.minDurationSec = 5;
+            item.maxDurationSec = 60;
+            item.maxFileSizeMb = 100;
+        } else if (evidenceType == EvidenceType.DIAGNOSTIC_FILE) {
+            item.allowedFormats =
+                    "BATTERY_REPORT".equals(parserType) ? "html" : "txt";
+            item.minCount = 1;
+            item.maxCount = 1;
+            item.maxFileSizeMb = 10;
+        }
+        return item;
+    }
 }
