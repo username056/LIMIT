@@ -3,14 +3,17 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { logout } from '../api/auth'
 import { clearAuthSession, useAuthSession } from '../auth/session'
+import { SELL_ENTRY_PATH, useSellerGate } from '../auth/sellerGate'
+import SellerNoticeModal from './SellerNoticeModal.vue'
 import limitLogo from '../assets/limit_logo.png'
 
 defineProps({
   navItems: {
     type: Array,
     default: () => [
-      { label: '상품 둘러보기', href: '/products' },
-      { label: '판매하기', href: '/seller/apply' },
+      { label: '전체 상품', href: '/products' },
+      // 판매하기는 판매자 여부에 따라 목적지가 달라서 링크가 아니라 동작으로 처리합니다.
+      { label: '판매하기', href: SELL_ENTRY_PATH, action: 'sell' },
       { label: '채팅', href: '/chat' },
     ],
   },
@@ -23,6 +26,18 @@ const searchQuery = ref('')
 const member = computed(() => session.value?.member || null)
 const isProfileMenuOpen = ref(false)
 const isMobileMenuOpen = ref(false)
+const {
+  isSellerNoticeOpen,
+  goToSell: openSellFlow,
+  goToSellerApply,
+  closeSellerNotice,
+} = useSellerGate(router)
+
+// 판매하기: 판매자면 등록 화면으로 바로, 아니면 판매자 등록을 먼저 안내합니다.
+async function goToSell() {
+  isMobileMenuOpen.value = false
+  await openSellFlow()
+}
 
 function isActiveNavItem(href) {
   return route.path === href
@@ -69,22 +84,42 @@ async function logoutMember() {
         </RouterLink>
 
         <nav class="hidden items-center gap-7 md:flex">
-          <RouterLink
+          <template
             v-for="item in navItems"
             :key="item.label"
-            :to="item.href"
-            class="group relative text-base transition-colors hover:font-bold hover:text-text-main"
-            :class="isActiveNavItem(item.href)
-              ? 'font-bold text-text-main'
-              : 'font-semibold text-text-sub'"
           >
-            {{ item.label }}
-            <span
-              class="absolute -bottom-2 left-0 right-0 h-0.5 rounded-full transition-colors group-hover:bg-primary"
-              :class="isActiveNavItem(item.href) ? 'bg-primary' : 'bg-transparent'"
-              aria-hidden="true"
-            />
-          </RouterLink>
+            <button
+              v-if="item.action === 'sell'"
+              type="button"
+              class="group relative text-base transition-colors hover:font-bold hover:text-text-main"
+              :class="isActiveNavItem(item.href)
+                ? 'font-bold text-text-main'
+                : 'font-semibold text-text-sub'"
+              @click="goToSell"
+            >
+              {{ item.label }}
+              <span
+                class="absolute -bottom-2 left-0 right-0 h-0.5 rounded-full transition-colors group-hover:bg-primary"
+                :class="isActiveNavItem(item.href) ? 'bg-primary' : 'bg-transparent'"
+                aria-hidden="true"
+              />
+            </button>
+            <RouterLink
+              v-else
+              :to="item.href"
+              class="group relative text-base transition-colors hover:font-bold hover:text-text-main"
+              :class="isActiveNavItem(item.href)
+                ? 'font-bold text-text-main'
+                : 'font-semibold text-text-sub'"
+            >
+              {{ item.label }}
+              <span
+                class="absolute -bottom-2 left-0 right-0 h-0.5 rounded-full transition-colors group-hover:bg-primary"
+                :class="isActiveNavItem(item.href) ? 'bg-primary' : 'bg-transparent'"
+                aria-hidden="true"
+              />
+            </RouterLink>
+          </template>
         </nav>
       </div>
 
@@ -306,17 +341,29 @@ async function logoutMember() {
       </form>
 
       <nav class="flex flex-col">
-        <RouterLink
+        <template
           v-for="item in navItems"
           :key="item.label"
-          :to="item.href"
-          class="rounded-md px-2 py-2.5 text-base transition-colors"
-          :class="isActiveNavItem(item.href)
-            ? 'font-bold text-text-main'
-            : 'font-semibold text-text-sub hover:bg-bg'"
         >
-          {{ item.label }}
-        </RouterLink>
+          <button
+            v-if="item.action === 'sell'"
+            type="button"
+            class="rounded-md px-2 py-2.5 text-left text-base font-semibold text-text-sub transition-colors hover:bg-bg"
+            @click="goToSell"
+          >
+            {{ item.label }}
+          </button>
+          <RouterLink
+            v-else
+            :to="item.href"
+            class="rounded-md px-2 py-2.5 text-base transition-colors"
+            :class="isActiveNavItem(item.href)
+              ? 'font-bold text-text-main'
+              : 'font-semibold text-text-sub hover:bg-bg'"
+          >
+            {{ item.label }}
+          </RouterLink>
+        </template>
         <RouterLink
           v-if="member"
           :to="{ name: 'calls' }"
@@ -333,5 +380,12 @@ async function logoutMember() {
         </RouterLink>
       </nav>
     </div>
+
+    <!-- 판매자가 아닌 회원이 판매하기를 눌렀을 때 -->
+    <SellerNoticeModal
+      :open="isSellerNoticeOpen"
+      @close="closeSellerNotice"
+      @apply="goToSellerApply"
+    />
   </header>
 </template>

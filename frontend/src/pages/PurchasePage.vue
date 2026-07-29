@@ -13,7 +13,8 @@ import { getMyProfile } from '../api/member'
 import { getDefaultAddress } from '../stores/addressBook'
 
 // TODO(주문/결제 API 연동): 주문 생성·결제 API가 준비되면 이 페이지의 mock 배송지·결제 흐름을
-// 실제 요청으로 교체하세요. 지금은 결제 자체를 처리할 백엔드가 없어 결제 버튼은 coming-soon으로 연결됩니다.
+// 실제 요청으로 교체하세요. 지금은 결제 버튼을 눌러도 서버 요청이 전혀 없고, mock 주문번호
+// (LMT-날짜-4자리)를 만들어 구매 완료 페이지로 이동만 합니다. 결제와 주문 저장은 일어나지 않습니다.
 
 const route = useRoute()
 const router = useRouter()
@@ -210,17 +211,20 @@ async function submitPayment() {
             <h2 class="mb-4 text-base font-bold text-text-main">
               주문 요약
             </h2>
-            <div class="flex items-center gap-3">
+            <RouterLink
+              :to="{ name: 'product-detail', params: { productId: route.params.productId } }"
+              class="group flex items-center gap-3 rounded-md transition hover:bg-bg"
+            >
               <div class="h-16 w-16 shrink-0 rounded-md bg-primary-gradient" />
               <div>
-                <p class="text-sm font-bold text-text-main">
+                <p class="text-sm font-bold text-text-main group-hover:text-primary group-hover:underline">
                   {{ product.name }}
                 </p>
                 <p class="mt-1 text-xs text-text-sub">
                   {{ product.brand }}
                 </p>
               </div>
-            </div>
+            </RouterLink>
 
             <div class="mt-5 space-y-2 border-t border-border pt-4 text-sm">
               <div class="flex items-center justify-between text-text-sub">

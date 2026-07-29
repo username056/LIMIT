@@ -42,23 +42,24 @@ const address = computed(() => route.query.address || '-')
           구매에 성공하셨습니다!
         </h1>
         <p class="mx-auto mt-3 max-w-md text-center text-sm leading-6 text-text-sub">
-          주문이 성공적으로 처리되었습니다. 판매자가 상품을 발송하면 안전거래 수령 대기 상태로 전환되며 실시간 알림을 보내드립니다.
+          결제가 완료되었습니다. 판매자가 상품을 발송하면 알림으로 알려드리며,
+          수령을 확인할 때까지 결제 금액은 안전하게 보관됩니다.
         </p>
 
-        <div class="mt-6 flex items-center gap-3 rounded-md bg-accent p-4">
+        <RouterLink
+          :to="{ name: 'product-detail', params: { productId: route.params.productId } }"
+          class="group mt-6 flex items-center gap-3 rounded-md bg-accent p-4 transition hover:brightness-95"
+        >
           <div class="h-14 w-14 shrink-0 rounded-md bg-primary-gradient" />
           <div>
-            <p class="text-xs font-semibold text-primary">
-              LIMIT 정품 검수 완료 상품
-            </p>
-            <p class="mt-1 text-sm font-bold text-text-main">
+            <p class="text-sm font-bold text-text-main group-hover:text-primary group-hover:underline">
               {{ product.name }}
             </p>
             <p class="mt-1 text-xs text-text-sub">
               {{ product.brand }}
             </p>
           </div>
-        </div>
+        </RouterLink>
 
         <div class="mt-6 space-y-2 border-t border-border pt-4 text-sm">
           <div class="flex items-center justify-between">

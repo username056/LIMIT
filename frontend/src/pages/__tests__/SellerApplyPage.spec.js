@@ -28,6 +28,7 @@ describe('SellerApplyPage', () => {
       global: {
         stubs: {
           MyPageLayout: { template: '<main><slot /></main>' },
+          RouterLink: { template: '<a><slot /></a>' },
         },
       },
     })

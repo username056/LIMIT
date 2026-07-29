@@ -5,6 +5,7 @@ import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseBadge from '../components/BaseBadge.vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseCard from '../components/BaseCard.vue'
+import { getDeviceCategories } from '../api/products'
 
 const route = useRoute()
 const router = useRouter()
@@ -17,13 +18,17 @@ onMounted(() => {
   router.replace({ query: rest })
 })
 
-// 예시 데이터입니다. 실제 연동 시 API 응답으로 교체하세요.
-const categories = [
-  { label: '노트북 / 랩탑' },
-  { label: '스마트폰 / 모바일' },
-  { label: '태블릿 / 패드' },
-  { label: '카메라' },
-]
+// 실제 판매 카테고리를 그대로 보여줍니다. 하위 기종은 빼고 최상위 카테고리만 노출합니다.
+const categories = ref([])
+
+onMounted(async () => {
+  try {
+    const items = await getDeviceCategories({ activeOnly: true })
+    categories.value = (items || []).slice(0, 4)
+  } catch {
+    categories.value = []
+  }
+})
 
 const steps = [
   {
@@ -99,19 +104,28 @@ const products = [
       <h2 class="mb-5 text-lg font-bold text-text-main">
         인기 전자기기 카테고리
       </h2>
-      <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div
+        v-if="categories.length"
+        class="grid grid-cols-2 gap-4 sm:grid-cols-4"
+      >
         <RouterLink
           v-for="category in categories"
-          :key="category.label"
-          :to="{ name: 'coming-soon', params: { feature: 'category' }, query: { name: category.label } }"
+          :key="category.categoryId"
+          :to="{ name: 'products', query: { categoryId: category.categoryId } }"
           class="group overflow-hidden rounded-lg border border-border bg-surface transition-shadow hover:shadow-elevated"
         >
           <div class="aspect-square bg-text-main" />
           <div class="flex items-center justify-between px-4 py-3">
-            <span class="text-sm font-semibold text-text-main">{{ category.label }}</span>
+            <span class="text-sm font-semibold text-text-main">{{ category.name }}</span>
           </div>
         </RouterLink>
       </div>
+      <p
+        v-else
+        class="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-text-sub"
+      >
+        카테고리를 불러오지 못했습니다.
+      </p>
     </section>
 
     <!-- Verification process -->

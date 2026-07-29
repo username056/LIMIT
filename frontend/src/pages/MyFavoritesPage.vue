@@ -5,6 +5,7 @@ import BaseBadge from '../components/BaseBadge.vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseCard from '../components/BaseCard.vue'
 import { getMyFavorites, removeFavorite as removeFavoriteRequest } from '../api/favorites'
+import { isSoldOut, productStatusLabel } from '../utils/productStatus'
 
 const favorites = ref([])
 const isLoading = ref(true)
@@ -104,14 +105,20 @@ onMounted(() => loadFavorites(0))
         :padded="false"
         class="overflow-hidden"
       >
-        <div class="flex aspect-[4/3] items-center justify-center bg-bg text-xs text-text-sub">
+        <div class="relative flex aspect-[4/3] items-center justify-center bg-bg text-xs text-text-sub">
           상품 이미지
+          <div
+            v-if="isSoldOut(product.status)"
+            class="absolute inset-0 flex items-center justify-center bg-black/55"
+          >
+            <span class="text-lg font-bold text-white">판매 완료</span>
+          </div>
         </div>
         <div class="p-5">
           <div class="flex items-center justify-between gap-3">
             <span class="text-xs font-semibold text-primary">{{ product.manufacturerName || '전자기기' }}</span>
             <BaseBadge variant="gray">
-              {{ product.status }}
+              {{ productStatusLabel(product.status) }}
             </BaseBadge>
           </div>
           <h2 class="mt-3 min-h-10 text-sm font-bold leading-5 text-text-main">

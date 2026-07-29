@@ -4,10 +4,20 @@ import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseButton from '../components/BaseButton.vue'
 import { getDeviceCategories, getProducts } from '../api/products'
+import { isSoldOut } from '../utils/productStatus'
+import { formatPriceDigits, toPriceDigits } from '../utils/priceInput'
+import { useSellerGate } from '../auth/sellerGate'
+import SellerNoticeModal from '../components/SellerNoticeModal.vue'
 
 const products = ref([])
 const route = useRoute()
 const router = useRouter()
+const {
+  isSellerNoticeOpen,
+  goToSell,
+  goToSellerApply,
+  closeSellerNotice,
+} = useSellerGate(router)
 const categories = ref([])
 const isLoading = ref(false)
 const errorMessage = ref('')
@@ -79,11 +89,11 @@ function formatPrice(price) {
   return Number(price || 0).toLocaleString('ko-KR')
 }
 
-function verificationLabel(status) {
-  return {
-    COMPLETED: '검증 완료',
-    IN_PROGRESS: '검증 중',
-  }[status] || '상태 확인 중'
+// 값에는 숫자만 담고 입력창에는 쉼표를 붙여 보여줍니다.
+// 값이 그대로일 때 Vue가 DOM을 다시 그리지 않으므로 직접 되돌려 놓습니다.
+function onPriceFilterInput(event, key) {
+  filters[key] = toPriceDigits(event.target.value)
+  event.target.value = formatPriceDigits(filters[key])
 }
 
 async function search(page = 0) {
@@ -128,12 +138,15 @@ async function resetFilters() {
   })
   const nextQuery = { ...route.query }
   delete nextQuery.q
+  delete nextQuery.categoryId
   await router.replace({ name: 'products', query: nextQuery })
   await search(0)
 }
 
 onMounted(async () => {
   filters.keyword = String(route.query.q || '')
+  // 홈의 카테고리 카드에서 ?categoryId=로 넘어오면 해당 카테고리가 선택된 상태로 시작합니다.
+  filters.categoryId = String(route.query.categoryId || '')
   try {
     categories.value = flattenCategories(await getDeviceCategories({ activeOnly: true }))
   } catch {
@@ -142,10 +155,12 @@ onMounted(async () => {
   await search(0)
 })
 
-watch(() => route.query.q, async (keyword) => {
+watch(() => [route.query.q, route.query.categoryId], async ([keyword, categoryId]) => {
   const nextKeyword = String(keyword || '')
-  if (nextKeyword === filters.keyword) return
+  const nextCategoryId = String(categoryId || '')
+  if (nextKeyword === filters.keyword && nextCategoryId === filters.categoryId) return
   filters.keyword = nextKeyword
+  filters.categoryId = nextCategoryId
   await search(0)
 })
 </script>
@@ -159,13 +174,13 @@ watch(() => route.query.q, async (keyword) => {
             VERIFIED DEVICES
           </p>
           <h1 class="mt-2 text-2xl font-bold text-text-main">
-            상품 목록
+            전체 상품
           </h1>
           <p class="mt-2 text-sm text-text-sub">
             검증 자료가 연결된 중고 전자기기를 찾아보세요.
           </p>
         </div>
-        <BaseButton to="/seller/products">
+        <BaseButton @click="goToSell">
           내 상품 등록하기
         </BaseButton>
       </div>
@@ -216,6 +231,7 @@ watch(() => route.query.q, async (keyword) => {
               카테고리
               <select
                 v-model="filters.categoryId"
+                aria-label="카테고리 선택"
                 class="mt-2 w-full rounded-md border border-border bg-bg px-3 py-2.5 text-sm outline-none focus:border-primary"
               >
                 <option value="">전체 카테고리</option>
@@ -233,21 +249,25 @@ watch(() => route.query.q, async (keyword) => {
               </legend>
               <div class="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                 <input
-                  v-model="filters.minPrice"
+                  :value="formatPriceDigits(filters.minPrice)"
                   aria-label="최소 가격"
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputmode="numeric"
+                  autocomplete="off"
                   placeholder="최소"
                   class="min-w-0 rounded-md border border-border bg-bg px-2 py-2.5 text-sm outline-none focus:border-primary"
+                  @input="onPriceFilterInput($event, 'minPrice')"
                 >
                 <span class="text-text-sub">–</span>
                 <input
-                  v-model="filters.maxPrice"
+                  :value="formatPriceDigits(filters.maxPrice)"
                   aria-label="최대 가격"
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputmode="numeric"
+                  autocomplete="off"
                   placeholder="최대"
                   class="min-w-0 rounded-md border border-border bg-bg px-2 py-2.5 text-sm outline-none focus:border-primary"
+                  @input="onPriceFilterInput($event, 'maxPrice')"
                 >
               </div>
             </fieldset>
@@ -379,10 +399,12 @@ watch(() => route.query.q, async (keyword) => {
                   <span class="text-4xl">▣</span>
                   <span class="mt-2 text-xs">등록된 이미지 없음</span>
                 </div>
-                <span
-                  class="absolute right-3 top-3 rounded-pill border border-white/70 bg-white/90 px-2.5 py-1 text-[11px] font-bold shadow-card"
-                  :class="product.verificationStatus === 'COMPLETED' ? 'text-success' : 'text-text-sub'"
-                >{{ verificationLabel(product.verificationStatus) }}</span>
+                <div
+                  v-if="isSoldOut(product.status)"
+                  class="absolute inset-0 flex items-center justify-center bg-black/55"
+                >
+                  <span class="text-lg font-bold text-white">판매 완료</span>
+                </div>
               </div>
               <div class="p-4">
                 <p class="truncate text-xs font-semibold text-primary">
@@ -427,7 +449,7 @@ watch(() => route.query.q, async (keyword) => {
           <nav
             v-if="!isLoading && pageMeta.totalPages > 1"
             class="mt-8 flex items-center justify-center gap-4"
-            aria-label="상품 목록 페이지"
+            aria-label="전체 상품 페이지"
           >
             <BaseButton
               variant="outline"
@@ -450,5 +472,11 @@ watch(() => route.query.q, async (keyword) => {
         </section>
       </div>
     </main>
+
+    <SellerNoticeModal
+      :open="isSellerNoticeOpen"
+      @close="closeSellerNotice"
+      @apply="goToSellerApply"
+    />
   </DefaultLayout>
 </template>

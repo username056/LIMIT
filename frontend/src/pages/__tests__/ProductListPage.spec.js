@@ -63,6 +63,61 @@ describe('ProductListPage', () => {
     expect(wrapper.text()).toContain('다음 상품')
   })
 
+  it('categoryId 쿼리로 들어오면 해당 카테고리가 선택된 상태로 조회한다', async () => {
+    routeQuery.categoryId = '2'
+    getDeviceCategories.mockResolvedValue([
+      { categoryId: 1, name: '일반형 스마트폰', children: [] },
+      { categoryId: 2, name: '폴더블 스마트폰', children: [] },
+    ])
+    getProducts.mockResolvedValue({
+      data: [{ productId: 1001, name: '폴더블 상품', price: 100000 }],
+      meta: { page: 0, totalPages: 1, hasNext: false },
+    })
+
+    const wrapper = mount(ProductListPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('select[aria-label="카테고리 선택"]').element.value).toBe('2')
+    expect(getProducts).toHaveBeenLastCalledWith(expect.objectContaining({ categoryId: '2' }))
+  })
+
+  it('가격 필터는 증감 화살표 없이 숫자만 받고 쉼표로 보여준다', async () => {
+    getProducts.mockResolvedValue({
+      data: [],
+      meta: { page: 0, totalPages: 0, hasNext: false },
+    })
+
+    const wrapper = mount(ProductListPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    const minInput = wrapper.find('input[aria-label="최소 가격"]')
+    const maxInput = wrapper.find('input[aria-label="최대 가격"]')
+    expect(minInput.attributes('type')).toBe('text')
+    expect(maxInput.attributes('type')).toBe('text')
+
+    await minInput.setValue('300000')
+    expect(minInput.element.value).toBe('300,000')
+
+    await maxInput.setValue('1a2,3만원')
+    expect(maxInput.element.value).toBe('123')
+  })
+
   it('조회 실패를 검색 결과 없음 상태와 동시에 표시하지 않는다', async () => {
     getProducts.mockRejectedValue(new Error('상품 조회 실패'))
     const wrapper = mount(ProductListPage, {

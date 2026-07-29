@@ -5,10 +5,11 @@ import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseCard from '../components/BaseCard.vue'
 import { addFavorite, getFavoriteStatus, removeFavorite } from '../api/favorites'
-import { getProduct, getProductChecklist, requestRecapture } from '../api/products'
+import { getMyProduct, getProduct, getProductChecklist, requestRecapture } from '../api/products'
 import { createChatRoom, requestRtcCall } from '../api/rtc'
 import { createOrGetChatRoom } from '../api/chat'
-import { getAccessToken } from '../auth/session'
+import { getAccessToken, getSessionMember } from '../auth/session'
+import { isSoldOut, productStatusLabel } from '../utils/productStatus'
 
 const route = useRoute()
 const router = useRouter()
@@ -19,6 +20,14 @@ const isUpdatingFavorite = ref(false)
 const isRequestingCall = ref(false)
 const isOpeningChat = ref(false)
 const errorMessage = ref('')
+// 소유자 전용 조회로 불러온 경우(비공개 상품)와, 판매 중인 내 상품을 공개 조회로 본 경우를 함께 다룹니다.
+const loadedViaOwnerApi = ref(false)
+const isOwner = computed(() => {
+  if (loadedViaOwnerApi.value) return true
+  const memberId = getSessionMember()?.memberId
+  return Boolean(memberId && product.value?.sellerId
+    && String(product.value.sellerId) === String(memberId))
+})
 
 const checklist = computed(() => product.value?.checklistSummary || {})
 const checklistRate = computed(() => {
@@ -28,8 +37,11 @@ const checklistRate = computed(() => {
 })
 const canPurchase = computed(() => product.value?.status === 'ON_SALE')
 const purchaseButtonLabel = computed(() => {
-  if (canPurchase.value) return '안전결제하고 구매하기'
-  return product.value?.status === 'RESERVED' ? '예약 중인 상품입니다' : '판매가 완료된 상품입니다'
+  if (canPurchase.value) return '상품 구매하기'
+  if (product.value?.status === 'RESERVED') return '예약 중인 상품입니다'
+  if (product.value?.status === 'DRAFT') return '임시 저장 중인 상품입니다'
+  if (product.value?.status === 'HIDDEN') return '숨김 상태인 상품입니다'
+  return '판매가 완료된 상품입니다'
 })
 
 // 재촬영 요청 팝업
@@ -86,14 +98,6 @@ function formatPrice(price) {
   return Number(price || 0).toLocaleString('ko-KR')
 }
 
-function statusLabel(status) {
-  return {
-    ON_SALE: '판매 중',
-    RESERVED: '예약 중',
-    SOLD: '판매 완료',
-  }[status] || status || '상태 확인 중'
-}
-
 async function requireLogin() {
   if (getAccessToken()) return true
   await router.push({ name: 'login', query: { redirect: route.fullPath } })
@@ -144,9 +148,26 @@ async function openChat() {
   }
 }
 
+// 공개 상세 API는 ON_SALE 상품만 반환합니다. 판매자가 자기 초안·숨김 상품을 열었을 때는
+// 소유자 전용 조회로 한 번 더 시도해서 등록 직후 상세 확인이 끊기지 않게 합니다.
+async function loadProduct(productId) {
+  try {
+    product.value = await getProduct(productId)
+  } catch (error) {
+    if (!getAccessToken()) throw error
+    try {
+      product.value = await getMyProduct(productId)
+      loadedViaOwnerApi.value = true
+    } catch {
+      // 소유자도 아니면 공개 조회 실패 사유를 그대로 보여줍니다.
+      throw error
+    }
+  }
+}
+
 onMounted(async () => {
   try {
-    product.value = await getProduct(route.params.productId)
+    await loadProduct(route.params.productId)
     if (getAccessToken()) {
       const favoriteStatus = await getFavoriteStatus(route.params.productId)
       isFavorite.value = Boolean(favoriteStatus?.favorite)
@@ -182,13 +203,27 @@ onMounted(async () => {
           to="/products"
           class="hover:text-primary"
         >
-          상품 목록
+          전체 상품
         </RouterLink>
         <template v-if="product">
           <span>/</span>
           <span class="max-w-48 truncate text-text-main">{{ product.name }}</span>
         </template>
       </nav>
+
+      <p
+        v-if="isOwner && !canPurchase"
+        role="status"
+        class="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-md bg-accent px-4 py-3 text-sm text-primary-dark"
+      >
+        임시 저장 중인 상품이라 다른 사용자에게는 보이지 않는 화면입니다.
+        <RouterLink
+          :to="{ name: 'seller-products' }"
+          class="font-semibold text-primary hover:underline"
+        >
+          상품 관리로 이동
+        </RouterLink>
+      </p>
 
       <div
         v-if="isLoading"
@@ -246,19 +281,39 @@ onMounted(async () => {
                 <span class="mt-3 text-sm">등록된 상품 이미지가 없습니다.</span>
               </div>
               <span class="absolute left-4 top-4 border-l-2 border-primary bg-surface/95 px-2.5 py-1 text-xs font-bold text-primary">
-                {{ statusLabel(product.status) }}
+                {{ productStatusLabel(product.status) }}
               </span>
+              <div
+                v-if="isSoldOut(product.status)"
+                class="absolute inset-0 flex items-center justify-center bg-black/55"
+              >
+                <span class="text-xl font-bold text-white">판매 완료</span>
+              </div>
             </div>
           </section>
 
           <section>
-            <p class="text-sm font-semibold text-primary">
-              {{ product.device?.manufacturer || '제조사 미등록' }}
-              <span class="text-text-sub">· {{ product.device?.model || '모델 미등록' }}</span>
-            </p>
-            <h1 class="mt-3 text-3xl font-bold leading-tight tracking-tight text-text-main">
-              {{ product.name }}
-            </h1>
+            <div class="flex items-start justify-between gap-4">
+              <div class="min-w-0">
+                <p class="text-sm font-semibold text-primary">
+                  {{ product.device?.manufacturer || '제조사 미등록' }}
+                  <span class="text-text-sub">· {{ product.device?.model || '모델 미등록' }}</span>
+                </p>
+                <h1 class="mt-3 text-3xl font-bold leading-tight tracking-tight text-text-main">
+                  {{ product.name }}
+                </h1>
+              </div>
+              <button
+                type="button"
+                class="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-md border text-xl transition"
+                :class="isFavorite ? 'border-primary bg-accent text-primary' : 'border-border bg-surface text-text-sub hover:border-primary'"
+                :disabled="isUpdatingFavorite"
+                :aria-label="isFavorite ? '좋아요한 상품 해제' : '좋아요한 상품 등록'"
+                @click="toggleFavorite"
+              >
+                {{ isFavorite ? '♥' : '♡' }}
+              </button>
+            </div>
             <p class="mt-5 text-3xl font-bold text-text-main">
               {{ formatPrice(product.price) }}원
             </p>
@@ -298,16 +353,25 @@ onMounted(async () => {
               </div>
             </dl>
 
+            <!-- 내 상품에서는 구매·문의처럼 자기 자신을 향하는 행동 대신 수정 동선만 보여줍니다. -->
             <div class="mt-5 space-y-3">
               <BaseButton
+                v-if="isOwner"
                 block
-                :to="canPurchase ? { name: 'purchase', params: { productId: product.productId } } : ''"
-                :disabled="!canPurchase"
+                :to="{ name: 'seller-product-edit', params: { productId: product.productId } }"
               >
-                {{ purchaseButtonLabel }}
+                수정하기
               </BaseButton>
-              <div class="grid grid-cols-[1fr_auto] gap-3">
+              <template v-else>
                 <BaseButton
+                  block
+                  :to="canPurchase ? { name: 'purchase', params: { productId: product.productId } } : ''"
+                  :disabled="!canPurchase"
+                >
+                  {{ purchaseButtonLabel }}
+                </BaseButton>
+                <BaseButton
+                  block
                   class="px-3 py-2 text-sm"
                   variant="outline"
                   :disabled="isOpeningChat"
@@ -315,19 +379,10 @@ onMounted(async () => {
                 >
                   {{ isOpeningChat ? '채팅방 여는 중…' : '판매자에게 문의하기' }}
                 </BaseButton>
-                <button
-                  type="button"
-                  class="flex h-10 w-10 items-center justify-center rounded-md border text-xl transition"
-                  :class="isFavorite ? 'border-primary bg-accent text-primary' : 'border-border bg-surface text-text-sub hover:border-primary'"
-                  :disabled="isUpdatingFavorite"
-                  :aria-label="isFavorite ? '좋아요한 상품 해제' : '좋아요한 상품 등록'"
-                  @click="toggleFavorite"
-                >
-                  {{ isFavorite ? '♥' : '♡' }}
-                </button>
-              </div>
+              </template>
             </div>
             <BaseButton
+              v-if="!isOwner"
               class="mt-2 px-3 py-2 text-sm"
               variant="ghost"
               :disabled="isRequestingCall"
