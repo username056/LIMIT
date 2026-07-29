@@ -6,6 +6,12 @@ import BaseBadge from '../components/BaseBadge.vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseCard from '../components/BaseCard.vue'
 import { getDeviceCategories } from '../api/products'
+// 파일 형식이 서로 달라 확장자를 실제 형식에 맞춰 두었습니다(확장자와 내용이 다르면 MIME이 틀어집니다).
+import galaxyFlip from '../assets/galaxy_flip.png'
+import galaxyNotebook from '../assets/galaxy_notebook.avif'
+import galaxyPhone from '../assets/galaxy_phone.png'
+import galaxyTap from '../assets/galaxy_tap.webp'
+import mainHeroBanner from '../assets/main_hero_banner.png'
 
 const route = useRoute()
 const router = useRouter()
@@ -20,6 +26,18 @@ onMounted(() => {
 
 // 실제 판매 카테고리를 그대로 보여줍니다. 하위 기종은 빼고 최상위 카테고리만 노출합니다.
 const categories = ref([])
+
+// 카테고리 대표 이미지. 이름이 바뀌어도 깨지지 않도록 code(deviceType)로 연결합니다.
+const CATEGORY_IMAGES = {
+  SMARTPHONE: galaxyPhone,
+  FOLDABLE: galaxyFlip,
+  TABLET: galaxyTap,
+  LAPTOP: galaxyNotebook,
+}
+
+function categoryImage(category) {
+  return CATEGORY_IMAGES[category.code] || ''
+}
 
 onMounted(async () => {
   try {
@@ -93,8 +111,12 @@ const products = [
           </BaseButton>
         </div>
 
-        <div class="flex aspect-[4/3] items-center justify-center rounded-lg bg-surface text-text-sub shadow-elevated lg:aspect-[16/11]">
-          실시간 화상 검수 이미지
+        <div class="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg bg-surface shadow-elevated lg:aspect-[16/11]">
+          <img
+            :src="mainHeroBanner"
+            alt="실시간 화상으로 중고 기기 상태를 확인하는 모습"
+            class="h-full w-full object-cover"
+          >
         </div>
       </div>
     </section>
@@ -114,7 +136,18 @@ const products = [
           :to="{ name: 'products', query: { categoryId: category.categoryId } }"
           class="group overflow-hidden rounded-lg border border-border bg-surface transition-shadow hover:shadow-elevated"
         >
-          <div class="aspect-square bg-text-main" />
+          <div class="flex aspect-square items-center justify-center overflow-hidden bg-bg">
+            <img
+              v-if="categoryImage(category)"
+              :src="categoryImage(category)"
+              :alt="category.name"
+              class="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+            >
+            <span
+              v-else
+              class="text-xs text-text-sub"
+            >이미지 준비 중</span>
+          </div>
           <div class="flex items-center justify-between px-4 py-3">
             <span class="text-sm font-semibold text-text-main">{{ category.name }}</span>
           </div>
