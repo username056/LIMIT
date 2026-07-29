@@ -72,7 +72,6 @@ async function fillDeviceStep(wrapper) {
 
   await wrapper.find('input[placeholder="예: 갤럭시 S24 256GB 자급제"]').setValue('갤럭시 북 테스트 상품')
   await wrapper.find('input[placeholder="판매 가격"]').setValue('850000')
-  // 1단계는 필수 구간이라 저장 용량까지 채워야 다음 단계로 넘어갑니다.
   await wrapper.find('select[aria-label="저장 용량 선택"]').setValue('256')
 }
 
@@ -90,6 +89,8 @@ const templateItems = [
 describe('ProductRegisterPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // clearAllMocks는 호출 기록만 지우고 구현은 남기므로, 테스트마다 기본 동작을 다시 세웁니다.
+    transitionProductStatus.mockResolvedValue({})
     // jsdom에는 scrollTo 구현이 없어 단계 이동 시 예외가 나므로 스텁으로 대체합니다.
     window.scrollTo = vi.fn()
     global.fetch = vi.fn().mockResolvedValue({ ok: true })
@@ -101,8 +102,6 @@ describe('ProductRegisterPage', () => {
       requiredHeaders: {},
     })
     completeEvidence.mockResolvedValue({})
-    // clearAllMocks는 호출 기록만 지우고 구현은 남기므로, 테스트마다 기본 동작을 다시 세웁니다.
-    transitionProductStatus.mockResolvedValue({})
     getDeviceCategories.mockResolvedValue([{ categoryId: 10, name: '노트북' }])
     getDeviceModels.mockResolvedValue([{
       deviceModelId: 101,
@@ -415,6 +414,30 @@ describe('ProductRegisterPage', () => {
     expect(wrapper.findAll('button[aria-label*="첨부 파일 확인"]')).toHaveLength(0)
   })
 
+  it('등록을 완료하면 판매 상태로 올리고 등록한 상품 상세로 이동한다', async () => {
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await goToCaptureStep(wrapper)
+
+    await attachFile(wrapper.find('input[type="file"]'), new File(['x'], 'photo.jpg', { type: 'image/jpeg' }))
+    await flushPromises()
+    await buttonByText(wrapper, '다음 단계로').trigger('click')
+    await flushPromises()
+
+    await wrapper.find('input[type="checkbox"]').setValue(true)
+    await buttonByText(wrapper, '다음 단계로').trigger('click')
+    await flushPromises()
+
+    await buttonByText(wrapper, '완료').trigger('click')
+    await flushPromises()
+
+    expect(transitionProductStatus).toHaveBeenCalledWith(1001, 'ON_SALE', '등록 완료')
+    expect(routerPushMock).toHaveBeenCalledWith({
+      name: 'product-detail',
+      params: { productId: 1001 },
+    })
+  })
+
   it('1단계에서 임시저장을 누르면 상품을 저장하고 상품 관리로 나간다', async () => {
     const wrapper = mount(ProductRegisterPage, { global: globalOptions })
     await flushPromises()
@@ -438,29 +461,5 @@ describe('ProductRegisterPage', () => {
 
     expect(transitionProductStatus).not.toHaveBeenCalled()
     expect(routerPushMock).toHaveBeenCalledWith({ name: 'seller-products' })
-  })
-
-  it('등록을 완료하면 판매 상태로 올리고 등록한 상품 상세로 이동한다', async () => {
-    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
-    await flushPromises()
-    await goToCaptureStep(wrapper)
-
-    await attachFile(wrapper.find('input[type="file"]'), new File(['x'], 'photo.jpg', { type: 'image/jpeg' }))
-    await flushPromises()
-    await buttonByText(wrapper, '다음 단계로').trigger('click')
-    await flushPromises()
-
-    await wrapper.find('input[type="checkbox"]').setValue(true)
-    await buttonByText(wrapper, '다음 단계로').trigger('click')
-    await flushPromises()
-
-    await buttonByText(wrapper, '완료').trigger('click')
-    await flushPromises()
-
-    expect(transitionProductStatus).toHaveBeenCalledWith(1001, 'ON_SALE', '등록 완료')
-    expect(routerPushMock).toHaveBeenCalledWith({
-      name: 'product-detail',
-      params: { productId: 1001 },
-    })
   })
 })
