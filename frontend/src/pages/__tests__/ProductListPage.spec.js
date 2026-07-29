@@ -89,6 +89,30 @@ describe('ProductListPage', () => {
     expect(getProducts).toHaveBeenLastCalledWith(expect.objectContaining({ categoryId: '2' }))
   })
 
+  it('사이드바에서 거래 지역 필터를 보여주지 않는다', async () => {
+    getProducts.mockResolvedValue({
+      data: [],
+      meta: { page: 0, totalPages: 0, hasNext: false },
+    })
+
+    const wrapper = mount(ProductListPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('거래 지역')
+    expect(wrapper.find('input[placeholder="예: 서울 강남구"]').exists()).toBe(false)
+    expect(getProducts).toHaveBeenLastCalledWith(
+      expect.not.objectContaining({ tradeRegion: expect.anything() }),
+    )
+  })
+
   it('가격 필터는 증감 화살표 없이 숫자만 받고 쉼표로 보여준다', async () => {
     getProducts.mockResolvedValue({
       data: [],
