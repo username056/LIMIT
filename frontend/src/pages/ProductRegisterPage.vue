@@ -20,7 +20,6 @@ import {
 } from '../api/products'
 import { compressImage, compressVideo } from '../utils/mediaOptimize'
 import { MAX_PRICE_DIGITS, formatPriceDigits, toPriceDigits } from '../utils/priceInput'
-import { searchPlaces } from '../api/places'
 
 const WIZARD_STEPS = [
   { number: 1, label: '기기 등록' },
@@ -31,6 +30,10 @@ const WIZARD_STEPS = [
 
 // 체크리스트 항목 하나에 첨부할 수 있는 사진·영상 개수 상한입니다.
 const MAX_MEDIA_PER_ITEM = 3
+
+// 화면에서 거래 지역을 받지 않기로 했지만 CreateProductRequest의 tradeRegion에 @NotBlank가 남아 있어
+// 값을 비우면 등록이 400으로 실패합니다. 백엔드에서 해당 제약이 풀리면 이 상수와 payload 항목을 함께 지우세요.
+const DEFAULT_TRADE_REGION = '협의'
 
 // 실제로 많이 쓰이는 용량만 골라 두고, 해당하지 않으면 직접 입력으로 넘어갑니다.
 const STORAGE_OPTIONS = [16, 32, 64, 128, 256, 512, 1024]
@@ -80,14 +83,46 @@ const draftProductId = ref(null)
 const activeStep = ref(1)
 const form = reactive({
   categoryId: '', deviceModelId: '', name: '', description: '', price: '',
-  color: '', storageGb: '', tradeRegion: '',
+  color: '', storageGb: '',
 })
 
-const tradeRegionResults = ref([])
-const isSearchingTradeRegion = ref(false)
-const showTradeRegionResults = ref(false)
-const hasSearchedTradeRegion = ref(false)
-let tradeRegionSearchTimer = null
+
+// TODO(대표 이미지 저장 연동): listing_image(THUMBNAIL) 등록 API가 아직 없습니다.
+// 목록·상세는 이미 thumbnailUrl을 읽어 표시하므로, 업로드 URL 발급과 등록 엔드포인트가 생기면
+// 아래 thumbnail 상태를 그 API로 올리고 goToStep2의 payload 또는 후속 호출에 연결하면 됩니다.
+const MAX_THUMBNAIL_BYTES = 10 * 1024 * 1024
+const thumbnail = ref(null)
+const isOptimizingThumbnail = ref(false)
+
+function removeThumbnail() {
+  if (thumbnail.value) URL.revokeObjectURL(thumbnail.value.previewUrl)
+  thumbnail.value = null
+}
+
+async function onThumbnailInput(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+  if (!file.type.startsWith('image/')) {
+    openAlert('이미지 파일만 대표 이미지로 등록할 수 있습니다.')
+    return
+  }
+  if (file.size > MAX_THUMBNAIL_BYTES) {
+    openAlert('대표 이미지는 10MB 이하만 등록할 수 있습니다.')
+    return
+  }
+
+  isOptimizingThumbnail.value = true
+  let optimized = file
+  try {
+    optimized = await compressImage(file)
+  } catch {
+    optimized = file
+  }
+  removeThumbnail()
+  thumbnail.value = { previewUrl: URL.createObjectURL(optimized), name: optimized.name }
+  isOptimizingThumbnail.value = false
+}
 
 // 사용자가 직접 입력을 고른 상태. 수정 진입 시 목록에 없는 용량이면 자동으로 직접 입력으로 보여줍니다.
 const isCustomStorage = ref(false)
@@ -138,44 +173,6 @@ function onStorageSelect(event) {
   form.storageGb = value
 }
 
-function clearTradeRegion() {
-  form.tradeRegion = ''
-  tradeRegionResults.value = []
-  hasSearchedTradeRegion.value = false
-  showTradeRegionResults.value = false
-}
-
-function onTradeRegionInput() {
-  showTradeRegionResults.value = true
-  clearTimeout(tradeRegionSearchTimer)
-  const keyword = form.tradeRegion.trim()
-  if (keyword.length < 2) {
-    tradeRegionResults.value = []
-    hasSearchedTradeRegion.value = false
-    return
-  }
-  tradeRegionSearchTimer = setTimeout(async () => {
-    isSearchingTradeRegion.value = true
-    try {
-      tradeRegionResults.value = await searchPlaces(keyword)
-    } catch {
-      tradeRegionResults.value = []
-    } finally {
-      isSearchingTradeRegion.value = false
-      hasSearchedTradeRegion.value = true
-    }
-  }, 300)
-}
-
-function selectTradeRegion(place) {
-  const address = place.roadAddressName || place.addressName
-  form.tradeRegion = place.placeName && place.placeName !== address
-    ? `${place.placeName} (${address})`
-    : address
-  tradeRegionResults.value = []
-  hasSearchedTradeRegion.value = false
-  showTradeRegionResults.value = false
-}
 
 // 체크리스트 관련: templateItems는 항목 가이드/허용 형식을 보여주기 위한 모델 템플릿,
 // checklistItems는 상품 생성 시 고정된 실제 스냅샷(evidence API 호출에 필요한 checklistItemId 포함).
@@ -193,6 +190,24 @@ const confirmState = reactive({})
 const mediaPreview = ref(null)
 // 체크리스트를 덜 채운 채 다음 단계를 누르면 인라인 문구만으로는 놓치기 쉬워 팝업으로 알립니다.
 const alertMessage = ref('')
+// 확인을 누르면 그대로 진행할 동작. 진행 없이 알리기만 할 때는 null입니다.
+const alertProceed = ref(null)
+
+function openAlert(message, proceed = null) {
+  alertMessage.value = message
+  alertProceed.value = proceed
+}
+
+function closeAlert() {
+  alertMessage.value = ''
+  alertProceed.value = null
+}
+
+function confirmAlert() {
+  const proceed = alertProceed.value
+  closeAlert()
+  if (proceed) proceed()
+}
 let mediaKeySeq = 0
 
 function mediaOf(checklistItemId) {
@@ -320,7 +335,7 @@ function resetForm() {
   activeStep.value = 1
   Object.assign(form, {
     categoryId: '', deviceModelId: '', name: '', description: '', price: '',
-    color: '', storageGb: '', tradeRegion: '',
+    color: '', storageGb: '',
   })
   models.value = []
   templateItems.value = []
@@ -331,8 +346,8 @@ function resetForm() {
   activeCaptureItemId.value = null
   handoverGuide.value = null
   isCustomStorage.value = false
-  hasSearchedTradeRegion.value = false
   priceRejection.value = ''
+  removeThumbnail()
   clearCaptureState()
   Object.keys(confirmState).forEach((key) => delete confirmState[key])
 }
@@ -374,8 +389,8 @@ async function loadTemplatePreview() {
 }
 
 function validateSaleInfo() {
-  if (!form.name || form.price === '' || !form.tradeRegion) {
-    errorMessage.value = '상품명, 가격, 거래 지역을 입력해 주세요.'
+  if (!form.name || form.price === '') {
+    errorMessage.value = '상품명과 가격을 입력해 주세요.'
     return false
   }
   if (!Number.isFinite(Number(form.price)) || Number(form.price) < 1) {
@@ -405,7 +420,7 @@ async function goToStep2() {
       price: Number(form.price),
       color: form.color || null,
       storageGb: form.storageGb ? Number(form.storageGb) : null,
-      tradeRegion: form.tradeRegion,
+      tradeRegion: DEFAULT_TRADE_REGION,
     }
     let productId = editingId.value
     if (productId) {
@@ -451,18 +466,26 @@ async function loadHandoverGuide() {
   }
 }
 
+// 체크리스트 항목이 많아 전부 채우지 않고 등록하려는 판매자도 있습니다.
+// 남은 항목을 알려주되, 확인을 누르면 그대로 다음 단계로 넘어갈 수 있게 합니다.
 function goToStep3() {
   errorMessage.value = ''
+  const proceed = () => {
+    setStep(3)
+    loadHandoverGuide()
+  }
   const missingRequired = mediaChecklistItems.value.filter(
     (item) => isRequiredItem(item) && mediaOf(item.checklistItemId).length === 0,
   )
   if (missingRequired.length) {
-    alertMessage.value = `아직 촬영하지 않은 필수 항목이 ${missingRequired.length}개 있습니다.\n${missingRequired.map((item) => `· ${item.name}`).join('\n')}`
     activeCaptureItemId.value = missingRequired[0].checklistItemId
+    openAlert(
+      `아직 촬영하지 않은 필수 항목이 ${missingRequired.length}개 있습니다.\n${missingRequired.map((item) => `· ${item.name}`).join('\n')}\n\n지금 넘어가도 나중에 이어서 등록할 수 있지만, 자료가 많을수록 구매자의 신뢰를 얻기 쉽습니다.`,
+      proceed,
+    )
     return
   }
-  setStep(3)
-  loadHandoverGuide()
+  proceed()
 }
 
 function goToStep4() {
@@ -471,7 +494,10 @@ function goToStep4() {
     (item) => isRequiredItem(item) && !confirmState[item.checklistItemId],
   )
   if (missingConfirm.length) {
-    alertMessage.value = `개인정보 정리 확인이 남아 있습니다.\n${missingConfirm.map((item) => `· ${item.name}`).join('\n')}`
+    openAlert(
+      `개인정보 정리 확인이 남아 있습니다.\n${missingConfirm.map((item) => `· ${item.name}`).join('\n')}\n\n기기를 넘기기 전에 반드시 초기화해 주세요.`,
+      () => setStep(4),
+    )
     return
   }
   setStep(4)
@@ -519,7 +545,7 @@ async function handleCaptureFile(item, file) {
   const itemId = item.checklistItemId
   if (!captureState[itemId]) captureState[itemId] = { media: [], busy: '' }
   if (captureState[itemId].media.length >= MAX_MEDIA_PER_ITEM) {
-    alertMessage.value = `‘${item.name}’ 항목은 최대 ${MAX_MEDIA_PER_ITEM}개까지 첨부할 수 있습니다.`
+    openAlert(`‘${item.name}’ 항목은 최대 ${MAX_MEDIA_PER_ITEM}개까지 첨부할 수 있습니다.`)
     return
   }
   errorMessage.value = ''
@@ -603,7 +629,6 @@ async function startEdit(productId) {
       deviceModelId: product.device?.deviceModelId || '',
       name: product.name || '', description: product.description || '', price: product.price || '',
       color: product.device?.color || '', storageGb: product.device?.storageGb || '',
-      tradeRegion: product.tradeRegion || '',
     })
     if (form.categoryId) models.value = await getDeviceModels({ categoryId: form.categoryId, page: 0, size: 100 })
     if (form.deviceModelId) await loadTemplatePreview()
@@ -927,64 +952,6 @@ onMounted(async () => {
                   class="mt-2 w-full rounded-md border border-border px-3 py-3 font-normal outline-none focus:border-primary"
                 >
               </label>
-              <label class="relative text-sm font-semibold text-text-main sm:col-span-2">
-                거래 지역
-                <div class="relative mt-2">
-                  <input
-                    v-model.trim="form.tradeRegion"
-                    required
-                    maxlength="100"
-                    placeholder="역, 랜드마크로 검색 (예: 상동역)"
-                    autocomplete="off"
-                    class="w-full rounded-md border border-border px-3 py-3 pr-10 font-normal outline-none focus:border-primary"
-                    @input="onTradeRegionInput"
-                    @focus="showTradeRegionResults = true"
-                    @blur="showTradeRegionResults = false"
-                  >
-                  <button
-                    v-if="form.tradeRegion"
-                    type="button"
-                    class="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-text-sub transition hover:bg-bg hover:text-text-main"
-                    aria-label="거래 지역 지우기"
-                    @click="clearTradeRegion"
-                  >
-                    ×
-                  </button>
-                </div>
-                <span class="mt-1 block text-xs font-normal text-text-sub">
-                  두 글자 이상 입력하면 장소를 검색합니다. 검색 결과가 없으면 직접 적어도 됩니다.
-                </span>
-                <ul
-                  v-if="showTradeRegionResults && (tradeRegionResults.length || isSearchingTradeRegion || hasSearchedTradeRegion)"
-                  class="absolute z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-md border border-border bg-white text-left shadow-lg"
-                >
-                  <li
-                    v-if="isSearchingTradeRegion"
-                    class="px-3 py-2 text-xs font-normal text-text-sub"
-                  >
-                    검색 중...
-                  </li>
-                  <li
-                    v-else-if="!tradeRegionResults.length"
-                    class="px-3 py-2 text-xs font-normal text-text-sub"
-                  >
-                    검색 결과가 없습니다. 입력한 내용을 그대로 사용할 수 있습니다.
-                  </li>
-                  <li
-                    v-for="place in tradeRegionResults"
-                    :key="`${place.placeName}-${place.addressName}`"
-                  >
-                    <button
-                      type="button"
-                      class="w-full px-3 py-2 text-left text-sm font-normal hover:bg-accent"
-                      @mousedown.prevent="selectTradeRegion(place)"
-                    >
-                      <span class="block font-semibold text-text-main">{{ place.placeName || place.addressName }}</span>
-                      <span class="block text-xs text-text-sub">{{ place.roadAddressName || place.addressName }}</span>
-                    </button>
-                  </li>
-                </ul>
-              </label>
               <label class="text-sm font-semibold text-text-main sm:col-span-2">
                 상품 설명
                 <textarea
@@ -995,6 +962,64 @@ onMounted(async () => {
                   class="mt-2 w-full rounded-md border border-border px-3 py-3 font-normal outline-none focus:border-primary"
                 />
               </label>
+
+              <div class="sm:col-span-2">
+                <p class="text-sm font-semibold text-text-main">
+                  대표 이미지
+                </p>
+                <p class="mt-1 text-xs text-text-sub">
+                  목록과 상세에서 가장 먼저 보이는 사진입니다. 1장만 등록할 수 있습니다.
+                </p>
+                <div class="mt-2 flex items-start gap-4">
+                  <div class="flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-bg">
+                    <img
+                      v-if="thumbnail"
+                      :src="thumbnail.previewUrl"
+                      alt="대표 이미지 미리보기"
+                      class="h-full w-full object-cover"
+                    >
+                    <span
+                      v-else
+                      class="px-2 text-center text-[11px] text-text-sub"
+                    >미등록</span>
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <label class="inline-block">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        class="hidden"
+                        aria-label="대표 이미지 선택"
+                        :disabled="isOptimizingThumbnail"
+                        @change="onThumbnailInput"
+                      >
+                      <span
+                        class="inline-block rounded-md border border-border px-3 py-2 text-sm font-semibold text-text-main transition hover:border-primary"
+                        :class="isOptimizingThumbnail ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'"
+                      >
+                        {{ isOptimizingThumbnail ? '처리 중…' : thumbnail ? '다른 이미지 선택' : '이미지 선택' }}
+                      </span>
+                    </label>
+                    <button
+                      v-if="thumbnail"
+                      type="button"
+                      class="ml-2 text-xs font-semibold text-red-600"
+                      @click="removeThumbnail"
+                    >
+                      삭제
+                    </button>
+                    <p
+                      v-if="thumbnail"
+                      class="mt-2 truncate text-xs text-text-sub"
+                    >
+                      {{ thumbnail.name }}
+                    </p>
+                    <p class="mt-2 text-[11px] leading-4 text-amber-700">
+                      아직 이미지 저장 API가 연결되지 않아, 지금은 이 화면에서만 미리 확인할 수 있습니다.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </section>
 
@@ -1014,7 +1039,8 @@ onMounted(async () => {
                 현재 진행률: {{ mediaChecklistItems.length }}개 중 {{ capturedMediaCount }}개 촬영 완료
               </p>
 
-              <ul class="mt-4 space-y-3">
+              <!-- 항목이 많으면 화면이 길어져서 6개 정도만 보이고 나머지는 스크롤로 봅니다. -->
+              <ul class="mt-4 max-h-[32rem] space-y-3 overflow-y-auto pr-1">
                 <li
                   v-for="item in mediaChecklistItems"
                   :key="item.checklistItemId"
@@ -1382,22 +1408,31 @@ onMounted(async () => {
         role="alertdialog"
         aria-modal="true"
         aria-label="확인 필요"
-        @click.self="alertMessage = ''"
+        @click.self="closeAlert"
       >
         <div class="w-full max-w-sm rounded-lg bg-surface p-6 text-center shadow-elevated">
           <div class="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-accent text-xl font-bold text-primary">
             !
           </div>
-          <p class="mt-4 whitespace-pre-line text-sm leading-6 text-text-main">
+          <p class="mt-4 whitespace-pre-line text-left text-sm leading-6 text-text-main">
             {{ alertMessage }}
           </p>
-          <BaseButton
-            block
-            class="mt-5"
-            @click="alertMessage = ''"
-          >
-            확인
-          </BaseButton>
+          <div class="mt-5 flex gap-3">
+            <BaseButton
+              v-if="alertProceed"
+              variant="outline"
+              class="flex-1"
+              @click="closeAlert"
+            >
+              계속 작성하기
+            </BaseButton>
+            <BaseButton
+              class="flex-1"
+              @click="confirmAlert"
+            >
+              확인
+            </BaseButton>
+          </div>
         </div>
       </div>
 

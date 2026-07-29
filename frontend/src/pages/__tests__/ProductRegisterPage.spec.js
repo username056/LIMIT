@@ -72,7 +72,6 @@ async function fillDeviceStep(wrapper) {
 
   await wrapper.find('input[placeholder="예: 갤럭시 S24 256GB 자급제"]').setValue('갤럭시 북 테스트 상품')
   await wrapper.find('input[placeholder="판매 가격"]').setValue('850000')
-  await wrapper.find('input[placeholder="역, 랜드마크로 검색 (예: 상동역)"]').setValue('광주광역시 광산구')
 }
 
 async function goToCaptureStep(wrapper) {
@@ -145,7 +144,8 @@ describe('ProductRegisterPage', () => {
       price: 850000,
       color: '그라파이트',
       storageGb: 512,
-      tradeRegion: '광주광역시 광산구',
+      // 화면에서는 거래 지역을 받지 않지만 백엔드 @NotBlank 때문에 기본값을 채워 보냅니다.
+      tradeRegion: '협의',
     })
     expect(getProductChecklist).toHaveBeenCalledWith(1001)
     expect(wrapper.text()).toContain('검수용 기기 촬영')
@@ -267,6 +267,45 @@ describe('ProductRegisterPage', () => {
     expect(priceInput.element.value).toBe('123,456,789,012')
   })
 
+  it('등록 폼에서 거래 지역을 받지 않는다', async () => {
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('거래 지역')
+    expect(wrapper.find('input[placeholder="역, 랜드마크로 검색 (예: 상동역)"]').exists()).toBe(false)
+  })
+
+  it('대표 이미지는 미리보기로 확인하고 삭제할 수 있다', async () => {
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('대표 이미지')
+    expect(wrapper.text()).toContain('미등록')
+    expect(wrapper.find('img[alt="대표 이미지 미리보기"]').exists()).toBe(false)
+
+    const input = wrapper.find('input[aria-label="대표 이미지 선택"]')
+    await attachFile(input, new File(['x'], 'thumb.jpg', { type: 'image/jpeg' }))
+    await flushPromises()
+
+    expect(wrapper.find('img[alt="대표 이미지 미리보기"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('thumb.jpg')
+
+    await buttonByText(wrapper, '삭제').trigger('click')
+    expect(wrapper.find('img[alt="대표 이미지 미리보기"]').exists()).toBe(false)
+  })
+
+  it('대표 이미지는 이미지 파일만 받는다', async () => {
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+
+    const input = wrapper.find('input[aria-label="대표 이미지 선택"]')
+    await attachFile(input, new File(['x'], 'spec.pdf', { type: 'application/pdf' }))
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('이미지 파일만 대표 이미지로 등록할 수 있습니다.')
+    expect(wrapper.find('img[alt="대표 이미지 미리보기"]').exists()).toBe(false)
+  })
+
   it('저장 용량은 드롭다운으로 고르거나 직접 입력할 수 있다', async () => {
     const wrapper = mount(ProductRegisterPage, { global: globalOptions })
     await flushPromises()
@@ -287,7 +326,7 @@ describe('ProductRegisterPage', () => {
     expect(createProduct).toHaveBeenCalledWith(expect.objectContaining({ storageGb: 384 }))
   })
 
-  it('필수 촬영 항목이 남으면 팝업으로 알리고 단계를 넘기지 않는다', async () => {
+  it('필수 촬영 항목이 남으면 팝업으로 알리되 계속 작성하기를 누르면 그 단계에 머문다', async () => {
     const wrapper = mount(ProductRegisterPage, { global: globalOptions })
     await flushPromises()
     await goToCaptureStep(wrapper)
@@ -297,10 +336,48 @@ describe('ProductRegisterPage', () => {
 
     expect(wrapper.find('[role="alertdialog"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('아직 촬영하지 않은 필수 항목이 1개 있습니다.')
-    expect(wrapper.text()).toContain('검수용 기기 촬영')
 
-    await buttonByText(wrapper, '확인').trigger('click')
+    await buttonByText(wrapper, '계속 작성하기').trigger('click')
+    await flushPromises()
+
     expect(wrapper.find('[role="alertdialog"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('검수용 기기 촬영')
+    expect(wrapper.text()).not.toContain('개인정보를 정리했는지 확인해 주세요.')
+  })
+
+  it('필수 촬영 항목이 남아도 확인을 누르면 다음 단계로 넘어간다', async () => {
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await goToCaptureStep(wrapper)
+
+    await buttonByText(wrapper, '다음 단계로').trigger('click')
+    await flushPromises()
+    await buttonByText(wrapper, '확인').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[role="alertdialog"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('개인정보를 정리했는지 확인해 주세요.')
+  })
+
+  it('개인정보 확인이 남아도 확인을 누르면 등록완료 단계로 넘어간다', async () => {
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await goToCaptureStep(wrapper)
+
+    // 촬영을 건너뛰고 3단계로 이동
+    await buttonByText(wrapper, '다음 단계로').trigger('click')
+    await flushPromises()
+    await buttonByText(wrapper, '확인').trigger('click')
+    await flushPromises()
+
+    // 개인정보 확인도 건너뛰고 4단계로 이동
+    await buttonByText(wrapper, '다음 단계로').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('개인정보 정리 확인이 남아 있습니다.')
+    await buttonByText(wrapper, '확인').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('체크리스트 등록이 완료되었습니다.')
   })
 
   it('체크리스트 항목당 사진은 3개까지만 첨부할 수 있다', async () => {
