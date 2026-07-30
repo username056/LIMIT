@@ -68,6 +68,7 @@ public enum ErrorCode {
     RTC_SESSION_EXPIRED("RTC003", HttpStatus.GONE, "실시간 확인 세션이 만료되었습니다."),
     RTC_SESSION_CLOSED("RTC004", HttpStatus.CONFLICT, "이미 종료된 실시간 확인 세션입니다."),
     RTC_INVALID_STATE("RTC005", HttpStatus.CONFLICT, "현재 상태에서는 실시간 확인 요청을 처리할 수 없습니다."),
+    RTC_ACTIVE_APPOINTMENT_EXISTS("RTC006", HttpStatus.CONFLICT, "이미 확정되었거나 응답을 기다리는 검증 일정이 있습니다."),
 
     SELLER_APPLICATION_NOT_FOUND("SEL001", HttpStatus.NOT_FOUND, "판매자 신청서를 찾을 수 없습니다."),
     ACTIVE_SELLER_APPLICATION_EXISTS("SEL002", HttpStatus.CONFLICT, "처리 중인 판매자 신청서가 있습니다."),

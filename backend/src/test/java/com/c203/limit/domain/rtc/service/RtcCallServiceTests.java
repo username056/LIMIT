@@ -10,6 +10,7 @@ import com.c203.limit.domain.call.entity.CallAppointment;
 import com.c203.limit.domain.call.repository.CallAppointmentRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomRepository;
 import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
+import com.c203.limit.domain.member.repository.MemberRepository;
 import com.c203.limit.domain.rtc.domain.RtcSessionStatus;
 import com.c203.limit.domain.rtc.dto.request.EndRtcSessionRequest;
 import com.c203.limit.domain.rtc.dto.request.RtcChecklistResultRequest;
@@ -24,6 +25,7 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 
 class RtcCallServiceTests {
     private CallAppointmentRepository appointmentRepository;
@@ -42,6 +44,8 @@ class RtcCallServiceTests {
                         mock(ChatRoomRepository.class),
                         mock(ListingChecklistItemRepository.class),
                         new RtcJoinTokenStore(),
+                        mock(ApplicationEventPublisher.class),
+                        mock(MemberRepository.class),
                         "stun:example.test:3478",
                         "",
                         "",

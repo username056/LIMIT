@@ -46,7 +46,7 @@ class ChatMessageControllerTests {
         UUID clientMessageId = UUID.randomUUID();
         ChatMessageResponse message = new ChatMessageResponse(
                 50L, 3L, 20L, clientMessageId, "TEXT", "안녕하세요", "SENT",
-                LocalDateTime.of(2026, 7, 28, 9, 0), List.of());
+                LocalDateTime.of(2026, 7, 28, 9, 0), List.of(), null, null);
         when(currentUser.memberId()).thenReturn(20L);
         when(chatRoomService.sendMessage(eq(10L), eq(20L), any()))
                 .thenReturn(new ChatMessageSendResult(message, true));
@@ -68,7 +68,7 @@ class ChatMessageControllerTests {
         UUID clientMessageId = UUID.randomUUID();
         ChatMessageResponse message = new ChatMessageResponse(
                 50L, 3L, 20L, clientMessageId, "TEXT", "안녕하세요", "SENT",
-                LocalDateTime.of(2026, 7, 28, 9, 0), List.of());
+                LocalDateTime.of(2026, 7, 28, 9, 0), List.of(), null, null);
         when(currentUser.memberId()).thenReturn(20L);
         when(chatRoomService.sendMessage(eq(10L), eq(20L), any()))
                 .thenReturn(new ChatMessageSendResult(message, false));

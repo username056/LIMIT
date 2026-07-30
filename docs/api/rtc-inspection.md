@@ -22,10 +22,14 @@
 | GET | `/api/v1/rtc-sessions/{sessionId}` | 세션·상품 체크리스트 조회 |
 | POST | `/api/v1/rtc-sessions/{sessionId}/join` | 최초 입장·재입장용 2분 단기 토큰 발급 |
 | POST | `/api/v1/rtc-sessions/{sessionId}/connected` | P2P 또는 TURN 연결 성공 기록 |
-| POST | `/api/v1/rtc-sessions/{sessionId}/end` | 체크리스트·메모 저장 후 종료 |
+| POST | `/api/v1/rtc-sessions/{sessionId}/end` | 체크리스트·메모 저장 후 연결 종료, 30분 재입장 유예 시작 |
 | WS | `/ws/rtc?token=...` | offer, answer, ICE, 재협상, 부위 요청, 종료 중계 |
 
 모든 REST 성공 응답은 `{ "data": ..., "meta": null }` 형식이다. WebSocket 입장 토큰은 REST 인증 후 발급되며 한 번 사용하면 즉시 폐기된다.
+
+`GET /api/v1/calls` 응답은 일정 시각 `scheduledAt`, 상대 닉네임 `counterpartName`,
+세션 만료 시각 `sessionExpiresAt`을 포함한다. 같은 채팅방에 `PROPOSED` 또는 `ACCEPTED`
+일정이 있으면 새 일정 생성은 `RTC006`으로 거절하고 기존 일정이 있음을 안내한다.
 
 ## 연결 실패와 재입장
 
@@ -33,6 +37,8 @@
 2. 시그널링 연결이 끊기거나 복구되지 않으면 사용자가 재입장 버튼으로 새 단기 토큰을 발급받는다.
 3. 같은 회원이 재입장하면 서버는 해당 회원의 이전 WebSocket을 닫고 최신 연결로 교체한다.
 4. 상대가 나가면 `peer-left`, 특정 확인 요청은 `inspection-request` 이벤트로 전달한다.
+5. 한 참가자가 종료하면 현재 P2P 연결만 끊고 세션은 30분 동안 재입장을 허용한다.
+   유예 시간이 지나면 분 단위 만료 스캔 또는 다음 입장 시점에 `EXPIRED`로 전환한다.
 
 ## 환경 계약
 

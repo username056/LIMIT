@@ -110,6 +110,14 @@ public class RtcSession {
         endedAt = LocalDateTime.now();
     }
 
+    public void disconnect(RtcEndReason reason, String memo, LocalDateTime expiresAt) {
+        if (status == RtcSessionStatus.ENDED || status == RtcSessionStatus.EXPIRED) return;
+        status = RtcSessionStatus.WAITING;
+        endReason = reason;
+        verificationMemo = memo;
+        this.expiresAt = expiresAt;
+    }
+
     public boolean expireIfDue(LocalDateTime now) {
         if (status == RtcSessionStatus.ENDED || status == RtcSessionStatus.EXPIRED) return false;
         if (expiresAt != null && expiresAt.isAfter(now)) {

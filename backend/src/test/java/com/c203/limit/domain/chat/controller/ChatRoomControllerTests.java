@@ -103,7 +103,7 @@ class ChatRoomControllerTests {
     void returnsMessagesAfterLastReceivedSequence() throws Exception {
         ChatMessageResponse message = new ChatMessageResponse(
                 101L, 8L, SELLER_ID, new UUID(0L, 1L), "TEXT", "안녕하세요", "SENT",
-                LocalDateTime.of(2026, 7, 23, 12, 0), List.of());
+                LocalDateTime.of(2026, 7, 23, 12, 0), List.of(), null, null);
         when(currentUser.memberId()).thenReturn(BUYER_ID);
         when(chatRoomService.findMessages(ROOM_ID, BUYER_ID, null, 7L, 10))
                 .thenReturn(new CursorResponse<>(List.of(message), null, false));

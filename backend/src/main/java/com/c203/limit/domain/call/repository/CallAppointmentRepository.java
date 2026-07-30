@@ -1,5 +1,6 @@
 package com.c203.limit.domain.call.repository;
 
+import com.c203.limit.domain.call.domain.AppointmentStatus;
 import com.c203.limit.domain.call.entity.CallAppointment;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -10,4 +11,6 @@ public interface CallAppointmentRepository extends JpaRepository<CallAppointment
     @Query(
             "SELECT a FROM CallAppointment a WHERE a.proposerId = :memberId OR a.respondentId = :memberId ORDER BY a.id DESC")
     List<CallAppointment> findMine(@Param("memberId") Long memberId);
+
+    boolean existsByChatRoomIdAndStatusIn(Long chatRoomId, List<AppointmentStatus> statuses);
 }

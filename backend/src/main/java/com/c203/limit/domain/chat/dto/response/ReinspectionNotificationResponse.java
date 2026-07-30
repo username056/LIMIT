@@ -5,6 +5,7 @@ import java.util.List;
 
 public record ReinspectionNotificationResponse(
         String requestKey,
+        Long listingId,
         int pendingRequestCount,
         String reason,
         List<Item> items,
@@ -14,6 +15,7 @@ public record ReinspectionNotificationResponse(
             ReinspectionNotificationEvent event) {
         return new ReinspectionNotificationResponse(
                 event.requestKey(),
+                event.listingId(),
                 event.pendingRequestCount(),
                 event.reason(),
                 event.items().stream()

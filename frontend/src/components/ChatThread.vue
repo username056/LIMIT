@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { getChatMediaBlob, getChatMessages, uploadChatMedia } from '../api/chat'
 import { createChatSocket } from '../api/chatSocket'
-import { getProduct, getProductChecklist } from '../api/products'
+import { getMyReinspectionRequests, getProduct, getProductChecklist } from '../api/products'
 import { getMyRtcCalls, requestRtcCall, respondRtcCall } from '../api/rtc'
 import { useAuthSession } from '../auth/session'
 
@@ -18,6 +18,7 @@ const session = useAuthSession()
 const myMemberId = computed(() => session.value?.member?.memberId ?? null)
 
 const product = ref(null)
+const isSeller = computed(() => Number(product.value?.sellerId) === Number(myMemberId.value))
 const checklistItems = ref([])
 const isChecklistOpen = ref(false)
 const messages = ref([])
@@ -42,6 +43,8 @@ let connectionVersion = 0
 let reconnectTimer = null
 const mediaObjectUrls = new Set()
 const LAST_TIMELINE_ORDER = 2147483647
+const now = ref(Date.now())
+const countdownTimer = setInterval(() => { now.value = Date.now() }, 1000)
 
 async function attachMediaUrls(message) {
   if (!message.media?.length) return message
@@ -60,12 +63,95 @@ async function attachMediaUrls(message) {
   return { ...message, media }
 }
 
+function matchesReinspectionRequest(message, request) {
+  if (Number(request.listingId) !== Number(props.room.listingId)) return false
+  const content = message.content || ''
+  if (request.reason && content.includes(request.reason)) return true
+  const itemNames = request.items?.map((item) => item.itemName).filter(Boolean) || []
+  return itemNames.length > 0 && itemNames.every((name) => content.includes(name))
+}
+
+function restoreReinspectionFromContent(message) {
+  if (message.type !== 'SYSTEM' || message.reinspection) return message
+  const content = String(message.content || '')
+  if (content.includes('재검수가 완료되었습니다')) {
+    return {
+      ...message,
+      notificationType: 'REINSPECTION_COMPLETED',
+      reinspection: {
+        listingId: props.room.listingId,
+        items: [],
+      },
+    }
+  }
+  if (!content.includes('재검수 요청')) return message
+
+  const lines = content.split('\n').map((line) => line.trim()).filter(Boolean)
+  const reasonLine = lines.find((line) => line.startsWith('사유:'))
+  const items = lines
+    .filter((line) => line.startsWith('- '))
+    .map((line) => ({
+      name: line.slice(2).split(':')[0].trim(),
+      requestContent: null,
+    }))
+    .filter((item) => item.name)
+  return {
+    ...message,
+    notificationType: 'REINSPECTION_REQUESTED',
+    reinspection: {
+      listingId: props.room.listingId,
+      reason: reasonLine?.slice('사유:'.length).trim() || null,
+      items,
+    },
+  }
+}
+
+async function restoreReinspectionCards(loadedMessages) {
+  const withCompletedCards = loadedMessages.map(restoreReinspectionFromContent)
+  const plainNotifications = loadedMessages.filter(
+    (message) => message.type === 'SYSTEM'
+      && !message.reinspection
+      && message.content?.includes('재검수 요청'),
+  )
+  if (!plainNotifications.length) return withCompletedCards
+
+  try {
+    const requests = await getMyReinspectionRequests()
+    return withCompletedCards.map((message) => {
+      const isPlainNotification = plainNotifications.some(
+        (candidate) => candidate.clientMessageId === message.clientMessageId,
+      )
+      if (!isPlainNotification) return message
+      const request = requests.find((candidate) => matchesReinspectionRequest(message, candidate))
+      if (!request) return restoreReinspectionFromContent(message)
+      return {
+        ...message,
+        notificationType: 'REINSPECTION_REQUESTED',
+        reinspection: {
+          requestKey: request.requestKey,
+          listingId: request.listingId,
+          reason: request.reason,
+          items: (request.items || []).map((item) => ({
+            name: item.itemName,
+            requestContent: item.requestContent,
+          })),
+        },
+      }
+    })
+  } catch {
+    return loadedMessages.map(restoreReinspectionFromContent)
+  }
+}
+
 async function loadMessages(roomId) {
   isLoadingMessages.value = true
   messagesError.value = ''
   try {
     const result = await getChatMessages(roomId, { size: 50 })
-    messages.value = await Promise.all((result?.content || []).slice().reverse().map(attachMediaUrls))
+    const loadedMessages = await Promise.all(
+      (result?.content || []).slice().reverse().map(attachMediaUrls),
+    )
+    messages.value = await restoreReinspectionCards(loadedMessages)
     markRead()
   } catch (error) {
     messagesError.value = error.message || '메시지를 불러오지 못했습니다.'
@@ -75,7 +161,7 @@ async function loadMessages(roomId) {
 }
 
 async function upsertMessage(message) {
-  const hydrated = await attachMediaUrls(message)
+  const hydrated = await attachMediaUrls(restoreReinspectionFromContent(message))
   const indexByClientId = messages.value.findIndex((item) => item.clientMessageId === message.clientMessageId)
   if (indexByClientId >= 0) {
     messages.value[indexByClientId] = { ...messages.value[indexByClientId], ...hydrated, isPending: false }
@@ -97,10 +183,29 @@ function messageTimelineOrder(roomSequence) {
   return Math.min(sequence * 2, LAST_TIMELINE_ORDER - 1)
 }
 
+function isMessageOnMySide(message) {
+  if (message.notificationType === 'REINSPECTION_REQUESTED') return isSeller.value
+  if (message.notificationType === 'REINSPECTION_COMPLETED') return !isSeller.value
+  return Number(message.senderId) === Number(myMemberId.value)
+}
+
+function appointmentNotificationDetails(content) {
+  return String(content || '').split('\n').slice(1)
+}
+
+function isAppointmentNotification(message) {
+  return message.type === 'SYSTEM'
+    && message.content?.startsWith('검증 약속이 변경됐어요!')
+}
+
 function appointmentTimelineOrder() {
   const sequence = Number(appointmentAnchorSequence.value)
   if (!Number.isSafeInteger(sequence) || sequence < 0) return LAST_TIMELINE_ORDER - 2
   return Math.min(sequence * 2 + 1, LAST_TIMELINE_ORDER - 1)
+}
+
+function reanchorAppointment() {
+  anchoredAppointmentId.value = null
 }
 
 function markRead() {
@@ -138,6 +243,17 @@ function connectSocket(roomId) {
       if (version !== connectionVersion) return
       if (event.type === 'MESSAGE' && event.message) {
         await upsertMessage(event.message)
+        markRead()
+        emit('room-updated')
+      } else if (event.type === 'CALL_APPOINTMENT_UPDATED') {
+        reanchorAppointment()
+        await loadAppointments(roomId)
+      } else if (event.type?.startsWith('REINSPECTION_') && event.message) {
+        await upsertMessage({
+          ...event.message,
+          reinspection: event.reinspection,
+          notificationType: event.type,
+        })
         markRead()
         emit('room-updated')
       } else if (event.type === 'READ' && event.readerId !== myMemberId.value) {
@@ -222,7 +338,28 @@ async function loadAppointments(roomId) {
   }
 }
 
-const latestAppointment = computed(() => appointments.value[0] || null)
+function isAppointmentExpired(appointment) {
+  if (!appointment?.scheduledAt) return false
+  return new Date(appointment.scheduledAt).getTime() + 30 * 60 * 1000 <= now.value
+}
+
+function appointmentRemainingTime(appointment) {
+  if (!appointment?.scheduledAt) return null
+  const scheduledAt = new Date(appointment.scheduledAt).getTime()
+  if (now.value < scheduledAt) return null
+  return remainingSessionTime(new Date(scheduledAt + 30 * 60 * 1000).toISOString())
+}
+
+function shouldDisplayAppointmentMemo(memo) {
+  return Boolean(memo) && !memo.trim().endsWith('상태 실시간 확인 요청')
+}
+
+const latestAppointment = computed(
+  () => appointments.value.find(
+    (appointment) => ['PROPOSED', 'ACCEPTED'].includes(appointment.status)
+      && !isAppointmentExpired(appointment),
+  ) || null,
+)
 const checkedChecklistCount = computed(
   () => checklistItems.value.filter((item) => isCheckedChecklistItem(item)).length,
 )
@@ -261,13 +398,16 @@ async function requestCallAppointment() {
       scheduledAt: `${callScheduledAt.value}:00`,
       memo: callMemo.value.trim() || null,
     })
+    reanchorAppointment()
     await loadAppointments(props.room.roomId)
     callMessage.value = '통화 약속을 요청했습니다.'
     isCallFormOpen.value = false
     callScheduledAt.value = ''
     callMemo.value = ''
   } catch (error) {
-    callMessage.value = error.message || '통화 약속을 요청하지 못했습니다.'
+    callMessage.value = error.code === 'RTC006'
+      ? '이미 확정되었거나 응답을 기다리는 검증 일정이 있어요.'
+      : error.message || '검증 일정을 요청하지 못했습니다.'
   } finally {
     isRequestingCall.value = false
   }
@@ -280,6 +420,7 @@ async function respondAppointment(accepted) {
   callMessage.value = ''
   try {
     await respondRtcCall(appointment.callId, accepted, accepted ? null : '요청 거절')
+    reanchorAppointment()
     await loadAppointments(props.room.roomId)
     callMessage.value = accepted ? '통화 약속을 수락했습니다.' : '통화 약속을 거절했습니다.'
   } catch (error) {
@@ -368,9 +509,23 @@ function formatAppointmentTime(isoString) {
   }).format(new Date(isoString))
 }
 
+function remainingSessionTime(expiresAt) {
+  if (!expiresAt) return null
+  const remainingSeconds = Math.max(
+    0,
+    Math.floor((new Date(expiresAt).getTime() - now.value) / 1000),
+  )
+  const hours = Math.floor(remainingSeconds / 3600)
+  const minutes = Math.floor((remainingSeconds % 3600) / 60)
+  const seconds = remainingSeconds % 60
+  if (hours > 0) return `${hours}시간 ${minutes}분 ${seconds}초`
+  return `${minutes}분 ${seconds}초`
+}
+
 onBeforeUnmount(() => {
   connectionVersion += 1
   clearTimeout(reconnectTimer)
+  clearInterval(countdownTimer)
   socketStatus.value = 'closed'
   chatSocket?.close()
   mediaObjectUrls.forEach((url) => URL.revokeObjectURL(url))
@@ -527,14 +682,120 @@ onBeforeUnmount(() => {
           :data-message-sequence="message.roomSequence"
           :data-testid="message.isPending ? 'pending-message' : undefined"
           class="flex flex-col"
-          :class="message.senderId === myMemberId ? 'items-end' : 'items-start'"
+          :class="isMessageOnMySide(message) ? 'items-end' : 'items-start'"
           :style="{ order: messageTimelineOrder(message.roomSequence) }"
         >
           <div
             class="max-w-[75%] rounded-lg px-4 py-2.5 text-sm leading-6"
-            :class="message.senderId === myMemberId ? 'bg-primary-deep text-white' : 'bg-bg text-text-main'"
+            :class="message.type === 'SYSTEM' && (message.reinspection || isAppointmentNotification(message))
+              ? 'bg-transparent p-0 text-text-main'
+              : message.senderId === myMemberId
+                ? 'bg-primary-deep text-white'
+                : 'bg-bg text-text-main'"
           >
-            <template v-if="message.type === 'TEXT' || message.type === 'SYSTEM'">
+            <template v-if="message.type === 'SYSTEM' && message.reinspection">
+              <div
+                data-testid="system-notification-card"
+                class="min-w-[280px] rounded-xl border border-primary/25 p-4 text-text-main shadow-sm sm:min-w-[360px]"
+              >
+                <p class="mb-2 text-xs font-bold text-primary">
+                  재검수 요청
+                </p>
+                <p class="font-bold text-text-main">
+                  {{ message.notificationType === 'REINSPECTION_COMPLETED'
+                    ? '재검수를 완료했어요!'
+                    : '재검수 요청이 들어왔어요!' }}
+                </p>
+                <details
+                  v-if="message.notificationType === 'REINSPECTION_REQUESTED'"
+                  class="group mt-3"
+                  open
+                >
+                  <summary class="cursor-pointer list-none text-sm font-semibold text-primary">
+                    <span class="group-open:hidden">펼쳐보기</span>
+                    <span class="hidden group-open:inline">접기</span>
+                  </summary>
+                  <div class="mt-3 border-t border-border pt-3">
+                    <div class="rounded-xl border border-primary/15 bg-accent/50 px-3.5 py-3">
+                      <p class="text-xs font-bold text-primary-dark">
+                        요청 내용
+                      </p>
+                      <p class="mt-1 text-sm leading-5 text-text-main">
+                        {{ message.reinspection.reason || '별도 요청 내용이 없습니다.' }}
+                      </p>
+                    </div>
+                    <p class="mt-4 text-xs font-bold text-text-sub">
+                      선택한 체크리스트
+                    </p>
+                    <ul class="mt-2 grid gap-2 sm:grid-cols-2">
+                      <li
+                        v-for="item in message.reinspection.items || []"
+                        :key="`${message.messageId}-${item.name}`"
+                        class="flex min-w-0 items-center gap-2.5 rounded-lg border border-primary/15 bg-white px-3 py-2.5"
+                      >
+                        <span
+                          aria-hidden="true"
+                          class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-white"
+                        >
+                          ✓
+                        </span>
+                        <span class="truncate text-sm font-semibold text-text-main">
+                          {{ item.name }}
+                        </span>
+                      </li>
+                    </ul>
+                    <RouterLink
+                      v-if="message.reinspection.requestKey && message.notificationType === 'REINSPECTION_REQUESTED'"
+                      :to="{
+                        name: 'seller-product-edit',
+                        params: { productId: message.reinspection.listingId || room.listingId },
+                        query: { reinspectionRequestKey: message.reinspection.requestKey },
+                      }"
+                      class="mt-4 block rounded-lg bg-primary-gradient px-4 py-2.5 text-center text-sm font-bold text-white"
+                    >
+                      바로 재촬영하기
+                    </RouterLink>
+                  </div>
+                </details>
+                <RouterLink
+                  v-else
+                  :to="{
+                    name: 'product-detail',
+                    params: { productId: message.reinspection.listingId || room.listingId },
+                  }"
+                  class="mt-4 block rounded-lg bg-primary-gradient px-4 py-2.5 text-center text-sm font-bold text-white"
+                >
+                  확인하러 가기
+                </RouterLink>
+              </div>
+            </template>
+            <template
+              v-else-if="isAppointmentNotification(message)"
+            >
+              <div
+                data-testid="appointment-notification-card"
+                class="min-w-[280px] rounded-xl border border-primary/25 p-4 text-text-main shadow-sm sm:min-w-[360px]"
+              >
+                <p class="mb-2 text-xs font-bold text-primary">
+                  약속 알림
+                </p>
+                <p class="font-bold text-text-main">
+                  검증 약속이 변경됐어요!
+                </p>
+                <ul class="mt-3 space-y-1 border-t border-border pt-3 text-sm text-text-sub">
+                  <li
+                    v-for="detail in appointmentNotificationDetails(message.content)"
+                    :key="detail"
+                  >
+                    {{ detail }}
+                  </li>
+                </ul>
+              </div>
+            </template>
+            <template v-else-if="message.type === 'SYSTEM'">
+              {{ message.content }}
+            </template>
+            <template v-else-if="message.type === 'TEXT'">
               {{ message.content }}
             </template>
             <template v-else>
@@ -570,7 +831,7 @@ onBeforeUnmount(() => {
         </div>
 
         <div
-          v-if="latestAppointment && ['PROPOSED', 'ACCEPTED'].includes(latestAppointment.status)"
+          v-if="latestAppointment"
           :key="`appointment-${latestAppointment.callId}`"
           data-testid="appointment-card"
           class="mx-auto w-full max-w-sm rounded-xl bg-white p-4 shadow-sm"
@@ -611,7 +872,14 @@ onBeforeUnmount(() => {
               {{ formatAppointmentTime(latestAppointment.scheduledAt) }}
             </p>
             <p
-              v-if="latestAppointment.memo"
+              v-if="appointmentRemainingTime(latestAppointment)"
+              data-testid="appointment-expiration"
+              class="mt-2 inline-flex rounded-full bg-accent px-2.5 py-1 text-xs font-bold text-primary-dark"
+            >
+              약속 만료까지 {{ appointmentRemainingTime(latestAppointment) }}
+            </p>
+            <p
+              v-if="shouldDisplayAppointmentMemo(latestAppointment.memo)"
               class="mt-1 text-xs text-text-sub"
             >
               {{ latestAppointment.memo }}
