@@ -181,6 +181,10 @@ curl -fsS http://127.0.0.1:8081/actuator/health/readiness
 curl -fsS http://127.0.0.1:8082/actuator/health/readiness
 ```
 
+Nginx는 호스트의 `/var/log/nginx/access.log`만 Alloy가 읽고 `{service="nginx", stream="access"}`로 전송한다. 접근 로그에는 method, query string을 제외한 path, status, 응답 크기와 처리 시간만 기록한다. OAuth code와 개인정보가 포함될 수 있는 query string, client IP, Referer는 기록하지 않으며 원문 요청을 포함할 수 있는 `error.log`도 Loki 수집 대상에서 제외한다.
+
+Spring의 JPA·JDBC·도메인 DB 로그는 백엔드 프로세스가 만든 애플리케이션 로그이므로 `{service=~"backend-(blue|green)"}`에서 조회한다. `{service="mysql"}`은 MySQL 서버 프로세스의 시작·종료·경고 로그로, 정상 운영 중에는 조회 결과가 없을 수 있다. SQL 전체를 남기는 general log는 성능과 개인정보 노출 위험 때문에 활성화하지 않는다. MySQL 상태는 exporter 메트릭으로 확인하고, 쿼리 분석이 필요하면 승인 후 임계값과 보존 기간을 제한한 slow query log를 사용한다.
+
 Grafana는 `https://grafana.l1mit.shop`에서 로그인하거나 장애 시 SSH 터널로 `127.0.0.1:3000`에 접속한다. `Limit Platform Overview` Canvas에서 노드를 클릭하면 해당 service 라벨의 Loki Explore로 이동한다. `userId`, 전체 URL, traceId는 Prometheus/Loki label로 승격하지 않는다. EC2 자체 장애는 내부 스택이 감지하지 못하므로 외부 uptime monitor가 별도로 필요하다.
 
 ## 8. 백업과 복구 훈련
