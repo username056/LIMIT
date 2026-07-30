@@ -85,6 +85,12 @@ run_backend_scripts() {
   grep -Fq 'tail_from_end = true' infra/monitoring/alloy/config.alloy
   grep -Fq 'log_format limit_observability' infra/nginx/limit.conf
   grep -Fq 'path=$uri' infra/nginx/limit.conf
+  chat_ws_block=$(sed -n '/^[[:space:]]*location = \/ws {/,/^[[:space:]]*}/p' infra/nginx/limit.conf)
+  test -n "$chat_ws_block"
+  printf '%s\n' "$chat_ws_block" | grep -Fq 'proxy_pass http://limit_backend;'
+  printf '%s\n' "$chat_ws_block" | grep -Fq 'proxy_http_version 1.1;'
+  printf '%s\n' "$chat_ws_block" | grep -Fq 'proxy_set_header Upgrade $http_upgrade;'
+  printf '%s\n' "$chat_ws_block" | grep -Fq 'proxy_set_header Connection $limit_connection_upgrade;'
   if sed -n '/^log_format limit_observability/,/;$/p' infra/nginx/limit.conf \
       | grep -Eq '\$(request_uri|args|remote_addr|http_referer)'; then
     echo "Nginx observability log format must not include query strings or personal data" >&2
