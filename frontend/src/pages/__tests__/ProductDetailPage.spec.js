@@ -11,6 +11,7 @@ import {
 import { getFavoriteStatus, removeFavorite } from '../../api/favorites'
 import { getAccessToken, getSessionMember } from '../../auth/session'
 import { createOrGetChatRoom } from '../../api/chat'
+import { getProductDiagnosisSummary } from '../../api/inspection'
 import { getSellerProfile } from '../../api/seller'
 
 const push = vi.fn()
@@ -36,6 +37,7 @@ vi.mock('../../api/favorites', () => ({
 vi.mock('../../auth/session', () => ({ getAccessToken: vi.fn(), getSessionMember: vi.fn() }))
 vi.mock('../../api/chat', () => ({ createOrGetChatRoom: vi.fn() }))
 vi.mock('../../api/seller', () => ({ getSellerProfile: vi.fn() }))
+vi.mock('../../api/inspection', () => ({ getProductDiagnosisSummary: vi.fn() }))
 vi.mock('../../api/rtc', () => ({ createChatRoom: vi.fn(), requestRtcCall: vi.fn() }))
 
 const layoutStub = { template: '<main><slot /></main>' }
@@ -69,6 +71,7 @@ describe('ProductDetailPage', () => {
     getProductChecklist.mockResolvedValue([])
     getEvidenceHistory.mockResolvedValue([])
     getProductImages.mockResolvedValue([])
+    getProductDiagnosisSummary.mockResolvedValue({ items: [], disclaimer: '' })
   })
 
   it('기존 좋아요한 상품 상태를 불러와 첫 클릭으로 해제한다', async () => {
@@ -339,6 +342,45 @@ describe('ProductDetailPage', () => {
     const rows = wrapper.findAll('ul[aria-label="검증 체크리스트 항목"] > li')
     expect(rows).toHaveLength(1)
     expect(rows[0].text()).toContain('공개 항목')
+  })
+
+  it('자동 인식된 사양을 필드별로 보여주고 인식 실패 필드는 원문 링크 없이 표시한다', async () => {
+    getAccessToken.mockReturnValue(null)
+    getProductDiagnosisSummary.mockResolvedValue({
+      items: [
+        {
+          fieldName: 'CPU',
+          value: '13th Gen Intel(R) Core(TM) i7-13700H',
+          originalFileUrl: 'https://cdn.example.test/evidence/1.txt',
+          status: 'AVAILABLE',
+        },
+        {
+          fieldName: 'GPU_MEMORY',
+          value: null,
+          originalFileUrl: null,
+          status: 'EXTRACTION_FAILED',
+        },
+      ],
+      disclaimer: '자동 추출값은 참고 정보이며 상품의 정상 여부를 보증하지 않습니다.',
+    })
+
+    const wrapper = mount(ProductDetailPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('자동 인식된 사양')
+    const cpuLink = wrapper.get('a[href="https://cdn.example.test/evidence/1.txt"]')
+    expect(cpuLink.text()).toBe('13th Gen Intel(R) Core(TM) i7-13700H')
+    expect(wrapper.text()).toContain('GPU 메모리')
+    expect(wrapper.text()).toContain('인식 실패')
+    expect(wrapper.text()).toContain('자동 추출값은 참고 정보이며 상품의 정상 여부를 보증하지 않습니다.')
   })
 
   // 누구에게 사는지 모른 채로 결제하게 두지 않습니다.

@@ -19,3 +19,7 @@ export function getDiagnosis(checklistItemId) {
 export function confirmDiagnosisValue(checklistItemId, payload) {
   return apiClient.patch(`/inspections/listing-checklist-items/${checklistItemId}/diagnosis-values`, payload)
 }
+
+export function getProductDiagnosisSummary(productId) {
+  return apiClient.get(`/inspections/products/${productId}/diagnosis-summary`)
+}
