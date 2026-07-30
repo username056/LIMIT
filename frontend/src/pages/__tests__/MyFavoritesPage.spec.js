@@ -44,6 +44,7 @@ describe('MyFavoritesPage', () => {
         stubs: {
           MyPageLayout: layoutStub,
           BaseButton: buttonStub,
+          RouterLink: { props: ['to'], template: '<a><slot /></a>' },
         },
       },
     })
@@ -51,13 +52,43 @@ describe('MyFavoritesPage', () => {
 
     expect(getMyFavorites).toHaveBeenCalledOnce()
     expect(wrapper.findAll('h2')).toHaveLength(1)
-    const removeButtons = wrapper.findAll('button').filter((button) => button.text() === '해제')
-    await removeButtons[0].trigger('click')
+    // '해제' 글자 버튼이 아니라 이미 눌러진 하트를 한 번 더 눌러 끕니다.
+    const heartButton = wrapper.get('button[aria-label="Galaxy S24 좋아요 해제"]')
+    expect(heartButton.text()).toBe('♥')
+    await heartButton.trigger('click')
     await flushPromises()
 
     expect(removeFavorite).toHaveBeenCalledWith(1001)
     expect(wrapper.findAll('h2')).toHaveLength(0)
     expect(wrapper.text()).toContain('좋아요한 상품이 없습니다.')
+  })
+
+  it('관심 상품에도 대표 이미지를 보여준다', async () => {
+    getMyFavorites.mockResolvedValue({
+      data: [{
+        favoriteId: 501,
+        productId: 1001,
+        manufacturerName: 'Samsung',
+        name: 'Galaxy S24',
+        price: 650000,
+        status: 'ON_SALE',
+        thumbnailUrl: 'https://cdn.example.com/1001.jpg',
+      }],
+      meta: { page: 0, totalPages: 1, hasNext: false },
+    })
+
+    const wrapper = mount(MyFavoritesPage, {
+      global: {
+        stubs: {
+          MyPageLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { props: ['to'], template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.get('img').attributes('src')).toBe('https://cdn.example.com/1001.jpg')
   })
 
   it('조회 실패 시 오류와 재시도 동작을 제공한다', async () => {
@@ -73,6 +104,7 @@ describe('MyFavoritesPage', () => {
         stubs: {
           MyPageLayout: layoutStub,
           BaseButton: buttonStub,
+          RouterLink: { props: ['to'], template: '<a><slot /></a>' },
         },
       },
     })

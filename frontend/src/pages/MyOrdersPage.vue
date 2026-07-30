@@ -39,13 +39,15 @@ const RETURN_REASONS = [
 // TODO(주문 API 연동): 아직 '내 주문 목록' 엔드포인트가 없어 예시 데이터로 둡니다.
 // PaymentApi에는 결제 생성과 결제 단건 조회만 있고 구매자 기준 목록 조회가 없습니다.
 // 목록 API가 생기면 orders를 응답으로 교체하고, 취소·반품 제출도 실제 요청으로 바꾸세요.
-// productId는 '판매자에게 문의'가 채팅방을 열 때 쓰므로 응답에도 반드시 포함되어야 합니다.
+// 응답에는 productId(문의로 채팅방을 열 때 필요)와 thumbnailUrl(대표 이미지)이 있어야 합니다.
+// 둘 다 ProductSummaryResponse가 이미 담고 있는 값입니다.
 const orders = ref([
   {
     name: '갤럭시 S24 Ultra 256GB 자급제',
     date: '2026.07.28',
     id: '#OR20260728-001',
     productId: 7,
+    thumbnailUrl: '',
     price: '1,050,000',
     status: '결제 완료',
     progress: '판매자와 거래 일정 조율 중',
@@ -55,7 +57,8 @@ const orders = ref([
     name: '갤럭시 북4 프로 512GB',
     date: '2026.07.20',
     id: '#OR20260720-004',
-    productId: 8,
+    productId: 7,
+    thumbnailUrl: '',
     price: '1,890,000',
     status: '취소/환불',
     progress: '2026.07.21 결제 취소',
@@ -102,6 +105,9 @@ function canRequestReturn(order) {
 const openingChatOrderId = ref('')
 const chatError = ref('')
 
+// 채팅방은 ON_SALE 매물에만 만들 수 있습니다(ChatRoomService.CHAT_CREATABLE_LISTING_STATUS).
+// 결제까지 한 구매자가 판매 완료된 상품의 판매자에게 문의할 수 없는 것은 별도로 다뤄야 하는
+// 채팅 도메인 정책 문제입니다. 지금은 서버 메시지를 그대로 보여 줍니다.
 async function contactSeller(order) {
   if (!order.productId) {
     chatError.value = '이 주문에 연결된 상품 정보를 찾을 수 없습니다.'
@@ -194,7 +200,19 @@ function submitRequest() {
         :key="order.id"
         class="flex items-center gap-4 rounded-lg border border-border bg-surface p-4"
       >
-        <div class="h-14 w-14 shrink-0 rounded-md bg-bg" />
+        <!-- 대표 이미지는 그 상품의 얼굴이라 주문 내역에서도 보여줍니다. -->
+        <div class="h-14 w-14 shrink-0 overflow-hidden rounded-md bg-bg">
+          <img
+            v-if="order.thumbnailUrl"
+            :src="order.thumbnailUrl"
+            :alt="order.name"
+            class="h-full w-full object-cover"
+          >
+          <span
+            v-else
+            class="flex h-full w-full items-center justify-center text-lg text-slate-300"
+          >▣</span>
+        </div>
         <!-- 주문 상세는 버튼 대신 항목 자체를 눌러서 엽니다. 버튼 자리는 문의에 씁니다. -->
         <button
           type="button"

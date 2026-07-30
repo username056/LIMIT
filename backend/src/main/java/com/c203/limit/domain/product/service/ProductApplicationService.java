@@ -255,6 +255,7 @@ public class ProductApplicationService {
             BigDecimal maxPrice,
             String tradeRegion,
             String verificationStatus,
+            Long sellerId,
             int page,
             int size,
             String sort) {
@@ -264,6 +265,7 @@ public class ProductApplicationService {
                 .and(keyword(keyword))
                 .and(category(categoryId, deviceModelId))
                 .and(manufacturer(manufacturerId))
+                .and(seller(sellerId))
                 .and(priceRange(minPrice, maxPrice))
                 .and(tradeRegion(tradeRegion))
                 .and(verificationStatus(verificationStatus));
@@ -341,7 +343,10 @@ public class ProductApplicationService {
         } catch (IllegalArgumentException exception) {
             throw new BusinessException(ErrorCode.INVALID_PRODUCT_STATUS_TRANSITION);
         }
-        if (target == ListingStatus.ON_SALE) {
+        if (target == ListingStatus.ON_SALE && previous == ListingStatus.SOLD) {
+            // 직거래가 깨졌을 때 원래 판매글로 되돌아가는 경로다. publish는 DRAFT만 허용하므로 따로 다룬다.
+            listing.reopenSoldBySeller();
+        } else if (target == ListingStatus.ON_SALE) {
             // 판매 시작은 체크리스트 완료 여부로 막지 않는다. 등록을 마친 판매자가 다시 '판매 시작'을
             // 눌러야 하는 흐름을 없애기 위한 정책이며, 남은 항목은 상세의 검증 진행률로 구매자에게 드러난다.
             listing.completePrecheck();
@@ -541,6 +546,13 @@ public class ProductApplicationService {
                     cb.equal(root.get("category").get("id"), categoryId),
                     cb.equal(root.get("category").get("parent").get("id"), categoryId));
         };
+    }
+
+    /** 판매자 공개 프로필에서 그 사람의 판매 목록만 보여 줄 때 쓴다. */
+    private Specification<Listing> seller(Long sellerId) {
+        return (root, query, cb) -> sellerId == null
+                ? cb.conjunction()
+                : cb.equal(root.get("sellerId"), sellerId);
     }
 
     private Specification<Listing> manufacturer(Long manufacturerId) {

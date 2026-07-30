@@ -4,9 +4,9 @@ import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseButton from '../components/BaseButton.vue'
 import { getDeviceCategories, getProducts } from '../api/products'
-import { isSoldOut } from '../utils/productStatus'
 import { formatPriceDigits, toPriceDigits } from '../utils/priceInput'
 import { useSellerGate } from '../auth/sellerGate'
+import ProductCard from '../components/ProductCard.vue'
 import SellerNoticeModal from '../components/SellerNoticeModal.vue'
 
 const products = ref([])
@@ -81,10 +81,6 @@ function flattenCategories(items, depth = 0) {
     { ...item, depth },
     ...flattenCategories(item.children, depth + 1),
   ])
-}
-
-function formatPrice(price) {
-  return Number(price || 0).toLocaleString('ko-KR')
 }
 
 // 값에는 숫자만 담고 입력창에는 쉼표를 붙여 보여줍니다.
@@ -367,48 +363,12 @@ watch(() => [route.query.q, route.query.categoryId], async ([keyword, categoryId
             v-else-if="products.length"
             class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3"
           >
-            <RouterLink
+            <ProductCard
               v-for="product in products"
               :key="product.productId"
+              :product="product"
               :to="{ name: 'product-detail', params: { productId: product.productId } }"
-              class="group overflow-hidden rounded-lg border border-border bg-surface shadow-card transition hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-elevated"
-            >
-              <div class="relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-slate-50">
-                <img
-                  v-if="product.thumbnailUrl"
-                  :src="product.thumbnailUrl"
-                  :alt="product.name"
-                  class="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-                >
-                <div
-                  v-else
-                  class="flex flex-col items-center text-slate-300"
-                >
-                  <span class="text-4xl">▣</span>
-                  <span class="mt-2 text-xs">등록된 이미지 없음</span>
-                </div>
-                <div
-                  v-if="isSoldOut(product.status)"
-                  class="absolute inset-0 flex items-center justify-center bg-black/55"
-                >
-                  <span class="text-lg font-bold text-white">판매 완료</span>
-                </div>
-              </div>
-              <div class="p-4">
-                <p class="truncate text-xs font-semibold text-primary">
-                  {{ product.manufacturerName || '제조사 미등록' }} · {{ product.modelName || '모델 미등록' }}
-                </p>
-                <h2 class="mt-2 truncate font-bold text-text-main">
-                  {{ product.name }}
-                </h2>
-                <p class="mt-3 text-lg font-bold text-text-main">
-                  {{ formatPrice(product.price) }}원
-                </p>
-                <div class="mt-3 flex items-center justify-end border-t border-border pt-3 text-xs text-text-sub">
-                  <span class="shrink-0 font-semibold text-primary">상세 보기 →</span>
-                </div>
-              </div>
-            </RouterLink>
+            />
           </div>
 
           <div

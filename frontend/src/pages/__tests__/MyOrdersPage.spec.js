@@ -98,6 +98,15 @@ describe('MyOrdersPage', () => {
     expect(wrapper.text()).toContain('반품 신청 접수 · 판매자 확인 대기')
   })
 
+  // 대표 이미지는 그 상품의 썸네일이라 주문 내역에서도 필요합니다.
+  it('주문 항목에 대표 이미지 자리가 있고 값이 있으면 표시한다', async () => {
+    const wrapper = mountPage()
+
+    // 예시 데이터에는 URL이 없어 자리표시자가 보입니다.
+    expect(wrapper.find('li img').exists()).toBe(false)
+    expect(wrapper.findAll('li')[0].text()).toContain('▣')
+  })
+
   it('주문 조회 대신 판매자에게 문의로 채팅방을 연다', async () => {
     const wrapper = mountPage()
 
