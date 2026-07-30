@@ -10,16 +10,21 @@ export function useSpeakerCheck() {
   function playTone() {
     status.value = 'playing'
     detail.value = ''
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext
-    audioContext = new AudioContextClass()
-    const oscillator = audioContext.createOscillator()
-    oscillator.type = 'sine'
-    oscillator.frequency.value = 440
-    oscillator.connect(audioContext.destination)
-    oscillator.start()
-    oscillator.stop(audioContext.currentTime + 1.2)
-    oscillator.onended = () => {
-      status.value = 'awaitingConfirmation'
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext
+      audioContext = new AudioContextClass()
+      const oscillator = audioContext.createOscillator()
+      oscillator.type = 'sine'
+      oscillator.frequency.value = 440
+      oscillator.connect(audioContext.destination)
+      oscillator.start()
+      oscillator.stop(audioContext.currentTime + 1.2)
+      oscillator.onended = () => {
+        status.value = 'awaitingConfirmation'
+      }
+    } catch {
+      status.value = 'failed'
+      detail.value = '이 브라우저에서는 테스트음 재생을 지원하지 않습니다.'
     }
   }
 

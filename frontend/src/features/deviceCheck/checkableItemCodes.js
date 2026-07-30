@@ -23,7 +23,12 @@ export const CHECKABLE_ITEM_CODES = {
 }
 
 export function toCheckableItems(checklistItems) {
+  // itemCode가 일치해도, 이 기능 배포 전에 스냅샷된 기존 상품은 evidenceType이 여전히
+  // PHOTO/VIDEO일 수 있다 — 그런 항목까지 포함하면 저장 시 백엔드가 SELLER_CONFIRMATION만
+  // 허용해서 ITEM_NOT_FOUND로 거부한다.
   return checklistItems
-    .filter((item) => CHECKABLE_ITEM_CODES[item.itemCode])
+    .filter(
+      (item) => CHECKABLE_ITEM_CODES[item.itemCode] && item.evidenceType === 'SELLER_CONFIRMATION',
+    )
     .map((item) => ({ ...item, checkKind: CHECKABLE_ITEM_CODES[item.itemCode] }))
 }
