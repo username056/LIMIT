@@ -55,6 +55,9 @@ async function load() {
         ...call,
         counterpartName: call.counterpartName || room?.counterpartNickname || null,
         sessionExpiresAt,
+        productId: room?.listingId || null,
+        productName: room?.listingTitle || (room?.listingId ? `상품 #${room.listingId}` : '상품 정보 없음'),
+        productThumbnailUrl: room?.listingThumbnailUrl || null,
       }
     }))
   } catch (error) {
@@ -162,6 +165,44 @@ onMounted(() => {
 
 onBeforeUnmount(() => clearInterval(remainingTimer))
 
+function isSessionExpired(call) {
+  if (!call.sessionExpiresAt) return false
+  return new Date(call.sessionExpiresAt).getTime() <= now.value
+}
+
+function isCallCompleted(call) {
+  return call.status === 'COMPLETED' || isSessionExpired(call)
+}
+
+const callFilter = ref('전체 목록')
+const callCounts = computed(() => ({
+  전체: calls.value.length,
+  대기: calls.value.filter((call) => call.status === 'PROPOSED').length,
+  거절: calls.value.filter((call) => call.status === 'REJECTED').length,
+  완료: calls.value.filter(isCallCompleted).length,
+}))
+const callTabs = computed(() => [
+  { key: '전체 목록', label: `전체 목록 (${callCounts.value.전체})` },
+  { key: '대기', label: `대기 (${callCounts.value.대기})` },
+  { key: '거절', label: `거절 (${callCounts.value.거절})` },
+  { key: '완료', label: `완료 (${callCounts.value.완료})` },
+])
+const filteredCalls = computed(() => {
+  if (callFilter.value === '대기') return calls.value.filter((call) => call.status === 'PROPOSED')
+  if (callFilter.value === '거절') return calls.value.filter((call) => call.status === 'REJECTED')
+  if (callFilter.value === '완료') return calls.value.filter(isCallCompleted)
+  return calls.value
+})
+const callGroups = computed(() => {
+  const groups = new Map()
+  filteredCalls.value.forEach((call) => {
+    const groupKey = call.productId ? `listing-${call.productId}` : `room-${call.chatRoomId}`
+    if (!groups.has(groupKey)) groups.set(groupKey, [])
+    groups.get(groupKey).push(call)
+  })
+  return Array.from(groups.values())
+})
+
 const recaptureFilter = ref('전체 목록')
 const recaptureCounts = computed(() => ({
   전체: recaptureRequests.value.length,
@@ -250,165 +291,232 @@ function remainingTime(expiresAt) {
         >
           요청을 불러오는 중입니다.
         </p>
-        <div
-          v-else
-          class="grid gap-4"
-        >
-          <BaseCard
-            v-for="call in calls"
-            :key="call.callId"
-            class="p-5"
+        <template v-else>
+          <p class="mb-5 text-sm text-text-sub">
+            상품별 실시간 확인 요청과 진행 상태를 확인하세요.
+          </p>
+          <div class="mb-5 flex flex-wrap gap-2">
+            <button
+              v-for="tab in callTabs"
+              :key="tab.key"
+              type="button"
+              class="rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors"
+              :class="callFilter === tab.key
+                ? 'border-primary bg-accent text-primary-dark'
+                : 'border-border text-text-sub hover:border-primary'"
+              @click="callFilter = tab.key"
+            >
+              {{ tab.label }}
+            </button>
+          </div>
+
+          <div
+            v-for="group in callGroups"
+            :key="group[0].productId || `room-${group[0].chatRoomId}`"
+            class="mb-6"
           >
-            <div class="flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <p class="font-semibold text-text-main">
-                  영상 확인 요청 #{{ call.callId }}
-                </p>
-                <p
-                  v-if="call.memo"
-                  class="mt-1 text-sm text-text-sub"
+            <BaseCard class="mb-3 flex items-center gap-4 p-5">
+              <div class="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md bg-bg text-text-sub">
+                <img
+                  v-if="group[0].productThumbnailUrl"
+                  :src="group[0].productThumbnailUrl"
+                  :alt="group[0].productName"
+                  class="h-full w-full object-cover"
                 >
-                  {{ call.memo }}
-                </p>
-                <p class="mt-2 text-xs text-text-sub">
-                  상태: {{ call.status }} · {{ call.incoming ? '받은 요청' : '보낸 요청' }}
-                </p>
-                <dl class="mt-3 grid gap-1 text-sm text-text-sub">
-                  <div class="flex gap-2">
-                    <dt class="font-semibold text-text-main">
-                      상대방
-                    </dt>
-                    <dd>{{ call.counterpartName || `회원 #${call.incoming ? call.proposerId : call.respondentId}` }}</dd>
-                  </div>
-                  <div class="flex gap-2">
-                    <dt class="font-semibold text-text-main">
-                      검증 일정
-                    </dt>
-                    <dd>{{ formatScheduledAt(call.scheduledAt) }}</dd>
-                  </div>
-                  <div
-                    v-if="remainingTime(call.sessionExpiresAt)"
-                    class="flex gap-2"
-                  >
-                    <dt class="font-semibold text-text-main">
-                      세션 만료까지
-                    </dt>
-                    <dd>{{ remainingTime(call.sessionExpiresAt) }}</dd>
-                  </div>
-                </dl>
+                <span
+                  v-else
+                  class="text-2xl"
+                >▣</span>
               </div>
-              <div class="flex gap-2">
-                <template v-if="call.status === 'PROPOSED' && call.incoming">
-                  <BaseButton @click="respond(call, true)">
-                    수락
-                  </BaseButton>
-                  <BaseButton
-                    variant="outline"
-                    @click="respond(call, false)"
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2">
+                  <BaseBadge variant="gray">
+                    실시간 확인
+                  </BaseBadge>
+                  <span class="text-xs text-text-sub">
+                    상품 번호 #{{ group[0].productId || '-' }}
+                  </span>
+                </div>
+                <p class="mt-1 truncate font-bold text-text-main">
+                  {{ group[0].productName }}
+                </p>
+                <p class="mt-1 text-sm text-text-sub">
+                  요청 {{ group.length }}건
+                </p>
+              </div>
+              <div class="shrink-0 text-right">
+                <p class="mb-1 text-xs text-text-sub">
+                  확인 현황
+                </p>
+                <BaseBadge :variant="group.every(isCallCompleted) ? 'success' : 'primary'">
+                  {{ group.every(isCallCompleted) ? '확인 완료' : '확인 진행 중' }}
+                </BaseBadge>
+              </div>
+            </BaseCard>
+
+            <BaseCard
+              v-for="call in group"
+              :key="call.callId"
+              class="mb-3 p-5"
+              :class="['PROPOSED', 'ACCEPTED'].includes(call.status) && !isSessionExpired(call)
+                ? 'border-l-2 border-l-primary'
+                : ''"
+            >
+              <div class="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <p class="font-semibold text-text-main">
+                    영상 확인 요청 #{{ call.callId }}
+                  </p>
+                  <p
+                    v-if="call.memo"
+                    class="mt-1 text-sm text-text-sub"
                   >
-                    거절
-                  </BaseButton>
-                </template>
-                <template v-if="call.status === 'PROPOSED' && !call.incoming">
+                    {{ call.memo }}
+                  </p>
+                  <p class="mt-2 text-xs text-text-sub">
+                    상태: {{ call.status }} · {{ call.incoming ? '받은 요청' : '보낸 요청' }}
+                  </p>
+                  <dl class="mt-3 grid gap-1 text-sm text-text-sub">
+                    <div class="flex gap-2">
+                      <dt class="font-semibold text-text-main">
+                        상대방
+                      </dt>
+                      <dd>{{ call.counterpartName || `회원 #${call.incoming ? call.proposerId : call.respondentId}` }}</dd>
+                    </div>
+                    <div
+                      class="flex flex-wrap items-center justify-between gap-x-6 gap-y-1"
+                    >
+                      <div class="flex gap-2">
+                        <dt class="font-semibold text-text-main">
+                          검증 일정
+                        </dt>
+                        <dd>{{ formatScheduledAt(call.scheduledAt) }}</dd>
+                      </div>
+                      <div
+                        v-if="call.sessionExpiresAt"
+                        class="flex gap-2"
+                        :class="isSessionExpired(call) ? 'font-semibold text-red-600' : ''"
+                      >
+                        <dt>{{ isSessionExpired(call) ? '세션 만료' : '세션 만료까지' }}</dt>
+                        <dd v-if="!isSessionExpired(call)">
+                          {{ remainingTime(call.sessionExpiresAt) }}
+                        </dd>
+                      </div>
+                    </div>
+                  </dl>
+                </div>
+                <div class="flex gap-2">
+                  <template v-if="call.status === 'PROPOSED' && call.incoming">
+                    <BaseButton @click="respond(call, true)">
+                      수락
+                    </BaseButton>
+                    <BaseButton
+                      variant="outline"
+                      @click="respond(call, false)"
+                    >
+                      거절
+                    </BaseButton>
+                  </template>
+                  <template v-if="call.status === 'PROPOSED' && !call.incoming">
+                    <BaseButton
+                      variant="outline"
+                      @click="startEdit(call)"
+                    >
+                      약속 변경
+                    </BaseButton>
+                    <BaseButton
+                      variant="ghost"
+                      @click="startCancel(call)"
+                    >
+                      약속 취소
+                    </BaseButton>
+                  </template>
                   <BaseButton
-                    variant="outline"
-                    @click="startEdit(call)"
+                    v-if="call.rtcSessionId && call.status === 'ACCEPTED' && !isSessionExpired(call)"
+                    @click="router.push({ name: 'rtc-call', params: { callId: call.callId } })"
                   >
-                    약속 변경
+                    통화 입장
                   </BaseButton>
+                </div>
+              </div>
+
+              <form
+                v-if="editingCallId === call.callId"
+                class="mt-5 grid gap-3 border-t border-border pt-5"
+                @submit.prevent="saveEdit(call)"
+              >
+                <label class="grid gap-1 text-sm font-medium text-text-main">
+                  통화 시간
+                  <input
+                    v-model="editScheduledAt"
+                    type="datetime-local"
+                    required
+                    class="rounded-md border border-border px-3 py-2"
+                  >
+                </label>
+                <label class="grid gap-1 text-sm font-medium text-text-main">
+                  메모
+                  <textarea
+                    v-model="editMemo"
+                    maxlength="500"
+                    rows="3"
+                    class="rounded-md border border-border px-3 py-2"
+                  />
+                </label>
+                <div class="flex justify-end gap-2">
                   <BaseButton
                     variant="ghost"
-                    @click="startCancel(call)"
+                    @click="editingCallId = null"
                   >
-                    약속 취소
+                    닫기
                   </BaseButton>
-                </template>
-                <BaseButton
-                  v-if="call.rtcSessionId && ['ACCEPTED', 'COMPLETED'].includes(call.status)"
-                  :disabled="call.status === 'COMPLETED'"
-                  @click="router.push({ name: 'rtc-call', params: { callId: call.callId } })"
-                >
-                  통화 입장
-                </BaseButton>
-              </div>
-            </div>
+                  <BaseButton
+                    type="submit"
+                    :disabled="pendingCallId === call.callId"
+                  >
+                    변경 저장
+                  </BaseButton>
+                </div>
+              </form>
 
-            <form
-              v-if="editingCallId === call.callId"
-              class="mt-5 grid gap-3 border-t border-border pt-5"
-              @submit.prevent="saveEdit(call)"
-            >
-              <label class="grid gap-1 text-sm font-medium text-text-main">
-                통화 시간
-                <input
-                  v-model="editScheduledAt"
-                  type="datetime-local"
-                  required
-                  class="rounded-md border border-border px-3 py-2"
-                >
-              </label>
-              <label class="grid gap-1 text-sm font-medium text-text-main">
-                메모
-                <textarea
-                  v-model="editMemo"
-                  maxlength="500"
-                  rows="3"
-                  class="rounded-md border border-border px-3 py-2"
-                />
-              </label>
-              <div class="flex justify-end gap-2">
-                <BaseButton
-                  variant="ghost"
-                  @click="editingCallId = null"
-                >
-                  닫기
-                </BaseButton>
-                <BaseButton
-                  type="submit"
-                  :disabled="pendingCallId === call.callId"
-                >
-                  변경 저장
-                </BaseButton>
-              </div>
-            </form>
-
-            <form
-              v-if="cancelingCallId === call.callId"
-              class="mt-5 grid gap-3 border-t border-border pt-5"
-              @submit.prevent="confirmCancel(call)"
-            >
-              <label class="grid gap-1 text-sm font-medium text-text-main">
-                취소 사유 (선택)
-                <textarea
-                  v-model="cancelReason"
-                  maxlength="500"
-                  rows="3"
-                  class="rounded-md border border-border px-3 py-2"
-                />
-              </label>
-              <div class="flex justify-end gap-2">
-                <BaseButton
-                  variant="ghost"
-                  @click="cancelingCallId = null"
-                >
-                  닫기
-                </BaseButton>
-                <BaseButton
-                  type="submit"
-                  :disabled="pendingCallId === call.callId"
-                >
-                  취소 확인
-                </BaseButton>
-              </div>
-            </form>
-          </BaseCard>
+              <form
+                v-if="cancelingCallId === call.callId"
+                class="mt-5 grid gap-3 border-t border-border pt-5"
+                @submit.prevent="confirmCancel(call)"
+              >
+                <label class="grid gap-1 text-sm font-medium text-text-main">
+                  취소 사유 (선택)
+                  <textarea
+                    v-model="cancelReason"
+                    maxlength="500"
+                    rows="3"
+                    class="rounded-md border border-border px-3 py-2"
+                  />
+                </label>
+                <div class="flex justify-end gap-2">
+                  <BaseButton
+                    variant="ghost"
+                    @click="cancelingCallId = null"
+                  >
+                    닫기
+                  </BaseButton>
+                  <BaseButton
+                    type="submit"
+                    :disabled="pendingCallId === call.callId"
+                  >
+                    취소 확인
+                  </BaseButton>
+                </div>
+              </form>
+            </BaseCard>
+          </div>
           <BaseCard
-            v-if="!calls.length"
+            v-if="!callGroups.length"
             class="py-14 text-center text-text-sub"
           >
-            영상 확인 요청이 없습니다.
+            선택한 상태의 영상 확인 요청이 없습니다.
           </BaseCard>
-        </div>
+        </template>
       </template>
 
       <template v-else>

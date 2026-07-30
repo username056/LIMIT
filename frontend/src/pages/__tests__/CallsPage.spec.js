@@ -60,9 +60,47 @@ describe('CallsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     getMyRtcCalls.mockResolvedValue([outgoingCall])
-    getChatRooms.mockResolvedValue({ content: [] })
+    getChatRooms.mockResolvedValue({
+      content: [{
+        roomId: 7,
+        listingId: 101,
+        listingTitle: '갤럭시 테스트 상품',
+        listingThumbnailUrl: 'https://example.test/product.jpg',
+        counterpartNickname: '상대 회원',
+      }],
+    })
     getRtcSession.mockResolvedValue({ expiresAt: '2026-08-01T16:00:00' })
     getMyReinspectionRequests.mockResolvedValue([])
+  })
+
+  it('상품별로 요청을 묶고 전체, 거절, 완료 상태로 필터링한다', async () => {
+    getMyRtcCalls.mockResolvedValue([
+      { ...outgoingCall, callId: 20, chatRoomId: 7, status: 'PROPOSED' },
+      { ...outgoingCall, callId: 21, chatRoomId: 7, status: 'REJECTED' },
+      { ...outgoingCall, callId: 22, chatRoomId: 7, status: 'COMPLETED' },
+    ])
+
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('갤럭시 테스트 상품')
+    expect(wrapper.text()).toContain('요청 3건')
+    expect(wrapper.text()).toContain('전체 목록 (3)')
+    expect(wrapper.text()).toContain('대기 (1)')
+    expect(wrapper.text()).toContain('거절 (1)')
+    expect(wrapper.text()).toContain('완료 (1)')
+
+    await wrapper.findAll('button').find((button) => button.text() === '대기 (1)').trigger('click')
+
+    expect(wrapper.text()).toContain('영상 확인 요청 #20')
+    expect(wrapper.text()).not.toContain('영상 확인 요청 #21')
+    expect(wrapper.text()).not.toContain('영상 확인 요청 #22')
+
+    await wrapper.findAll('button').find((button) => button.text() === '거절 (1)').trigger('click')
+
+    expect(wrapper.text()).toContain('영상 확인 요청 #21')
+    expect(wrapper.text()).not.toContain('영상 확인 요청 #20')
+    expect(wrapper.text()).not.toContain('영상 확인 요청 #22')
   })
 
   it('검증 일정 날짜와 상대방, 세션 만료 시간을 표시한다', async () => {
@@ -92,6 +130,27 @@ describe('CallsPage', () => {
     expect(getRtcSession).toHaveBeenCalledWith(31)
     expect(wrapper.text()).toContain('채팅 상대방')
     expect(wrapper.text()).toContain('세션 만료까지')
+  })
+
+  it('만료된 세션을 완료에 포함하고 통화 입장 버튼을 숨긴다', async () => {
+    getMyRtcCalls.mockResolvedValue([{
+      ...outgoingCall,
+      chatRoomId: 7,
+      status: 'ACCEPTED',
+      rtcSessionId: 31,
+      sessionExpiresAt: '2020-01-01T00:00:00',
+    }])
+
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('완료 (1)')
+    expect(wrapper.text()).toContain('세션 만료')
+    expect(wrapper.findAll('button').some((button) => button.text() === '통화 입장')).toBe(false)
+
+    await wrapper.findAll('button').find((button) => button.text() === '완료 (1)').trigger('click')
+
+    expect(wrapper.text()).toContain('영상 확인 요청 #20')
   })
 
   it('보낸 통화 약속의 시간과 메모를 변경한다', async () => {

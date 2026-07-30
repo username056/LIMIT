@@ -3,6 +3,7 @@ package com.c203.limit.domain.rtc.service;
 import com.c203.limit.domain.call.domain.AppointmentStatus;
 import com.c203.limit.domain.call.entity.CallAppointment;
 import com.c203.limit.domain.call.event.CallAppointmentChangedEvent;
+import com.c203.limit.domain.call.event.CallAppointmentUpdatedNotificationEvent;
 import com.c203.limit.domain.call.repository.CallAppointmentRepository;
 import com.c203.limit.domain.chat.entity.ChatRoom;
 import com.c203.limit.domain.chat.repository.ChatRoomRepository;
@@ -33,6 +34,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -180,6 +182,14 @@ public class RtcCallService {
         }
         log.info("RTC inspection call updated: callId={}", callId);
         publishAppointmentChanged(appointment.getChatRoomId());
+        eventPublisher.publishEvent(
+                new CallAppointmentUpdatedNotificationEvent(
+                        UUID.randomUUID(),
+                        appointment.getId(),
+                        appointment.getChatRoomId(),
+                        memberId,
+                        appointment.getScheduledAt(),
+                        appointment.getMemo()));
         return callResponse(appointment, null, memberId);
     }
 

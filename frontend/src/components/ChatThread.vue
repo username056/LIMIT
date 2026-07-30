@@ -160,6 +160,15 @@ function messageTimelineOrder(roomSequence) {
   return Math.min(sequence * 2, LAST_TIMELINE_ORDER - 1)
 }
 
+function appointmentNotificationDetails(content) {
+  return String(content || '').split('\n').slice(1)
+}
+
+function isAppointmentNotification(message) {
+  return message.type === 'SYSTEM'
+    && message.content?.startsWith('검증 약속이 변경됐어요!')
+}
+
 function appointmentTimelineOrder() {
   const sequence = Number(appointmentAnchorSequence.value)
   if (!Number.isSafeInteger(sequence) || sequence < 0) return LAST_TIMELINE_ORDER - 2
@@ -295,7 +304,24 @@ async function loadAppointments(roomId) {
   }
 }
 
-const latestAppointment = computed(() => appointments.value[0] || null)
+function isAppointmentExpired(appointment) {
+  if (!appointment?.scheduledAt) return false
+  return new Date(appointment.scheduledAt).getTime() + 30 * 60 * 1000 <= now.value
+}
+
+function appointmentRemainingTime(appointment) {
+  if (!appointment?.scheduledAt) return null
+  const scheduledAt = new Date(appointment.scheduledAt).getTime()
+  if (now.value < scheduledAt) return null
+  return remainingSessionTime(new Date(scheduledAt + 30 * 60 * 1000).toISOString())
+}
+
+const latestAppointment = computed(
+  () => appointments.value.find(
+    (appointment) => ['PROPOSED', 'ACCEPTED'].includes(appointment.status)
+      && !isAppointmentExpired(appointment),
+  ) || null,
+)
 const checkedChecklistCount = computed(
   () => checklistItems.value.filter((item) => isCheckedChecklistItem(item)).length,
 )
@@ -621,7 +647,7 @@ onBeforeUnmount(() => {
         >
           <div
             class="max-w-[75%] rounded-lg px-4 py-2.5 text-sm leading-6"
-            :class="message.type === 'SYSTEM' && message.reinspection
+            :class="message.type === 'SYSTEM' && (message.reinspection || isAppointmentNotification(message))
               ? 'bg-transparent p-0 text-text-main'
               : message.senderId === myMemberId
                 ? 'bg-primary-deep text-white'
@@ -632,6 +658,9 @@ onBeforeUnmount(() => {
                 data-testid="system-notification-card"
                 class="min-w-[280px] rounded-xl border border-primary/25 p-4 text-text-main shadow-sm sm:min-w-[360px]"
               >
+                <p class="mb-2 text-xs font-bold text-primary">
+                  재검수 요청
+                </p>
                 <p class="font-bold text-text-main">
                   {{ message.notificationType === 'REINSPECTION_COMPLETED'
                     ? '재검수가 완료됐어요!'
@@ -700,6 +729,29 @@ onBeforeUnmount(() => {
                 </RouterLink>
               </div>
             </template>
+            <template
+              v-else-if="isAppointmentNotification(message)"
+            >
+              <div
+                data-testid="appointment-notification-card"
+                class="min-w-[280px] rounded-xl border border-primary/25 p-4 text-text-main shadow-sm sm:min-w-[360px]"
+              >
+                <p class="mb-2 text-xs font-bold text-primary">
+                  약속 알림
+                </p>
+                <p class="font-bold text-text-main">
+                  검증 약속이 변경됐어요!
+                </p>
+                <ul class="mt-3 space-y-1 border-t border-border pt-3 text-sm text-text-sub">
+                  <li
+                    v-for="detail in appointmentNotificationDetails(message.content)"
+                    :key="detail"
+                  >
+                    {{ detail }}
+                  </li>
+                </ul>
+              </div>
+            </template>
             <template v-else-if="message.type === 'SYSTEM'">
               {{ message.content }}
             </template>
@@ -739,7 +791,7 @@ onBeforeUnmount(() => {
         </div>
 
         <div
-          v-if="latestAppointment && ['PROPOSED', 'ACCEPTED'].includes(latestAppointment.status)"
+          v-if="latestAppointment"
           :key="`appointment-${latestAppointment.callId}`"
           data-testid="appointment-card"
           class="mx-auto w-full max-w-sm rounded-xl bg-white p-4 shadow-sm"
@@ -780,11 +832,11 @@ onBeforeUnmount(() => {
               {{ formatAppointmentTime(latestAppointment.scheduledAt) }}
             </p>
             <p
-              v-if="remainingSessionTime(latestAppointment.sessionExpiresAt)"
+              v-if="appointmentRemainingTime(latestAppointment)"
               data-testid="appointment-expiration"
               class="mt-2 inline-flex rounded-full bg-accent px-2.5 py-1 text-xs font-bold text-primary-dark"
             >
-              세션 만료까지 {{ remainingSessionTime(latestAppointment.sessionExpiresAt) }}
+              약속 만료까지 {{ appointmentRemainingTime(latestAppointment) }}
             </p>
             <p
               v-if="latestAppointment.memo"
