@@ -341,7 +341,10 @@ public class ProductApplicationService {
         } catch (IllegalArgumentException exception) {
             throw new BusinessException(ErrorCode.INVALID_PRODUCT_STATUS_TRANSITION);
         }
-        if (target == ListingStatus.ON_SALE) {
+        if (target == ListingStatus.ON_SALE && previous == ListingStatus.SOLD) {
+            // 직거래가 깨졌을 때 원래 판매글로 되돌아가는 경로다. publish는 DRAFT만 허용하므로 따로 다룬다.
+            listing.reopenSoldBySeller();
+        } else if (target == ListingStatus.ON_SALE) {
             // 판매 시작은 체크리스트 완료 여부로 막지 않는다. 등록을 마친 판매자가 다시 '판매 시작'을
             // 눌러야 하는 흐름을 없애기 위한 정책이며, 남은 항목은 상세의 검증 진행률로 구매자에게 드러난다.
             listing.completePrecheck();

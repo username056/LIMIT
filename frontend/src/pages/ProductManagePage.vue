@@ -5,7 +5,12 @@ import BaseButton from '../components/BaseButton.vue'
 import BaseBadge from '../components/BaseBadge.vue'
 import ProductCard from '../components/ProductCard.vue'
 import { deleteProduct, getMyProducts, transitionProductStatus } from '../api/products'
-import { canSellerMarkSold, isProductEditable, productStatusLabel } from '../utils/productStatus'
+import {
+  canSellerMarkSold,
+  canSellerReopen,
+  isProductEditable,
+  productStatusLabel,
+} from '../utils/productStatus'
 
 // 이 화면은 내가 등록한 상품을 확인하고 관리하는 곳입니다.
 // 등록·수정 위자드는 ProductRegisterPage로 분리되어 있습니다.
@@ -59,11 +64,11 @@ async function publish(product) {
   }
 }
 
-// 서비스 결제를 거치지 않은 직거래를 판매자가 직접 닫는 경로입니다. 되돌릴 수 없어 한 번 확인합니다.
+// 서비스 결제를 거치지 않은 직거래를 판매자가 직접 닫는 경로입니다.
 async function markSold(product) {
   const confirmed = window.confirm(
     `‘${product.name}’을 판매 완료로 바꿀까요?\n\n`
-    + '구매자에게 더 이상 노출되지 않고, 되돌리거나 수정할 수 없습니다.',
+    + '구매자에게 더 이상 노출되지 않습니다. 거래가 깨지면 다시 판매 중으로 되돌릴 수 있습니다.',
   )
   if (!confirmed) return
   errorMessage.value = ''
@@ -73,6 +78,18 @@ async function markSold(product) {
     await loadProducts(pageMeta.value.page)
   } catch (error) {
     errorMessage.value = error.message || '판매 완료로 처리하지 못했습니다.'
+  }
+}
+
+// 직거래 약속이 깨졌을 때 상품을 새로 등록하지 않고 원래 글로 돌아가는 경로입니다.
+async function reopen(product) {
+  errorMessage.value = ''
+  try {
+    await transitionProductStatus(product.productId, 'ON_SALE', '거래 파기로 판매 재개')
+    notice.value = '다시 판매 중으로 바꿨습니다.'
+    await loadProducts(pageMeta.value.page)
+  } catch (error) {
+    errorMessage.value = error.message || '판매 중으로 되돌리지 못했습니다.'
   }
 }
 
@@ -193,6 +210,14 @@ onMounted(() => loadProducts(0))
               @click="markSold(product)"
             >
               판매 완료 처리
+            </button>
+            <button
+              v-if="canSellerReopen(product.status)"
+              type="button"
+              class="font-semibold text-primary"
+              @click="reopen(product)"
+            >
+              다시 판매하기
             </button>
             <button
               type="button"

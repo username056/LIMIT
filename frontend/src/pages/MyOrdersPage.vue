@@ -57,7 +57,7 @@ const orders = ref([
     name: '갤럭시 북4 프로 512GB',
     date: '2026.07.20',
     id: '#OR20260720-004',
-    productId: 8,
+    productId: 7,
     thumbnailUrl: '',
     price: '1,890,000',
     status: '취소/환불',
@@ -105,6 +105,9 @@ function canRequestReturn(order) {
 const openingChatOrderId = ref('')
 const chatError = ref('')
 
+// 채팅방은 ON_SALE 매물에만 만들 수 있습니다(ChatRoomService.CHAT_CREATABLE_LISTING_STATUS).
+// 결제까지 한 구매자가 판매 완료된 상품의 판매자에게 문의할 수 없는 것은 별도로 다뤄야 하는
+// 채팅 도메인 정책 문제입니다. 지금은 서버 메시지를 그대로 보여 줍니다.
 async function contactSeller(order) {
   if (!order.productId) {
     chatError.value = '이 주문에 연결된 상품 정보를 찾을 수 없습니다.'

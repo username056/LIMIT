@@ -125,7 +125,7 @@ public interface ProductApi {
             @RequestParam(defaultValue = "updatedAt,desc") String sort
     );
 
-    @Operation(operationId = "product07", summary = "상품 상태 전환", description = "허용된 상태 전이만 수행합니다. ON_SALE(판매 시작), HIDDEN(숨김), SOLD(판매자가 직거래를 직접 판매 완료 처리)를 지원하며 SOLD는 ON_SALE·HIDDEN에서만 가능합니다.", security = @SecurityRequirement(name = "bearerAuth"))
+    @Operation(operationId = "product07", summary = "상품 상태 전환", description = "허용된 상태 전이만 수행합니다. ON_SALE(판매 시작), HIDDEN(숨김), SOLD(판매자가 직거래를 직접 판매 완료 처리)를 지원합니다. SOLD는 ON_SALE·HIDDEN에서만 가능하고, 거래가 깨진 경우 SOLD에서 ON_SALE로 되돌릴 수 있습니다.", security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "상품 상태 전환 성공", content = @Content(schema = @Schema(implementation = ProductStatusTransitionApiResponse.class))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "INVALID_PRODUCT_STATUS_TRANSITION"),

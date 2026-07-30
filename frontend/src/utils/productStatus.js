@@ -21,6 +21,12 @@ export function canSellerMarkSold(status) {
   return SELLER_CLOSABLE_STATUSES.includes(status)
 }
 
+// 직거래는 약속이 깨질 수 있어, 판매 완료로 닫은 상품을 다시 판매 중으로 되돌릴 수 있어야 합니다.
+// 서버 Listing.reopenSoldBySeller와 같은 조건입니다.
+export function canSellerReopen(status) {
+  return status === 'SOLD'
+}
+
 // 판매자가 상품 정보를 고칠 수 있는 상태입니다. 서버 Listing.EDITABLE_STATUSES와 같은 목록을 씁니다.
 // 등록을 끝낸 뒤에야 가격 오타 같은 실수를 알아차리는 경우가 있어 판매 중·숨김도 수정을 허용하고,
 // 구매자가 조건을 보고 결제·검수에 들어간 예약 이후 상태만 막습니다.

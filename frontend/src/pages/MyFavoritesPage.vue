@@ -109,25 +109,27 @@ onMounted(() => loadFavorites(0))
           >
             {{ productStatusLabel(product.status) }}
           </BaseBadge>
+          <!--
+            '해제'라는 글자 버튼 대신 이미 눌러진 하트를 한 번 더 눌러 끕니다.
+            상품 상세에서 하트로 켰으니 끄는 동작도 같은 모양이어야 헷갈리지 않습니다.
+          -->
+          <button
+            type="button"
+            class="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full border border-primary bg-surface/95 text-lg text-primary transition hover:bg-accent disabled:opacity-60"
+            :aria-label="`${product.name} 좋아요 해제`"
+            :disabled="removingProductIds.has(product.productId)"
+            @click="removeFavorite(product)"
+          >
+            {{ removingProductIds.has(product.productId) ? '…' : '♥' }}
+          </button>
         </template>
         <template #footer>
-          <div class="flex gap-2">
-            <BaseButton
-              class="flex-1 px-3"
-              :to="{ name: 'product-detail', params: { productId: product.productId } }"
-            >
-              상품 보기
-            </BaseButton>
-            <BaseButton
-              variant="outline"
-              class="px-3"
-              :aria-label="`${product.name} 좋아요 해제`"
-              :disabled="removingProductIds.has(product.productId)"
-              @click="removeFavorite(product)"
-            >
-              {{ removingProductIds.has(product.productId) ? '해제 중' : '해제' }}
-            </BaseButton>
-          </div>
+          <BaseButton
+            block
+            :to="{ name: 'product-detail', params: { productId: product.productId } }"
+          >
+            상품 보기
+          </BaseButton>
         </template>
       </ProductCard>
     </div>

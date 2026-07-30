@@ -52,8 +52,10 @@ describe('MyFavoritesPage', () => {
 
     expect(getMyFavorites).toHaveBeenCalledOnce()
     expect(wrapper.findAll('h2')).toHaveLength(1)
-    const removeButtons = wrapper.findAll('button').filter((button) => button.text() === '해제')
-    await removeButtons[0].trigger('click')
+    // '해제' 글자 버튼이 아니라 이미 눌러진 하트를 한 번 더 눌러 끕니다.
+    const heartButton = wrapper.get('button[aria-label="Galaxy S24 좋아요 해제"]')
+    expect(heartButton.text()).toBe('♥')
+    await heartButton.trigger('click')
     await flushPromises()
 
     expect(removeFavorite).toHaveBeenCalledWith(1001)

@@ -16,7 +16,7 @@ import {
 } from '../api/products'
 import { createOrGetChatRoom } from '../api/chat'
 import { getAccessToken, getSessionMember } from '../auth/session'
-import { canSellerMarkSold, isSoldOut } from '../utils/productStatus'
+import { canSellerMarkSold, canSellerReopen, isSoldOut } from '../utils/productStatus'
 
 const route = useRoute()
 const router = useRouter()
@@ -172,7 +172,8 @@ const canMarkSold = computed(
 
 async function markSold() {
   const confirmed = window.confirm(
-    '판매 완료로 바꿀까요?\n\n구매자에게 더 이상 노출되지 않고, 되돌리거나 수정할 수 없습니다.',
+    '판매 완료로 바꿀까요?\n\n'
+    + '구매자에게 더 이상 노출되지 않습니다. 거래가 깨지면 다시 판매 중으로 되돌릴 수 있습니다.',
   )
   if (!confirmed) return
   isMarkingSold.value = true
@@ -182,6 +183,22 @@ async function markSold() {
     await loadProduct(product.value.productId)
   } catch (error) {
     errorMessage.value = error.message || '판매 완료로 처리하지 못했습니다.'
+  } finally {
+    isMarkingSold.value = false
+  }
+}
+
+// 직거래 약속이 깨졌을 때 원래 판매글로 돌아갑니다.
+const canReopen = computed(() => isOwner.value && canSellerReopen(product.value?.status))
+
+async function reopen() {
+  isMarkingSold.value = true
+  errorMessage.value = ''
+  try {
+    await transitionProductStatus(product.value.productId, 'ON_SALE', '거래 파기로 판매 재개')
+    await loadProduct(product.value.productId)
+  } catch (error) {
+    errorMessage.value = error.message || '판매 중으로 되돌리지 못했습니다.'
   } finally {
     isMarkingSold.value = false
   }
@@ -455,6 +472,16 @@ onMounted(async () => {
                   @click="markSold"
                 >
                   {{ isMarkingSold ? '처리 중…' : '판매 완료 처리하기' }}
+                </BaseButton>
+                <!-- 직거래가 깨졌을 때 상품을 새로 등록하지 않고 이 글로 돌아옵니다. -->
+                <BaseButton
+                  v-if="canReopen"
+                  block
+                  variant="outline"
+                  :disabled="isMarkingSold"
+                  @click="reopen"
+                >
+                  {{ isMarkingSold ? '처리 중…' : '다시 판매하기' }}
                 </BaseButton>
               </template>
               <!-- 구매하기와 문의하기 두 개만 둡니다. 영상 확인은 채팅방 안에서 요청합니다. -->

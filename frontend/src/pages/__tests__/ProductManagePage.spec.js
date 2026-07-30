@@ -163,6 +163,52 @@ describe('ProductManagePage', () => {
     expect(wrapper.get('img').attributes('src')).toBe('https://cdn.example.com/2002.jpg')
   })
 
+  // 직거래 약속이 깨질 수 있어 되돌릴 길이 있어야 합니다.
+  it('판매 완료된 상품은 다시 판매 중으로 되돌릴 수 있다', async () => {
+    getMyProducts.mockResolvedValue({
+      data: [{
+        productId: 4004,
+        name: '판매 완료된 상품',
+        status: 'SOLD',
+        completedItemCount: 2,
+        requiredItemCount: 2,
+      }],
+      meta: { page: 0, totalPages: 1, hasNext: false },
+    })
+    transitionProductStatus.mockResolvedValue({})
+
+    const wrapper = mount(ProductManagePage, { global: globalOptions })
+    await flushPromises()
+
+    // 이미 닫힌 상품에는 판매 완료 처리를 다시 보여주지 않습니다.
+    expect(wrapper.findAll('button').filter((n) => n.text() === '판매 완료 처리')).toHaveLength(0)
+
+    const reopenButton = wrapper.findAll('button').find((n) => n.text() === '다시 판매하기')
+    await reopenButton.trigger('click')
+    await flushPromises()
+
+    expect(transitionProductStatus).toHaveBeenCalledWith(4004, 'ON_SALE', '거래 파기로 판매 재개')
+    expect(wrapper.text()).toContain('다시 판매 중으로 바꿨습니다.')
+  })
+
+  it('판매 중인 상품에는 다시 판매하기를 노출하지 않는다', async () => {
+    getMyProducts.mockResolvedValue({
+      data: [{
+        productId: 3003,
+        name: '판매 중 상품',
+        status: 'ON_SALE',
+        completedItemCount: 2,
+        requiredItemCount: 2,
+      }],
+      meta: { page: 0, totalPages: 1, hasNext: false },
+    })
+
+    const wrapper = mount(ProductManagePage, { global: globalOptions })
+    await flushPromises()
+
+    expect(wrapper.findAll('button').filter((n) => n.text() === '다시 판매하기')).toHaveLength(0)
+  })
+
   it('임시 저장 중이거나 이미 판매 완료된 상품에는 판매 완료 처리를 노출하지 않는다', async () => {
     getMyProducts.mockResolvedValue({
       data: [
