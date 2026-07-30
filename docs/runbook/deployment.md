@@ -59,8 +59,22 @@ Spring profile은 `local`, `prod`만 사용한다. Compose도 `compose.yml` base
 
 ```text
 MYSQL_EXPORTER_CONFIG_FILE=/opt/limit-secrets/mysql-exporter.my.cnf
+ALERTMANAGER_SMTP_PASSWORD_FILE=/opt/limit-secrets/alertmanager-smtp-password
 MONITORING_SECRET_GID=1000
+GRAFANA_ADMIN_USER=admin
+GRAFANA_ADMIN_PASSWORD=<운영 Secret>
+BACKEND_BLUE_IMAGE=<배포 스크립트가 설정하는 immutable digest>
+BACKEND_GREEN_IMAGE=<배포 스크립트가 설정하는 immutable digest>
 ```
+
+이 값들의 이름은 `infra/.env.example`에 포함하지만 실제 비밀번호, Secret 파일 내용과
+이미지 digest는 저장소에 기록하지 않는다. 다운로드한 운영 `.env`를 로컬에 복사하지 않고,
+로컬은 예시 파일을 기준으로 개발 전용 값을 별도로 유지한다.
+
+OAuth redirect 계약은 `GOOGLE_OAUTH_REDIRECT_URIS`, `KAKAO_OAUTH_REDIRECT_URIS`,
+`NAVER_OAUTH_REDIRECT_URIS`처럼 복수형 키를 사용한다. 단수형 `*_REDIRECT_URI`와 현재
+Compose·애플리케이션에서 참조하지 않는 Toss·Qdrant 관련 키는 과거 환경파일에서 발견되더라도
+복사하지 않는다. 해당 연동을 다시 도입할 때 코드·Compose·예시 파일을 같은 변경에서 갱신한다.
 
 `infra/monitoring/**/*` 또는 `infra/nginx/limit.conf` 변경은 `monitoring_deploy_prod`가 백엔드 이미지를 다시 빌드하지 않고 모니터링 파일만 동기화한다. 원격 `deploy-monitoring.sh`는 Compose 유효성을 검사하고 관측 컨테이너만 기동·재시작하며, Nginx 설정은 기존 파일을 백업한 뒤 `nginx -t`를 통과해야 reload한다. 검증 실패 시 백업 파일을 즉시 복원하고, Grafana·Prometheus·Loki readiness는 제한된 횟수만큼 재시도한다. `infra/compose*.yml`처럼 앱과 관측 스택이 함께 참조하는 파일은 기존 백엔드 배포와 모니터링 배포가 모두 직렬화된 `limit-prod` resource group에서 처리한다.
 

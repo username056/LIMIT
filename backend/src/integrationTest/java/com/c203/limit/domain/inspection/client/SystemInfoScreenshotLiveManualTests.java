@@ -45,7 +45,7 @@ class SystemInfoScreenshotLiveManualTests {
                         "image/jpeg"),
                 Arguments.of(
                         Path.of(
-                                "C:\\Users\\SSAFY\\Desktop\\ssafy15th\\comm_proj\\ex\\system_info_screenshot.png"),
+                                "C:\\Users\\SSAFY\\Desktop\\ssafy15th\\comm_proj\\ex\\system_info_w10.png"),
                         "png",
                         "image/png"));
     }

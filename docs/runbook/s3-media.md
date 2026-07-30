@@ -81,6 +81,7 @@ Versioning이 활성화되어 있으므로 삭제 후에도 이전 버전은 Lif
 AWS_REGION=ap-northeast-2
 AWS_ACCESS_KEY_ID=
 AWS_SECRET_ACCESS_KEY=
+AWS_SESSION_TOKEN=
 S3_MEDIA_BUCKET=l1mit-dev-media-0b849303
 S3_ENDPOINT=
 S3_PATH_STYLE_ACCESS=false
@@ -94,15 +95,21 @@ EC2에서는 `AWS_ACCESS_KEY_ID`와 `AWS_SECRET_ACCESS_KEY`를 비워 두고 Ins
 
 ### 운영 배포와 GitLab 변수
 
-운영 백엔드는 장기 Access Key를 사용하지 않습니다. `l1mit-prod-backend` Role을 운영 EC2의
-Instance Profile에 연결하고, 서버의 `infra/.env`에는 아래 비밀이 아닌 설정만 둡니다.
+운영 백엔드는 `l1mit-prod-backend` Role을 운영 EC2의 Instance Profile에 연결하는 방식을
+우선합니다. 서버 계정의 IAM을 변경할 수 없는 예외 환경에서는 S3 소유 계정에
+`l1mit-prod-runtime` 전용 IAM 사용자를 만들고, 운영 버킷의 지정 경로만 허용한 Access Key를
+서버의 `infra/.env`에 직접 저장할 수 있습니다. Root 또는 관리자 Access Key는 사용하지 않습니다.
 GitLab의 앱·모니터링 배포는 `apply-ci-s3-env-remote.sh`를 통해 아래 S3 런타임
 설정만 서버 `infra/.env`에 원자적으로 반영한 뒤 Compose 설정을 검증합니다.
-기존 파일은 타임스탬프 백업으로 보존됩니다. `AWS_ACCESS_KEY_ID`와
-`AWS_SECRET_ACCESS_KEY`는 전달 대상에서 제외하며 EC2 Instance Profile을 사용합니다.
+기존 파일은 타임스탬프 백업으로 보존됩니다. Access Key 예외를 사용할 때도
+`AWS_ACCESS_KEY_ID`와 `AWS_SECRET_ACCESS_KEY`는 GitLab 변수로 등록하거나 CI를 통해
+전달하지 않고, 서버에 직접 주입한 값을 유지합니다.
 
 ```dotenv
 AWS_REGION=ap-northeast-2
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_SESSION_TOKEN=
 S3_MEDIA_BUCKET=l1mit-prod-media-0b849303
 S3_ENDPOINT=
 S3_PATH_STYLE_ACCESS=false
@@ -114,11 +121,26 @@ S3_FFPROBE_EXECUTABLE=ffprobe
 S3_FFPROBE_TIMEOUT=10s
 ```
 
-GitLab CI/CD 변수에도 동일한 이름을 `production` environment scope와 `Protected`로 등록해
+GitLab CI/CD 변수에는 비밀이 아닌 S3 설정만 `production` environment scope로 등록해
 배포 전 서버 환경 갱신과 설정 검증에 사용합니다. `AWS_ACCESS_KEY_ID`,
-`AWS_SECRET_ACCESS_KEY`는 등록하거나 서버로 전달하지 않습니다.
+`AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`은 등록하거나 서버로 전달하지 않습니다.
 CI 작업이 AWS API를 직접 호출해야 할 때만 기존 GitLab OIDC 토큰으로 Role을 assume하고,
 그 작업 안에서 발급되는 단기 자격 증명을 사용합니다.
+
+Access Key 예외를 처음 적용할 때는 AWS 콘솔 로그인 기반 임시 CLI 프로필로 아래 스크립트를
+한 번만 실행합니다. 스크립트는 기존 키가 없는지 확인하고 새 키로 PUT, HEAD, GET, DELETE를
+검증한 뒤, 키 값을 출력하지 않고 EC2 환경파일에 직접 주입합니다. 주입 전 실패하면 생성한
+키를 즉시 폐기합니다.
+
+```powershell
+aws login --profile limit-bootstrap --region ap-northeast-2
+.\scripts\provision-s3-runtime-credential.ps1
+aws logout --profile limit-bootstrap
+```
+
+키를 교체할 때는 새 키를 만들기 전에 기존 키를 비활성화하고, 배포 검증이 끝난 후 기존 키를
+삭제합니다. 서버 환경파일과 타임스탬프 백업은 `0600` 권한을 유지하고 운영 담당자 외에는
+읽을 수 없도록 합니다.
 
 | GitLab 변수 | 운영 값 |
 | --- | --- |
