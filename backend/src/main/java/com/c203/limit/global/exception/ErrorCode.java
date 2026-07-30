@@ -152,7 +152,20 @@ public enum ErrorCode {
     REINSPECTION_ITEM_LISTING_MISMATCH(
             "INS023", HttpStatus.BAD_REQUEST, "선택한 체크리스트 항목이 해당 매물 소속이 아닙니다."),
     REINSPECTION_ACCESS_DENIED("INS024", HttpStatus.FORBIDDEN, "해당 재검수 요청을 처리할 권한이 없습니다."),
-    REINSPECTION_ALREADY_PROCESSED("INS025", HttpStatus.CONFLICT, "이미 처리된 재검수 요청입니다.");
+    REINSPECTION_ALREADY_PROCESSED("INS025", HttpStatus.CONFLICT, "이미 처리된 재검수 요청입니다."),
+    REINSPECTION_EVIDENCE_REQUIRED(
+            "INS033", HttpStatus.CONFLICT, "요청된 모든 항목에 새 재검수 증빙을 업로드해야 합니다."),
+    MEDIA_UPLOAD_NOT_FOUND("INS026", HttpStatus.NOT_FOUND, "미디어 업로드 요청을 찾을 수 없습니다."),
+    MEDIA_UPLOAD_EXPIRED("INS027", HttpStatus.GONE, "미디어 업로드 요청이 만료되었습니다."),
+    MEDIA_UPLOAD_ALREADY_COMPLETED("INS028", HttpStatus.CONFLICT, "이미 완료된 미디어 업로드 요청입니다."),
+    MEDIA_UPLOAD_MISMATCH("INS029", HttpStatus.UNPROCESSABLE_ENTITY, "업로드된 파일 정보가 요청과 일치하지 않습니다."),
+    MEDIA_UPLOAD_INVALID("INS030", HttpStatus.UNPROCESSABLE_ENTITY, "허용되지 않는 미디어 파일입니다."),
+    MEDIA_STORAGE_UNAVAILABLE("INS031", HttpStatus.BAD_GATEWAY, "미디어 저장소 요청에 실패했습니다."),
+    MEDIA_STORAGE_NOT_CONFIGURED(
+            "INS032", HttpStatus.SERVICE_UNAVAILABLE, "미디어 저장소 설정을 확인해 주세요."),
+    LISTING_IMAGE_NOT_FOUND("PRD015", HttpStatus.NOT_FOUND, "상품 이미지를 찾을 수 없습니다."),
+    LISTING_IMAGE_LIMIT_EXCEEDED(
+            "PRD016", HttpStatus.UNPROCESSABLE_ENTITY, "상품 이미지는 최대 10개까지 등록할 수 있습니다.");
 
     private final String code;
     private final HttpStatus status;

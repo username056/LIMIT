@@ -37,7 +37,7 @@ public class Listing extends BaseTimeEntity {
     private String description;
 
     @Column(nullable = false)
-    private int price;
+    private long price;
 
     @Column(length = 50)
     private String color;
@@ -53,6 +53,9 @@ public class Listing extends BaseTimeEntity {
 
     @Column(name = "precheck_completed", nullable = false)
     private boolean precheckCompleted;
+
+    @Column(name = "draft_step", nullable = false)
+    private int draftStep;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
@@ -100,7 +103,7 @@ public class Listing extends BaseTimeEntity {
             Category category,
             String title,
             String description,
-            int price,
+            long price,
             Long checklistTemplateId) {
         Listing listing = new Listing();
         listing.sellerId = sellerId;
@@ -110,6 +113,7 @@ public class Listing extends BaseTimeEntity {
         listing.price = price;
         listing.checklistTemplateId = checklistTemplateId;
         listing.precheckCompleted = false;
+        listing.draftStep = 1;
         listing.status = ListingStatus.DRAFT;
         return listing;
     }
@@ -119,7 +123,7 @@ public class Listing extends BaseTimeEntity {
             Category category,
             String title,
             String description,
-            int price,
+            long price,
             String color,
             Integer storageGb,
             String tradeRegion,
@@ -132,7 +136,7 @@ public class Listing extends BaseTimeEntity {
         return listing;
     }
 
-    public void updateDraft(String title, String description, int price) {
+    public void updateDraft(String title, String description, long price) {
         if (title != null) this.title = title;
         if (description != null) this.description = description;
         this.price = price;
@@ -142,7 +146,7 @@ public class Listing extends BaseTimeEntity {
             String title,
             String description,
             boolean descriptionSpecified,
-            Integer price,
+            Long price,
             String color,
             boolean colorSpecified,
             Integer storageGb,
@@ -167,6 +171,14 @@ public class Listing extends BaseTimeEntity {
 
     public void completePrecheck() {
         this.precheckCompleted = true;
+    }
+
+    public void updateDraftStep(int draftStep) {
+        requireStatus(ListingStatus.DRAFT, ErrorCode.PRODUCT_EDIT_NOT_ALLOWED);
+        if (draftStep < 1 || draftStep > 4) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+        this.draftStep = draftStep;
     }
 
     public void hide() {

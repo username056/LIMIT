@@ -23,6 +23,16 @@ public class CurrentUser {
         return user.id();
     }
 
+    public Long memberIdOrNull() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null
+                || !(authentication.getPrincipal() instanceof AuthenticatedUser user)
+                || !"MEMBER".equals(user.accountType())) {
+            return null;
+        }
+        return user.id();
+    }
+
     public Long adminId() {
         AuthenticatedUser user = require();
         if (!"ADMIN".equals(user.accountType())) throw new BusinessException(ErrorCode.FORBIDDEN);

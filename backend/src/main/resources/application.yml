@@ -143,6 +143,20 @@ limit:
     naver-clova:
       invoke-url: ${NAVER_CLOVA_OCR_INVOKE_URL:}
       secret-key: ${NAVER_CLOVA_OCR_SECRET_KEY:}
+  storage:
+    s3:
+      region: ${AWS_REGION:ap-northeast-2}
+      bucket: ${S3_MEDIA_BUCKET:}
+      endpoint: ${S3_ENDPOINT:}
+      path-style-access: ${S3_PATH_STYLE_ACCESS:false}
+      upload-ttl: ${S3_UPLOAD_TTL:600s}
+      download-ttl: ${S3_DOWNLOAD_TTL:300s}
+      public-base-url: ${S3_PUBLIC_BASE_URL:}
+      cleanup-delay-ms: ${S3_UPLOAD_CLEANUP_DELAY_MS:3600000}
+      cleanup-initial-delay-ms: ${S3_UPLOAD_CLEANUP_INITIAL_DELAY_MS:60000}
+      ffprobe-enabled: ${S3_FFPROBE_ENABLED:false}
+      ffprobe-executable: ${S3_FFPROBE_EXECUTABLE:ffprobe}
+      ffprobe-timeout: ${S3_FFPROBE_TIMEOUT:15s}
 
 springdoc:
   api-docs:

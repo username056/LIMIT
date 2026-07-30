@@ -34,6 +34,7 @@ import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
 import com.c203.limit.domain.product.repository.ListingThumbnailProjection;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
+import com.c203.limit.domain.product.storage.MediaUrlResolver;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -53,6 +54,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @Service
 public class ProductApplicationService {
@@ -69,6 +71,27 @@ public class ProductApplicationService {
     private final ListingChecklistItemRepository checklistItemRepository;
     private final ListingStatusHistoryRepository statusHistoryRepository;
     private final ListingImageRepository imageRepository;
+    private final MediaUrlResolver mediaUrlResolver;
+
+    @Autowired
+    public ProductApplicationService(
+            ListingRepository listingRepository,
+            CategoryRepository categoryRepository,
+            ChecklistTemplateRepository templateRepository,
+            ChecklistTemplateItemRepository templateItemRepository,
+            ListingChecklistItemRepository checklistItemRepository,
+            ListingStatusHistoryRepository statusHistoryRepository,
+            ListingImageRepository imageRepository,
+            MediaUrlResolver mediaUrlResolver) {
+        this.listingRepository = listingRepository;
+        this.categoryRepository = categoryRepository;
+        this.templateRepository = templateRepository;
+        this.templateItemRepository = templateItemRepository;
+        this.checklistItemRepository = checklistItemRepository;
+        this.statusHistoryRepository = statusHistoryRepository;
+        this.imageRepository = imageRepository;
+        this.mediaUrlResolver = mediaUrlResolver;
+    }
 
     public ProductApplicationService(
             ListingRepository listingRepository,
@@ -78,13 +101,15 @@ public class ProductApplicationService {
             ListingChecklistItemRepository checklistItemRepository,
             ListingStatusHistoryRepository statusHistoryRepository,
             ListingImageRepository imageRepository) {
-        this.listingRepository = listingRepository;
-        this.categoryRepository = categoryRepository;
-        this.templateRepository = templateRepository;
-        this.templateItemRepository = templateItemRepository;
-        this.checklistItemRepository = checklistItemRepository;
-        this.statusHistoryRepository = statusHistoryRepository;
-        this.imageRepository = imageRepository;
+        this(
+                listingRepository,
+                categoryRepository,
+                templateRepository,
+                templateItemRepository,
+                checklistItemRepository,
+                statusHistoryRepository,
+                imageRepository,
+                null);
     }
 
     @Transactional
@@ -409,7 +434,9 @@ public class ProductApplicationService {
                 .stream()
                 .collect(Collectors.toMap(
                         ListingThumbnailProjection::getListingId,
-                        ListingThumbnailProjection::getCdnUrl));
+                        image -> mediaUrlResolver == null
+                                ? image.getCdnUrl()
+                                : mediaUrlResolver.resolve(image.getS3Key(), image.getCdnUrl())));
         Map<Long, ProductMetrics> result = new HashMap<>();
         listingIds.forEach(listingId -> {
             ListingChecklistCountProjection count = counts.get(listingId);
@@ -436,9 +463,13 @@ public class ProductApplicationService {
         }
     }
 
-    private int price(BigDecimal price) {
+    private long price(BigDecimal price) {
         try {
-            return price.intValueExact();
+            long value = price.longValueExact();
+            if (value < 1 || value > 999_999_999_999L) {
+                throw new ArithmeticException("price out of contract");
+            }
+            return value;
         } catch (ArithmeticException exception) {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
         }

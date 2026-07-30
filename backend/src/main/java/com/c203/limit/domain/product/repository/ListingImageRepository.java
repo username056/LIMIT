@@ -12,9 +12,17 @@ public interface ListingImageRepository extends JpaRepository<ListingImage, Long
     Optional<ListingImage> findFirstByListingIdAndImageTypeOrderByIdAsc(
             Long listingId, ListingImageType imageType);
 
+    Optional<ListingImage> findByIdAndListingId(Long id, Long listingId);
+
+    List<ListingImage> findAllByListingIdOrderByDisplayOrderAscIdAsc(Long listingId);
+
+    long countByListingId(Long listingId);
+
     @Query(
             """
-            SELECT image.listing.id AS listingId, image.cdnUrl AS cdnUrl
+            SELECT image.listing.id AS listingId,
+                   image.cdnUrl AS cdnUrl,
+                   image.s3Key AS s3Key
               FROM ListingImage image
              WHERE image.imageType = :imageType
                AND image.listing.id IN :listingIds

@@ -3,13 +3,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ProductRegisterPage from '../ProductRegisterPage.vue'
 import {
   completeEvidence,
+  completeProductImage,
   createEvidenceUploadUrl,
+  createProductImageUploadUrl,
   createProduct,
+  deleteProductImage,
   generateChecklist,
   getChecklistTemplate,
   getDeviceCategories,
   getDeviceModels,
   getProductChecklist,
+  getEvidenceHistory,
+  getProductImages,
   transitionProductStatus,
 } from '../../api/products'
 
@@ -27,17 +32,27 @@ vi.mock('../../utils/mediaOptimize', () => ({
 
 vi.mock('../../api/products', () => ({
   completeEvidence: vi.fn(),
+  completeReinspectionRequest: vi.fn(),
+  completeProductImage: vi.fn(),
   createEvidenceUploadUrl: vi.fn(),
+  createProductImageUploadUrl: vi.fn(),
   createProduct: vi.fn(),
   generateChecklist: vi.fn(),
   getChecklistTemplate: vi.fn(),
   getDeviceCategories: vi.fn(),
   getDeviceModels: vi.fn(),
   getHandoverGuide: vi.fn(),
+  getReinspectionRequest: vi.fn(),
   getMyProduct: vi.fn(),
   getProductChecklist: vi.fn(),
+  getProductDraftProgress: vi.fn(),
+  getEvidenceHistory: vi.fn(),
+  getProductImages: vi.fn(),
+  deleteProductImage: vi.fn(),
   transitionProductStatus: vi.fn(),
   updateProduct: vi.fn(),
+  updateProductDraftProgress: vi.fn(),
+  uploadToPresignedUrl: vi.fn().mockResolvedValue(undefined),
 }))
 
 const buttonStub = {
@@ -90,6 +105,7 @@ describe('ProductRegisterPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     // clearAllMocks는 호출 기록만 지우고 구현은 남기므로, 테스트마다 기본 동작을 다시 세웁니다.
+    getEvidenceHistory.mockResolvedValue([])
     transitionProductStatus.mockResolvedValue({})
     // jsdom에는 scrollTo 구현이 없어 단계 이동 시 예외가 나므로 스텁으로 대체합니다.
     window.scrollTo = vi.fn()
@@ -102,6 +118,19 @@ describe('ProductRegisterPage', () => {
       requiredHeaders: {},
     })
     completeEvidence.mockResolvedValue({})
+    completeProductImage.mockResolvedValue({
+      imageId: 1,
+      imageType: 'THUMBNAIL',
+      displayOrder: 0,
+      imageUrl: 'https://storage.test/image',
+      mimeType: 'image/jpeg',
+    })
+    createProductImageUploadUrl.mockResolvedValue({
+      uploadId: 'image-upload-1',
+      presignedUrl: 'https://storage.test/image-upload',
+      requiredHeaders: { 'Content-Type': 'image/jpeg' },
+    })
+    getProductImages.mockResolvedValue([])
     getDeviceCategories.mockResolvedValue([{ categoryId: 10, name: '노트북' }])
     getDeviceModels.mockResolvedValue([{
       deviceModelId: 101,
@@ -385,7 +414,7 @@ describe('ProductRegisterPage', () => {
     await goToCaptureStep(wrapper)
 
     for (let index = 0; index < 3; index += 1) {
-      const fileInput = wrapper.find('input[type="file"]')
+      const fileInput = wrapper.find('input[accept="image/*"]')
       expect(fileInput.element.disabled).toBe(false)
       // eslint-disable-next-line no-await-in-loop
       await attachFile(fileInput, new File(['x'], `photo${index}.jpg`, { type: 'image/jpeg' }))
@@ -395,7 +424,7 @@ describe('ProductRegisterPage', () => {
 
     expect(wrapper.findAll('button[aria-label*="첨부 파일 확인"]')).toHaveLength(3)
     expect(wrapper.text()).toContain('최대 3개까지 첨부했습니다')
-    expect(wrapper.find('input[type="file"]').element.disabled).toBe(true)
+    expect(wrapper.find('input[accept="image/*"]').element.disabled).toBe(true)
     expect(wrapper.text()).toContain('첨부 3 / 3')
   })
 
@@ -404,7 +433,7 @@ describe('ProductRegisterPage', () => {
     await flushPromises()
     await goToCaptureStep(wrapper)
 
-    await attachFile(wrapper.find('input[type="file"]'), new File(['x'], 'photo.jpg', { type: 'image/jpeg' }))
+    await attachFile(wrapper.find('input[accept="image/*"]'), new File(['x'], 'photo.jpg', { type: 'image/jpeg' }))
     await flushPromises()
 
     await wrapper.find('button[aria-label*="첨부 파일 확인"]').trigger('click')
@@ -414,12 +443,40 @@ describe('ProductRegisterPage', () => {
     expect(wrapper.findAll('button[aria-label*="첨부 파일 확인"]')).toHaveLength(0)
   })
 
+  it('상품 이미지를 S3에 업로드하고 삭제 API와 동기화한다', async () => {
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await goToCaptureStep(wrapper)
+
+    await attachFile(
+      wrapper.find('input[accept="image/jpeg,image/png,image/webp"]'),
+      new File(['image'], 'product.jpg', { type: 'image/jpeg' }),
+    )
+    await flushPromises()
+
+    expect(createProductImageUploadUrl).toHaveBeenCalledWith(1001, {
+      filename: 'product.jpg',
+      contentType: 'image/jpeg',
+      fileSize: 5,
+    })
+    expect(completeProductImage).toHaveBeenCalledWith(1001, {
+      uploadId: 'image-upload-1',
+      imageType: 'THUMBNAIL',
+      displayOrder: 0,
+    })
+    expect(wrapper.text()).toContain('대표')
+
+    await wrapper.find('button[aria-label="상품 이미지 삭제"]').trigger('click')
+    await flushPromises()
+    expect(deleteProductImage).toHaveBeenCalledWith(1001, 1)
+  })
+
   it('등록을 완료하면 판매 상태로 올리고 등록한 상품 상세로 이동한다', async () => {
     const wrapper = mount(ProductRegisterPage, { global: globalOptions })
     await flushPromises()
     await goToCaptureStep(wrapper)
 
-    await attachFile(wrapper.find('input[type="file"]'), new File(['x'], 'photo.jpg', { type: 'image/jpeg' }))
+    await attachFile(wrapper.find('input[accept="image/*"]'), new File(['x'], 'photo.jpg', { type: 'image/jpeg' }))
     await flushPromises()
     await buttonByText(wrapper, '다음 단계로').trigger('click')
     await flushPromises()

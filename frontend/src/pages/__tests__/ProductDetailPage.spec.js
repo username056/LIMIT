@@ -1,7 +1,13 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ProductDetailPage from '../ProductDetailPage.vue'
-import { getMyProduct, getProduct, getProductChecklist } from '../../api/products'
+import {
+  getMyProduct,
+  getProduct,
+  getProductChecklist,
+  getEvidenceHistory,
+  getProductImages,
+} from '../../api/products'
 import { getFavoriteStatus, removeFavorite } from '../../api/favorites'
 import { getAccessToken, getSessionMember } from '../../auth/session'
 import { createOrGetChatRoom } from '../../api/chat'
@@ -17,7 +23,9 @@ vi.mock('../../api/products', () => ({
   getMyProduct: vi.fn(),
   getProduct: vi.fn(),
   getProductChecklist: vi.fn(),
-  requestRecapture: vi.fn(),
+  getEvidenceHistory: vi.fn(),
+  getProductImages: vi.fn(),
+  createReinspectionRequest: vi.fn(),
 }))
 vi.mock('../../api/favorites', () => ({
   addFavorite: vi.fn(),
@@ -47,6 +55,8 @@ describe('ProductDetailPage', () => {
       checklistSummary: {},
     })
     getProductChecklist.mockResolvedValue([])
+    getEvidenceHistory.mockResolvedValue([])
+    getProductImages.mockResolvedValue([])
   })
 
   it('기존 좋아요한 상품 상태를 불러와 첫 클릭으로 해제한다', async () => {
@@ -260,5 +270,33 @@ describe('ProductDetailPage', () => {
 
     expect(wrapper.text()).toContain('상품을 찾을 수 없습니다.')
     expect(wrapper.text()).not.toContain('권한이 없습니다.')
+  })
+
+  it('구매자 공개 증빙을 상품 상세에 표시한다', async () => {
+    getAccessToken.mockReturnValue(null)
+    getProductChecklist.mockResolvedValue([{
+      checklistItemId: 7001,
+      visibleToBuyer: true,
+      evidenceType: 'PHOTO',
+    }])
+    getEvidenceHistory.mockResolvedValue([{
+      evidenceId: 9001,
+      evidenceType: 'PHOTO',
+      mediaUrl: 'https://example.test/evidence.jpg',
+    }])
+
+    const wrapper = mount(ProductDetailPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.get('img[alt="판매자가 공개한 검수 증빙"]').attributes('src'))
+      .toBe('https://example.test/evidence.jpg')
   })
 })

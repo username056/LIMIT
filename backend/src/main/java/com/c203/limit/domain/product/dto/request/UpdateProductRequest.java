@@ -6,6 +6,8 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -29,6 +31,7 @@ public class UpdateProductRequest {
 
     @Schema(description = "판매 가격", example = "630000")
     @Positive
+    @Digits(integer = 12, fraction = 0)
     private BigDecimal price;
 
     @Schema(description = "색상", example = "Onyx Black", nullable = true)
@@ -40,6 +43,7 @@ public class UpdateProductRequest {
 
     @Schema(description = "저장 용량(GB)", example = "256", nullable = true)
     @Min(1)
+    @Max(16384)
     private Integer storageGb;
 
     @JsonIgnore

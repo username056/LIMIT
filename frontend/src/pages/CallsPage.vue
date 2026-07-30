@@ -7,6 +7,7 @@ import BaseCard from '../components/BaseCard.vue'
 import BaseBadge from '../components/BaseBadge.vue'
 import BaseTabs from '../components/BaseTabs.vue'
 import { cancelRtcCall, getMyRtcCalls, respondRtcCall, updateRtcCall } from '../api/rtc'
+import { getMyReinspectionRequests } from '../api/products'
 
 const router = useRouter()
 const activeTab = ref('실시간 확인')
@@ -93,38 +94,38 @@ async function confirmCancel(call) {
   }
 }
 
-onMounted(load)
+const recaptureRequests = ref([])
+const isLoadingRecaptures = ref(true)
+const recaptureLoadError = ref('')
 
-// 재촬영 요청 목록 조회 API가 아직 없어(판매자가 자기 상품 전체에 걸린 요청을 한 번에 보는 API 없음)
-// 예시 데이터로 화면만 먼저 구성합니다. API가 준비되면 이 배열 대신 응답 데이터를 사용하세요.
-const recaptureRequests = ref([
-  {
-    id: 1,
-    productId: 1042,
-    productName: 'Galaxy Book4 Pro (Space Black)',
-    categoryLabel: '노트북',
-    registrationNumber: '#10842',
-    price: 1680000,
-    specSummary: '배터리 효율 94% · RAM 18GB · SSD 512GB',
-    checklistItemName: '화면 상태 (디스플레이)',
-    requestedAt: '2024-03-11',
-    reason: '화면 좌측 하단 백라이트 밝기 차이가 있는 것 같습니다. 불을 끄고 완전히 어두운 어둠 속에서 흰색 단일 배경을 띄우고 다시 한번 정밀 촬영해 주세요.',
-    status: 'PENDING',
-  },
-  {
-    id: 2,
-    productId: 1042,
-    productName: 'Galaxy Book4 Pro (Space Black)',
-    categoryLabel: '노트북',
-    registrationNumber: '#10842',
-    price: 1680000,
-    specSummary: '배터리 효율 94% · RAM 18GB · SSD 512GB',
-    checklistItemName: '외관 후면',
-    requestedAt: '2024-03-09',
-    reason: '후면 바닥 고무 패드의 마모 상태 및 좌측 하단 나사 결합 부품이 분해 이력에 의해 뭉개져 있는지 확인을 요청하셨습니다.',
-    status: 'COMPLETED',
-  },
-])
+async function loadRecaptures() {
+  isLoadingRecaptures.value = true
+  recaptureLoadError.value = ''
+  try {
+    const requests = await getMyReinspectionRequests()
+    recaptureRequests.value = requests.map((request) => ({
+      id: request.requestKey,
+      requestKey: request.requestKey,
+      productId: request.listingId,
+      productName: `상품 #${request.listingId}`,
+      categoryLabel: '재검수',
+      registrationNumber: `#${request.listingId}`,
+      price: null,
+      specSummary: `${request.items.length}개 항목`,
+      checklistItemName: request.items.map((item) => item.itemName).join(', '),
+      requestedAt: request.requestedAt?.slice(0, 10) || '',
+      reason: request.reason,
+      status: request.status === 'REQUESTED' ? 'PENDING' : request.status,
+    }))
+  } catch (error) {
+    recaptureLoadError.value = error.message || '재검수 요청을 불러오지 못했습니다.'
+    recaptureRequests.value = []
+  } finally {
+    isLoadingRecaptures.value = false
+  }
+}
+
+onMounted(() => Promise.all([load(), loadRecaptures()]))
 
 const recaptureFilter = ref('전체 목록')
 const recaptureCounts = computed(() => ({
@@ -325,6 +326,19 @@ function formatPrice(price) {
       </template>
 
       <template v-else>
+        <p
+          v-if="recaptureLoadError"
+          role="alert"
+          class="mb-5 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700"
+        >
+          {{ recaptureLoadError }}
+        </p>
+        <p
+          v-else-if="isLoadingRecaptures"
+          class="mb-5 text-sm text-text-sub"
+        >
+          재검수 요청을 불러오는 중입니다.
+        </p>
         <p class="mb-5 text-sm text-text-sub">
           구매 희망자가 실시간 검수 전 특정 부위에 대한 재확인을 요청한 내역입니다.
         </p>
@@ -402,7 +416,11 @@ function formatPrice(price) {
                   </BaseBadge>
                   <BaseButton
                     v-if="item.status === 'PENDING'"
-                    :to="{ name: 'seller-product-edit', params: { productId: item.productId } }"
+                    :to="{
+                      name: 'seller-product-edit',
+                      params: { productId: item.productId },
+                      query: { reinspectionRequestKey: item.requestKey },
+                    }"
                   >
                     재촬영 진행하기
                   </BaseButton>

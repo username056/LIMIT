@@ -43,6 +43,8 @@ import com.c203.limit.domain.inspection.repository.ListingOwnerReader;
 import com.c203.limit.domain.inspection.repository.OcrResultRepository;
 import com.c203.limit.domain.product.repository.ListingRepository;
 import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
+import com.c203.limit.domain.product.repository.ListingImageRepository;
+import com.c203.limit.domain.product.repository.MediaUploadSessionRepository;
 import com.c203.limit.domain.product.repository.WishlistRepository;
 import com.c203.limit.domain.product.dto.response.ChecklistTemplateResponse;
 import com.c203.limit.domain.product.dto.response.ProductChecklistItemResponse;
@@ -51,6 +53,7 @@ import com.c203.limit.domain.product.service.ProductApplicationService;
 import com.c203.limit.domain.product.service.ProductApplicationService.ProductPage;
 import com.c203.limit.domain.product.service.ProductCatalogService;
 import com.c203.limit.domain.product.service.ProductChecklistService;
+import com.c203.limit.domain.product.service.EvidenceUploadService;
 import com.c203.limit.domain.payment.service.PaymentService;
 import com.c203.limit.global.security.JwtTokenProvider;
 
@@ -132,6 +135,12 @@ class ProductMockControllerTests {
     ListingStatusHistoryRepository listingStatusHistoryRepository;
 
     @MockitoBean
+    ListingImageRepository listingImageRepository;
+
+    @MockitoBean
+    MediaUploadSessionRepository mediaUploadSessionRepository;
+
+    @MockitoBean
     EvidenceRepository evidenceRepository;
 
     @MockitoBean
@@ -166,6 +175,9 @@ class ProductMockControllerTests {
 
     @MockitoBean
     ProductChecklistService productChecklistService;
+
+    @MockitoBean
+    EvidenceUploadService evidenceUploadService;
 
     @MockitoBean
     com.c203.limit.domain.inspection.checklist.ChecklistGenerationService
@@ -288,7 +300,13 @@ class ProductMockControllerTests {
                         false,
                         "PENDING",
                         null,
-                        0)));
+                        0,
+                        true,
+                        1,
+                        3,
+                        20,
+                        3,
+                        30)));
 
         mockMvc.perform(get("/api/v1/products/1001/checklist-items")
                         .header(

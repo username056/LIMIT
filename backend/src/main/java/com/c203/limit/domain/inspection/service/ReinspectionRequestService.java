@@ -10,6 +10,7 @@ import com.c203.limit.domain.inspection.enums.ReinspectionStatus;
 import com.c203.limit.domain.inspection.event.ReinspectionNotificationEvent;
 import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
 import com.c203.limit.domain.inspection.repository.ListingOwnerReader;
+import com.c203.limit.domain.inspection.repository.EvidenceRepository;
 import com.c203.limit.domain.inspection.repository.ReinspectionRequestItemRepository;
 import com.c203.limit.domain.inspection.repository.ReinspectionRequestRepository;
 import com.c203.limit.global.exception.BusinessException;
@@ -33,6 +34,7 @@ public class ReinspectionRequestService {
     private final ListingChecklistItemRepository checklistItemRepository;
     private final ReinspectionRequestRepository requestRepository;
     private final ReinspectionRequestItemRepository requestItemRepository;
+    private final EvidenceRepository evidenceRepository;
     private final ApplicationEventPublisher eventPublisher;
 
     public ReinspectionRequestService(
@@ -41,12 +43,14 @@ public class ReinspectionRequestService {
             ListingChecklistItemRepository checklistItemRepository,
             ReinspectionRequestRepository requestRepository,
             ReinspectionRequestItemRepository requestItemRepository,
+            EvidenceRepository evidenceRepository,
             ApplicationEventPublisher eventPublisher) {
         this.listingOwnerReader = listingOwnerReader;
         this.chatRoomService = chatRoomService;
         this.checklistItemRepository = checklistItemRepository;
         this.requestRepository = requestRepository;
         this.requestItemRepository = requestItemRepository;
+        this.evidenceRepository = evidenceRepository;
         this.eventPublisher = eventPublisher;
     }
 
@@ -71,6 +75,9 @@ public class ReinspectionRequestService {
         checklistItemRepository.findAllByIdInAndListingId(itemIds, listingId)
                 .forEach(item -> checklistItems.put(item.getId(), item));
         if (checklistItems.size() != itemIds.size()) {
+            throw new BusinessException(ErrorCode.REINSPECTION_ITEM_NOT_FOUND);
+        }
+        if (checklistItems.values().stream().anyMatch(item -> !item.isVisibleToBuyer())) {
             throw new BusinessException(ErrorCode.REINSPECTION_ITEM_NOT_FOUND);
         }
 
@@ -112,6 +119,29 @@ public class ReinspectionRequestService {
         return ReinspectionRequestResponse.from(request, savedItems);
     }
 
+    @Transactional(readOnly = true)
+    public List<ReinspectionRequestResponse> findForSeller(Long sellerId) {
+        return requestRepository.findBySellerIdOrderByRequestedAtDesc(sellerId).stream()
+                .map(request -> ReinspectionRequestResponse.from(
+                        request,
+                        requestItemRepository.findByReinspectionRequestIdOrderByDisplayOrderAsc(
+                                request.getId())))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public ReinspectionRequestResponse find(String requestKey, Long memberId) {
+        ReinspectionRequest request = requestRepository.findByRequestKey(requestKey)
+                .orElseThrow(() -> new BusinessException(ErrorCode.REINSPECTION_REQUEST_NOT_FOUND));
+        if (!request.getSellerId().equals(memberId) && !request.getBuyerId().equals(memberId)) {
+            throw new BusinessException(ErrorCode.REINSPECTION_ACCESS_DENIED);
+        }
+        List<ReinspectionRequestItem> items =
+                requestItemRepository.findByReinspectionRequestIdOrderByDisplayOrderAsc(
+                        request.getId());
+        return ReinspectionRequestResponse.from(request, items);
+    }
+
     @Transactional
     public ReinspectionRequestResponse complete(String requestKey, Long sellerId) {
         ReinspectionRequest request = requestRepository.findByRequestKey(requestKey)
@@ -124,6 +154,12 @@ public class ReinspectionRequestService {
         }
         List<ReinspectionRequestItem> items =
                 requestItemRepository.findByReinspectionRequestIdOrderByDisplayOrderAsc(request.getId());
+        boolean allItemsReuploaded = items.stream().allMatch(item ->
+                evidenceRepository.existsByListingChecklistItem_IdAndUploadedAtAfter(
+                        item.getListingChecklistItem().getId(), request.getRequestedAt()));
+        if (!allItemsReuploaded) {
+            throw new BusinessException(ErrorCode.REINSPECTION_EVIDENCE_REQUIRED);
+        }
         request.complete();
         int pendingRequestCount = Math.toIntExact(
                 requestRepository.countByChatRoomIdAndStatus(
