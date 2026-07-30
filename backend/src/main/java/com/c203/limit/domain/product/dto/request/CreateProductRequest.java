@@ -3,13 +3,12 @@ package com.c203.limit.domain.product.dto.request;
 import java.math.BigDecimal;
 import java.util.Set;
 
-import com.c203.limit.domain.inspection.checklist.LaptopFeatureCode;
 import com.c203.limit.domain.product.entity.OsFamily;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -59,9 +58,9 @@ public class CreateProductRequest {
     @Size(max = 100)
     private final String tradeRegion;
 
-    @Schema(description = "판매자가 확인한 노트북 지원 기능. 최대 5개")
+    @Schema(description = "판매자가 확인한 모델별 지원 기능 코드. 최대 5개")
     @Size(max = 5)
-    private final Set<LaptopFeatureCode> confirmedFeatures;
+    private final Set<@NotBlank String> confirmedFeatures;
 
     @Schema(
             description =

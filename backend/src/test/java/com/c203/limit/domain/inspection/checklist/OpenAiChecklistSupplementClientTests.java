@@ -14,6 +14,7 @@ class OpenAiChecklistSupplementClientTests {
         OpenAiChecklistSupplementClient client = new OpenAiChecklistSupplementClient(
                 RestClient.builder(),
                 mapper,
+                new DeviceChecklistFeatureCatalog(),
                 "https://api.openai.com/v1/responses",
                 "test-key",
                 "gpt-5.6-luna",
@@ -49,7 +50,7 @@ class OpenAiChecklistSupplementClientTests {
         assertThat(result.available()).isTrue();
         assertThat(result.suggestions())
                 .extracting(ChecklistSuggestion::featureCode)
-                .containsExactly(LaptopFeatureCode.CAMERA);
+                .containsExactly("CAMERA");
         assertThat(result.suggestions())
                 .singleElement()
                 .satisfies(suggestion -> {

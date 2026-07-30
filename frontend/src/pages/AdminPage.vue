@@ -9,12 +9,18 @@ import AdminShell from '../components/AdminShell.vue'
 import {
   createAdminAccount,
   createMemberRestriction,
+  approveChecklistResearch,
+  approveDeviceModelRequest,
   getAdminAccounts,
   getAdminActionLogs,
   getAdminMember,
   getAdminMembers,
   getMemberRestrictions,
+  getChecklistResearches,
+  getDeviceModelRequests,
   loginAdmin,
+  rejectChecklistResearch,
+  rejectDeviceModelRequest,
   releaseMemberRestriction,
   updateAdminAccount,
 } from '../api/admin'
@@ -31,6 +37,8 @@ const successMessage = ref('')
 const membersPage = ref(emptyPage())
 const logsPage = ref(emptyPage())
 const accountsPage = ref(emptyPage())
+const checklistResearches = ref([])
+const deviceModelRequests = ref([])
 const selectedMember = ref(null)
 const restrictions = ref([])
 const restrictionForm = reactive({
@@ -47,6 +55,8 @@ const isSuperAdmin = computed(() => admin.value?.roles?.includes('SUPER_ADMIN'))
 const sections = computed(() => [
   { id: 'dashboard', label: '대시보드' },
   { id: 'members', label: '회원 관리' },
+  { id: 'checklist-researches', label: '체크리스트 AI 검토' },
+  { id: 'device-model-requests', label: '신규 기기 모델 검토' },
   { id: 'logs', label: '관리자 작업 로그' },
   ...(isSuperAdmin.value ? [{ id: 'accounts', label: '관리자 계정' }] : []),
 ])
@@ -108,6 +118,10 @@ async function loadSection(section) {
       if (accountResult) accountsPage.value = accountResult
     } else if (section === 'members') {
       membersPage.value = await getAdminMembers(0, 20)
+    } else if (section === 'checklist-researches') {
+      checklistResearches.value = await getChecklistResearches()
+    } else if (section === 'device-model-requests') {
+      deviceModelRequests.value = await getDeviceModelRequests()
     } else if (section === 'logs') {
       logsPage.value = await getAdminActionLogs(0, 20)
     } else if (section === 'accounts' && isSuperAdmin.value) {
@@ -117,6 +131,59 @@ async function loadSection(section) {
     showError(error, '관리자 데이터를 불러오지 못했습니다.')
   } finally {
     isLoading.value = false
+  }
+}
+
+async function approveResearch(research) {
+  const note = window.prompt('승인 메모를 입력해 주세요. (선택)', '') ?? ''
+  try {
+    await approveChecklistResearch(research.researchId, {
+      approvedFeatureCodes: research.suggestions.map((item) => item.featureCode),
+      note,
+    })
+    checklistResearches.value = checklistResearches.value
+      .filter((item) => item.researchId !== research.researchId)
+    successMessage.value = '승인된 기능으로 새 공용 체크리스트 템플릿을 발행했습니다.'
+  } catch (error) {
+    showError(error, '체크리스트 조사 결과를 승인하지 못했습니다.')
+  }
+}
+
+async function rejectResearch(research) {
+  const note = window.prompt('반려 사유를 입력해 주세요.')
+  if (!note) return
+  try {
+    await rejectChecklistResearch(research.researchId, { approvedFeatureCodes: [], note })
+    checklistResearches.value = checklistResearches.value
+      .filter((item) => item.researchId !== research.researchId)
+    successMessage.value = '체크리스트 조사 결과를 반려했습니다.'
+  } catch (error) {
+    showError(error, '체크리스트 조사 결과를 반려하지 못했습니다.')
+  }
+}
+
+async function approveModelRequest(request) {
+  const note = window.prompt('승인 메모를 입력해 주세요. (선택)', '') ?? ''
+  try {
+    await approveDeviceModelRequest(request.requestId, { note })
+    deviceModelRequests.value = deviceModelRequests.value
+      .filter((item) => item.requestId !== request.requestId)
+    successMessage.value = '새 모델과 초기 공용 체크리스트를 카탈로그에 등록했습니다.'
+  } catch (error) {
+    showError(error, '기기 모델 요청을 승인하지 못했습니다.')
+  }
+}
+
+async function rejectModelRequest(request) {
+  const note = window.prompt('반려 사유를 입력해 주세요.')
+  if (!note) return
+  try {
+    await rejectDeviceModelRequest(request.requestId, { note })
+    deviceModelRequests.value = deviceModelRequests.value
+      .filter((item) => item.requestId !== request.requestId)
+    successMessage.value = '기기 모델 요청을 반려했습니다.'
+  } catch (error) {
+    showError(error, '기기 모델 요청을 반려하지 못했습니다.')
   }
 }
 
@@ -525,6 +592,151 @@ onMounted(() => {
           class="py-10 text-center text-sm text-text-sub"
         >
           목록에서 회원을 선택해 주세요.
+        </p>
+      </BaseCard>
+    </section>
+
+    <section
+      v-else-if="activeSection === 'device-model-requests'"
+      class="space-y-5"
+    >
+      <BaseCard>
+        <h2 class="font-bold">
+          신규 기기 모델 요청
+        </h2>
+        <p class="mt-2 text-xs leading-5 text-text-sub">
+          승인하면 같은 카테고리의 검증된 기본 템플릿을 복제해 새 모델을 즉시 선택할 수 있게 합니다.
+          사용자가 처음 선택할 때 모델별 AI 조사가 한 번 시작됩니다.
+        </p>
+      </BaseCard>
+      <BaseCard
+        v-for="request in deviceModelRequests"
+        :key="request.requestId"
+      >
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p class="text-xs font-semibold text-primary">
+              카테고리 #{{ request.categoryId }} · 요청자 #{{ request.requestedByMemberId }}
+            </p>
+            <h3 class="mt-1 text-lg font-bold">
+              {{ request.manufacturer }} {{ request.modelName }}
+            </h3>
+            <p class="mt-1 text-xs text-text-sub">
+              {{ request.modelCode || '모델 코드 미입력' }} · {{ request.osFamily }}
+              · {{ formatDate(request.createdAt) }}
+            </p>
+          </div>
+          <BaseBadge variant="primary">
+            {{ request.status }}
+          </BaseBadge>
+        </div>
+        <div class="mt-5 flex gap-2">
+          <BaseButton
+            type="button"
+            @click="approveModelRequest(request)"
+          >
+            모델 등록 승인
+          </BaseButton>
+          <BaseButton
+            type="button"
+            variant="secondary"
+            @click="rejectModelRequest(request)"
+          >
+            반려
+          </BaseButton>
+        </div>
+      </BaseCard>
+      <BaseCard v-if="!deviceModelRequests.length">
+        <p class="py-8 text-center text-sm text-text-sub">
+          검토 대기 중인 모델 요청이 없습니다.
+        </p>
+      </BaseCard>
+    </section>
+
+    <section
+      v-else-if="activeSection === 'checklist-researches'"
+      class="space-y-5"
+    >
+      <BaseCard>
+        <h2 class="font-bold">
+          관리자 검토 대기
+        </h2>
+        <p class="mt-2 text-xs leading-5 text-text-sub">
+          AI 조사는 모델별로 한 번만 저장됩니다. 승인하면 선택한 기능이 새 PUBLISHED
+          체크리스트 버전으로 발행되고, 이후 같은 모델의 모든 매물이 이를 재사용합니다.
+        </p>
+      </BaseCard>
+
+      <BaseCard
+        v-for="research in checklistResearches"
+        :key="research.researchId"
+      >
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p class="text-xs font-semibold text-primary">
+              {{ research.deviceType }} · #{{ research.deviceModelId }}
+            </p>
+            <h3 class="mt-1 text-lg font-bold">
+              {{ research.manufacturer }} {{ research.modelName }}
+            </h3>
+            <p class="mt-1 text-xs text-text-sub">
+              조사 버전 {{ research.researchVersion }} · {{ formatDate(research.createdAt) }}
+            </p>
+          </div>
+          <BaseBadge variant="primary">
+            {{ research.status }}
+          </BaseBadge>
+        </div>
+
+        <ul
+          v-if="research.suggestions.length"
+          class="mt-5 grid gap-3 md:grid-cols-2"
+        >
+          <li
+            v-for="suggestion in research.suggestions"
+            :key="suggestion.featureCode"
+            class="rounded-md border border-border bg-bg p-4"
+          >
+            <strong class="text-sm">{{ suggestion.featureName || suggestion.featureCode }}</strong>
+            <p class="mt-2 text-xs leading-5 text-text-sub">
+              {{ suggestion.reason }}
+            </p>
+            <a
+              :href="suggestion.sourceUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="mt-2 inline-block text-xs font-semibold text-primary underline"
+            >
+              {{ suggestion.sourceTitle || '공식 자료 확인' }}
+            </a>
+          </li>
+        </ul>
+        <p
+          v-if="research.reviewCandidates.length"
+          class="mt-4 rounded-md bg-amber-50 px-4 py-3 text-xs text-amber-800"
+        >
+          미지원 기능 후보: {{ research.reviewCandidates.join(', ') }}
+        </p>
+        <div class="mt-5 flex gap-2">
+          <BaseButton
+            type="button"
+            @click="approveResearch(research)"
+          >
+            전체 확인 기능 승인
+          </BaseButton>
+          <BaseButton
+            type="button"
+            variant="secondary"
+            @click="rejectResearch(research)"
+          >
+            반려
+          </BaseButton>
+        </div>
+      </BaseCard>
+
+      <BaseCard v-if="!checklistResearches.length">
+        <p class="py-8 text-center text-sm text-text-sub">
+          검토 대기 중인 모델 조사가 없습니다.
         </p>
       </BaseCard>
     </section>
