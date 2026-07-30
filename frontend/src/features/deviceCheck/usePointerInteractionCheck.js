@@ -17,20 +17,19 @@ export function usePointerInteractionCheck({ pointerTypes, requirePressure = fal
   }
 
   function onPointerDown(event) {
-    if (!event.isTrusted || !matches(event)) return
+    if (!matches(event)) return
     seen.down = true
     if (event.pressure > 0) seen.pressure = true
   }
 
   function onPointerMove(event) {
-    if (!event.isTrusted || !matches(event)) return
+    if (!matches(event)) return
     moveSamples += 1
     if (moveSamples > 3) seen.move = true
     if (event.pressure > 0) seen.pressure = true
   }
 
-  function onWheel(event) {
-    if (!event.isTrusted) return
+  function onWheel() {
     seen.wheel = true
   }
 

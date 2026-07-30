@@ -31,7 +31,6 @@ export function useKeyboardCheck({ includeNumpad = false } = {}) {
   const isComplete = computed(() => pressedCount.value >= total)
 
   function handleKeydown(event) {
-    if (!event.isTrusted) return
     if (!targetCodes.includes(event.code)) return
     pressed.add(event.code)
   }
