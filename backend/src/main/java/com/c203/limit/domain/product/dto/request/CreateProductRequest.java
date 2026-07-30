@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.util.Set;
 
 import com.c203.limit.domain.inspection.checklist.LaptopFeatureCode;
+import com.c203.limit.domain.product.entity.OsFamily;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Min;
@@ -62,6 +63,27 @@ public class CreateProductRequest {
     @Size(max = 5)
     private final Set<LaptopFeatureCode> confirmedFeatures;
 
+    @Schema(
+            description =
+                    "카탈로그에 없는 기기를 '기타 (직접 입력)' 모델로 등록할 때 판매자가 적는 제조사."
+                            + " 모델명과 함께 보내면 이 정보로 체크리스트를 생성한다.",
+            example = "Samsung")
+    @Size(max = 50)
+    private final String customManufacturer;
+
+    @Schema(description = "직접 입력 모델명", example = "Galaxy Book4 Pro")
+    @Size(max = 100)
+    private final String customModelName;
+
+    @Schema(description = "직접 입력 모델 코드", example = "NT960XGK-KC51G")
+    @Size(max = 50)
+    private final String customModelCode;
+
+    @Schema(
+            description = "직접 입력 운영체제. 노트북 체크리스트 생성에 필요하다.",
+            allowableValues = {"WINDOWS", "LINUX"})
+    private final OsFamily customOsFamily;
+
     public CreateProductRequest(
             Long categoryId,
             Long deviceModelId,
@@ -80,6 +102,19 @@ public class CreateProductRequest {
                 color,
                 storageGb,
                 tradeRegion,
-                Set.of());
+                Set.of(),
+                null,
+                null,
+                null,
+                null);
+    }
+
+    /** 판매자가 카탈로그에 없는 기기를 직접 입력했는지 여부. */
+    public boolean hasCustomModel() {
+        return hasText(customManufacturer) && hasText(customModelName);
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 }

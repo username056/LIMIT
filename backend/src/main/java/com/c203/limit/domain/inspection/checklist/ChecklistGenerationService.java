@@ -78,6 +78,34 @@ public class ChecklistGenerationService {
                 confirmedFeatures));
     }
 
+    /**
+     * 카탈로그에 없는 기기를 직접 입력으로 등록할 때 쓴다. 판매자가 적은 제조사·모델명으로 공식 자료를
+     * 찾아 체크리스트를 만들되, 결과에는 매물이 실제로 매달릴 '기타 (직접 입력)' 모델 ID를 찍는다.
+     *
+     * <p>{@link #generateCustom}은 조회 전용이라 deviceModelId가 없다. 등록 경로는 생성 결과와 매물의
+     * 모델이 같은지 검증하므로, 여기서 carrier 모델 ID를 채워 그 검증을 통과시킨다.
+     */
+    public GeneratedChecklist generateCustomForModel(
+            Long carrierDeviceModelId,
+            String manufacturer,
+            String modelName,
+            String modelCode,
+            OsFamily osFamily,
+            Set<LaptopFeatureCode> confirmedFeatures) {
+        Category carrier = activeModel(carrierDeviceModelId);
+        requireLaptop(carrier);
+        if (isBlank(manufacturer) || isBlank(modelName) || osFamily == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+        return generate(context(
+                carrier.getId(),
+                manufacturer.trim(),
+                modelName.trim(),
+                trimToNull(modelCode),
+                osFamily,
+                confirmedFeatures));
+    }
+
     private GeneratedChecklist generate(ChecklistGenerationContext context) {
         ChecklistSupplementResult supplement;
         try {

@@ -110,6 +110,9 @@ const form = reactive({
   color: '', storageGb: '',
 })
 
+// 카탈로그에 없는 기기를 직접 입력할 때 쓰는 값입니다. 이 값으로 체크리스트를 생성합니다.
+const customModel = reactive({ manufacturer: '', modelName: '', modelCode: '', osFamily: 'WINDOWS' })
+
 
 
 // 사용자가 직접 입력을 고른 상태. 수정 진입 시 목록에 없는 용량이면 자동으로 직접 입력으로 보여줍니다.
@@ -253,12 +256,42 @@ const selectedModel = computed(
 const supportsGeneratedChecklist = computed(
   () => ['WINDOWS', 'LINUX'].includes(selectedModel.value?.defaultOs),
 )
-// 목록에 없는 기기를 위한 '기타 (직접 입력)' 모델입니다. 서버 시드의 model_code와 규칙을
-// 공유합니다(V20260806__seed_generic_device_models.sql). 이 모델을 고르면 세부 모델명을
-// 글제목에 직접 적어야 하므로 그 안내를 띄웁니다.
-const isCustomModelSelected = computed(
-  () => String(selectedModel.value?.modelCode || '').startsWith('ETC-'),
+// 목록에 없는 기기는 기기 모델 칸 맨 아래 '직접 입력'으로 등록합니다. 서버에는 값을 받아 줄
+// '기타 (직접 입력)' 모델 행이 필요해서(V20260806) 그 행을 carrier로 쓰고, 판매자가 적은
+// 제조사·모델명은 매물에 따로 저장합니다. 이 값으로 AI가 공식 자료를 찾아 체크리스트를 만듭니다.
+//
+// AI 체크리스트 정책이 노트북(Windows·Linux) 전용이라 지금은 노트북 카테고리에서만 엽니다.
+const CUSTOM_MODEL_VALUE = 'custom'
+const ETC_MODEL_PREFIX = 'ETC-'
+const CUSTOM_MODEL_OS_OPTIONS = ['WINDOWS', 'LINUX']
+
+// carrier 행은 사용자에게 보여줄 이름이 아니라서 목록에서 감춥니다.
+const selectableModels = computed(
+  () => models.value.filter(
+    (item) => !String(item.modelCode || '').startsWith(ETC_MODEL_PREFIX),
+  ),
 )
+const customModelCarrier = computed(
+  () => models.value.find(
+    (item) => String(item.modelCode || '').startsWith(ETC_MODEL_PREFIX),
+  ) || null,
+)
+// carrier의 device_type이 LAPTOP인 카테고리에서만 직접 입력을 제공합니다.
+const canUseCustomModel = computed(
+  () => customModelCarrier.value?.modelCode === 'ETC-LAPTOP',
+)
+const isCustomModelSelected = computed(
+  () => form.deviceModelId === CUSTOM_MODEL_VALUE,
+)
+const isCustomModelReady = computed(
+  () => Boolean(customModel.manufacturer && customModel.modelName && customModel.osFamily),
+)
+// 직접 입력이면 carrier 행 ID를 서버에 보냅니다.
+const resolvedDeviceModelId = computed(() => (
+  isCustomModelSelected.value
+    ? customModelCarrier.value?.deviceModelId
+    : form.deviceModelId
+))
 const confirmedFeatureLimitReached = computed(() => confirmedFeatures.value.length >= 5)
 const mediaChecklistItems = computed(
   () => checklistItems.value.filter((item) => item.evidenceType !== 'SELLER_CONFIRMATION'),
@@ -392,6 +425,7 @@ function resetForm() {
     categoryId: '', deviceModelId: '', name: '', description: '', price: '',
     color: '', storageGb: '',
   })
+  Object.assign(customModel, { manufacturer: '', modelName: '', modelCode: '', osFamily: 'WINDOWS' })
   models.value = []
   templateItems.value = []
   checklistGeneration.value = null
@@ -421,10 +455,23 @@ async function loadTemplatePreview() {
   checklistGeneration.value = null
   confirmedFeatures.value = []
   if (!form.deviceModelId) return
+  // 직접 입력은 제조사·모델명·OS가 다 채워져야 근거 자료를 찾을 수 있습니다.
+  if (isCustomModelSelected.value && !isCustomModelReady.value) return
   isGeneratingChecklist.value = true
   errorMessage.value = ''
   try {
-    if (supportsGeneratedChecklist.value) {
+    if (isCustomModelSelected.value) {
+      // 카탈로그 ID 대신 판매자가 적은 모델 정보를 보냅니다. 서버가 이 값으로 공식 자료를 찾습니다.
+      const generated = await measureRegistrationPhase('checklistMs', () => generateChecklist({
+        manufacturer: customModel.manufacturer,
+        modelName: customModel.modelName,
+        modelCode: customModel.modelCode || null,
+        osFamily: customModel.osFamily,
+        confirmedFeatures: [],
+      }))
+      checklistGeneration.value = generated
+      templateItems.value = generated.items || []
+    } else if (supportsGeneratedChecklist.value) {
       const generated = await measureRegistrationPhase('checklistMs', () => generateChecklist({
         deviceModelId: Number(form.deviceModelId),
         confirmedFeatures: [],
@@ -478,15 +525,25 @@ async function persistSaleInfo() {
     storageGb: form.storageGb ? Number(form.storageGb) : null,
     tradeRegion: DEFAULT_TRADE_REGION,
   }
+  // 직접 입력한 기기는 제조사·모델명을 매물에 함께 저장해야 상세에서 실제 모델이 보입니다.
+  const customModelPayload = isCustomModelSelected.value
+    ? {
+      customManufacturer: customModel.manufacturer,
+      customModelName: customModel.modelName,
+      customModelCode: customModel.modelCode || null,
+      customOsFamily: customModel.osFamily,
+    }
+    : {}
   let productId = editingId.value
   if (productId) {
     await updateProduct(productId, payload)
   } else {
     const created = await createProduct({
       ...payload,
+      ...customModelPayload,
       categoryId: Number(form.categoryId),
-      deviceModelId: Number(form.deviceModelId),
-      ...(supportsGeneratedChecklist.value
+      deviceModelId: Number(resolvedDeviceModelId.value),
+      ...(supportsGeneratedChecklist.value || isCustomModelSelected.value
         ? { confirmedFeatures: [...confirmedFeatures.value] }
         : {}),
     })
@@ -504,6 +561,10 @@ function validateDeviceStep() {
   errorMessage.value = ''
   if (!form.categoryId || !form.deviceModelId) {
     errorMessage.value = '카테고리와 기기 모델을 선택해 주세요.'
+    return false
+  }
+  if (isCustomModelSelected.value && !isCustomModelReady.value) {
+    errorMessage.value = '직접 입력한 기기의 제조사, 모델명, 운영체제를 모두 채워 주세요.'
     return false
   }
   return validateSaleInfo()
@@ -1074,22 +1135,63 @@ onMounted(async () => {
                   @change="loadTemplatePreview"
                 >
                   <option value="">기기 모델 선택</option><option
-                    v-for="item in models"
+                    v-for="item in selectableModels"
                     :key="item.deviceModelId"
                     :value="item.deviceModelId"
-                  >{{ item.manufacturerName ? `${item.manufacturerName} ` : '' }}{{ item.modelName }}</option>
+                  >{{ item.manufacturerName ? `${item.manufacturerName} ` : '' }}{{ item.modelName }}</option><option
+                    v-if="canUseCustomModel"
+                    :value="CUSTOM_MODEL_VALUE"
+                  >직접 입력</option>
                 </select>
+
                 <!--
-                  목록에 없는 기기는 '기타 (직접 입력)'을 고르고 세부 모델명을 글제목에 적습니다.
-                  기기 모델은 체크리스트 템플릿이 묶인 실제 카탈로그 행이라 임의 문자열을 보낼 수 없습니다.
+                  목록에 없는 기기는 여기에 직접 적습니다. 이 값으로 서버가 공식 자료를 찾아
+                  체크리스트를 만들기 때문에, 글제목에 적게 하는 우회가 필요하지 않습니다.
                 -->
-                <span
+                <div
                   v-if="isCustomModelSelected"
-                  class="mt-2 block rounded-md bg-accent px-3 py-2 text-xs font-normal leading-5 text-primary-dark"
+                  class="mt-3 space-y-2 rounded-md border border-primary/30 bg-accent/50 p-3"
                 >
-                  목록에 없는 기기를 고르셨습니다. 정확한 제조사와 모델명을 아래 <strong class="font-bold">글제목</strong>에
-                  적어 주세요. 검증 항목은 모든 기기에 공통인 4가지로 준비됩니다.
-                </span>
+                  <p class="text-xs font-normal leading-5 text-primary-dark">
+                    적어 주신 제조사와 모델명으로 공식 자료를 찾아 검증 항목을 만듭니다.
+                  </p>
+                  <input
+                    v-model.trim="customModel.manufacturer"
+                    maxlength="50"
+                    placeholder="제조사 (예: Samsung)"
+                    aria-label="직접 입력 제조사"
+                    class="w-full rounded-md border border-border px-3 py-2.5 text-sm font-normal outline-none focus:border-primary"
+                    @change="loadTemplatePreview"
+                  >
+                  <input
+                    v-model.trim="customModel.modelName"
+                    maxlength="100"
+                    placeholder="모델명 (예: Galaxy Book4 Pro)"
+                    aria-label="직접 입력 모델명"
+                    class="w-full rounded-md border border-border px-3 py-2.5 text-sm font-normal outline-none focus:border-primary"
+                    @change="loadTemplatePreview"
+                  >
+                  <input
+                    v-model.trim="customModel.modelCode"
+                    maxlength="50"
+                    placeholder="모델 코드 (선택, 예: NT960XGK-KC51G)"
+                    aria-label="직접 입력 모델 코드"
+                    class="w-full rounded-md border border-border px-3 py-2.5 text-sm font-normal outline-none focus:border-primary"
+                    @change="loadTemplatePreview"
+                  >
+                  <select
+                    v-model="customModel.osFamily"
+                    aria-label="직접 입력 운영체제"
+                    class="w-full rounded-md border border-border bg-white px-3 py-2.5 text-sm font-normal outline-none focus:border-primary"
+                    @change="loadTemplatePreview"
+                  >
+                    <option
+                      v-for="os in CUSTOM_MODEL_OS_OPTIONS"
+                      :key="os"
+                      :value="os"
+                    >{{ os }}</option>
+                  </select>
+                </div>
               </label>
             </div>
 

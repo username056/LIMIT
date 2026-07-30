@@ -247,6 +247,41 @@ class ProductApplicationServiceTests {
         assertThat(listing.getStorageGb()).isNull();
     }
 
+    // 카탈로그에 없는 기기는 '기타 (직접 입력)' 모델 한 행을 공유하므로, 실제 제조사·모델명을
+    // 매물에 남기고 상세·목록에서 그 값을 노출해야 구매자가 기기를 특정할 수 있다.
+    @Test
+    void showsSellerEnteredModelInsteadOfThePlaceholderCatalogRow() {
+        Listing listing = listing();
+        listing.applyCustomModel("LG", "gram Pro 17");
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+
+        var result = service.findOwnedDetail(55L, 1001L);
+
+        assertThat(result.getDevice().getManufacturer()).isEqualTo("LG");
+        assertThat(result.getDevice().getModel()).isEqualTo("gram Pro 17");
+    }
+
+    @Test
+    void fallsBackToCatalogModelWhenSellerDidNotEnterOne() {
+        Listing listing = listing();
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+
+        var result = service.findOwnedDetail(55L, 1001L);
+
+        assertThat(result.getDevice().getModel()).isEqualTo("Galaxy S24");
+    }
+
+    @Test
+    void trimsAndNullsOutBlankSellerEnteredModel() {
+        Listing listing = listing();
+        listing.applyCustomModel("  LG  ", "   ");
+
+        assertThat(listing.getCustomManufacturer()).isEqualTo("LG");
+        assertThat(listing.getCustomModelName()).isNull();
+    }
+
     @Test
     void letsSellerCloseAnOnSaleListingAsSold() {
         Listing listing = listing();

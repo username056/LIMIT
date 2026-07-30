@@ -40,6 +40,17 @@ public class Listing extends BaseTimeEntity {
     @JoinColumn(name = "category_id")
     private Category category;
 
+    /**
+     * 카탈로그에 없는 기기를 '기타 (직접 입력)' 모델로 등록할 때 판매자가 적은 실제 제조사·모델명.
+     * 그 모델 행 하나에 여러 기기가 매달리므로 매물마다 따로 보관하고, 값이 있으면 상세·목록에서
+     * 카탈로그 모델명 대신 이 값을 노출한다.
+     */
+    @Column(name = "custom_manufacturer", length = 50)
+    private String customManufacturer;
+
+    @Column(name = "custom_model_name", length = 100)
+    private String customModelName;
+
     @Column(nullable = false, length = 200)
     private String title;
 
@@ -144,6 +155,18 @@ public class Listing extends BaseTimeEntity {
         listing.storageGb = storageGb;
         listing.tradeRegion = tradeRegion;
         return listing;
+    }
+
+    /** 카탈로그에 없는 기기를 판매자가 직접 입력한 제조사·모델명과 함께 등록한다. */
+    public void applyCustomModel(String customManufacturer, String customModelName) {
+        this.customManufacturer = trimToNull(customManufacturer);
+        this.customModelName = trimToNull(customModelName);
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     public void updateDraft(String title, String description, long price) {

@@ -590,13 +590,14 @@ describe('ProductRegisterPage', () => {
   })
 
   // 카탈로그에 없는 기기를 가진 판매자가 등록할 길이 아예 없었습니다.
-  it("'기타 (직접 입력)' 모델을 고르면 글제목에 모델명을 적으라고 안내한다", async () => {
-    getDeviceModels.mockResolvedValue([
+  describe('카탈로그에 없는 기기 직접 입력', () => {
+    const laptopModels = [
       {
         deviceModelId: 101,
         manufacturerName: 'Samsung',
         modelName: 'Galaxy Book',
         modelCode: 'NT750XGK',
+        defaultOs: 'WINDOWS',
       },
       {
         deviceModelId: 199,
@@ -604,41 +605,112 @@ describe('ProductRegisterPage', () => {
         modelName: '기타 (직접 입력)',
         modelCode: 'ETC-LAPTOP',
       },
-    ])
+    ]
 
-    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
-    await flushPromises()
+    async function openCustomModel(wrapper) {
+      await wrapper.findAll('select')[0].setValue('10')
+      await flushPromises()
+      await wrapper.findAll('select')[1].setValue('custom')
+      await flushPromises()
+    }
 
-    await wrapper.findAll('select')[0].setValue('10')
-    await flushPromises()
+    it("carrier 행은 목록에서 감추고 맨 아래 '직접 입력'을 제공한다", async () => {
+      getDeviceModels.mockResolvedValue(laptopModels)
 
-    // 카탈로그 모델을 고르면 안내가 뜨지 않습니다.
-    await wrapper.findAll('select')[1].setValue('101')
-    await flushPromises()
-    expect(wrapper.text()).not.toContain('목록에 없는 기기를 고르셨습니다')
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await wrapper.findAll('select')[0].setValue('10')
+      await flushPromises()
 
-    await wrapper.findAll('select')[1].setValue('199')
-    await flushPromises()
-    expect(wrapper.text()).toContain('목록에 없는 기기를 고르셨습니다')
-    expect(wrapper.text()).toContain('글제목')
-  })
+      const options = wrapper.findAll('select')[1].findAll('option')
+      const labels = options.map((node) => node.text())
+      expect(labels).not.toContain('기타 (직접 입력)')
+      expect(labels[labels.length - 1]).toBe('직접 입력')
+      expect(options[options.length - 1].attributes('value')).toBe('custom')
+    })
 
-  it("제조사가 없는 모델은 앞에 빈칸 없이 이름만 보여준다", async () => {
-    getDeviceModels.mockResolvedValue([{
-      deviceModelId: 199,
-      manufacturerName: null,
-      modelName: '기타 (직접 입력)',
-      modelCode: 'ETC-TABLET',
-    }])
+    it('노트북이 아닌 카테고리에는 직접 입력을 제공하지 않는다', async () => {
+      getDeviceModels.mockResolvedValue([
+        { deviceModelId: 301, manufacturerName: 'Samsung', modelName: 'Galaxy Tab S9', modelCode: 'SM-X710N' },
+        { deviceModelId: 399, manufacturerName: null, modelName: '기타 (직접 입력)', modelCode: 'ETC-TABLET' },
+      ])
 
-    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
-    await flushPromises()
-    await wrapper.findAll('select')[0].setValue('10')
-    await flushPromises()
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await wrapper.findAll('select')[0].setValue('10')
+      await flushPromises()
 
-    const option = wrapper.findAll('select')[1].findAll('option')
-      .find((node) => node.attributes('value') === '199')
-    expect(option.text()).toBe('기타 (직접 입력)')
+      const labels = wrapper.findAll('select')[1].findAll('option').map((node) => node.text())
+      expect(labels).not.toContain('직접 입력')
+      expect(labels).not.toContain('기타 (직접 입력)')
+    })
+
+    it('입력한 제조사·모델명으로 체크리스트를 생성한다', async () => {
+      getDeviceModels.mockResolvedValue(laptopModels)
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await openCustomModel(wrapper)
+
+      // 값이 다 차기 전에는 생성을 요청하지 않습니다.
+      expect(generateChecklist).not.toHaveBeenCalled()
+
+      await wrapper.find('input[aria-label="직접 입력 제조사"]').setValue('LG')
+      await wrapper.find('input[aria-label="직접 입력 모델명"]').setValue('gram Pro 17')
+      await wrapper.find('input[aria-label="직접 입력 모델명"]').trigger('change')
+      await flushPromises()
+
+      expect(generateChecklist).toHaveBeenCalledWith({
+        manufacturer: 'LG',
+        modelName: 'gram Pro 17',
+        modelCode: null,
+        osFamily: 'WINDOWS',
+        confirmedFeatures: [],
+      })
+    })
+
+    it('등록 시 carrier 모델 ID와 직접 입력 값을 함께 보낸다', async () => {
+      getDeviceModels.mockResolvedValue(laptopModels)
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await openCustomModel(wrapper)
+
+      await wrapper.find('input[aria-label="직접 입력 제조사"]').setValue('LG')
+      await wrapper.find('input[aria-label="직접 입력 모델명"]').setValue('gram Pro 17')
+      await wrapper.find('input[aria-label="직접 입력 모델 코드"]').setValue('17Z90SP')
+      await wrapper.find('input[aria-label="직접 입력 모델명"]').trigger('change')
+      await flushPromises()
+
+      await wrapper.find('input[placeholder="예: 갤럭시 S24 256GB 자급제"]').setValue('그램 프로 17 팝니다')
+      await wrapper.find('input[placeholder="판매 가격"]').setValue('1500000')
+      await buttonByText(wrapper, '다음 단계').trigger('click')
+      await flushPromises()
+
+      expect(createProduct).toHaveBeenCalledWith(expect.objectContaining({
+        deviceModelId: 199,
+        customManufacturer: 'LG',
+        customModelName: 'gram Pro 17',
+        customModelCode: '17Z90SP',
+        customOsFamily: 'WINDOWS',
+      }))
+    })
+
+    it('직접 입력 값이 비어 있으면 다음 단계로 넘기지 않는다', async () => {
+      getDeviceModels.mockResolvedValue(laptopModels)
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await openCustomModel(wrapper)
+
+      await wrapper.find('input[placeholder="예: 갤럭시 S24 256GB 자급제"]').setValue('그램 프로 17 팝니다')
+      await wrapper.find('input[placeholder="판매 가격"]').setValue('1500000')
+      await buttonByText(wrapper, '다음 단계').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('제조사, 모델명, 운영체제를 모두 채워 주세요')
+      expect(createProduct).not.toHaveBeenCalled()
+    })
   })
 
   it('압축 후에도 15MB를 넘는 대표 이미지는 업로드하지 않고 안내한다', async () => {
