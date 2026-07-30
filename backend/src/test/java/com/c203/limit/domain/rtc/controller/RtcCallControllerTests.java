@@ -33,7 +33,18 @@ class RtcCallControllerTests {
     void requestsCallForAuthenticatedMember() {
         CreateCallRequest request = new CreateCallRequest(LocalDateTime.now().plusMinutes(5), "외관 확인");
         CallResponse response = new CallResponse(
-                1L, 10L, 20L, 30L, "PROPOSED", request.scheduledAt(), request.memo(), null, null, false);
+                1L,
+                10L,
+                20L,
+                30L,
+                "PROPOSED",
+                request.scheduledAt(),
+                request.memo(),
+                null,
+                null,
+                false,
+                "상대방",
+                null);
         when(service.request(10L, 20L, request)).thenReturn(response);
 
         var result = controller.request(10L, request);

@@ -2,11 +2,14 @@ package com.c203.limit.domain.rtc.service;
 
 import com.c203.limit.domain.call.domain.AppointmentStatus;
 import com.c203.limit.domain.call.entity.CallAppointment;
+import com.c203.limit.domain.call.event.CallAppointmentChangedEvent;
+import com.c203.limit.domain.call.event.CallAppointmentUpdatedNotificationEvent;
 import com.c203.limit.domain.call.repository.CallAppointmentRepository;
 import com.c203.limit.domain.chat.entity.ChatRoom;
 import com.c203.limit.domain.chat.repository.ChatRoomRepository;
 import com.c203.limit.domain.inspection.entity.ListingChecklistItem;
 import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
+import com.c203.limit.domain.member.repository.MemberRepository;
 import com.c203.limit.domain.rtc.domain.ConnectionType;
 import com.c203.limit.domain.rtc.domain.RtcEndReason;
 import com.c203.limit.domain.rtc.domain.RtcSessionStatus;
@@ -31,11 +34,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,6 +54,8 @@ public class RtcCallService {
     private final ChatRoomRepository chatRoomRepository;
     private final ListingChecklistItemRepository checklistRepository;
     private final RtcJoinTokenStore tokenStore;
+    private final ApplicationEventPublisher eventPublisher;
+    private final MemberRepository memberRepository;
     private final String stunUrl;
     private final String turnUrl;
     private final String turnUsername;
@@ -61,6 +68,8 @@ public class RtcCallService {
             ChatRoomRepository chatRoomRepository,
             ListingChecklistItemRepository checklistRepository,
             RtcJoinTokenStore tokenStore,
+            ApplicationEventPublisher eventPublisher,
+            MemberRepository memberRepository,
             @Value("${limit.rtc.stun-url:stun:stun.l.google.com:19302}") String stunUrl,
             @Value("${limit.rtc.turn-url:}") String turnUrl,
             @Value("${limit.rtc.turn-username:}") String turnUsername,
@@ -71,6 +80,8 @@ public class RtcCallService {
         this.chatRoomRepository = chatRoomRepository;
         this.checklistRepository = checklistRepository;
         this.tokenStore = tokenStore;
+        this.eventPublisher = eventPublisher;
+        this.memberRepository = memberRepository;
         this.stunUrl = stunUrl;
         this.turnUrl = turnUrl;
         this.turnUsername = turnUsername;
@@ -80,6 +91,10 @@ public class RtcCallService {
     @Transactional
     public CallResponse request(Long roomId, Long memberId, CreateCallRequest request) {
         ChatRoom room = room(roomId, memberId);
+        if (appointmentRepository.existsByChatRoomIdAndStatusIn(
+                roomId, List.of(AppointmentStatus.PROPOSED, AppointmentStatus.ACCEPTED))) {
+            throw new BusinessException(ErrorCode.RTC_ACTIVE_APPOINTMENT_EXISTS);
+        }
         Long respondent =
                 room.getBuyerId().equals(memberId) ? room.getSellerId() : room.getBuyerId();
         LocalDateTime scheduledAt =
@@ -92,6 +107,7 @@ public class RtcCallService {
                 "RTC inspection call requested: callId={}, chatRoomId={}",
                 appointment.getId(),
                 roomId);
+        publishAppointmentChanged(roomId);
         return callResponse(appointment, null, memberId);
     }
 
@@ -130,6 +146,7 @@ public class RtcCallService {
             if (!request.accepted()) {
                 appointment.reject(memberId, request.reason());
                 log.info("RTC inspection call rejected: callId={}", callId);
+                publishAppointmentChanged(appointment.getChatRoomId());
                 return callResponse(appointment, null, memberId);
             }
             appointment.accept(memberId);
@@ -149,8 +166,11 @@ public class RtcCallService {
                                                         room.getListingId(),
                                                         room.getSellerId(),
                                                         room.getBuyerId(),
-                                                        LocalDateTime.now().plusHours(2))));
+                                                        appointment
+                                                                .getScheduledAt()
+                                                                .plusMinutes(30))));
         log.info("RTC inspection call accepted: callId={}, sessionId={}", callId, session.getId());
+        publishAppointmentChanged(appointment.getChatRoomId());
         return callResponse(appointment, session, memberId);
     }
 
@@ -163,6 +183,15 @@ public class RtcCallService {
             throw new BusinessException(ErrorCode.RTC_INVALID_STATE);
         }
         log.info("RTC inspection call updated: callId={}", callId);
+        publishAppointmentChanged(appointment.getChatRoomId());
+        eventPublisher.publishEvent(
+                new CallAppointmentUpdatedNotificationEvent(
+                        UUID.randomUUID(),
+                        appointment.getId(),
+                        appointment.getChatRoomId(),
+                        memberId,
+                        appointment.getScheduledAt(),
+                        appointment.getMemo()));
         return callResponse(appointment, null, memberId);
     }
 
@@ -175,6 +204,7 @@ public class RtcCallService {
             throw new BusinessException(ErrorCode.RTC_INVALID_STATE);
         }
         log.info("RTC inspection call canceled: callId={}", callId);
+        publishAppointmentChanged(appointment.getChatRoomId());
         return callResponse(appointment, null, memberId);
     }
 
@@ -257,16 +287,16 @@ public class RtcCallService {
         } catch (IllegalArgumentException exception) {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
         }
-        session.end(reason, request.memo());
-        log.info("RTC inspection session ended: sessionId={}, reason={}", sessionId, reason);
-        appointmentRepository
-                .findById(session.getCallAppointmentId())
-                .ifPresent(
-                        appointment -> {
-                            if (appointment.getStatus() == AppointmentStatus.ACCEPTED)
-                                appointment.complete();
-                        });
+        session.disconnect(reason, request.memo(), LocalDateTime.now().plusMinutes(30));
+        log.info(
+                "RTC inspection session disconnected: sessionId={}, expiresAt={}",
+                sessionId,
+                session.getExpiresAt());
         return sessionResponse(session);
+    }
+
+    private void publishAppointmentChanged(Long roomId) {
+        eventPublisher.publishEvent(new CallAppointmentChangedEvent(roomId));
     }
 
     private ChatRoom room(Long roomId, Long memberId) {
@@ -328,7 +358,15 @@ public class RtcCallService {
                 appointment.getMemo(),
                 appointment.getCancelReason(),
                 session == null ? null : session.getId(),
-                appointment.getRespondentId().equals(memberId));
+                appointment.getRespondentId().equals(memberId),
+                memberRepository
+                        .findById(
+                                appointment.getProposerId().equals(memberId)
+                                        ? appointment.getRespondentId()
+                                        : appointment.getProposerId())
+                        .map(member -> member.getNickname())
+                        .orElse(null),
+                session == null ? null : session.getExpiresAt());
     }
 
     private RtcSessionResponse sessionResponse(RtcSession session) {

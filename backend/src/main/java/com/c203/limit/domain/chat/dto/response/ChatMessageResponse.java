@@ -19,19 +19,37 @@ public record ChatMessageResponse(
         String content,
         String status,
         LocalDateTime sentAt,
-        List<ChatMediaResponse> media) {
+        List<ChatMediaResponse> media,
+        String notificationType,
+        ReinspectionNotificationResponse reinspection) {
 
     public static ChatMessageResponse from(ChatMessageProjection message, List<ChatMedia> media) {
         return new ChatMessageResponse(message.getMessageId(), message.getRoomSequence(), message.getSenderId(),
                 message.getClientMessageId(), message.getType().name(), message.getContent(),
                 message.getStatus().name(), message.getSentAt(),
-                media.stream().map(ChatMediaResponse::from).toList());
+                media.stream().map(ChatMediaResponse::from).toList(), null, null);
     }
 
     public static ChatMessageResponse from(ChatMessage message, List<ChatMedia> media) {
         return new ChatMessageResponse(message.getId(), message.getRoomSequence(), message.getSenderId(),
                 message.getClientMessageId(), message.getType().name(), message.getContent(),
                 message.getStatus().name(), message.getSentAt(),
-                media.stream().map(ChatMediaResponse::from).toList());
+                media.stream().map(ChatMediaResponse::from).toList(), null, null);
+    }
+
+    public ChatMessageResponse withReinspection(
+            String notificationType, ReinspectionNotificationResponse reinspection) {
+        return new ChatMessageResponse(
+                messageId,
+                roomSequence,
+                senderId,
+                clientMessageId,
+                type,
+                content,
+                status,
+                sentAt,
+                media,
+                notificationType,
+                reinspection);
     }
 }

@@ -114,6 +114,18 @@ Server broadcasts:
 
 ## 구현 메모
 
+### 도메인 알림 이벤트
+
+- 통화 약속 생성·수락·거절·변경·취소가 커밋되면 방 구독 채널로
+  `{ "type": "CALL_APPOINTMENT_UPDATED", "roomId": 10 }`을 발행한다.
+  클라이언트는 이벤트 수신 즉시 통화 약속 목록을 다시 조회한다.
+- 재검수 알림은 `REINSPECTION_REQUESTED` 또는 `REINSPECTION_COMPLETED` 타입으로 발행하며,
+  `message`와 구조화된 `reinspection` 데이터를 함께 제공한다. `reinspection`에는
+  `listingId`, `requestKey`, 요청 체크리스트 항목이 포함되며 클라이언트는 이를 접을 수 있는
+  SYSTEM 알림 카드로 표시한다. 과거 메시지 조회에서도 같은 구조화 데이터를 복원한다.
+- 재검수 요청 시 같은 구매자·판매자 조합의 기존 채팅방이 있으면 매물이 달라도 최신 기존 방을
+  재사용한다. 기존 방이 없을 때만 재검수용 채팅방을 생성한다.
+
 - 방별 메시지 순서는 `chat_room` 행을 pessimistic lock으로 조회한 뒤 `last_message_seq + 1`로 발급한다.
 - `chat_message`에는 `(chat_room_id, room_sequence)`와 `(chat_room_id, client_message_id)` unique constraint가 있어 순서 중복과 클라이언트 재전송 중복을 막는다.
 - 같은 `clientMessageId` 동시 전송을 고려해 방 락 획득 후에도 중복 메시지를 한 번 더 확인한다.

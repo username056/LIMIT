@@ -16,6 +16,11 @@ public record ChatEventResponse(
         return new ChatEventResponse("READ", roomId, null, readerId, lastReadSeq, null);
     }
 
+    public static ChatEventResponse callAppointmentUpdated(Long roomId) {
+        return new ChatEventResponse(
+                "CALL_APPOINTMENT_UPDATED", roomId, null, null, null, null);
+    }
+
     public static ChatEventResponse reinspectionRequested(
             Long roomId,
             ChatMessageResponse message,
