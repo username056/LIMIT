@@ -413,6 +413,27 @@ class PaymentServiceTests {
     }
 
     @Test
+    void confirmRethrowsWhenLocalApprovalPersistFailsAfterTossSucceeds() {
+        Payment payment = requestedPayment();
+        when(paymentRepository.findById(PAYMENT_ID))
+                .thenReturn(Optional.of(payment))
+                .thenThrow(new RuntimeException("db down"));
+        when(tossPaymentClient.confirm(
+                        "payment-key-1", payment.getProviderOrderId(), 650_000L, "payment-confirm-" + PAYMENT_ID + "-1"))
+                .thenReturn(new TossPaymentResponse(
+                        "payment-key-1", payment.getProviderOrderId(), "DONE", 650_000L, "CARD", null));
+
+        assertThatThrownBy(() -> service.confirm(
+                        BUYER_ID,
+                        PAYMENT_ID,
+                        new ConfirmPaymentRequest("payment-key-1", payment.getProviderOrderId(), 650_000L)))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("db down");
+
+        verify(listingService, never()).markPaid(any(), any());
+    }
+
+    @Test
     void confirmRejectsWhenReservationNoLongerActiveWithoutCallingToss() {
         Payment payment = requestedPayment();
         when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
