@@ -104,6 +104,7 @@ describe('CallsPage', () => {
   })
 
   it('검증 일정 날짜와 상대방, 세션 만료 시간을 표시한다', async () => {
+    getMyRtcCalls.mockResolvedValue([{ ...outgoingCall, status: 'ACCEPTED' }])
     const wrapper = mountPage()
     await flushPromises()
 
@@ -112,11 +113,25 @@ describe('CallsPage', () => {
     expect(wrapper.text()).toContain('세션 만료까지')
   })
 
+  it('기존 요청의 자동 생성 상태 확인 메모를 표시하지 않는다', async () => {
+    getMyRtcCalls.mockResolvedValue([{
+      ...outgoingCall,
+      chatRoomId: 7,
+      memo: '갤럭시 자급제 상태 실시간 확인 요청',
+    }])
+
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('갤럭시 자급제 상태 실시간 확인 요청')
+  })
+
   it('목록 응답에 정보가 없으면 채팅방과 세션 상세에서 보완한다', async () => {
     getMyRtcCalls.mockResolvedValue([{
       ...outgoingCall,
       chatRoomId: 7,
       rtcSessionId: 31,
+      status: 'ACCEPTED',
       counterpartName: null,
       sessionExpiresAt: null,
     }])
@@ -137,6 +152,7 @@ describe('CallsPage', () => {
       ...outgoingCall,
       chatRoomId: 7,
       status: 'ACCEPTED',
+      scheduledAt: '2020-01-01T00:00:00',
       rtcSessionId: 31,
       sessionExpiresAt: '2020-01-01T00:00:00',
     }])

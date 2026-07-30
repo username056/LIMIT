@@ -166,7 +166,9 @@ public class RtcCallService {
                                                         room.getListingId(),
                                                         room.getSellerId(),
                                                         room.getBuyerId(),
-                                                        LocalDateTime.now().plusHours(2))));
+                                                        appointment
+                                                                .getScheduledAt()
+                                                                .plusMinutes(30))));
         log.info("RTC inspection call accepted: callId={}, sessionId={}", callId, session.getId());
         publishAppointmentChanged(appointment.getChatRoomId());
         return callResponse(appointment, session, memberId);

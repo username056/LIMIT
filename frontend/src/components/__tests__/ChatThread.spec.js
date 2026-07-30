@@ -119,6 +119,30 @@ describe('ChatThread', () => {
     expect(wrapper.text()).toContain('바로 재촬영하기')
   })
 
+  it('판매자 재검수 목록과 매칭되지 않아도 저장 본문을 카드로 복원한다', async () => {
+    getChatMessages.mockResolvedValue({
+      content: [{
+        messageId: 52,
+        roomSequence: 6,
+        senderId: 2,
+        clientMessageId: 'plain-reinspection-event',
+        type: 'SYSTEM',
+        content: '재검수 요청이 1건 들어왔어요!\n사유: 화면을 다시 확인해 주세요.\n- 화면 상태: 다시 촬영해 주세요.',
+        sentAt: '2026-07-30T10:00:00',
+        media: [],
+      }],
+    })
+    getMyReinspectionRequests.mockResolvedValue([])
+
+    const wrapper = mountThread()
+    await flushPromises()
+
+    const card = wrapper.get('[data-testid="system-notification-card"]')
+    expect(card.text()).toContain('재검수 요청이 들어왔어요!')
+    expect(card.text()).toContain('화면을 다시 확인해 주세요.')
+    expect(card.text()).toContain('화면 상태')
+  })
+
   it('새로고침 후 재검수 완료 시스템 메시지를 확인 카드로 복원한다', async () => {
     getChatMessages.mockResolvedValue({
       content: [{
@@ -137,7 +161,7 @@ describe('ChatThread', () => {
     await flushPromises()
 
     expect(wrapper.get('[data-testid="system-notification-card"]').text())
-      .toContain('재검수가 완료됐어요!')
+      .toContain('재검수를 완료했어요!')
     expect(wrapper.text()).toContain('확인하러 가기')
     expect(wrapper.text()).not.toContain('재검수가 완료되었습니다.')
   })
@@ -283,6 +307,23 @@ describe('ChatThread', () => {
     expect(wrapper.text()).not.toContain('실시간 검증 입장하기')
   })
 
+  it('채팅 약속 카드에서 자동 생성된 상태 확인 메모를 숨긴다', async () => {
+    getMyRtcCalls.mockResolvedValue([{
+      callId: 34,
+      chatRoomId: 10,
+      status: 'PROPOSED',
+      scheduledAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      memo: '갤럭시 자급제 상태 실시간 확인 요청',
+      incoming: false,
+    }])
+
+    const wrapper = mountThread()
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="appointment-card"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('갤럭시 자급제 상태 실시간 확인 요청')
+  })
+
   it('순번이 없는 전송 대기 메시지를 일정 카드 뒤에 안전하게 정렬한다', async () => {
     getMyRtcCalls.mockResolvedValue([{
       callId: 32,
@@ -400,4 +441,37 @@ describe('ChatThread', () => {
     expect(wrapper.text()).not.toContain('자세히 보여 주세요.')
     expect(wrapper.text()).toContain('바로 재촬영하기')
   })
+
+  it('판매자 화면에서는 재검수 요청 카드를 내 쪽에 표시한다', async () => {
+    getProduct.mockResolvedValue({ name: 'Galaxy S24', price: 650000, sellerId: 1 })
+    const wrapper = mountThread()
+    await flushPromises()
+
+    await socketHandlers.onEvent({
+      type: 'REINSPECTION_REQUESTED',
+      message: {
+        messageId: 61,
+        roomSequence: 5,
+        senderId: 1,
+        clientMessageId: 'my-reinspection-event',
+        type: 'SYSTEM',
+        content: '재검수 요청이 들어왔어요!',
+        sentAt: '2026-07-30T10:00:00',
+        media: [],
+      },
+      reinspection: {
+        requestKey: 'request-key',
+        listingId: 1,
+        reason: '화면 상태를 확인해 주세요.',
+        items: [{ name: '화면 상태', requestContent: '다시 촬영해 주세요.' }],
+      },
+    })
+    await flushPromises()
+
+    const card = wrapper.get('[data-testid="system-notification-card"]')
+    expect(card.text()).toContain('재검수 요청이 들어왔어요!')
+    expect(card.element.parentElement.parentElement.classList).toContain('items-end')
+    expect(wrapper.text()).toContain('바로 재촬영하기')
+  })
+
 })

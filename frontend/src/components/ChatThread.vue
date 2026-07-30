@@ -18,6 +18,7 @@ const session = useAuthSession()
 const myMemberId = computed(() => session.value?.member?.memberId ?? null)
 
 const product = ref(null)
+const isSeller = computed(() => Number(product.value?.sellerId) === Number(myMemberId.value))
 const checklistItems = ref([])
 const isChecklistOpen = ref(false)
 const messages = ref([])
@@ -70,24 +71,43 @@ function matchesReinspectionRequest(message, request) {
   return itemNames.length > 0 && itemNames.every((name) => content.includes(name))
 }
 
-async function restoreReinspectionCards(loadedMessages) {
-  const withCompletedCards = loadedMessages.map((message) => {
-    if (
-      message.type === 'SYSTEM'
-      && !message.reinspection
-      && message.content?.includes('재검수가 완료되었습니다')
-    ) {
-      return {
-        ...message,
-        notificationType: 'REINSPECTION_COMPLETED',
-        reinspection: {
-          listingId: props.room.listingId,
-          items: [],
-        },
-      }
+function restoreReinspectionFromContent(message) {
+  if (message.type !== 'SYSTEM' || message.reinspection) return message
+  const content = String(message.content || '')
+  if (content.includes('재검수가 완료되었습니다')) {
+    return {
+      ...message,
+      notificationType: 'REINSPECTION_COMPLETED',
+      reinspection: {
+        listingId: props.room.listingId,
+        items: [],
+      },
     }
-    return message
-  })
+  }
+  if (!content.includes('재검수 요청')) return message
+
+  const lines = content.split('\n').map((line) => line.trim()).filter(Boolean)
+  const reasonLine = lines.find((line) => line.startsWith('사유:'))
+  const items = lines
+    .filter((line) => line.startsWith('- '))
+    .map((line) => ({
+      name: line.slice(2).split(':')[0].trim(),
+      requestContent: null,
+    }))
+    .filter((item) => item.name)
+  return {
+    ...message,
+    notificationType: 'REINSPECTION_REQUESTED',
+    reinspection: {
+      listingId: props.room.listingId,
+      reason: reasonLine?.slice('사유:'.length).trim() || null,
+      items,
+    },
+  }
+}
+
+async function restoreReinspectionCards(loadedMessages) {
+  const withCompletedCards = loadedMessages.map(restoreReinspectionFromContent)
   const plainNotifications = loadedMessages.filter(
     (message) => message.type === 'SYSTEM'
       && !message.reinspection
@@ -98,9 +118,12 @@ async function restoreReinspectionCards(loadedMessages) {
   try {
     const requests = await getMyReinspectionRequests()
     return withCompletedCards.map((message) => {
-      if (!plainNotifications.includes(message)) return message
+      const isPlainNotification = plainNotifications.some(
+        (candidate) => candidate.clientMessageId === message.clientMessageId,
+      )
+      if (!isPlainNotification) return message
       const request = requests.find((candidate) => matchesReinspectionRequest(message, candidate))
-      if (!request) return message
+      if (!request) return restoreReinspectionFromContent(message)
       return {
         ...message,
         notificationType: 'REINSPECTION_REQUESTED',
@@ -116,7 +139,7 @@ async function restoreReinspectionCards(loadedMessages) {
       }
     })
   } catch {
-    return withCompletedCards
+    return loadedMessages.map(restoreReinspectionFromContent)
   }
 }
 
@@ -138,7 +161,7 @@ async function loadMessages(roomId) {
 }
 
 async function upsertMessage(message) {
-  const hydrated = await attachMediaUrls(message)
+  const hydrated = await attachMediaUrls(restoreReinspectionFromContent(message))
   const indexByClientId = messages.value.findIndex((item) => item.clientMessageId === message.clientMessageId)
   if (indexByClientId >= 0) {
     messages.value[indexByClientId] = { ...messages.value[indexByClientId], ...hydrated, isPending: false }
@@ -160,6 +183,12 @@ function messageTimelineOrder(roomSequence) {
   return Math.min(sequence * 2, LAST_TIMELINE_ORDER - 1)
 }
 
+function isMessageOnMySide(message) {
+  if (message.notificationType === 'REINSPECTION_REQUESTED') return isSeller.value
+  if (message.notificationType === 'REINSPECTION_COMPLETED') return !isSeller.value
+  return Number(message.senderId) === Number(myMemberId.value)
+}
+
 function appointmentNotificationDetails(content) {
   return String(content || '').split('\n').slice(1)
 }
@@ -173,6 +202,10 @@ function appointmentTimelineOrder() {
   const sequence = Number(appointmentAnchorSequence.value)
   if (!Number.isSafeInteger(sequence) || sequence < 0) return LAST_TIMELINE_ORDER - 2
   return Math.min(sequence * 2 + 1, LAST_TIMELINE_ORDER - 1)
+}
+
+function reanchorAppointment() {
+  anchoredAppointmentId.value = null
 }
 
 function markRead() {
@@ -213,6 +246,7 @@ function connectSocket(roomId) {
         markRead()
         emit('room-updated')
       } else if (event.type === 'CALL_APPOINTMENT_UPDATED') {
+        reanchorAppointment()
         await loadAppointments(roomId)
       } else if (event.type?.startsWith('REINSPECTION_') && event.message) {
         await upsertMessage({
@@ -316,6 +350,10 @@ function appointmentRemainingTime(appointment) {
   return remainingSessionTime(new Date(scheduledAt + 30 * 60 * 1000).toISOString())
 }
 
+function shouldDisplayAppointmentMemo(memo) {
+  return Boolean(memo) && !memo.trim().endsWith('상태 실시간 확인 요청')
+}
+
 const latestAppointment = computed(
   () => appointments.value.find(
     (appointment) => ['PROPOSED', 'ACCEPTED'].includes(appointment.status)
@@ -360,6 +398,7 @@ async function requestCallAppointment() {
       scheduledAt: `${callScheduledAt.value}:00`,
       memo: callMemo.value.trim() || null,
     })
+    reanchorAppointment()
     await loadAppointments(props.room.roomId)
     callMessage.value = '통화 약속을 요청했습니다.'
     isCallFormOpen.value = false
@@ -381,6 +420,7 @@ async function respondAppointment(accepted) {
   callMessage.value = ''
   try {
     await respondRtcCall(appointment.callId, accepted, accepted ? null : '요청 거절')
+    reanchorAppointment()
     await loadAppointments(props.room.roomId)
     callMessage.value = accepted ? '통화 약속을 수락했습니다.' : '통화 약속을 거절했습니다.'
   } catch (error) {
@@ -642,7 +682,7 @@ onBeforeUnmount(() => {
           :data-message-sequence="message.roomSequence"
           :data-testid="message.isPending ? 'pending-message' : undefined"
           class="flex flex-col"
-          :class="message.senderId === myMemberId ? 'items-end' : 'items-start'"
+          :class="isMessageOnMySide(message) ? 'items-end' : 'items-start'"
           :style="{ order: messageTimelineOrder(message.roomSequence) }"
         >
           <div
@@ -663,7 +703,7 @@ onBeforeUnmount(() => {
                 </p>
                 <p class="font-bold text-text-main">
                   {{ message.notificationType === 'REINSPECTION_COMPLETED'
-                    ? '재검수가 완료됐어요!'
+                    ? '재검수를 완료했어요!'
                     : '재검수 요청이 들어왔어요!' }}
                 </p>
                 <details
@@ -839,7 +879,7 @@ onBeforeUnmount(() => {
               약속 만료까지 {{ appointmentRemainingTime(latestAppointment) }}
             </p>
             <p
-              v-if="latestAppointment.memo"
+              v-if="shouldDisplayAppointmentMemo(latestAppointment.memo)"
               class="mt-1 text-xs text-text-sub"
             >
               {{ latestAppointment.memo }}

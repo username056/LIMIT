@@ -166,8 +166,13 @@ onMounted(() => {
 onBeforeUnmount(() => clearInterval(remainingTimer))
 
 function isSessionExpired(call) {
-  if (!call.sessionExpiresAt) return false
-  return new Date(call.sessionExpiresAt).getTime() <= now.value
+  const expiresAt = callExpirationAt(call)
+  return expiresAt ? expiresAt.getTime() <= now.value : false
+}
+
+function callExpirationAt(call) {
+  if (!call.scheduledAt || !['ACCEPTED', 'COMPLETED'].includes(call.status)) return null
+  return new Date(new Date(call.scheduledAt).getTime() + 30 * 60 * 1000)
 }
 
 function isCallCompleted(call) {
@@ -242,6 +247,10 @@ function formatScheduledAt(value) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(value))
+}
+
+function shouldDisplayCallMemo(memo) {
+  return Boolean(memo) && !memo.trim().endsWith('상태 실시간 확인 요청')
 }
 
 function remainingTime(expiresAt) {
@@ -368,7 +377,7 @@ function remainingTime(expiresAt) {
                     영상 확인 요청 #{{ call.callId }}
                   </p>
                   <p
-                    v-if="call.memo"
+                    v-if="shouldDisplayCallMemo(call.memo)"
                     class="mt-1 text-sm text-text-sub"
                   >
                     {{ call.memo }}
@@ -393,13 +402,15 @@ function remainingTime(expiresAt) {
                         <dd>{{ formatScheduledAt(call.scheduledAt) }}</dd>
                       </div>
                       <div
-                        v-if="call.sessionExpiresAt"
+                        v-if="callExpirationAt(call)"
                         class="flex gap-2"
                         :class="isSessionExpired(call) ? 'font-semibold text-red-600' : ''"
                       >
-                        <dt>{{ isSessionExpired(call) ? '세션 만료' : '세션 만료까지' }}</dt>
+                        <dt class="font-semibold text-text-main">
+                          {{ isSessionExpired(call) ? '세션 만료' : '세션 만료까지' }}
+                        </dt>
                         <dd v-if="!isSessionExpired(call)">
-                          {{ remainingTime(call.sessionExpiresAt) }}
+                          {{ remainingTime(callExpirationAt(call)) }}
                         </dd>
                       </div>
                     </div>

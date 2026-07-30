@@ -143,7 +143,7 @@ async function requestCall() {
   errorMessage.value = ''
   try {
     const room = await createChatRoom(product.value.productId)
-    await requestRtcCall(room.roomId, { memo: `${product.value.name} 상태 실시간 확인 요청` })
+    await requestRtcCall(room.roomId, {})
     await router.push({ name: 'calls' })
   } catch (error) {
     errorMessage.value = error.message || '영상 확인 요청을 보내지 못했습니다.'
