@@ -1,7 +1,8 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CallsPage from '../CallsPage.vue'
-import { cancelRtcCall, getMyRtcCalls, updateRtcCall } from '../../api/rtc'
+import { getChatRooms } from '../../api/chat'
+import { cancelRtcCall, getMyRtcCalls, getRtcSession, updateRtcCall } from '../../api/rtc'
 import { getMyReinspectionRequests } from '../../api/products'
 
 vi.mock('vue-router', () => ({
@@ -11,8 +12,12 @@ vi.mock('vue-router', () => ({
 vi.mock('../../api/rtc', () => ({
   cancelRtcCall: vi.fn(),
   getMyRtcCalls: vi.fn(),
+  getRtcSession: vi.fn(),
   respondRtcCall: vi.fn(),
   updateRtcCall: vi.fn(),
+}))
+vi.mock('../../api/chat', () => ({
+  getChatRooms: vi.fn(),
 }))
 vi.mock('../../api/products', () => ({
   getMyReinspectionRequests: vi.fn(),
@@ -25,6 +30,10 @@ const outgoingCall = {
   scheduledAt: '2026-08-01T14:00:00',
   memo: '제품 상태 확인',
   rtcSessionId: null,
+  proposerId: 1,
+  respondentId: 2,
+  counterpartName: '상대 회원',
+  sessionExpiresAt: '2026-08-01T16:00:00',
 }
 
 const layoutStub = { template: '<main><slot /></main>' }
@@ -51,7 +60,38 @@ describe('CallsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     getMyRtcCalls.mockResolvedValue([outgoingCall])
+    getChatRooms.mockResolvedValue({ content: [] })
+    getRtcSession.mockResolvedValue({ expiresAt: '2026-08-01T16:00:00' })
     getMyReinspectionRequests.mockResolvedValue([])
+  })
+
+  it('검증 일정 날짜와 상대방, 세션 만료 시간을 표시한다', async () => {
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('상대 회원')
+    expect(wrapper.text()).toContain('2026년 8월 1일')
+    expect(wrapper.text()).toContain('세션 만료까지')
+  })
+
+  it('목록 응답에 정보가 없으면 채팅방과 세션 상세에서 보완한다', async () => {
+    getMyRtcCalls.mockResolvedValue([{
+      ...outgoingCall,
+      chatRoomId: 7,
+      rtcSessionId: 31,
+      counterpartName: null,
+      sessionExpiresAt: null,
+    }])
+    getChatRooms.mockResolvedValue({
+      content: [{ roomId: 7, counterpartNickname: '채팅 상대방' }],
+    })
+
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(getRtcSession).toHaveBeenCalledWith(31)
+    expect(wrapper.text()).toContain('채팅 상대방')
+    expect(wrapper.text()).toContain('세션 만료까지')
   })
 
   it('보낸 통화 약속의 시간과 메모를 변경한다', async () => {

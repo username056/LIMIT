@@ -68,6 +68,7 @@ public enum ErrorCode {
     RTC_SESSION_EXPIRED("RTC003", HttpStatus.GONE, "실시간 확인 세션이 만료되었습니다."),
     RTC_SESSION_CLOSED("RTC004", HttpStatus.CONFLICT, "이미 종료된 실시간 확인 세션입니다."),
     RTC_INVALID_STATE("RTC005", HttpStatus.CONFLICT, "현재 상태에서는 실시간 확인 요청을 처리할 수 없습니다."),
+    RTC_ACTIVE_APPOINTMENT_EXISTS("RTC006", HttpStatus.CONFLICT, "이미 확정되었거나 응답을 기다리는 검증 일정이 있습니다."),
 
     SELLER_APPLICATION_NOT_FOUND("SEL001", HttpStatus.NOT_FOUND, "판매자 신청서를 찾을 수 없습니다."),
     ACTIVE_SELLER_APPLICATION_EXISTS("SEL002", HttpStatus.CONFLICT, "처리 중인 판매자 신청서가 있습니다."),
@@ -161,8 +162,7 @@ public enum ErrorCode {
     MEDIA_UPLOAD_MISMATCH("INS029", HttpStatus.UNPROCESSABLE_ENTITY, "업로드된 파일 정보가 요청과 일치하지 않습니다."),
     MEDIA_UPLOAD_INVALID("INS030", HttpStatus.UNPROCESSABLE_ENTITY, "허용되지 않는 미디어 파일입니다."),
     MEDIA_STORAGE_UNAVAILABLE("INS031", HttpStatus.BAD_GATEWAY, "미디어 저장소 요청에 실패했습니다."),
-    MEDIA_STORAGE_NOT_CONFIGURED(
-            "INS032", HttpStatus.SERVICE_UNAVAILABLE, "미디어 저장소 설정을 확인해 주세요."),
+    MEDIA_STORAGE_NOT_CONFIGURED("INS032", HttpStatus.SERVICE_UNAVAILABLE, "미디어 저장소 설정을 확인해 주세요."),
     LISTING_IMAGE_NOT_FOUND("PRD015", HttpStatus.NOT_FOUND, "상품 이미지를 찾을 수 없습니다."),
     LISTING_IMAGE_LIMIT_EXCEEDED(
             "PRD016", HttpStatus.UNPROCESSABLE_ENTITY, "상품 이미지는 최대 10개까지 등록할 수 있습니다.");

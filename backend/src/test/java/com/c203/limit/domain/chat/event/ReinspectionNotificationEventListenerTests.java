@@ -62,6 +62,7 @@ class ReinspectionNotificationEventListenerTests {
                 type,
                 10L,
                 "request-key",
+                100L,
                 20L,
                 30L,
                 40L,
@@ -80,6 +81,8 @@ class ReinspectionNotificationEventListenerTests {
                 "재검수",
                 "SENT",
                 LocalDateTime.of(2026, 7, 29, 10, 0),
-                List.of());
+                List.of(),
+                null,
+                null);
     }
 }

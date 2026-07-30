@@ -15,6 +15,7 @@ import com.c203.limit.domain.chat.dto.response.ChatRoomSummaryResponse;
 import com.c203.limit.domain.chat.dto.request.ChatMessageSendRequest;
 import com.c203.limit.domain.chat.dto.request.ChatReadRequest;
 import com.c203.limit.domain.chat.dto.response.ChatMessageResponse;
+import com.c203.limit.domain.chat.dto.response.ReinspectionNotificationResponse;
 import com.c203.limit.domain.chat.entity.ChatMessage;
 import com.c203.limit.domain.chat.entity.ChatRoomParticipant;
 import com.c203.limit.domain.chat.entity.ChatMedia;
@@ -24,6 +25,7 @@ import com.c203.limit.domain.chat.domain.UploadStatus;
 import com.c203.limit.domain.chat.entity.ChatRoom;
 import com.c203.limit.domain.chat.repository.ChatMessageProjection;
 import com.c203.limit.domain.chat.repository.ChatMessageRepository;
+import com.c203.limit.domain.chat.repository.ChatOutboxEventRepository;
 import com.c203.limit.domain.chat.repository.ChatMediaRepository;
 import com.c203.limit.domain.chat.repository.ChatMessageMediaRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomParticipantRepository;
@@ -36,6 +38,8 @@ import com.c203.limit.domain.chat.repository.ListingChatReader.ListingChatInfo;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import com.c203.limit.global.response.CursorResponse;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Service
 public class ChatRoomService {
@@ -51,11 +55,14 @@ public class ChatRoomService {
     private final ChatMessageMediaRepository chatMessageMediaRepository;
     private final ChatRoomContextReader contextReader;
     private final ChatRoomCreator creator;
+    private final ChatOutboxEventRepository outboxEventRepository;
+    private final ObjectMapper objectMapper;
 
     public ChatRoomService(ListingChatReader listingReader, ChatRoomRepository chatRoomRepository,
             ChatRoomParticipantRepository participantRepository, ChatMessageRepository chatMessageRepository,
             ChatMediaRepository chatMediaRepository, ChatMessageMediaRepository chatMessageMediaRepository,
-            ChatRoomContextReader contextReader, ChatRoomCreator creator) {
+            ChatRoomContextReader contextReader, ChatRoomCreator creator,
+            ChatOutboxEventRepository outboxEventRepository, ObjectMapper objectMapper) {
         this.listingReader = listingReader;
         this.chatRoomRepository = chatRoomRepository;
         this.participantRepository = participantRepository;
@@ -64,6 +71,8 @@ public class ChatRoomService {
         this.chatMessageMediaRepository = chatMessageMediaRepository;
         this.contextReader = contextReader;
         this.creator = creator;
+        this.outboxEventRepository = outboxEventRepository;
+        this.objectMapper = objectMapper;
     }
 
     public ChatRoomCreateResult createOrGet(Long listingId, Long buyerId) {
@@ -87,6 +96,8 @@ public class ChatRoomService {
         }
         return chatRoomRepository
                 .findByListingIdAndBuyerIdAndSellerId(listingId, buyerId, sellerId)
+                .or(() -> chatRoomRepository
+                        .findFirstByBuyerIdAndSellerIdOrderByIdDesc(buyerId, sellerId))
                 .map(ChatRoom::getId)
                 .orElseGet(() -> createForReinspection(listingId, buyerId, sellerId));
     }
@@ -126,8 +137,8 @@ public class ChatRoomService {
         boolean hasNext = rows.size() > size;
         List<ChatMessageResponse> content = rows.stream()
                 .limit(size)
-                .map(message -> ChatMessageResponse.from(
-                        message, chatMessageMediaRepository.findMediaByMessageId(message.getMessageId())))
+                .map(message -> enrichNotification(ChatMessageResponse.from(
+                        message, chatMessageMediaRepository.findMediaByMessageId(message.getMessageId()))))
                 .toList();
         String nextCursor = hasNext ? content.get(content.size() - 1).roomSequence().toString() : null;
         return new CursorResponse<>(content, nextCursor, hasNext);
@@ -241,6 +252,28 @@ public class ChatRoomService {
     }
 
     public record ChatMessageSendResult(ChatMessageResponse message, boolean created) {}
+
+    private ChatMessageResponse enrichNotification(ChatMessageResponse message) {
+        if (!"SYSTEM".equals(message.type()) || message.clientMessageId() == null) {
+            return message;
+        }
+        return outboxEventRepository
+                .findByEventId(message.clientMessageId())
+                .map(event -> {
+                    try {
+                        return message.withReinspection(
+                                event.getEventType(),
+                                objectMapper.readValue(
+                                        event.getPayload(), ReinspectionNotificationResponse.class));
+                    } catch (JsonProcessingException exception) {
+                        log.warn(
+                                "reinspection notification payload could not be read: eventId={}",
+                                message.clientMessageId());
+                        return message;
+                    }
+                })
+                .orElse(message);
+    }
 
     private ChatRoomSummaryResponse toSummary(
             ChatRoomSummaryProjection row, Long memberId, ChatRoomContext context) {

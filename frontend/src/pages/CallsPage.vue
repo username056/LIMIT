@@ -1,12 +1,19 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseCard from '../components/BaseCard.vue'
 import BaseBadge from '../components/BaseBadge.vue'
 import BaseTabs from '../components/BaseTabs.vue'
-import { cancelRtcCall, getMyRtcCalls, respondRtcCall, updateRtcCall } from '../api/rtc'
+import { getChatRooms } from '../api/chat'
+import {
+  cancelRtcCall,
+  getMyRtcCalls,
+  getRtcSession,
+  respondRtcCall,
+  updateRtcCall,
+} from '../api/rtc'
 import { getMyReinspectionRequests } from '../api/products'
 
 const router = useRouter()
@@ -21,12 +28,35 @@ const editScheduledAt = ref('')
 const editMemo = ref('')
 const cancelReason = ref('')
 const errorMessage = ref('')
+const now = ref(Date.now())
+let remainingTimer = null
 
 async function load() {
   isLoading.value = true
   errorMessage.value = ''
   try {
-    calls.value = await getMyRtcCalls()
+    const [loadedCalls, chatRooms] = await Promise.all([
+      getMyRtcCalls(),
+      getChatRooms({ size: 100 }).catch(() => ({ content: [] })),
+    ])
+    const rooms = chatRooms?.content || []
+    calls.value = await Promise.all(loadedCalls.map(async (call) => {
+      const room = rooms.find(({ roomId }) => Number(roomId) === Number(call.chatRoomId))
+      let sessionExpiresAt = call.sessionExpiresAt
+      if (!sessionExpiresAt && call.rtcSessionId) {
+        try {
+          const session = await getRtcSession(call.rtcSessionId)
+          sessionExpiresAt = session.expiresAt
+        } catch {
+          // 통화 목록은 유지하고, 세션 만료 정보만 표시하지 않는다.
+        }
+      }
+      return {
+        ...call,
+        counterpartName: call.counterpartName || room?.counterpartNickname || null,
+        sessionExpiresAt,
+      }
+    }))
   } catch (error) {
     errorMessage.value = error.message || '영상 확인 요청을 불러오지 못했습니다.'
   } finally {
@@ -125,7 +155,12 @@ async function loadRecaptures() {
   }
 }
 
-onMounted(() => Promise.all([load(), loadRecaptures()]))
+onMounted(() => {
+  remainingTimer = setInterval(() => { now.value = Date.now() }, 1000)
+  return Promise.all([load(), loadRecaptures()])
+})
+
+onBeforeUnmount(() => clearInterval(remainingTimer))
 
 const recaptureFilter = ref('전체 목록')
 const recaptureCounts = computed(() => ({
@@ -154,6 +189,31 @@ const recaptureGroups = computed(() => {
 
 function formatPrice(price) {
   return Number(price || 0).toLocaleString('ko-KR')
+}
+
+function formatScheduledAt(value) {
+  if (!value) return '일정 미정'
+  return new Intl.DateTimeFormat('ko-KR', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value))
+}
+
+function remainingTime(expiresAt) {
+  if (!expiresAt) return null
+  const remainingSeconds = Math.max(
+    0,
+    Math.floor((new Date(expiresAt).getTime() - now.value) / 1000),
+  )
+  const hours = Math.floor(remainingSeconds / 3600)
+  const minutes = Math.floor((remainingSeconds % 3600) / 60)
+  const seconds = remainingSeconds % 60
+  if (hours > 0) return `${hours}시간 ${minutes}분 ${seconds}초`
+  return `${minutes}분 ${seconds}초`
 }
 </script>
 
@@ -204,12 +264,38 @@ function formatPrice(price) {
                 <p class="font-semibold text-text-main">
                   영상 확인 요청 #{{ call.callId }}
                 </p>
-                <p class="mt-1 text-sm text-text-sub">
-                  {{ call.memo || '등록된 상품 상태를 실시간으로 확인합니다.' }}
+                <p
+                  v-if="call.memo"
+                  class="mt-1 text-sm text-text-sub"
+                >
+                  {{ call.memo }}
                 </p>
                 <p class="mt-2 text-xs text-text-sub">
                   상태: {{ call.status }} · {{ call.incoming ? '받은 요청' : '보낸 요청' }}
                 </p>
+                <dl class="mt-3 grid gap-1 text-sm text-text-sub">
+                  <div class="flex gap-2">
+                    <dt class="font-semibold text-text-main">
+                      상대방
+                    </dt>
+                    <dd>{{ call.counterpartName || `회원 #${call.incoming ? call.proposerId : call.respondentId}` }}</dd>
+                  </div>
+                  <div class="flex gap-2">
+                    <dt class="font-semibold text-text-main">
+                      검증 일정
+                    </dt>
+                    <dd>{{ formatScheduledAt(call.scheduledAt) }}</dd>
+                  </div>
+                  <div
+                    v-if="remainingTime(call.sessionExpiresAt)"
+                    class="flex gap-2"
+                  >
+                    <dt class="font-semibold text-text-main">
+                      세션 만료까지
+                    </dt>
+                    <dd>{{ remainingTime(call.sessionExpiresAt) }}</dd>
+                  </div>
+                </dl>
               </div>
               <div class="flex gap-2">
                 <template v-if="call.status === 'PROPOSED' && call.incoming">
