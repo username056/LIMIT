@@ -169,6 +169,13 @@ class OpenApiContractTests {
     @MockitoBean
     BatteryReportResultRepository batteryReportResultRepository;
 
+    @MockitoBean
+    com.c203.limit.domain.inspection.service.ModelChecklistResearchService
+            modelChecklistResearchService;
+
+    @MockitoBean
+    com.c203.limit.domain.product.service.DeviceModelRequestService deviceModelRequestService;
+
     @Autowired
     MockMvc mockMvc;
 

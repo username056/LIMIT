@@ -17,8 +17,8 @@ public record ChecklistSuggestionResponse(
 
     public static ChecklistSuggestionResponse from(ChecklistSuggestion suggestion) {
         return new ChecklistSuggestionResponse(
-                suggestion.featureCode().name(),
-                suggestion.featureCode().displayNameKo(),
+                suggestion.featureCode(),
+                suggestion.featureName(),
                 suggestion.evidenceStatus().name(),
                 suggestion.reason(),
                 suggestion.checkGuide(),

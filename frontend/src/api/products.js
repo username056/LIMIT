@@ -33,6 +33,10 @@ export function generateChecklist(payload) {
   return apiClient.post('/checklist-generations', payload)
 }
 
+export function requestDeviceModel(payload) {
+  return apiClient.post('/device-model-requests', payload)
+}
+
 export function updateProduct(productId, payload) {
   return apiClient.patch(`/products/${productId}`, payload)
 }

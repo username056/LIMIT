@@ -112,6 +112,13 @@ public enum ErrorCode {
             "PRD013", HttpStatus.BAD_REQUEST, "현재 자동 체크리스트 생성은 노트북만 지원합니다."),
     CHECKLIST_OS_NOT_SUPPORTED(
             "PRD014", HttpStatus.BAD_REQUEST, "노트북 체크리스트는 Windows와 Linux만 지원합니다."),
+    CHECKLIST_RESEARCH_NOT_FOUND("PRD015", HttpStatus.NOT_FOUND, "체크리스트 모델 조사 결과를 찾을 수 없습니다."),
+    CHECKLIST_RESEARCH_STATE_CONFLICT(
+            "PRD016", HttpStatus.CONFLICT, "현재 상태에서는 체크리스트 조사 결과를 검토할 수 없습니다."),
+    DEVICE_MODEL_REQUEST_DUPLICATED("PRD017", HttpStatus.CONFLICT, "이미 검토 중인 동일 모델 요청이 있습니다."),
+    DEVICE_MODEL_REQUEST_NOT_FOUND("PRD018", HttpStatus.NOT_FOUND, "기기 모델 요청을 찾을 수 없습니다."),
+    DEVICE_MODEL_REQUEST_STATE_CONFLICT(
+            "PRD019", HttpStatus.CONFLICT, "현재 상태에서는 기기 모델 요청을 검토할 수 없습니다."),
 
     // ========== 결제 에러 ==========
     PAYMENT_NOT_FOUND("PAY001", HttpStatus.NOT_FOUND, "결제 내역을 찾을 수 없습니다."),

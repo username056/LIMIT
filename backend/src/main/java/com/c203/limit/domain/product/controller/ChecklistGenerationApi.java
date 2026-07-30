@@ -21,9 +21,9 @@ public interface ChecklistGenerationApi {
 
     @Operation(
             operationId = "productChecklist01",
-            summary = "노트북 체크리스트 생성",
+            summary = "기기 모델 체크리스트 생성",
             description =
-                    "Windows 또는 Linux 노트북의 검증된 기본 체크리스트를 생성하고, 공식 제조사 자료 기반 AI 기능 후보를 함께 반환합니다.",
+                    "스마트폰·폴더블·태블릿·노트북의 검증된 기본 체크리스트를 생성하고, 공식 제조사 자료 기반 AI 기능 후보를 함께 반환합니다.",
             security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -37,7 +37,7 @@ public interface ChecklistGenerationApi {
                                                         ChecklistGenerationApiResponse.class))),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "400",
-                description = "CHECKLIST_DEVICE_TYPE_NOT_SUPPORTED / CHECKLIST_OS_NOT_SUPPORTED"),
+                description = "CHECKLIST_OS_NOT_SUPPORTED"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "404",
                 description = "DEVICE_MODEL_NOT_FOUND")

@@ -129,7 +129,10 @@ describe('ProductRegisterPage', () => {
     await flushPromises()
 
     await fillDeviceStep(wrapper)
-    expect(getChecklistTemplate).toHaveBeenCalledWith(101)
+    expect(generateChecklist).toHaveBeenCalledWith({
+      deviceModelId: 101,
+      confirmedFeatures: [],
+    })
 
     await wrapper.find('input[placeholder="예: 오닉스 블랙"]').setValue('그라파이트')
     await wrapper.find('select[aria-label="저장 용량 선택"]').setValue('512')
@@ -146,6 +149,7 @@ describe('ProductRegisterPage', () => {
       color: '그라파이트',
       storageGb: 512,
       tradeRegion: '광주광역시 광산구',
+      confirmedFeatures: [],
     })
     expect(getProductChecklist).toHaveBeenCalledWith(1001)
     expect(wrapper.text()).toContain('검수용 기기 촬영')
@@ -204,6 +208,53 @@ describe('ProductRegisterPage', () => {
 
     expect(createProduct).toHaveBeenCalledWith(expect.objectContaining({
       confirmedFeatures: ['CAMERA'],
+    }))
+  })
+
+  it('스마트폰 모델도 AI 공식자료 후보를 조회하고 선택한 기능을 함께 보낸다', async () => {
+    getDeviceCategories.mockResolvedValue([{ categoryId: 10, name: '스마트폰' }])
+    getDeviceModels.mockResolvedValue([{
+      deviceModelId: 101,
+      manufacturerName: 'Samsung',
+      modelName: 'Galaxy S24',
+      defaultOs: 'ANDROID',
+    }])
+    generateChecklist.mockResolvedValue({
+      deviceModelId: 101,
+      manufacturer: 'Samsung',
+      modelName: 'Galaxy S24',
+      osFamily: 'ANDROID',
+      aiApplied: true,
+      items: templateItems.map((item) => ({ ...item, required: item.isRequired })),
+      aiSuggestions: [{
+        featureCode: 'WIRELESS_CHARGING',
+        featureName: '무선 충전',
+        evidenceStatus: 'VERIFIED',
+        reason: '공식 사양에서 무선 충전을 확인했습니다.',
+        checkGuide: '호환 충전기로 충전 상태를 확인하세요.',
+        sourceUrl: 'https://www.samsung.com/example',
+        sourceTitle: 'Galaxy S24 공식 사양',
+      }],
+      reviewCandidates: [],
+    })
+
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await fillDeviceStep(wrapper)
+
+    expect(generateChecklist).toHaveBeenCalledWith({
+      deviceModelId: 101,
+      confirmedFeatures: [],
+    })
+    expect(getChecklistTemplate).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('무선 충전')
+
+    await wrapper.find('input[type="checkbox"][value="WIRELESS_CHARGING"]').setValue(true)
+    await buttonByText(wrapper, '다음 단계').trigger('click')
+    await flushPromises()
+
+    expect(createProduct).toHaveBeenCalledWith(expect.objectContaining({
+      confirmedFeatures: ['WIRELESS_CHARGING'],
     }))
   })
 
