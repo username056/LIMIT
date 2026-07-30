@@ -634,6 +634,82 @@ describe('ProductRegisterPage', () => {
     })
   })
 
+  describe('모델 목록 탐색', () => {
+    it('모델을 제조사·모델명으로 검색하고 제조사 안에서 정렬한다', async () => {
+      getDeviceModels.mockResolvedValue([
+        { deviceModelId: 101, manufacturerName: 'Samsung', modelName: 'Zeta Book', modelCode: 'NT750XGK' },
+        { deviceModelId: 102, manufacturerName: 'LG', modelName: 'gram Pro 17', modelCode: '17Z90SP' },
+        { deviceModelId: 103, manufacturerName: 'Samsung', modelName: 'Alpha Book', modelCode: 'NT960XGK' },
+      ])
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await wrapper.findAll('select')[0].setValue('10')
+      await flushPromises()
+
+      const groups = wrapper.findAll('select')[1].findAll('optgroup')
+      expect(groups[0].findAll('option').map((node) => node.text())).toEqual([
+        'Alpha Book (NT960XGK)',
+        'Zeta Book (NT750XGK)',
+      ])
+
+      await wrapper.find('input[aria-label="기기 모델 검색"]').setValue('gram')
+      const labels = wrapper.findAll('select')[1].findAll('option').map((node) => node.text())
+      expect(labels).toContain('gram Pro 17 (17Z90SP)')
+      expect(labels).not.toContain('Zeta Book (NT750XGK)')
+    })
+
+    it('모델 API가 배열이 아닌 값을 반환하면 빈 목록으로 안전하게 처리한다', async () => {
+      getDeviceModels.mockResolvedValue(null)
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await wrapper.findAll('select')[0].setValue('10')
+      await flushPromises()
+
+      expect(wrapper.findAll('select')[1].findAll('optgroup')).toHaveLength(0)
+      expect(wrapper.find('input[aria-label="기기 모델 검색"]').attributes('disabled')).toBeUndefined()
+    })
+
+    it('카테고리를 빠르게 바꿔도 이전 모델 응답이 현재 목록을 덮어쓰지 않는다', async () => {
+      let resolveFirst
+      let resolveSecond
+      getDeviceCategories.mockResolvedValue([
+        { categoryId: 10, name: '노트북' },
+        { categoryId: 20, name: '스마트폰' },
+      ])
+      getDeviceModels
+        .mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve }))
+        .mockReturnValueOnce(new Promise((resolve) => { resolveSecond = resolve }))
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      const categorySelect = wrapper.findAll('select')[0]
+      await categorySelect.setValue('10')
+      await categorySelect.setValue('20')
+
+      resolveSecond([{ deviceModelId: 201, manufacturerName: 'Samsung', modelName: 'Galaxy S24' }])
+      await flushPromises()
+      resolveFirst([{ deviceModelId: 101, manufacturerName: 'LG', modelName: 'gram Pro' }])
+      await flushPromises()
+
+      const labels = wrapper.findAll('select')[1].findAll('option').map((node) => node.text())
+      expect(labels).toContain('Galaxy S24')
+      expect(labels).not.toContain('gram Pro')
+    })
+
+    it('모델 목록 조회에 실패하면 오류를 안내한다', async () => {
+      getDeviceModels.mockRejectedValueOnce(new Error('network error'))
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await wrapper.findAll('select')[0].setValue('10')
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('모델 목록을 불러오지 못했습니다')
+    })
+  })
+
   describe('카탈로그에 없는 기기 모델 검토 요청', () => {
     it('모델을 제조사별로 묶고 내부 carrier 모델은 숨긴다', async () => {
       getDeviceModels.mockResolvedValue([
