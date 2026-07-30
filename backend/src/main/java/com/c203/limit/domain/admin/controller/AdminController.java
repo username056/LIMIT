@@ -5,10 +5,16 @@ import com.c203.limit.domain.admin.dto.request.ChangeAdminPasswordRequest;
 import com.c203.limit.domain.admin.dto.request.CreateAdminAccountRequest;
 import com.c203.limit.domain.admin.dto.request.CreateMemberRestrictionRequest;
 import com.c203.limit.domain.admin.dto.request.ReleaseMemberRestrictionRequest;
+import com.c203.limit.domain.admin.dto.request.ReviewChecklistResearchRequest;
+import com.c203.limit.domain.admin.dto.request.ReviewDeviceModelRequest;
 import com.c203.limit.domain.admin.dto.request.UpdateAdminAccountAccessRequest;
 import com.c203.limit.domain.admin.service.AdminAccountManagementService;
 import com.c203.limit.domain.admin.service.AdminService;
 import com.c203.limit.domain.auth.service.AuthCookieService;
+import com.c203.limit.domain.inspection.enums.ModelChecklistResearchStatus;
+import com.c203.limit.domain.inspection.service.ModelChecklistResearchService;
+import com.c203.limit.domain.product.entity.DeviceModelRequestStatus;
+import com.c203.limit.domain.product.service.DeviceModelRequestService;
 import com.c203.limit.global.response.ApiResponse;
 import com.c203.limit.global.security.CurrentUser;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +29,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminController implements AdminApi {
     private final AdminService adminService;
     private final AdminAccountManagementService adminAccountManagementService;
+    private final ModelChecklistResearchService checklistResearchService;
+    private final DeviceModelRequestService deviceModelRequestService;
     private final CurrentUser currentUser;
     private final AuthCookieService authCookieService;
 
@@ -109,5 +117,54 @@ public class AdminController implements AdminApi {
                 ApiResponse.ok(
                         adminAccountManagementService.update(
                                 currentUser.adminId(), adminId, request)));
+    }
+
+    @Override
+    public ResponseEntity<?> listChecklistResearches(ModelChecklistResearchStatus status) {
+        return ResponseEntity.ok(ApiResponse.ok(checklistResearchService.list(status)));
+    }
+
+    @Override
+    public ResponseEntity<?> approveChecklistResearch(
+            Long researchId, ReviewChecklistResearchRequest request) {
+        return ResponseEntity.ok(
+                ApiResponse.ok(
+                        checklistResearchService.approve(
+                                researchId,
+                                currentUser.adminId(),
+                                request.approvedFeatureCodes(),
+                                request.note())));
+    }
+
+    @Override
+    public ResponseEntity<?> rejectChecklistResearch(
+            Long researchId, ReviewChecklistResearchRequest request) {
+        return ResponseEntity.ok(
+                ApiResponse.ok(
+                        checklistResearchService.reject(
+                                researchId, currentUser.adminId(), request.note())));
+    }
+
+    @Override
+    public ResponseEntity<?> listDeviceModelRequests(DeviceModelRequestStatus status) {
+        return ResponseEntity.ok(ApiResponse.ok(deviceModelRequestService.list(status)));
+    }
+
+    @Override
+    public ResponseEntity<?> approveDeviceModelRequest(
+            Long requestId, ReviewDeviceModelRequest request) {
+        return ResponseEntity.ok(
+                ApiResponse.ok(
+                        deviceModelRequestService.approve(
+                                requestId, currentUser.adminId(), request.note())));
+    }
+
+    @Override
+    public ResponseEntity<?> rejectDeviceModelRequest(
+            Long requestId, ReviewDeviceModelRequest request) {
+        return ResponseEntity.ok(
+                ApiResponse.ok(
+                        deviceModelRequestService.reject(
+                                requestId, currentUser.adminId(), request.note())));
     }
 }

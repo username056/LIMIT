@@ -27,29 +27,24 @@
 증거 업로드·확인·재촬영 이력, OCR, batteryreport/dxdiag 파싱, 자동 추출값 확정,
 채팅 및 영상통화는 담당 범위에서 제외했으며 기존 목업을 변경하지 않았다.
 
-### 카탈로그에 없는 기기 직접 입력
+### 카탈로그에 없는 기기 모델 요청
 
 기기 모델은 `category` 테이블의 실제 행이고 `checklist_template`이 그 행에 묶여 있어 임의
 문자열을 `deviceModelId`로 보낼 수 없다. 시드 이전에는 모델이 7종뿐이라 그 목록에 없는 기기를
 가진 판매자는 상품을 등록할 방법이 아예 없었다.
 
-`V20260806__seed_generic_device_models.sql`이 카테고리마다 `기타 (직접 입력)` 모델
-(`model_code`가 `ETC-`로 시작)과 `PUBLISHED` 템플릿을 시드하고, 그 행을 값을 받아 줄
-carrier로 쓴다. 실제 제조사·모델명은 `V20260807__add_listing_custom_model_columns.sql`이
-추가한 `listing.custom_manufacturer`, `listing.custom_model_name`에 매물마다 저장한다.
-carrier 행 하나에 여러 기기가 매달리기 때문이다.
+판매 화면은 모델을 제조사별로 묶어 보여주며, `model_code`가 `ETC-`로 시작하는 내부 carrier
+행은 노출하지 않는다. 찾는 모델이 없으면 판매자가 제조사·모델명·모델 코드·운영체제를 입력해
+`POST /api/v1/device-model-requests`로 검토를 요청한다.
 
-- 등록 요청은 `deviceModelId`에 carrier 행 ID를, `customManufacturer`·`customModelName`·
-  `customModelCode`·`customOsFamily`에 판매자 입력을 담는다.
-- 두 값이 모두 있으면 `ChecklistGenerationService.generateCustomForModel`이 그 정보로 공식
-  자료를 찾아 체크리스트를 만든다. carrier 행에서 읽으면 제조사·모델명이 비어 있어 근거 자료를
-  찾을 수 없으므로, 결과에는 carrier 모델 ID를 찍어 등록 경로의 모델 일치 검증을 통과시킨다.
-- 상세·목록 응답은 직접 입력 값이 있으면 카탈로그 모델명 대신 그 값을 노출한다. carrier 행
-  이름을 그대로 보여주면 구매자가 기기를 특정할 수 없다.
-- **현재는 노트북(`ETC-LAPTOP`)에서만 제공한다.** 체크리스트 생성 정책이
-  `LaptopChecklistPolicy` 기반이고 `osFamily`가 `WINDOWS`/`LINUX`만 받는다. 나머지 세 carrier
-  행은 시드돼 있지만 화면에서 노출하지 않으며, 스마트폰·태블릿까지 열려면 기기 종류별 정책이
-  먼저 필요하다.
+- 요청은 `PENDING` 상태로 저장되고, 이 단계에서는 상품이나 판매 체크리스트를 만들지 않는다.
+- 관리자가 승인하면 실제 카탈로그 모델과 기본 `PUBLISHED` 템플릿을 만든다.
+- 판매자는 승인된 모델을 목록에서 선택한 뒤 상품을 등록한다.
+- 처음 선택된 모델의 AI 조사는 모델별로 한 번만 수행되며, 관리자 승인 전에는 기본 템플릿만
+  상품 체크리스트에 사용한다.
+- 기존 직접 입력 클라이언트와 이미 저장된 매물의 호환을 위해 carrier 및
+  `listing.custom_manufacturer`, `listing.custom_model_name` 계약은 유지한다. 신규 판매 화면은
+  이 호환 경로를 사용하지 않는다.
 
 ## 데이터 변경
 

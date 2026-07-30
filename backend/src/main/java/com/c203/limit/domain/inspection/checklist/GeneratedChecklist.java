@@ -12,11 +12,37 @@ public record GeneratedChecklist(
         boolean aiApplied,
         List<GeneratedChecklistItem> items,
         List<ChecklistSuggestion> aiSuggestions,
-        List<String> reviewCandidates) {
+        List<String> reviewCandidates,
+        Long researchId,
+        String researchStatus) {
 
     public GeneratedChecklist {
         items = List.copyOf(items);
         aiSuggestions = List.copyOf(aiSuggestions);
         reviewCandidates = List.copyOf(reviewCandidates);
+    }
+
+    public GeneratedChecklist(
+            Long deviceModelId,
+            String manufacturer,
+            String modelName,
+            OsFamily osFamily,
+            int templateVersion,
+            boolean aiApplied,
+            List<GeneratedChecklistItem> items,
+            List<ChecklistSuggestion> aiSuggestions,
+            List<String> reviewCandidates) {
+        this(
+                deviceModelId,
+                manufacturer,
+                modelName,
+                osFamily,
+                templateVersion,
+                aiApplied,
+                items,
+                aiSuggestions,
+                reviewCandidates,
+                null,
+                null);
     }
 }

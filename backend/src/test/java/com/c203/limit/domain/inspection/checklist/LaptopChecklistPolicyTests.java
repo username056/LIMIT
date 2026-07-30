@@ -68,11 +68,11 @@ class LaptopChecklistPolicyTests {
                         .filter(item -> item.featureCode() != null)
                         .map(GeneratedChecklistItem::featureCode))
                 .containsExactlyInAnyOrder(
-                        LaptopFeatureCode.CAMERA,
-                        LaptopFeatureCode.WIFI,
-                        LaptopFeatureCode.BLUETOOTH,
-                        LaptopFeatureCode.OLED,
-                        LaptopFeatureCode.NUMPAD);
+                        "CAMERA",
+                        "WIFI",
+                        "BLUETOOTH",
+                        "OLED",
+                        "NUMPAD");
     }
 
     @Test
@@ -86,15 +86,15 @@ class LaptopChecklistPolicyTests {
                         .filter(item -> item.featureCode() != null)
                         .map(GeneratedChecklistItem::featureCode))
                 .containsExactlyInAnyOrder(
-                        LaptopFeatureCode.RJ45_PORT,
-                        LaptopFeatureCode.MICROSD_SLOT);
+                        "RJ45_PORT",
+                        "MICROSD_SLOT");
         assertThat(items)
-                .filteredOn(item -> item.featureCode() == LaptopFeatureCode.RJ45_PORT)
+                .filteredOn(item -> "RJ45_PORT".equals(item.featureCode()))
                 .singleElement()
                 .extracting(GeneratedChecklistItem::name)
                 .isEqualTo("유선 LAN(RJ45) 포트");
         assertThat(items)
-                .filteredOn(item -> item.featureCode() == LaptopFeatureCode.MICROSD_SLOT)
+                .filteredOn(item -> "MICROSD_SLOT".equals(item.featureCode()))
                 .singleElement()
                 .extracting(GeneratedChecklistItem::name)
                 .isEqualTo("microSD 카드 슬롯");

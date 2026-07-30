@@ -13,7 +13,7 @@ public record GeneratedChecklistItem(
         String parserType,
         boolean required,
         int displayOrder,
-        LaptopFeatureCode featureCode,
+        String featureCode,
         ChecklistEvidenceStatus evidenceStatus,
         String sourceUrl,
         String sourceTitle) {

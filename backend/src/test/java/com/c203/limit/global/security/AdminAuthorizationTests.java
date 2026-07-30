@@ -108,6 +108,11 @@ class AdminAuthorizationTests {
     @MockitoBean DxdiagResultRepository dxdiagResultRepository;
     @MockitoBean BatteryReportResultRepository batteryReportResultRepository;
     @MockitoBean com.c203.limit.domain.seller.repository.SellerRepository sellerRepository;
+    @MockitoBean
+    com.c203.limit.domain.inspection.service.ModelChecklistResearchService
+            modelChecklistResearchService;
+    @MockitoBean
+    com.c203.limit.domain.product.service.DeviceModelRequestService deviceModelRequestService;
 
     @Test
     void publicHealthEndpointDoesNotRequireAuthentication() throws Exception {

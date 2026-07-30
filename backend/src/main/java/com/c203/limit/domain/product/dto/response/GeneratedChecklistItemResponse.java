@@ -3,7 +3,7 @@ package com.c203.limit.domain.product.dto.response;
 import com.c203.limit.domain.inspection.checklist.GeneratedChecklistItem;
 import io.swagger.v3.oas.annotations.media.Schema;
 
-@Schema(name = "GeneratedChecklistItemResponse", description = "생성된 노트북 체크리스트 항목")
+@Schema(name = "GeneratedChecklistItemResponse", description = "생성된 기기 모델 체크리스트 항목")
 public record GeneratedChecklistItemResponse(
         String itemCode,
         String name,
@@ -30,7 +30,7 @@ public record GeneratedChecklistItemResponse(
                 item.parserType(),
                 item.required(),
                 item.displayOrder(),
-                item.featureCode() == null ? null : item.featureCode().name(),
+                item.featureCode(),
                 item.evidenceStatus() == null ? null : item.evidenceStatus().name(),
                 item.sourceUrl(),
                 item.sourceTitle());
