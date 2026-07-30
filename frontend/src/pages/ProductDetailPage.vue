@@ -15,8 +15,9 @@ import {
   transitionProductStatus,
 } from '../api/products'
 import { createOrGetChatRoom } from '../api/chat'
+import { getSellerProfile } from '../api/seller'
 import { getAccessToken, getSessionMember } from '../auth/session'
-import { canSellerMarkSold, isSoldOut, productStatusLabel } from '../utils/productStatus'
+import { canSellerMarkSold, canSellerReopen, isSoldOut } from '../utils/productStatus'
 
 const route = useRoute()
 const router = useRouter()
@@ -28,6 +29,8 @@ const isOpeningChat = ref(false)
 const errorMessage = ref('')
 const productImages = ref([])
 const activeImageUrl = ref('')
+// 구매자에게 공개되는 판매자 정보입니다(닉네임·개인/사업자·판매 중 수).
+const sellerProfile = ref(null)
 // 소유자 전용 조회로 불러온 경우(비공개 상품)와, 판매 중인 내 상품을 공개 조회로 본 경우를 함께 다룹니다.
 const loadedViaOwnerApi = ref(false)
 const isOwner = computed(() => {
@@ -172,7 +175,8 @@ const canMarkSold = computed(
 
 async function markSold() {
   const confirmed = window.confirm(
-    '판매 완료로 바꿀까요?\n\n구매자에게 더 이상 노출되지 않고, 되돌리거나 수정할 수 없습니다.',
+    '판매 완료로 바꿀까요?\n\n'
+    + '구매자에게 더 이상 노출되지 않습니다. 거래가 깨지면 다시 판매 중으로 되돌릴 수 있습니다.',
   )
   if (!confirmed) return
   isMarkingSold.value = true
@@ -182,6 +186,22 @@ async function markSold() {
     await loadProduct(product.value.productId)
   } catch (error) {
     errorMessage.value = error.message || '판매 완료로 처리하지 못했습니다.'
+  } finally {
+    isMarkingSold.value = false
+  }
+}
+
+// 직거래 약속이 깨졌을 때 원래 판매글로 돌아갑니다.
+const canReopen = computed(() => isOwner.value && canSellerReopen(product.value?.status))
+
+async function reopen() {
+  isMarkingSold.value = true
+  errorMessage.value = ''
+  try {
+    await transitionProductStatus(product.value.productId, 'ON_SALE', '거래 파기로 판매 재개')
+    await loadProduct(product.value.productId)
+  } catch (error) {
+    errorMessage.value = error.message || '판매 중으로 되돌리지 못했습니다.'
   } finally {
     isMarkingSold.value = false
   }
@@ -232,6 +252,14 @@ onMounted(async () => {
     } catch {
       productImages.value = []
       activeImageUrl.value = product.value.thumbnailUrl || ''
+    }
+    // 판매자 프로필은 곁들이는 정보입니다. 실패해도 상품 화면 자체는 그대로 보여 줍니다.
+    if (product.value?.sellerId) {
+      try {
+        sellerProfile.value = await getSellerProfile(product.value.sellerId)
+      } catch {
+        sellerProfile.value = null
+      }
     }
     if (getAccessToken()) {
       const favoriteStatus = await getFavoriteStatus(route.params.productId)
@@ -351,9 +379,7 @@ onMounted(async () => {
                 <span class="text-6xl">▣</span>
                 <span class="mt-3 text-sm">등록된 상품 이미지가 없습니다.</span>
               </div>
-              <span class="absolute left-4 top-4 border-l-2 border-primary bg-surface/95 px-2.5 py-1 text-xs font-bold text-primary">
-                {{ productStatusLabel(product.status) }}
-              </span>
+              <!-- 상태 배지는 이미지 위에 두지 않습니다. 사진을 가리고, 구매 버튼이 이미 상태를 말해 줍니다. -->
               <div
                 v-if="isSoldOut(product.status)"
                 class="absolute inset-0 flex items-center justify-center bg-black/55"
@@ -412,7 +438,44 @@ onMounted(async () => {
               {{ formatPrice(product.price) }}원
             </p>
 
-            <dl class="mt-8 grid grid-cols-2 gap-x-6 gap-y-5 border-y border-border py-5 text-sm">
+            <!--
+              가격 바로 아래에 판매자를 둡니다. 누구에게 사는지가 기기 옵션보다 먼저 읽혀야 합니다.
+              누르면 그 판매자의 판매 목록으로 갑니다.
+              판매 중 개수는 여기서 보여주지 않습니다 — 이 화면의 관심은 '이 상품'이고, 판매자의
+              재고 규모는 프로필 페이지에서 볼 내용입니다.
+              정산 계좌 같은 값은 공개 프로필에 담기지 않습니다.
+            -->
+            <RouterLink
+              v-if="sellerProfile"
+              :to="{ name: 'seller-profile', params: { sellerId: sellerProfile.sellerId } }"
+              class="mt-6 flex items-center gap-3 rounded-lg border border-border bg-surface p-3 transition hover:border-primary/50 hover:shadow-card"
+            >
+              <span
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-gradient text-sm font-bold text-white"
+                aria-hidden="true"
+              >{{ (sellerProfile.nickname || '판').trim().charAt(0) }}</span>
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-sm font-semibold text-text-main">
+                  {{ sellerProfile.nickname }}
+                </span>
+                <!-- 판매자 등록 행이 없는 회원이면 sellerType이 비어 옵니다. -->
+                <span
+                  v-if="sellerProfile.sellerType"
+                  class="mt-0.5 block text-xs text-text-sub"
+                >
+                  {{ sellerProfile.sellerType === 'BUSINESS' ? '사업자 판매자' : '개인 판매자' }}
+                </span>
+              </span>
+              <span class="shrink-0 text-xs font-semibold text-primary">판매자 상품 보기 →</span>
+            </RouterLink>
+            <p
+              v-else
+              class="mt-6 text-sm text-text-sub"
+            >
+              판매자 정보를 불러오지 못했습니다.
+            </p>
+
+            <dl class="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-border pt-5 text-sm">
               <div>
                 <dt class="text-xs text-text-sub">
                   색상
@@ -427,14 +490,6 @@ onMounted(async () => {
                 </dt>
                 <dd class="mt-1 font-semibold text-text-main">
                   {{ product.device?.storageGb ? `${product.device.storageGb}GB` : '미입력' }}
-                </dd>
-              </div>
-              <div>
-                <dt class="text-xs text-text-sub">
-                  상품 번호
-                </dt>
-                <dd class="mt-1 font-semibold text-text-main">
-                  #{{ product.productId }}
                 </dd>
               </div>
             </dl>
@@ -457,6 +512,16 @@ onMounted(async () => {
                   @click="markSold"
                 >
                   {{ isMarkingSold ? '처리 중…' : '판매 완료 처리하기' }}
+                </BaseButton>
+                <!-- 직거래가 깨졌을 때 상품을 새로 등록하지 않고 이 글로 돌아옵니다. -->
+                <BaseButton
+                  v-if="canReopen"
+                  block
+                  variant="outline"
+                  :disabled="isMarkingSold"
+                  @click="reopen"
+                >
+                  {{ isMarkingSold ? '처리 중…' : '다시 판매하기' }}
                 </BaseButton>
               </template>
               <!-- 구매하기와 문의하기 두 개만 둡니다. 영상 확인은 채팅방 안에서 요청합니다. -->

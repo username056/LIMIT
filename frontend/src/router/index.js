@@ -29,6 +29,7 @@ const PurchaseFailPage = () => import('../pages/PurchaseFailPage.vue')
 const ChatPage = () => import('../pages/ChatPage.vue')
 const ProductListPage = () => import('../pages/ProductListPage.vue')
 const ProductDetailPage = () => import('../pages/ProductDetailPage.vue')
+const SellerProfilePage = () => import('../pages/SellerProfilePage.vue')
 const CallsPage = () => import('../pages/CallsPage.vue')
 const RtcCallPage = () => import('../pages/RtcCallPage.vue')
 
@@ -36,6 +37,7 @@ const routes = [
   { path: '/', name: 'home', component: HomePage },
   { path: '/products', name: 'products', component: ProductListPage },
   { path: '/products/:productId', name: 'product-detail', component: ProductDetailPage },
+  { path: '/sellers/:sellerId', name: 'seller-profile', component: SellerProfilePage },
   { path: '/calls', name: 'calls', component: CallsPage, meta: { requiresAuth: true } },
   { path: '/calls/:callId/session', name: 'rtc-call', component: RtcCallPage, meta: { requiresAuth: true } },
   { path: '/purchase/:productId', name: 'purchase', component: PurchasePage },

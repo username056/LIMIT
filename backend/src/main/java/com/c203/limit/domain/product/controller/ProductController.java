@@ -90,6 +90,7 @@ public class ProductController implements ProductApi {
             BigDecimal maxPrice,
             String tradeRegion,
             String verificationStatus,
+            Long sellerId,
             int page,
             int size,
             String sort) {
@@ -102,6 +103,7 @@ public class ProductController implements ProductApi {
                 maxPrice,
                 tradeRegion,
                 verificationStatus,
+                sellerId,
                 page,
                 size,
                 sort);

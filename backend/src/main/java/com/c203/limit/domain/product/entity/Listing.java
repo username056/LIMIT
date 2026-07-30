@@ -239,6 +239,18 @@ public class Listing extends BaseTimeEntity {
     }
 
     /**
+     * 직접 판매 완료로 닫은 매물을 다시 판매 중으로 되돌린다. 직거래는 약속이 깨질 수 있어,
+     * 판매자가 상품을 새로 등록하지 않고 원래 글로 돌아갈 길이 필요하다.
+     *
+     * <p>서비스 결제를 거쳐 종료된 매물(SETTLED 등)은 대상이 아니다. 그 거래는 주문·정산 기록이
+     * 남아 있어 매물 상태만 되돌리면 서로 맞지 않는다.
+     */
+    public void reopenSoldBySeller() {
+        requireStatus(ListingStatus.SOLD, ErrorCode.INVALID_PRODUCT_STATUS_TRANSITION);
+        this.status = ListingStatus.ON_SALE;
+    }
+
+    /**
      * ON_SALE 매물을 구매자에게 예약 처리한다. 예약 유예 만료 시각은 Entity가 직접 계산하지 않고
      * 호출자(ListingService)가 Clock 기반으로 계산해 전달한다 — 테스트에서 시간을 결정적으로
      * 제어하기 위함이다.
