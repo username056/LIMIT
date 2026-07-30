@@ -445,7 +445,7 @@ class ProductApplicationServiceTests {
                 .thenReturn(List.of(thumbnail));
 
         var result = service.findPublic(
-                null, null, null, null, null, null, null, null, 0, 20, "price,asc");
+                null, null, null, null, null, null, null, null, null, 0, 20, "price,asc");
 
         assertThat(result.content()).hasSize(2);
         assertThat(result.content().get(0).getVerificationStatus()).isEqualTo("COMPLETED");
@@ -465,7 +465,7 @@ class ProductApplicationServiceTests {
     @Test
     void rejectsUnsupportedVerificationStatusAndSort() {
         assertThatThrownBy(() -> service.findPublic(
-                        null, null, null, null, null, null, null, "UNKNOWN", 0, 20,
+                        null, null, null, null, null, null, null, "UNKNOWN", null, 0, 20,
                         "createdAt,desc"))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
@@ -473,7 +473,7 @@ class ProductApplicationServiceTests {
                                 .isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
 
         assertThatThrownBy(() -> service.findPublic(
-                        null, null, null, null, null, null, null, null, 0, 20,
+                        null, null, null, null, null, null, null, null, null, 0, 20,
                         "sellerId,asc"))
                 .isInstanceOfSatisfying(
                         BusinessException.class,

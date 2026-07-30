@@ -28,6 +28,9 @@ public interface ListingRepository
     @EntityGraph(attributePaths = "category")
     Page<Listing> findBySellerIdAndDeletedAtIsNull(Long sellerId, Pageable pageable);
 
+    /** 판매자 공개 프로필에 보여 줄 판매 중 상품 수. */
+    long countBySellerIdAndStatusAndDeletedAtIsNull(Long sellerId, ListingStatus status);
+
     @EntityGraph(attributePaths = "category")
     Page<Listing> findBySellerIdAndStatusAndDeletedAtIsNull(
             Long sellerId, ListingStatus status, Pageable pageable);

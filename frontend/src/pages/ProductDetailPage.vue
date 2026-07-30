@@ -15,6 +15,7 @@ import {
   transitionProductStatus,
 } from '../api/products'
 import { createOrGetChatRoom } from '../api/chat'
+import { getSellerProfile } from '../api/seller'
 import { getAccessToken, getSessionMember } from '../auth/session'
 import { canSellerMarkSold, canSellerReopen, isSoldOut } from '../utils/productStatus'
 
@@ -28,6 +29,8 @@ const isOpeningChat = ref(false)
 const errorMessage = ref('')
 const productImages = ref([])
 const activeImageUrl = ref('')
+// 구매자에게 공개되는 판매자 정보입니다(닉네임·개인/사업자·판매 중 수).
+const sellerProfile = ref(null)
 // 소유자 전용 조회로 불러온 경우(비공개 상품)와, 판매 중인 내 상품을 공개 조회로 본 경우를 함께 다룹니다.
 const loadedViaOwnerApi = ref(false)
 const isOwner = computed(() => {
@@ -250,6 +253,14 @@ onMounted(async () => {
       productImages.value = []
       activeImageUrl.value = product.value.thumbnailUrl || ''
     }
+    // 판매자 프로필은 곁들이는 정보입니다. 실패해도 상품 화면 자체는 그대로 보여 줍니다.
+    if (product.value?.sellerId) {
+      try {
+        sellerProfile.value = await getSellerProfile(product.value.sellerId)
+      } catch {
+        sellerProfile.value = null
+      }
+    }
     if (getAccessToken()) {
       const favoriteStatus = await getFavoriteStatus(route.params.productId)
       isFavorite.value = Boolean(favoriteStatus?.favorite)
@@ -444,12 +455,43 @@ onMounted(async () => {
                   {{ product.device?.storageGb ? `${product.device.storageGb}GB` : '미입력' }}
                 </dd>
               </div>
-              <div>
+              <!--
+                상품 번호 자리에 판매자를 둡니다. 번호는 구매 판단에 쓰이지 않고, 누구에게 사는지가
+                훨씬 중요합니다. 누르면 그 판매자의 판매 목록으로 갑니다.
+                정산 계좌 같은 값은 공개 프로필에 담기지 않습니다.
+              -->
+              <div class="col-span-2">
                 <dt class="text-xs text-text-sub">
-                  상품 번호
+                  판매자
                 </dt>
-                <dd class="mt-1 font-semibold text-text-main">
-                  #{{ product.productId }}
+                <dd class="mt-1">
+                  <RouterLink
+                    v-if="sellerProfile"
+                    :to="{ name: 'seller-profile', params: { sellerId: sellerProfile.sellerId } }"
+                    class="flex items-center gap-3 rounded-lg border border-border bg-surface p-3 transition hover:border-primary/50 hover:shadow-card"
+                  >
+                    <span
+                      class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-gradient text-sm font-bold text-white"
+                      aria-hidden="true"
+                    >{{ (sellerProfile.nickname || '판').trim().charAt(0) }}</span>
+                    <span class="min-w-0 flex-1">
+                      <span class="block truncate font-semibold text-text-main">
+                        {{ sellerProfile.nickname }}
+                      </span>
+                      <!-- 판매자 등록 행이 없는 회원이면 sellerType이 비어 옵니다. -->
+                      <span class="mt-0.5 block text-xs font-normal text-text-sub">
+                        <template v-if="sellerProfile.sellerType">
+                          {{ sellerProfile.sellerType === 'BUSINESS' ? '사업자 판매자' : '개인 판매자' }} ·
+                        </template>
+                        판매 중 {{ sellerProfile.onSaleCount }}개
+                      </span>
+                    </span>
+                    <span class="shrink-0 text-xs font-semibold text-primary">판매자 상품 보기 →</span>
+                  </RouterLink>
+                  <span
+                    v-else
+                    class="text-sm font-normal text-text-sub"
+                  >판매자 정보를 불러오지 못했습니다.</span>
                 </dd>
               </div>
             </dl>

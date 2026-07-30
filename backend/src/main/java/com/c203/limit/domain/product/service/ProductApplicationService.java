@@ -255,6 +255,7 @@ public class ProductApplicationService {
             BigDecimal maxPrice,
             String tradeRegion,
             String verificationStatus,
+            Long sellerId,
             int page,
             int size,
             String sort) {
@@ -264,6 +265,7 @@ public class ProductApplicationService {
                 .and(keyword(keyword))
                 .and(category(categoryId, deviceModelId))
                 .and(manufacturer(manufacturerId))
+                .and(seller(sellerId))
                 .and(priceRange(minPrice, maxPrice))
                 .and(tradeRegion(tradeRegion))
                 .and(verificationStatus(verificationStatus));
@@ -544,6 +546,13 @@ public class ProductApplicationService {
                     cb.equal(root.get("category").get("id"), categoryId),
                     cb.equal(root.get("category").get("parent").get("id"), categoryId));
         };
+    }
+
+    /** 판매자 공개 프로필에서 그 사람의 판매 목록만 보여 줄 때 쓴다. */
+    private Specification<Listing> seller(Long sellerId) {
+        return (root, query, cb) -> sellerId == null
+                ? cb.conjunction()
+                : cb.equal(root.get("sellerId"), sellerId);
     }
 
     private Specification<Listing> manufacturer(Long manufacturerId) {

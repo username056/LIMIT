@@ -11,6 +11,7 @@ import {
 import { getFavoriteStatus, removeFavorite } from '../../api/favorites'
 import { getAccessToken, getSessionMember } from '../../auth/session'
 import { createOrGetChatRoom } from '../../api/chat'
+import { getSellerProfile } from '../../api/seller'
 
 const push = vi.fn()
 
@@ -34,6 +35,7 @@ vi.mock('../../api/favorites', () => ({
 }))
 vi.mock('../../auth/session', () => ({ getAccessToken: vi.fn(), getSessionMember: vi.fn() }))
 vi.mock('../../api/chat', () => ({ createOrGetChatRoom: vi.fn() }))
+vi.mock('../../api/seller', () => ({ getSellerProfile: vi.fn() }))
 vi.mock('../../api/rtc', () => ({ createChatRoom: vi.fn(), requestRtcCall: vi.fn() }))
 
 const layoutStub = { template: '<main><slot /></main>' }
@@ -46,13 +48,23 @@ const buttonStub = {
 describe('ProductDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // clearAllMocks는 호출 기록만 지우고 mockReturnValue는 남깁니다. 소유자 테스트가 세워 둔
+    // 세션이 다음 테스트로 새어 나가 isOwner가 잘못 켜지므로 기본값을 다시 세웁니다.
+    getSessionMember.mockReturnValue(null)
     getProduct.mockResolvedValue({
       productId: 1001,
+      sellerId: 55,
       name: 'Galaxy S24',
       price: 650000,
       status: 'ON_SALE',
       device: {},
       checklistSummary: {},
+    })
+    getSellerProfile.mockResolvedValue({
+      sellerId: 55,
+      nickname: '리미트판매자',
+      sellerType: 'INDIVIDUAL',
+      onSaleCount: 3,
     })
     getProductChecklist.mockResolvedValue([])
     getEvidenceHistory.mockResolvedValue([])
@@ -327,6 +339,53 @@ describe('ProductDetailPage', () => {
     const rows = wrapper.findAll('ul[aria-label="검증 체크리스트 항목"] > li')
     expect(rows).toHaveLength(1)
     expect(rows[0].text()).toContain('공개 항목')
+  })
+
+  // 누구에게 사는지 모른 채로 결제하게 두지 않습니다.
+  it('판매자 프로필을 보여주고 누르면 그 판매자 페이지로 연결한다', async () => {
+    getAccessToken.mockReturnValue(null)
+
+    const wrapper = mount(ProductDetailPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { props: ['to'], template: '<a :data-to="JSON.stringify(to)"><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(getSellerProfile).toHaveBeenCalledWith(55)
+    expect(wrapper.text()).toContain('리미트판매자')
+    expect(wrapper.text()).toContain('개인 판매자')
+    expect(wrapper.text()).toContain('판매 중 3개')
+
+    const link = wrapper.findAll('[data-to]')
+      .find((node) => node.text().includes('리미트판매자'))
+    expect(JSON.parse(link.attributes('data-to'))).toEqual({
+      name: 'seller-profile',
+      params: { sellerId: 55 },
+    })
+  })
+
+  it('판매자 프로필 조회가 실패해도 상품 화면은 그대로 보여준다', async () => {
+    getAccessToken.mockReturnValue(null)
+    getSellerProfile.mockRejectedValue(new Error('판매자 조회 실패'))
+
+    const wrapper = mount(ProductDetailPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Galaxy S24')
+    expect(wrapper.text()).not.toContain('판매자 상품 보기')
   })
 
   it('상세 화면 행동 버튼은 구매하기와 문의하기 두 개만 둔다', async () => {
