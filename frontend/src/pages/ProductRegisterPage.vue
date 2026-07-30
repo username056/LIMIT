@@ -542,7 +542,7 @@ function validateSaleInfo() {
     || Number(form.storageGb) < 1
     || Number(form.storageGb) > 16384
   )) {
-    errorMessage.value = '저장 용량은 1~16,384GB 범위의 정수로 입력해 주세요.'
+    errorMessage.value = '저장 용량은 1 ~ 16,384GB 범위의 정수로 입력해 주세요.'
     return false
   }
   return true
@@ -678,7 +678,7 @@ function goToStep4() {
   )
   if (missingConfirm.length) {
     openAlert(
-      `개인정보 정리 확인이 남아 있습니다.\n${missingConfirm.map((item) => `· ${item.name}`).join('\n')}\n\n기기를 넘기기 전에 반드시 초기화해야 하는 항목이라 건너뛸 수 없습니다.`,
+      `개인정보 정리 확인이 남아 있습니다.\n${missingConfirm.map((item) => `· ${item.name}`).join('\n')}\n\n개인 정보 보호를 위해 반드시 초기화를 진행해주세요.`,
     )
     return
   }
@@ -809,7 +809,7 @@ async function handleListingImage(file, displayOrder = listingImages.value.lengt
     // 서버 상한과 같은 값을 미리 걸러 냅니다. 그냥 보내면 MEDIA_UPLOAD_INVALID로만 돌아와
     // 사용자는 무엇이 문제인지 알 수 없습니다.
     if (optimizedFile.size > MAX_LISTING_IMAGE_BYTES) {
-      errorMessage.value = '대표 이미지는 압축 후에도 15MB를 넘을 수 없습니다. 더 작은 파일을 올려 주세요.'
+      errorMessage.value = '대표 이미지는 15MB를 넘을 수 없습니다. 더 작은 용량의 파일을 올려 주세요.'
       return
     }
     const upload = await createProductImageUploadUrl(currentProductId.value, {
@@ -865,7 +865,9 @@ async function onThumbnailInput(event) {
       pendingThumbnail.value = { file, previewUrl: URL.createObjectURL(file) }
       // persistSaleInfo가 상품을 만든 뒤 flushPendingThumbnail로 업로드까지 이어집니다.
       await persistSaleInfo()
-      notice.value = '대표 이미지를 저장했습니다. 이어서 작성하다 나가도 남아 있습니다.'
+      // 업로드 실패는 예외를 던지지 않고 errorMessage만 세웁니다(1단계 입력을 살려야 하므로).
+      // 여기서 직접 확인하지 않으면 실패했는데 저장됐다고 알리게 됩니다.
+      if (!errorMessage.value) notice.value = '대표 이미지를 저장했습니다.'
     } catch (error) {
       errorMessage.value = error.message || '대표 이미지를 저장하지 못했습니다.'
     } finally {
@@ -1029,7 +1031,7 @@ async function startEdit(productId) {
     )
     activeStep.value = draftProgress?.step || (hasEvidence ? 2 : 1)
     if (editingStatus.value && editingStatus.value !== 'DRAFT') {
-      notice.value = '판매 중인 상품을 수정하고 있습니다. 저장하면 구매자에게 보이는 정보가 바로 바뀝니다.'
+      notice.value = '판매 중인 상품을 수정하고 있습니다.'
     } else if (hasEvidence) {
       notice.value = '임시저장된 상품 정보와 기존 S3 증빙을 복구했습니다.'
     }
@@ -1521,7 +1523,7 @@ onMounted(async () => {
                 v-else-if="listingThumbnail"
                 class="mt-2 text-xs leading-5 text-primary"
               >
-                서버에 저장됨 · 지금 나가도 남아 있습니다.
+                서버에 저장되었습니다.
               </p>
             </div>
           </section>
@@ -1642,7 +1644,7 @@ onMounted(async () => {
                 검수용 기기 촬영
               </h2>
               <p class="mt-1 text-sm text-text-sub">
-                구매자가 믿고 살 수 있도록 {{ mediaChecklistItems.length }}가지 필수 항목의 실물 인증샷을 등록하세요.
+                구매자가 믿고 살 수 있도록 {{ mediaChecklistItems.length }}가지 필수 항목의 실물 사진을 등록하세요.
               </p>
 
               <p class="mt-4 rounded-md bg-accent px-4 py-3 text-sm font-semibold text-primary-dark">
@@ -1815,7 +1817,7 @@ onMounted(async () => {
               </div>
               <p class="mt-2 text-center text-[11px] text-text-sub">
                 항목별 최대 파일 개수와 크기·영상 길이를 적용합니다.
-                사진은 자동으로 리사이즈, 영상은 브라우저에서 자동 압축된 뒤 업로드됩니다.
+                파일은 자동으로 압축됩니다.
               </p>
 
               <div class="mt-5 rounded-lg bg-bg p-4 text-xs leading-6 text-text-sub">
@@ -1838,7 +1840,7 @@ onMounted(async () => {
               개인정보를 정리했는지 확인해 주세요.
             </h2>
             <p class="mt-1 text-sm text-text-sub">
-              구매자에게 전달되기 전, 안전을 위해 기기의 계정·개인정보를 반드시 초기화해 주세요.
+              구매자에게 전달되기 전, 개인정보 보호를 위해 기기의 계정·개인정보를 반드시 초기화해 주세요.
             </p>
 
             <p
