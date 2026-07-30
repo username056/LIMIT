@@ -93,6 +93,10 @@ const route = useRoute()
 const router = useRouter()
 const categories = ref([])
 const models = ref([])
+const modelKeyword = ref('')
+const isLoadingModels = ref(false)
+const modelLoadError = ref('')
+let modelRequestId = 0
 const isCustomModelInput = ref(false)
 const isRequestingModel = ref(false)
 const modelRequestResult = ref(null)
@@ -259,15 +263,23 @@ const selectedModel = computed(
   () => models.value.find((item) => String(item.deviceModelId) === String(form.deviceModelId)) || null,
 )
 const modelGroups = computed(() => {
+  const keyword = modelKeyword.value.trim().toLowerCase()
   const groups = new Map()
   models.value
     .filter((model) => !String(model.modelCode || '').startsWith('ETC-'))
+    .filter((model) => !keyword || [model.manufacturerName, model.modelName, model.modelCode]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(keyword)))
     .forEach((model) => {
-    const manufacturer = model.manufacturerName || '기타'
-    if (!groups.has(manufacturer)) groups.set(manufacturer, [])
-    groups.get(manufacturer).push(model)
+      const manufacturer = model.manufacturerName || '기타'
+      if (!groups.has(manufacturer)) groups.set(manufacturer, [])
+      groups.get(manufacturer).push(model)
     })
-  return [...groups.entries()].map(([manufacturer, items]) => ({ manufacturer, items }))
+  return [...groups.entries()].map(([manufacturer, items]) => ({
+    manufacturer,
+    items: items.slice().sort((a, b) => String(a.modelName || '')
+      .localeCompare(String(b.modelName || ''))),
+  }))
 })
 const supportsGeneratedChecklist = computed(
   () => Boolean(selectedModel.value),
@@ -396,6 +408,8 @@ function resetForm() {
     color: '', storageGb: '',
   })
   models.value = []
+  modelKeyword.value = ''
+  modelLoadError.value = ''
   isCustomModelInput.value = false
   modelRequestResult.value = null
   Object.assign(customModel, {
@@ -418,15 +432,31 @@ function resetForm() {
 }
 
 async function loadModels() {
+  const requestId = ++modelRequestId
   form.deviceModelId = ''
   templateItems.value = []
   checklistGeneration.value = null
   confirmedFeatures.value = []
   isCustomModelInput.value = false
   modelRequestResult.value = null
-  models.value = form.categoryId
-    ? await getDeviceModels({ categoryId: form.categoryId, page: 0, size: 100 })
-    : []
+  models.value = []
+  modelKeyword.value = ''
+  modelLoadError.value = ''
+  if (!form.categoryId) {
+    isLoadingModels.value = false
+    return
+  }
+  isLoadingModels.value = true
+  try {
+    const response = await getDeviceModels({ categoryId: form.categoryId, page: 0, size: 100 })
+    if (requestId !== modelRequestId) return
+    models.value = Array.isArray(response) ? response : []
+  } catch {
+    if (requestId !== modelRequestId) return
+    modelLoadError.value = '모델 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'
+  } finally {
+    if (requestId === modelRequestId) isLoadingModels.value = false
+  }
 }
 
 function toggleCustomModelInput() {
@@ -1109,15 +1139,23 @@ onMounted(async () => {
                 </select>
               </label>
               <label class="text-sm font-semibold text-text-main">기기 모델<span class="ml-0.5 text-red-500">*</span>
+                <input
+                  v-model="modelKeyword"
+                  type="search"
+                  placeholder="제조사 또는 모델명 검색"
+                  aria-label="기기 모델 검색"
+                  :disabled="Boolean(editingId) || !form.categoryId || isLoadingModels"
+                  class="mt-2 w-full rounded-md border border-border bg-bg px-3 py-2.5 font-normal outline-none focus:border-primary disabled:opacity-60"
+                >
                 <select
                   v-model="form.deviceModelId"
-                  :disabled="Boolean(editingId) || !form.categoryId"
+                  :disabled="Boolean(editingId) || !form.categoryId || isLoadingModels"
                   required
                   class="mt-2 w-full rounded-md border border-border bg-bg px-3 py-3 font-normal outline-none focus:border-primary disabled:opacity-60"
                   @change="loadTemplatePreview"
                 >
                   <option value="">
-                    기기 모델 선택
+                    {{ isLoadingModels ? '모델 목록 불러오는 중…' : '기기 모델 선택' }}
                   </option>
                   <optgroup
                     v-for="group in modelGroups"
@@ -1129,10 +1167,18 @@ onMounted(async () => {
                       :key="item.deviceModelId"
                       :value="item.deviceModelId"
                     >
-                      {{ item.modelName }}
+                      {{ item.modelName }}{{ item.modelCode ? ` (${item.modelCode})` : '' }}
                     </option>
                   </optgroup>
                 </select>
+                <span
+                  v-if="modelLoadError"
+                  class="mt-2 block text-xs font-normal text-red-600"
+                >{{ modelLoadError }}</span>
+                <span
+                  v-else-if="form.categoryId && !isLoadingModels && modelGroups.length === 0 && modelKeyword"
+                  class="mt-2 block text-xs font-normal text-text-muted"
+                >검색 결과가 없습니다.</span>
               </label>
             </div>
 
