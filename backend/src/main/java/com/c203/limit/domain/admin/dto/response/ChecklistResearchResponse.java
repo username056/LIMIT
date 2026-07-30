@@ -14,6 +14,8 @@ public record ChecklistResearchResponse(
         String status,
         List<ChecklistSuggestionResponse> suggestions,
         List<String> reviewCandidates,
+        String failureCode,
+        String failureMessage,
         Long publishedTemplateId,
         Long reviewedByAdminId,
         String reviewNote,

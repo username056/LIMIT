@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -28,6 +30,7 @@ import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class ChecklistGenerationServiceTests {
@@ -102,6 +105,11 @@ class ChecklistGenerationServiceTests {
         assertThat(result.items()).hasSize(12);
         assertThat(result.aiSuggestions()).isEmpty();
         assertThat(result.researchStatus()).isEqualTo("FAILED");
+        ArgumentCaptor<ModelChecklistResearch> researchCaptor =
+                ArgumentCaptor.forClass(ModelChecklistResearch.class);
+        verify(researchRepository, times(2)).saveAndFlush(researchCaptor.capture());
+        assertThat(researchCaptor.getValue().getResultJson())
+                .contains("\"failureCode\":\"AI_REQUEST_FAILED\"");
     }
 
     @Test

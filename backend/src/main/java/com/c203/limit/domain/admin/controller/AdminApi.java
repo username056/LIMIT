@@ -112,6 +112,12 @@ public interface AdminApi {
             @Valid @RequestBody ReviewChecklistResearchRequest request);
 
     @Operation(
+            summary = "실패한 모델 체크리스트 AI 조사 재시도",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @PostMapping("/checklist-researches/{researchId}/retry")
+    ResponseEntity<?> retryChecklistResearch(@PathVariable("researchId") Long researchId);
+
+    @Operation(
             summary = "직접 입력 기기 모델 요청 목록 조회",
             security = @SecurityRequirement(name = "bearerAuth"))
     @GetMapping("/device-model-requests")

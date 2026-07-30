@@ -22,6 +22,7 @@ import {
   rejectChecklistResearch,
   rejectDeviceModelRequest,
   releaseMemberRestriction,
+  retryChecklistResearch,
   updateAdminAccount,
 } from '../api/admin'
 import { clearAuthSession, setAuthSession, useAuthSession } from '../auth/session'
@@ -38,6 +39,8 @@ const membersPage = ref(emptyPage())
 const logsPage = ref(emptyPage())
 const accountsPage = ref(emptyPage())
 const checklistResearches = ref([])
+const checklistResearchStatus = ref('PENDING_REVIEW')
+const retryingResearchId = ref(null)
 const deviceModelRequests = ref([])
 const selectedMember = ref(null)
 const restrictions = ref([])
@@ -74,6 +77,21 @@ function badgeVariant(status) {
   if (status === 'ACTIVE') return 'success'
   if (status === 'SUSPENDED' || status === 'RELEASED') return 'gray'
   return 'primary'
+}
+
+function researchBadgeVariant(status) {
+  if (status === 'FAILED') return 'danger'
+  if (status === 'APPROVED') return 'success'
+  if (status === 'REJECTED') return 'gray'
+  return 'primary'
+}
+
+function researchStatusLabel(status) {
+  if (status === 'PENDING_REVIEW') return '관리자 검토 대기'
+  if (status === 'FAILED') return 'AI 조사 실패'
+  if (status === 'APPROVED') return '승인 완료'
+  if (status === 'REJECTED') return '반려'
+  return status
 }
 
 function showError(error, fallback) {
@@ -119,7 +137,7 @@ async function loadSection(section) {
     } else if (section === 'members') {
       membersPage.value = await getAdminMembers(0, 20)
     } else if (section === 'checklist-researches') {
-      checklistResearches.value = await getChecklistResearches()
+      checklistResearches.value = await getChecklistResearches(checklistResearchStatus.value)
     } else if (section === 'device-model-requests') {
       deviceModelRequests.value = await getDeviceModelRequests()
     } else if (section === 'logs') {
@@ -132,6 +150,12 @@ async function loadSection(section) {
   } finally {
     isLoading.value = false
   }
+}
+
+async function selectChecklistResearchStatus(status) {
+  if (isLoading.value || retryingResearchId.value) return
+  checklistResearchStatus.value = status
+  await loadSection('checklist-researches')
 }
 
 async function approveResearch(research) {
@@ -159,6 +183,30 @@ async function rejectResearch(research) {
     successMessage.value = '체크리스트 조사 결과를 반려했습니다.'
   } catch (error) {
     showError(error, '체크리스트 조사 결과를 반려하지 못했습니다.')
+  }
+}
+
+async function retryResearch(research) {
+  if (retryingResearchId.value) return
+  retryingResearchId.value = research.researchId
+  errorMessage.value = ''
+  successMessage.value = ''
+  try {
+    const retried = await retryChecklistResearch(research.researchId)
+    if (retried.status === 'PENDING_REVIEW') {
+      checklistResearchStatus.value = 'PENDING_REVIEW'
+      checklistResearches.value = await getChecklistResearches('PENDING_REVIEW')
+      successMessage.value = 'AI 재조사가 완료되어 관리자 검토 대기 목록으로 이동했습니다.'
+    } else {
+      checklistResearches.value = checklistResearches.value.map((item) => (
+        item.researchId === retried.researchId ? retried : item
+      ))
+      errorMessage.value = retried.failureMessage || 'AI 재조사에 다시 실패했습니다.'
+    }
+  } catch (error) {
+    showError(error, '체크리스트 AI 재조사를 시작하지 못했습니다.')
+  } finally {
+    retryingResearchId.value = null
   }
 }
 
@@ -658,12 +706,41 @@ onMounted(() => {
       class="space-y-5"
     >
       <BaseCard>
-        <h2 class="font-bold">
-          관리자 검토 대기
-        </h2>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <h2 class="font-bold">
+            체크리스트 AI 조사 관리
+          </h2>
+          <div
+            class="flex gap-2"
+            aria-label="AI 조사 상태 필터"
+          >
+            <BaseButton
+              type="button"
+              :variant="checklistResearchStatus === 'PENDING_REVIEW' ? 'primary' : 'outline'"
+              :disabled="isLoading || Boolean(retryingResearchId)"
+              @click="selectChecklistResearchStatus('PENDING_REVIEW')"
+            >
+              검토 대기
+            </BaseButton>
+            <BaseButton
+              type="button"
+              :variant="checklistResearchStatus === 'FAILED' ? 'primary' : 'outline'"
+              :disabled="isLoading || Boolean(retryingResearchId)"
+              @click="selectChecklistResearchStatus('FAILED')"
+            >
+              조사 실패
+            </BaseButton>
+          </div>
+        </div>
         <p class="mt-2 text-xs leading-5 text-text-sub">
-          AI 조사는 모델별로 한 번만 저장됩니다. 승인하면 선택한 기능이 새 PUBLISHED
-          체크리스트 버전으로 발행되고, 이후 같은 모델의 모든 매물이 이를 재사용합니다.
+          <template v-if="checklistResearchStatus === 'PENDING_REVIEW'">
+            승인하면 선택한 기능이 새 PUBLISHED 체크리스트 버전으로 발행되고,
+            이후 같은 모델의 모든 매물이 이를 재사용합니다.
+          </template>
+          <template v-else>
+            AI 요청 실패 사유를 확인하고 모델별로 재조사할 수 있습니다.
+            재조사가 성공하면 검토 대기 목록으로 이동합니다.
+          </template>
         </p>
       </BaseCard>
 
@@ -683,9 +760,25 @@ onMounted(() => {
               조사 버전 {{ research.researchVersion }} · {{ formatDate(research.createdAt) }}
             </p>
           </div>
-          <BaseBadge variant="primary">
-            {{ research.status }}
+          <BaseBadge :variant="researchBadgeVariant(research.status)">
+            {{ researchStatusLabel(research.status) }}
           </BaseBadge>
+        </div>
+
+        <div
+          v-if="research.status === 'FAILED'"
+          class="mt-5 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700"
+          role="alert"
+        >
+          <p class="font-semibold">
+            {{ research.failureMessage || 'AI 조사 결과를 사용할 수 없습니다.' }}
+          </p>
+          <p
+            v-if="research.failureCode"
+            class="mt-1 text-xs"
+          >
+            오류 코드: {{ research.failureCode }}
+          </p>
         </div>
 
         <ul
@@ -717,7 +810,10 @@ onMounted(() => {
         >
           미지원 기능 후보: {{ research.reviewCandidates.join(', ') }}
         </p>
-        <div class="mt-5 flex gap-2">
+        <div
+          v-if="research.status === 'PENDING_REVIEW'"
+          class="mt-5 flex gap-2"
+        >
           <BaseButton
             type="button"
             @click="approveResearch(research)"
@@ -732,11 +828,27 @@ onMounted(() => {
             반려
           </BaseButton>
         </div>
+        <div
+          v-else-if="research.status === 'FAILED'"
+          class="mt-5"
+        >
+          <BaseButton
+            type="button"
+            :disabled="Boolean(retryingResearchId)"
+            @click="retryResearch(research)"
+          >
+            {{ retryingResearchId === research.researchId ? 'AI 재조사 중…' : 'AI 재조사' }}
+          </BaseButton>
+        </div>
       </BaseCard>
 
       <BaseCard v-if="!checklistResearches.length">
         <p class="py-8 text-center text-sm text-text-sub">
-          검토 대기 중인 모델 조사가 없습니다.
+          {{
+            checklistResearchStatus === 'PENDING_REVIEW'
+              ? '검토 대기 중인 모델 조사가 없습니다.'
+              : '실패한 모델 조사가 없습니다.'
+          }}
         </p>
       </BaseCard>
     </section>
