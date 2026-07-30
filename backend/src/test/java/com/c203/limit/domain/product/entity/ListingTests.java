@@ -111,8 +111,9 @@ class ListingTests {
     @Test
     void markPaidRequiresReservedListing() {
         Listing listing = onSaleListing();
+        LocalDateTime now = RESERVED_UNTIL.minusMinutes(1);
 
-        assertThatThrownBy(listing::markPaid)
+        assertThatThrownBy(() -> listing.markPaid(2L, now))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         exception ->
@@ -120,10 +121,38 @@ class ListingTests {
                                         .isEqualTo(ErrorCode.LISTING_NOT_RESERVED));
 
         listing.reserve(2L, RESERVED_UNTIL);
-        listing.markPaid();
+        listing.markPaid(2L, now);
 
         assertThat(listing.getStatus()).isEqualTo(ListingStatus.PAID);
         assertThat(listing.getPaidAt()).isNotNull();
+    }
+
+    @Test
+    void markPaidRejectsMismatchedBuyer() {
+        Listing listing = onSaleListing();
+        listing.reserve(2L, RESERVED_UNTIL);
+
+        assertThatThrownBy(() -> listing.markPaid(3L, RESERVED_UNTIL.minusMinutes(1)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.LISTING_RESERVATION_MISMATCH));
+        assertThat(listing.getStatus()).isEqualTo(ListingStatus.RESERVED);
+    }
+
+    @Test
+    void markPaidRejectsExpiredReservation() {
+        Listing listing = onSaleListing();
+        listing.reserve(2L, RESERVED_UNTIL);
+
+        assertThatThrownBy(() -> listing.markPaid(2L, RESERVED_UNTIL.plusSeconds(1)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.LISTING_RESERVATION_MISMATCH));
+        assertThat(listing.getStatus()).isEqualTo(ListingStatus.RESERVED);
     }
 
     @Test
@@ -138,7 +167,7 @@ class ListingTests {
                                         .isEqualTo(ErrorCode.LISTING_NOT_PAID));
 
         listing.reserve(2L, RESERVED_UNTIL);
-        listing.markPaid();
+        listing.markPaid(2L, RESERVED_UNTIL.minusMinutes(1));
         listing.markInspecting();
 
         assertThat(listing.getStatus()).isEqualTo(ListingStatus.INSPECTING);
@@ -148,7 +177,7 @@ class ListingTests {
     void confirmRequiresInspectingListing() {
         Listing listing = onSaleListing();
         listing.reserve(2L, RESERVED_UNTIL);
-        listing.markPaid();
+        listing.markPaid(2L, RESERVED_UNTIL.minusMinutes(1));
 
         assertThatThrownBy(listing::confirm)
                 .isInstanceOfSatisfying(
@@ -168,7 +197,7 @@ class ListingTests {
     void settleRequiresConfirmedListing() {
         Listing listing = onSaleListing();
         listing.reserve(2L, RESERVED_UNTIL);
-        listing.markPaid();
+        listing.markPaid(2L, RESERVED_UNTIL.minusMinutes(1));
         listing.markInspecting();
 
         assertThatThrownBy(listing::settle)

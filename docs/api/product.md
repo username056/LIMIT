@@ -3,7 +3,17 @@
 ## 구현 범위
 
 - 상품 초안 등록, 부분 수정, 논리 삭제
+  - 수정은 `DRAFT`, `ON_SALE`, `HIDDEN`에서 허용한다. 등록을 끝낸 뒤 발견하는 가격 오타 같은
+    실수를 판매자가 스스로 고칠 수 있어야 하기 때문이다. `RESERVED` 이후는 구매자가 그 조건을
+    보고 결제·검수에 들어간 뒤라 `PRODUCT_EDIT_NOT_ALLOWED`로 거절한다.
 - 필수 체크리스트 완료 검증을 포함한 `DRAFT -> ON_SALE` 전환
+- 판매자가 직접 종료하는 `ON_SALE|HIDDEN -> SOLD` 전환
+  - 서비스 결제를 거치지 않는 직거래를 정리하기 위한 출구다. 결제 흐름
+    (`RESERVED -> PAID -> INSPECTING -> CONFIRMED -> SETTLED`)과는 별개 경로이며,
+    `RESERVED` 이후에는 구매자가 이미 결제·검수에 들어가 있어 거절한다.
+  - `listing.status`는 `VARCHAR(30)`이라 `SOLD` 추가에 마이그레이션이 필요하지 않다.
+  - 공개 목록·상세는 `ON_SALE`만 노출하므로 `SOLD` 매물은 구매자에게 `LISTING_NOT_FOUND`로
+    응답한다. 판매자는 `GET /api/v1/members/me/products/{productId}`로 계속 확인할 수 있다.
 - `ON_SALE` 공개 상품 목록·상세 및 판매자 본인 상품 목록·상세 조회
 - 기기 카테고리·모델·체크리스트 템플릿·판매 준비 가이드 조회
 - 상품 생성 시 게시된 체크리스트 템플릿을 매물 항목으로 스냅샷 저장
@@ -16,6 +26,30 @@
 
 증거 업로드·확인·재촬영 이력, OCR, batteryreport/dxdiag 파싱, 자동 추출값 확정,
 채팅 및 영상통화는 담당 범위에서 제외했으며 기존 목업을 변경하지 않았다.
+
+### 카탈로그에 없는 기기 직접 입력
+
+기기 모델은 `category` 테이블의 실제 행이고 `checklist_template`이 그 행에 묶여 있어 임의
+문자열을 `deviceModelId`로 보낼 수 없다. 시드 이전에는 모델이 7종뿐이라 그 목록에 없는 기기를
+가진 판매자는 상품을 등록할 방법이 아예 없었다.
+
+`V20260806__seed_generic_device_models.sql`이 카테고리마다 `기타 (직접 입력)` 모델
+(`model_code`가 `ETC-`로 시작)과 `PUBLISHED` 템플릿을 시드하고, 그 행을 값을 받아 줄
+carrier로 쓴다. 실제 제조사·모델명은 `V20260807__add_listing_custom_model_columns.sql`이
+추가한 `listing.custom_manufacturer`, `listing.custom_model_name`에 매물마다 저장한다.
+carrier 행 하나에 여러 기기가 매달리기 때문이다.
+
+- 등록 요청은 `deviceModelId`에 carrier 행 ID를, `customManufacturer`·`customModelName`·
+  `customModelCode`·`customOsFamily`에 판매자 입력을 담는다.
+- 두 값이 모두 있으면 `ChecklistGenerationService.generateCustomForModel`이 그 정보로 공식
+  자료를 찾아 체크리스트를 만든다. carrier 행에서 읽으면 제조사·모델명이 비어 있어 근거 자료를
+  찾을 수 없으므로, 결과에는 carrier 모델 ID를 찍어 등록 경로의 모델 일치 검증을 통과시킨다.
+- 상세·목록 응답은 직접 입력 값이 있으면 카탈로그 모델명 대신 그 값을 노출한다. carrier 행
+  이름을 그대로 보여주면 구매자가 기기를 특정할 수 없다.
+- **현재는 노트북(`ETC-LAPTOP`)에서만 제공한다.** 체크리스트 생성 정책이
+  `LaptopChecklistPolicy` 기반이고 `osFamily`가 `WINDOWS`/`LINUX`만 받는다. 나머지 세 carrier
+  행은 시드돼 있지만 화면에서 노출하지 않으며, 스마트폰·태블릿까지 열려면 기기 종류별 정책이
+  먼저 필요하다.
 
 ## 데이터 변경
 

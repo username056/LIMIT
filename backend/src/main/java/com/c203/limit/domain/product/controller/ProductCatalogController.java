@@ -1,6 +1,5 @@
 package com.c203.limit.domain.product.controller;
 
-import com.c203.limit.domain.product.dto.request.CreateDeviceModelRequest;
 import com.c203.limit.domain.product.dto.response.ChecklistTemplateResponse;
 import com.c203.limit.domain.product.dto.response.DeviceCategoryResponse;
 import com.c203.limit.domain.product.dto.response.DeviceModelDetailResponse;
@@ -8,29 +7,18 @@ import com.c203.limit.domain.product.dto.response.DeviceModelSummaryResponse;
 import com.c203.limit.domain.product.dto.response.HandoverGuideResponse;
 import com.c203.limit.domain.product.service.ProductCatalogService;
 import com.c203.limit.domain.product.service.ProductCatalogService.ModelPage;
-import com.c203.limit.domain.seller.service.SellerStatusReader;
 import com.c203.limit.global.response.ApiResponse;
 import com.c203.limit.global.response.PageMetaResponse;
-import com.c203.limit.global.security.CurrentUser;
 import java.util.List;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 public class ProductCatalogController implements ProductCatalogApi {
     private final ProductCatalogService catalogService;
-    private final CurrentUser currentUser;
-    private final SellerStatusReader sellerStatusReader;
 
-    public ProductCatalogController(
-            ProductCatalogService catalogService,
-            CurrentUser currentUser,
-            SellerStatusReader sellerStatusReader) {
+    public ProductCatalogController(ProductCatalogService catalogService) {
         this.catalogService = catalogService;
-        this.currentUser = currentUser;
-        this.sellerStatusReader = sellerStatusReader;
     }
 
     @Override
@@ -56,15 +44,6 @@ public class ProductCatalogController implements ProductCatalogApi {
                         result.totalElements(),
                         result.totalPages(),
                         result.hasNext())));
-    }
-
-    @Override
-    @PreAuthorize("hasRole('SELLER')")
-    public ResponseEntity<ApiResponse<DeviceModelSummaryResponse>> createDeviceModel(
-            CreateDeviceModelRequest request) {
-        sellerStatusReader.requireActiveSeller(currentUser.memberId());
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.ok(catalogService.createModel(request)));
     }
 
     @Override

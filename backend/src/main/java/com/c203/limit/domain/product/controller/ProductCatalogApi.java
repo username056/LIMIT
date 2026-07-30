@@ -6,11 +6,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RequestBody;
 
-import com.c203.limit.domain.product.dto.request.CreateDeviceModelRequest;
 import com.c203.limit.domain.product.dto.response.ChecklistTemplateResponse;
 import com.c203.limit.domain.product.dto.response.DeviceCategoryResponse;
 import com.c203.limit.domain.product.dto.response.DeviceModelDetailResponse;
@@ -24,8 +21,6 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
-import jakarta.validation.Valid;
 
 @Tag(name = "04. 기기 카탈로그", description = "카테고리·지원 모델·체크리스트 템플릿·판매 준비 가이드 API")
 public interface ProductCatalogApi {
@@ -48,27 +43,6 @@ public interface ProductCatalogApi {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     );
-
-    @Operation(
-            operationId = "model03",
-            summary = "노트북 모델 직접 등록",
-            description = "판매자가 상품 등록 중 목록에 없는 Windows·Linux 노트북 모델을 등록합니다.",
-            security = @SecurityRequirement(name = "bearerAuth"))
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "201",
-                description = "기기 모델 등록 성공",
-                content = @Content(schema = @Schema(implementation = DeviceModelSummaryResponse.class))),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                responseCode = "400",
-                description = "CHECKLIST_DEVICE_TYPE_NOT_SUPPORTED / CHECKLIST_OS_NOT_SUPPORTED")
-    })
-    @PostMapping(
-            path = "/api/v1/device-models",
-            consumes = MediaType.APPLICATION_JSON_VALUE,
-            produces = MediaType.APPLICATION_JSON_VALUE)
-    ResponseEntity<ApiResponse<DeviceModelSummaryResponse>> createDeviceModel(
-            @Valid @RequestBody CreateDeviceModelRequest request);
 
     @Operation(operationId = "model02", summary = "기기 모델 상세 조회")
     @ApiResponses({

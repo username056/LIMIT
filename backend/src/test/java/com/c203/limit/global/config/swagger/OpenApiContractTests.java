@@ -281,11 +281,6 @@ class OpenApiContractTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.paths['/api/v1/products'].post.operationId")
                         .value("product01"))
-                .andExpect(jsonPath("$.paths['/api/v1/device-models'].post.operationId")
-                        .value("model03"))
-                .andExpect(
-                        jsonPath("$.paths['/api/v1/device-models'].post.security[0].bearerAuth")
-                                .isArray())
                 .andExpect(jsonPath("$.paths['/api/v1/device-models/{deviceModelId}/checklist-template'].get.operationId")
                         .value("checklist01"))
                 .andExpect(jsonPath("$.paths['/api/v1/products/{productId}/checklist-items'].get.operationId")

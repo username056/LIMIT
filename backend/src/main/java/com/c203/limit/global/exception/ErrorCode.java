@@ -101,7 +101,10 @@ public enum ErrorCode {
     LISTING_NOT_PAID("PRD003", HttpStatus.CONFLICT, "결제완료 상태의 매물만 검수를 시작할 수 있습니다."),
     LISTING_NOT_INSPECTING("PRD004", HttpStatus.CONFLICT, "검수중 상태의 매물만 확정할 수 있습니다."),
     LISTING_NOT_CONFIRMED("PRD005", HttpStatus.CONFLICT, "확정 상태의 매물만 정산할 수 있습니다."),
-    PRODUCT_EDIT_NOT_ALLOWED("PRD006", HttpStatus.CONFLICT, "초안 상태의 상품만 수정할 수 있습니다."),
+    PRODUCT_EDIT_NOT_ALLOWED(
+            "PRD006",
+            HttpStatus.CONFLICT,
+            "거래가 시작된 상품은 수정할 수 없습니다. 초안·판매 중·숨김 상태에서만 수정할 수 있습니다."),
     PRODUCT_DELETE_NOT_ALLOWED("PRD007", HttpStatus.CONFLICT, "현재 상태의 상품은 삭제할 수 없습니다."),
     INVALID_PRODUCT_STATUS_TRANSITION("PRD008", HttpStatus.CONFLICT, "허용되지 않은 상품 상태 전환입니다."),
     REQUIRED_EVIDENCE_INCOMPLETE("PRD009", HttpStatus.UNPROCESSABLE_ENTITY, "필수 체크리스트를 완료해 주세요."),
@@ -112,6 +115,8 @@ public enum ErrorCode {
             "PRD013", HttpStatus.BAD_REQUEST, "현재 자동 체크리스트 생성은 노트북만 지원합니다."),
     CHECKLIST_OS_NOT_SUPPORTED(
             "PRD014", HttpStatus.BAD_REQUEST, "노트북 체크리스트는 Windows와 Linux만 지원합니다."),
+    LISTING_RESERVATION_MISMATCH(
+            "PRD017", HttpStatus.CONFLICT, "예약이 만료되었거나 다른 구매자에게 재배정되어 처리할 수 없습니다."),
 
     // ========== 결제 에러 ==========
     PAYMENT_NOT_FOUND("PAY001", HttpStatus.NOT_FOUND, "결제 내역을 찾을 수 없습니다."),
@@ -121,6 +126,19 @@ public enum ErrorCode {
     PAYMENT_REQUEST_CONFLICT(
             "PAY005", HttpStatus.CONFLICT, "결제 요청이 다른 요청과 경합해 처리하지 못했습니다. 잠시 후 다시 시도해 주세요."),
     PAYMENT_NOT_EXPIRABLE("PAY006", HttpStatus.CONFLICT, "요청 상태의 결제만 만료 처리할 수 있습니다."),
+    PAYMENT_RETRY_NOT_ALLOWED("PAY007", HttpStatus.CONFLICT, "예약이 만료되어 결제를 재시도할 수 없습니다."),
+    PAYMENT_ORDER_ID_MISMATCH("PAY008", HttpStatus.BAD_REQUEST, "요청한 orderId가 결제 정보와 일치하지 않습니다."),
+    PAYMENT_AMOUNT_MISMATCH("PAY009", HttpStatus.BAD_REQUEST, "결제 금액이 일치하지 않습니다."),
+    PAYMENT_NOT_CONFIRMABLE("PAY010", HttpStatus.CONFLICT, "요청 상태의 결제만 승인할 수 있습니다."),
+    PAYMENT_CONFIRM_RETRYABLE(
+            "PAY011", HttpStatus.SERVICE_UNAVAILABLE, "일시적인 오류로 승인에 실패했습니다. 잠시 후 다시 시도해 주세요."),
+    PAYMENT_CONFIRM_REJECTED("PAY012", HttpStatus.UNPROCESSABLE_ENTITY, "결제 승인이 거절되었습니다."),
+    PAYMENT_CONFIRM_RESERVATION_INVALID(
+            "PAY013",
+            HttpStatus.CONFLICT,
+            "결제는 승인되었으나 매물 예약 상태가 유효하지 않습니다. 고객센터로 문의해 주세요."),
+    PAYMENT_CONFIRM_RESERVATION_EXPIRED(
+            "PAY014", HttpStatus.CONFLICT, "예약이 만료되었거나 유효하지 않아 결제를 확정할 수 없습니다."),
 
     // ========== 장소 검색 에러 ==========
     PLACE_SEARCH_UNAVAILABLE("PLC001", HttpStatus.SERVICE_UNAVAILABLE, "장소 검색 설정을 확인해 주세요."),

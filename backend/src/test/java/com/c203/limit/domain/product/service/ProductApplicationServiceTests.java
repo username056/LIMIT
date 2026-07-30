@@ -247,6 +247,135 @@ class ProductApplicationServiceTests {
         assertThat(listing.getStorageGb()).isNull();
     }
 
+    // 카탈로그에 없는 기기는 '기타 (직접 입력)' 모델 한 행을 공유하므로, 실제 제조사·모델명을
+    // 매물에 남기고 상세·목록에서 그 값을 노출해야 구매자가 기기를 특정할 수 있다.
+    @Test
+    void showsSellerEnteredModelInsteadOfThePlaceholderCatalogRow() {
+        Listing listing = listing();
+        listing.applyCustomModel("LG", "gram Pro 17");
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+
+        var result = service.findOwnedDetail(55L, 1001L);
+
+        assertThat(result.getDevice().getManufacturer()).isEqualTo("LG");
+        assertThat(result.getDevice().getModel()).isEqualTo("gram Pro 17");
+    }
+
+    @Test
+    void fallsBackToCatalogModelWhenSellerDidNotEnterOne() {
+        Listing listing = listing();
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+
+        var result = service.findOwnedDetail(55L, 1001L);
+
+        assertThat(result.getDevice().getModel()).isEqualTo("Galaxy S24");
+    }
+
+    @Test
+    void trimsAndNullsOutBlankSellerEnteredModel() {
+        Listing listing = listing();
+        listing.applyCustomModel("  LG  ", "   ");
+
+        assertThat(listing.getCustomManufacturer()).isEqualTo("LG");
+        assertThat(listing.getCustomModelName()).isNull();
+    }
+
+    @Test
+    void letsSellerCloseAnOnSaleListingAsSold() {
+        Listing listing = listing();
+        ReflectionTestUtils.setField(listing, "status", ListingStatus.ON_SALE);
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(statusHistoryRepository.saveAndFlush(any(ListingStatusHistory.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = service.transition(
+                55L, 1001L, new TransitionProductStatusRequest("SOLD", "직거래로 판매 완료"));
+
+        assertThat(result.getCurrentStatus()).isEqualTo("SOLD");
+        assertThat(listing.getStatus()).isEqualTo(ListingStatus.SOLD);
+    }
+
+    @Test
+    void letsSellerCloseAHiddenListingAsSold() {
+        Listing listing = listing();
+        ReflectionTestUtils.setField(listing, "status", ListingStatus.HIDDEN);
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(statusHistoryRepository.saveAndFlush(any(ListingStatusHistory.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.transition(55L, 1001L, new TransitionProductStatusRequest("SOLD", "직거래"));
+
+        assertThat(listing.getStatus()).isEqualTo(ListingStatus.SOLD);
+    }
+
+    // 예약 이후에는 구매자가 결제·검수에 들어가 있어 판매자가 임의로 닫으면 주문과 상태가 어긋난다.
+    @Test
+    void rejectsSellerSoldTransitionOnceBuyerHasReserved() {
+        Listing listing = listing();
+        ReflectionTestUtils.setField(listing, "status", ListingStatus.RESERVED);
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+
+        assertThatThrownBy(() -> service.transition(
+                        55L, 1001L, new TransitionProductStatusRequest("SOLD", "직거래")))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INVALID_PRODUCT_STATUS_TRANSITION));
+        assertThat(listing.getStatus()).isEqualTo(ListingStatus.RESERVED);
+    }
+
+    @Test
+    void rejectsEditingASoldListing() {
+        Listing listing = listing();
+        ReflectionTestUtils.setField(listing, "status", ListingStatus.SOLD);
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        UpdateProductRequest request = new UpdateProductRequest();
+        request.setPrice(BigDecimal.valueOf(100000));
+
+        assertThatThrownBy(() -> service.update(55L, 1001L, request))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.PRODUCT_EDIT_NOT_ALLOWED));
+    }
+
+    @Test
+    void allowsEditingAListingThatIsAlreadyOnSale() {
+        Listing listing = listing();
+        ReflectionTestUtils.setField(listing, "status", ListingStatus.ON_SALE);
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        UpdateProductRequest request = new UpdateProductRequest();
+        request.setPrice(BigDecimal.valueOf(100000));
+
+        service.update(55L, 1001L, request);
+
+        assertThat(listing.getPrice()).isEqualTo(100000L);
+        assertThat(listing.getStatus()).isEqualTo(ListingStatus.ON_SALE);
+    }
+
+    @Test
+    void rejectsEditingOnceTheTradeHasStarted() {
+        Listing listing = listing();
+        ReflectionTestUtils.setField(listing, "status", ListingStatus.RESERVED);
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        UpdateProductRequest request = new UpdateProductRequest();
+        request.setPrice(BigDecimal.valueOf(100000));
+
+        assertThatThrownBy(() -> service.update(55L, 1001L, request))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.PRODUCT_EDIT_NOT_ALLOWED));
+    }
+
     @Test
     void loadsChecklistCountsAndThumbnailsOnceForAProductPage() {
         Listing first = listing();

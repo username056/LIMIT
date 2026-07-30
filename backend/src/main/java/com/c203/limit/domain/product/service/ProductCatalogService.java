@@ -4,11 +4,9 @@ import com.c203.limit.domain.inspection.entity.AccountRemovalGuide;
 import com.c203.limit.domain.inspection.entity.ChecklistTemplate;
 import com.c203.limit.domain.inspection.entity.ChecklistTemplateItem;
 import com.c203.limit.domain.inspection.enums.ChecklistTemplateStatus;
-import com.c203.limit.domain.inspection.enums.DeviceType;
 import com.c203.limit.domain.inspection.repository.AccountRemovalGuideRepository;
 import com.c203.limit.domain.inspection.repository.ChecklistTemplateItemRepository;
 import com.c203.limit.domain.inspection.repository.ChecklistTemplateRepository;
-import com.c203.limit.domain.product.dto.request.CreateDeviceModelRequest;
 import com.c203.limit.domain.product.dto.response.ChecklistTemplateItemResponse;
 import com.c203.limit.domain.product.dto.response.ChecklistTemplateResponse;
 import com.c203.limit.domain.product.dto.response.DeviceCategoryResponse;
@@ -17,15 +15,11 @@ import com.c203.limit.domain.product.dto.response.DeviceModelSummaryResponse;
 import com.c203.limit.domain.product.dto.response.HandoverGuideResponse;
 import com.c203.limit.domain.product.dto.response.HandoverGuideStepResponse;
 import com.c203.limit.domain.product.entity.Category;
-import com.c203.limit.domain.product.entity.OsFamily;
 import com.c203.limit.domain.product.repository.CategoryRepository;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
-import java.util.zip.CRC32;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.slf4j.Logger;
@@ -83,53 +77,6 @@ public class ProductCatalogService {
                 result.getTotalElements(),
                 result.getTotalPages(),
                 result.hasNext());
-    }
-
-    @Transactional
-    public DeviceModelSummaryResponse createModel(CreateDeviceModelRequest request) {
-        Category parent = categoryRepository
-                .findById(request.categoryId())
-                .filter(Category::isActive)
-                .filter(category -> category.getParent() == null)
-                .orElseThrow(() -> new BusinessException(ErrorCode.DEVICE_MODEL_NOT_FOUND));
-        if (parent.getDeviceType() != DeviceType.LAPTOP) {
-            throw new BusinessException(ErrorCode.CHECKLIST_DEVICE_TYPE_NOT_SUPPORTED);
-        }
-        if (request.osFamily() != OsFamily.WINDOWS && request.osFamily() != OsFamily.LINUX) {
-            throw new BusinessException(ErrorCode.CHECKLIST_OS_NOT_SUPPORTED);
-        }
-
-        String manufacturer = request.manufacturer().trim();
-        String modelName = request.modelName().trim();
-        return categoryRepository
-                .findFirstByParentIdAndManufacturerIgnoreCaseAndNameIgnoreCaseAndIsActiveTrue(
-                        parent.getId(), manufacturer, modelName)
-                .map(this::modelSummary)
-                .orElseGet(
-                        () -> {
-                            int displayOrder =
-                                    categoryRepository
-                                                    .findByParentIdOrderByDisplayOrderAsc(
-                                                            parent.getId())
-                                                    .size()
-                                            + 1;
-                            Category model =
-                                    Category.createLeaf(
-                                            parent,
-                                            modelName,
-                                            parent.getDeviceType(),
-                                            manufacturer,
-                                            request.osFamily(),
-                                            modelCode(request, manufacturer, modelName),
-                                            List.of(),
-                                            displayOrder);
-                            Category saved = categoryRepository.saveAndFlush(model);
-                            log.info(
-                                    "custom device model registered: categoryId={}, modelId={}",
-                                    parent.getId(),
-                                    saved.getId());
-                            return modelSummary(saved);
-                        });
     }
 
     @Transactional(readOnly = true)
@@ -252,19 +199,6 @@ public class ProductCatalogService {
             log.warn("invalid supported storage catalog value ignored");
             return List.of();
         }
-    }
-
-    private String modelCode(
-            CreateDeviceModelRequest request, String manufacturer, String modelName) {
-        if (request.modelCode() != null && !request.modelCode().isBlank()) {
-            return request.modelCode().trim();
-        }
-        CRC32 crc32 = new CRC32();
-        crc32.update(
-                (manufacturer + ":" + modelName + ":" + request.osFamily().name())
-                        .toLowerCase(Locale.ROOT)
-                        .getBytes(StandardCharsets.UTF_8));
-        return "CUSTOM-" + Long.toHexString(crc32.getValue()).toUpperCase(Locale.ROOT);
     }
 
     private void validatePage(int page, int size) {
