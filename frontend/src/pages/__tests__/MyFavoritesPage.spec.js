@@ -44,6 +44,7 @@ describe('MyFavoritesPage', () => {
         stubs: {
           MyPageLayout: layoutStub,
           BaseButton: buttonStub,
+          RouterLink: { props: ['to'], template: '<a><slot /></a>' },
         },
       },
     })
@@ -60,6 +61,34 @@ describe('MyFavoritesPage', () => {
     expect(wrapper.text()).toContain('좋아요한 상품이 없습니다.')
   })
 
+  it('관심 상품에도 대표 이미지를 보여준다', async () => {
+    getMyFavorites.mockResolvedValue({
+      data: [{
+        favoriteId: 501,
+        productId: 1001,
+        manufacturerName: 'Samsung',
+        name: 'Galaxy S24',
+        price: 650000,
+        status: 'ON_SALE',
+        thumbnailUrl: 'https://cdn.example.com/1001.jpg',
+      }],
+      meta: { page: 0, totalPages: 1, hasNext: false },
+    })
+
+    const wrapper = mount(MyFavoritesPage, {
+      global: {
+        stubs: {
+          MyPageLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { props: ['to'], template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.get('img').attributes('src')).toBe('https://cdn.example.com/1001.jpg')
+  })
+
   it('조회 실패 시 오류와 재시도 동작을 제공한다', async () => {
     getMyFavorites
       .mockRejectedValueOnce(new Error('목록 조회 실패'))
@@ -73,6 +102,7 @@ describe('MyFavoritesPage', () => {
         stubs: {
           MyPageLayout: layoutStub,
           BaseButton: buttonStub,
+          RouterLink: { props: ['to'], template: '<a><slot /></a>' },
         },
       },
     })

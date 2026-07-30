@@ -16,7 +16,7 @@ import {
 } from '../api/products'
 import { createOrGetChatRoom } from '../api/chat'
 import { getAccessToken, getSessionMember } from '../auth/session'
-import { canSellerMarkSold, isSoldOut, productStatusLabel } from '../utils/productStatus'
+import { canSellerMarkSold, isSoldOut } from '../utils/productStatus'
 
 const route = useRoute()
 const router = useRouter()
@@ -351,9 +351,7 @@ onMounted(async () => {
                 <span class="text-6xl">▣</span>
                 <span class="mt-3 text-sm">등록된 상품 이미지가 없습니다.</span>
               </div>
-              <span class="absolute left-4 top-4 border-l-2 border-primary bg-surface/95 px-2.5 py-1 text-xs font-bold text-primary">
-                {{ productStatusLabel(product.status) }}
-              </span>
+              <!-- 상태 배지는 이미지 위에 두지 않습니다. 사진을 가리고, 구매 버튼이 이미 상태를 말해 줍니다. -->
               <div
                 v-if="isSoldOut(product.status)"
                 class="absolute inset-0 flex items-center justify-center bg-black/55"

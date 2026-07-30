@@ -4,18 +4,15 @@ import MyPageLayout from '../layouts/MyPageLayout.vue'
 import BaseBadge from '../components/BaseBadge.vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseCard from '../components/BaseCard.vue'
+import ProductCard from '../components/ProductCard.vue'
 import { getMyFavorites, removeFavorite as removeFavoriteRequest } from '../api/favorites'
-import { isSoldOut, productStatusLabel } from '../utils/productStatus'
+import { productStatusLabel } from '../utils/productStatus'
 
 const favorites = ref([])
 const isLoading = ref(true)
 const errorMessage = ref('')
 const removingProductIds = ref(new Set())
 const pageMeta = ref({ page: 0, totalPages: 0, hasNext: false })
-
-function formatPrice(price) {
-  return new Intl.NumberFormat('ko-KR').format(price)
-}
 
 async function loadFavorites(page = 0) {
   isLoading.value = true
@@ -99,35 +96,22 @@ onMounted(() => loadFavorites(0))
       v-else-if="favorites.length"
       class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
     >
-      <BaseCard
+      <!-- 상품 목록과 같은 카드를 씁니다. 대표 이미지가 어느 화면에서든 같게 보여야 합니다. -->
+      <ProductCard
         v-for="product in favorites"
         :key="product.favoriteId"
-        :padded="false"
-        class="overflow-hidden"
+        :product="product"
       >
-        <div class="relative flex aspect-[4/3] items-center justify-center bg-bg text-xs text-text-sub">
-          상품 이미지
-          <div
-            v-if="isSoldOut(product.status)"
-            class="absolute inset-0 flex items-center justify-center bg-black/55"
+        <template #image-overlay>
+          <BaseBadge
+            variant="gray"
+            class="absolute left-3 top-3"
           >
-            <span class="text-lg font-bold text-white">판매 완료</span>
-          </div>
-        </div>
-        <div class="p-5">
-          <div class="flex items-center justify-between gap-3">
-            <span class="text-xs font-semibold text-primary">{{ product.manufacturerName || '전자기기' }}</span>
-            <BaseBadge variant="gray">
-              {{ productStatusLabel(product.status) }}
-            </BaseBadge>
-          </div>
-          <h2 class="mt-3 min-h-10 text-sm font-bold leading-5 text-text-main">
-            {{ product.name }}
-          </h2>
-          <p class="mt-2 text-base font-bold text-text-main">
-            {{ formatPrice(product.price) }}원
-          </p>
-          <div class="mt-5 flex gap-2">
+            {{ productStatusLabel(product.status) }}
+          </BaseBadge>
+        </template>
+        <template #footer>
+          <div class="flex gap-2">
             <BaseButton
               class="flex-1 px-3"
               :to="{ name: 'product-detail', params: { productId: product.productId } }"
@@ -144,8 +128,8 @@ onMounted(() => loadFavorites(0))
               {{ removingProductIds.has(product.productId) ? '해제 중' : '해제' }}
             </BaseButton>
           </div>
-        </div>
-      </BaseCard>
+        </template>
+      </ProductCard>
     </div>
 
     <nav

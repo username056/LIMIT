@@ -143,6 +143,26 @@ describe('ProductManagePage', () => {
     expect(wrapper.text()).toContain('판매 완료로 처리했습니다.')
   })
 
+  // 판매자도 자기 대표 이미지가 구매자 화면과 같은 모양으로 보이는지 확인할 수 있어야 합니다.
+  it('상품 관리에서도 대표 이미지를 보여준다', async () => {
+    getMyProducts.mockResolvedValue({
+      data: [{
+        productId: 2002,
+        name: '임시 저장된 상품',
+        status: 'DRAFT',
+        thumbnailUrl: 'https://cdn.example.com/2002.jpg',
+        completedItemCount: 0,
+        requiredItemCount: 2,
+      }],
+      meta: { page: 0, totalPages: 1, hasNext: false },
+    })
+
+    const wrapper = mount(ProductManagePage, { global: globalOptions })
+    await flushPromises()
+
+    expect(wrapper.get('img').attributes('src')).toBe('https://cdn.example.com/2002.jpg')
+  })
+
   it('임시 저장 중이거나 이미 판매 완료된 상품에는 판매 완료 처리를 노출하지 않는다', async () => {
     getMyProducts.mockResolvedValue({
       data: [
