@@ -272,12 +272,15 @@ describe('ProductDetailPage', () => {
     expect(wrapper.text()).not.toContain('권한이 없습니다.')
   })
 
-  it('구매자 공개 증빙을 상품 상세에 표시한다', async () => {
+  it('판매글 체크리스트 항목과 그 증빙을 항목별로 묶어 보여준다', async () => {
     getAccessToken.mockReturnValue(null)
     getProductChecklist.mockResolvedValue([{
       checklistItemId: 7001,
+      name: '화면 전체 터치',
       visibleToBuyer: true,
       evidenceType: 'PHOTO',
+      status: 'COMPLETED',
+      required: true,
     }])
     getEvidenceHistory.mockResolvedValue([{
       evidenceId: 9001,
@@ -296,7 +299,51 @@ describe('ProductDetailPage', () => {
     })
     await flushPromises()
 
-    expect(wrapper.get('img[alt="판매자가 공개한 검수 증빙"]').attributes('src'))
-      .toBe('https://example.test/evidence.jpg')
+    const itemRow = wrapper.get('ul[aria-label="검증 체크리스트 항목"] > li')
+    expect(itemRow.text()).toContain('화면 전체 터치')
+    expect(itemRow.text()).toContain('판매자 확인 완료')
+    expect(itemRow.get('img').attributes('src')).toBe('https://example.test/evidence.jpg')
+  })
+
+  it('숨겨진 체크리스트 항목은 구매자에게 보여주지 않는다', async () => {
+    getAccessToken.mockReturnValue(null)
+    getProductChecklist.mockResolvedValue([
+      { checklistItemId: 7001, name: '공개 항목', visibleToBuyer: true, evidenceType: 'PHOTO' },
+      { checklistItemId: 7002, name: '비공개 항목', visibleToBuyer: false, evidenceType: 'PHOTO' },
+    ])
+    getEvidenceHistory.mockResolvedValue([])
+
+    const wrapper = mount(ProductDetailPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    const rows = wrapper.findAll('ul[aria-label="검증 체크리스트 항목"] > li')
+    expect(rows).toHaveLength(1)
+    expect(rows[0].text()).toContain('공개 항목')
+  })
+
+  it('상세 화면 행동 버튼은 구매하기와 문의하기 두 개만 둔다', async () => {
+    getAccessToken.mockReturnValue(null)
+
+    const wrapper = mount(ProductDetailPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('판매자에게 문의하기')
+    expect(wrapper.text()).not.toContain('1:1 영상으로 상태 추가 확인')
   })
 })
