@@ -216,6 +216,9 @@ class OpenApiContractTests {
                 .andExpect(jsonPath("$.components.schemas.ChangeAdminPasswordRequest").exists())
                 .andExpect(jsonPath("$.components.schemas.MemberProfileResponse").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/admin/members']").exists())
+                .andExpect(jsonPath(
+                                "$.paths['/api/v1/admin/checklist-researches/{researchId}/retry']")
+                        .exists())
                 .andExpect(jsonPath("$.paths['/api/v1/admin/me/password']").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/auth/password-reset-requests']").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/auth/password-resets']").exists())
