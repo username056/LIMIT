@@ -81,6 +81,7 @@ Versioning이 활성화되어 있으므로 삭제 후에도 이전 버전은 Lif
 AWS_REGION=ap-northeast-2
 AWS_ACCESS_KEY_ID=
 AWS_SECRET_ACCESS_KEY=
+AWS_SESSION_TOKEN=
 S3_MEDIA_BUCKET=l1mit-dev-media-0b849303
 S3_ENDPOINT=
 S3_PATH_STYLE_ACCESS=false
