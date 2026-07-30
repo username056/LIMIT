@@ -4,6 +4,7 @@ import RtcCallPage from '../RtcCallPage.vue'
 import { getChatMessages, getChatRooms } from '../../api/chat'
 import { createChatSocket } from '../../api/chatSocket'
 import { getRtcCall, getRtcSession } from '../../api/rtc'
+import { createReinspectionRequest } from '../../api/products'
 import { clearAuthSession, setAuthSession } from '../../auth/session'
 
 vi.mock('vue-router', () => ({
@@ -28,6 +29,10 @@ vi.mock('../../api/rtc', () => ({
   markRtcConnected: vi.fn(),
   respondRtcCall: vi.fn(),
   signalingSocketUrl: vi.fn(),
+}))
+
+vi.mock('../../api/products', () => ({
+  createReinspectionRequest: vi.fn(),
 }))
 
 const layoutStub = { template: '<main><slot /></main>' }
@@ -115,6 +120,82 @@ describe('RtcCallPage', () => {
     await flushPromises()
 
     expect(wrapper.get('[data-testid="counterpart-nickname"]').text()).toBe('판매자닉네임')
+
+    wrapper.unmount()
+  })
+
+  // 통화 중 재촬영 요청은 화면만 있고 API에 붙어 있지 않았습니다.
+  it('구매자는 통화 중에 체크리스트 항목을 골라 재촬영을 요청한다', async () => {
+    setAuthSession({ member: { memberId: 2, nickname: '구매자' } })
+    getRtcSession.mockResolvedValue({
+      sessionId: 30,
+      listingId: 777,
+      sellerId: 1,
+      buyerId: 2,
+      status: 'ENDED',
+      checklistItems: [{
+        checklistItemId: 100,
+        name: '제품 외관 전체 확인',
+        captureGuide: '모서리와 흠집을 확인해 주세요.',
+        confirmed: false,
+        note: null,
+      }],
+    })
+    getChatRooms.mockResolvedValue({
+      content: [{ roomId: 10, counterpartId: 1, counterpartNickname: '판매자닉네임' }],
+    })
+    createReinspectionRequest.mockResolvedValue({})
+
+    const wrapper = mount(RtcCallPage, {
+      global: { stubs: { DefaultLayout: layoutStub } },
+    })
+    await flushPromises()
+
+    const sendButton = wrapper.findAll('button')
+      .find((node) => node.text().includes('재촬영 요청 보내기'))
+
+    // 항목과 사유가 모두 있어야 접수됩니다.
+    await sendButton.trigger('click')
+    expect(wrapper.text()).toContain('재촬영을 요청할 항목을 하나 이상 선택해 주세요.')
+    expect(createReinspectionRequest).not.toHaveBeenCalled()
+
+    await wrapper.get('input[type="checkbox"]').setValue(true)
+    await wrapper.get('textarea').setValue('화면 하단이 잘 안 보입니다.')
+    await sendButton.trigger('click')
+    await flushPromises()
+
+    expect(createReinspectionRequest).toHaveBeenCalledWith(777, {
+      reason: '화면 하단이 잘 안 보입니다.',
+      items: [{ checklistItemId: 100, requestContent: '화면 하단이 잘 안 보입니다.' }],
+    })
+    expect(wrapper.text()).toContain('재촬영 요청을 보냈습니다.')
+
+    wrapper.unmount()
+  })
+
+  it('판매자에게는 재촬영 요청 UI를 보여주지 않는다', async () => {
+    getRtcSession.mockResolvedValue({
+      sessionId: 30,
+      listingId: 777,
+      sellerId: 1,
+      buyerId: 2,
+      status: 'ENDED',
+      checklistItems: [{
+        checklistItemId: 100,
+        name: '제품 외관 전체 확인',
+        captureGuide: '모서리와 흠집을 확인해 주세요.',
+        confirmed: false,
+        note: null,
+      }],
+    })
+
+    const wrapper = mount(RtcCallPage, {
+      global: { stubs: { DefaultLayout: layoutStub } },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('재촬영 요청 보내기')
+    expect(wrapper.find('input[type="checkbox"]').exists()).toBe(false)
 
     wrapper.unmount()
   })
