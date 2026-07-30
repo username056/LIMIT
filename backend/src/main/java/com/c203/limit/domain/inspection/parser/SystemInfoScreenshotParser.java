@@ -53,6 +53,7 @@ public class SystemInfoScreenshotParser {
         BigDecimal overallConfidence = averageConfidence(tokens);
 
         extractCardRow(tokens, expectedFieldTypes, overallConfidence, results);
+        extractDeviceSpecTable(tokens, expectedFieldTypes, overallConfidence, results);
         extractOsVersion(tokens, expectedFieldTypes, overallConfidence, results);
         extractModelName(tokens, expectedFieldTypes, overallConfidence, results);
 
@@ -140,6 +141,82 @@ public class SystemInfoScreenshotParser {
             }
         }
         return false;
+    }
+
+    /** "장치 사양" 표의 라벨 7개(고정 순서). 값 열이 어디서 시작하는지 알기 위해 전부 찾아야 한다. */
+    private static final List<String> DEVICE_SPEC_LABELS_IN_ORDER =
+            List.of("장치이름", "프로세서", "설치된RAM", "장치ID", "제품ID", "시스템종류", "펜및터치");
+
+    /**
+     * "장치 사양" 표(장치 이름 → 프로세서 → 설치된 RAM → 장치 ID → 제품 ID → 시스템 종류 → 펜 및 터치, 항상
+     * 이 순서로 고정된 Windows 표준 패널)에서 프로세서/설치된 RAM 값을 읽어 카드 값을 대체한다. 카드보다
+     * 표기가 더 상세하고(클럭 속도 포함, "사용 가능" 용량 등), 표 자체가 4열 카드보다 단순한 레이아웃이라 값을
+     * 더 안정적으로 잡을 수 있다는 전제다.
+     *
+     * <p>Windows 사양 표(에디션/버전)에서 이미 확인됐듯 이 종류의 표는 "라벨 여러 개가 먼저, 그다음 값
+     * 여러 개가 같은 순서로" 오고 라벨 바로 뒤에 그 값이 오지 않는다. 몇 번째 라벨까지 이 규칙이 적용되는지
+     * (표 전체 단위인지, 몇 줄씩 끊기는지) 확실하지 않아서, 안전하게 7개 라벨을 전부 순서대로 찾은 뒤에만
+     * 그다음에 오는 값 행들을 라벨과 같은 순서로 읽는다 — 라벨 하나라도 못 찾으면(표를 펼치지 않은 화면,
+     * 다른 Windows 버전 등) 조용히 아무것도 하지 않는다.
+     *
+     * <p><b>주의:</b> 이 표는 {@link SystemInfoScreenshotParserTests}의 실제 라이브 좌표 픽스처에 아직
+     * 포함되어 있지 않다 — 실제 클로바 응답으로 검증되지 않은 가정이므로, 라이브 테스트로 확인 전까지는
+     * 신뢰도를 낮게 봐야 한다.
+     */
+    private void extractDeviceSpecTable(
+            List<OcrToken> tokens,
+            Set<OcrFieldType> expected,
+            BigDecimal confidence,
+            List<OcrFieldExtraction> results) {
+        if (!expected.contains(OcrFieldType.CPU) && !expected.contains(OcrFieldType.RAM)) {
+            return;
+        }
+        Optional<LabelMatch> lastLabel = Optional.empty();
+        int searchFrom = 0;
+        for (String label : DEVICE_SPEC_LABELS_IN_ORDER) {
+            Optional<LabelMatch> found = findLabel(tokens, searchFrom, label);
+            if (found.isEmpty()) {
+                return;
+            }
+            lastLabel = found;
+            searchFrom = found.get().endIndex();
+        }
+
+        Row deviceNameValueRow = firstRowAfter(tokens, lastLabel.get().endIndex());
+        if (deviceNameValueRow.tokens().isEmpty()) {
+            return;
+        }
+        Row processorValueRow = firstRowAfter(tokens, deviceNameValueRow.nextIndex());
+        if (processorValueRow.tokens().isEmpty()) {
+            return;
+        }
+        Row ramValueRow = firstRowAfter(tokens, processorValueRow.nextIndex());
+
+        if (expected.contains(OcrFieldType.CPU) && looksLikeProcessorValue(processorValueRow.text())) {
+            upsertField(results, OcrFieldType.CPU, processorValueRow.text(), confidence);
+        }
+        if (expected.contains(OcrFieldType.RAM) && !ramValueRow.tokens().isEmpty()) {
+            capacityOrRaw(ramValueRow.text())
+                    .ifPresent(value -> upsertField(results, OcrFieldType.RAM, value, confidence));
+        }
+    }
+
+    /** CPU는 자유 텍스트라 엄밀히 검증할 수 없어, 최소한 그럴듯한 길이인지만 걸러 잘못된 값 덮어쓰기를 줄인다. */
+    private boolean looksLikeProcessorValue(String text) {
+        return text != null && text.trim().length() >= 6;
+    }
+
+    /** 이미 있던 같은 필드 결과를 지우고 새 값으로 교체한다(카드 값보다 이 표 값을 우선한다). */
+    private void upsertField(
+            List<OcrFieldExtraction> results,
+            OcrFieldType fieldType,
+            String value,
+            BigDecimal confidence) {
+        if (value == null || value.isBlank()) {
+            return;
+        }
+        results.removeIf(result -> result.fieldType() == fieldType);
+        results.add(new OcrFieldExtraction(fieldType, value.trim(), value.trim(), confidence));
     }
 
     /** Windows 사양 표의 "에디션"/"버전" 두 라벨의 값을 합쳐 하나의 OS_VERSION 값으로 만든다. */

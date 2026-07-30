@@ -297,6 +297,8 @@ class ProductMockControllerTests {
                         "내장 카메라",
                         "카메라 앱을 실행해 영상 출력 상태를 확인하세요.",
                         "VIDEO",
+                        "NONE",
+                        null,
                         false,
                         "PENDING",
                         null,
@@ -322,6 +324,7 @@ class ProductMockControllerTests {
                 .andExpect(jsonPath("$.data[0].name").value("내장 카메라"))
                 .andExpect(jsonPath("$.data[0].guide")
                         .value("카메라 앱을 실행해 영상 출력 상태를 확인하세요."))
+                .andExpect(jsonPath("$.data[0].automationType").value("NONE"))
                 .andExpect(jsonPath("$.data[0].status").value("PENDING"));
     }
 

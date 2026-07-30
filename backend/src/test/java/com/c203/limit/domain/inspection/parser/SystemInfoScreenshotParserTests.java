@@ -68,6 +68,65 @@ class SystemInfoScreenshotParserTests {
         return tokens;
     }
 
+    /**
+     * "장치 사양" 표 좌표는 실제 라이브 호출로 검증된 것이 아니라, 화면 스크린샷을 보고 대략적인 배치(라벨
+     * 열 x~600-750, 값 열 x~1000+, 행마다 세로로 나열)를 그대로 옮겨 만든 가정용 픽스처다. 이 테스트는
+     * "라벨 7개를 순서대로 다 찾은 뒤 그다음 값 행을 같은 순서로 읽는다"는 파서 로직 자체가 의도대로
+     * 동작하는지만 검증하며, 클로바가 실제로 이 순서로 토큰을 반환하는지는 보증하지 않는다.
+     */
+    private static List<OcrToken> deviceSpecTableTokens() {
+        List<OcrToken> tokens = new ArrayList<>(fullScreenshotTokens());
+        // 라벨 열(같은 x 범위, 행마다 아래로)
+        tokens.add(t("장치", 0.99, 596, 700, 640, 725));
+        tokens.add(t("이름", 0.99, 645, 700, 690, 725));
+        tokens.add(t("프로세서", 0.99, 596, 735, 690, 760));
+        tokens.add(t("설치된", 0.99, 596, 770, 650, 795));
+        tokens.add(t("RAM", 0.99, 655, 770, 690, 795));
+        tokens.add(t("장치", 0.99, 596, 805, 640, 830));
+        tokens.add(t("ID", 0.99, 645, 805, 665, 830));
+        tokens.add(t("제품", 0.99, 596, 840, 640, 865));
+        tokens.add(t("ID", 0.99, 645, 840, 665, 865));
+        tokens.add(t("시스템", 0.99, 596, 875, 655, 900));
+        tokens.add(t("종류", 0.99, 660, 875, 700, 900));
+        tokens.add(t("펜", 0.99, 596, 910, 620, 935));
+        tokens.add(t("및", 0.99, 625, 910, 645, 935));
+        tokens.add(t("터치", 0.99, 650, 910, 690, 935));
+        // 값 열 (같은 순서로, 라벨과는 다른 x 범위)
+        tokens.add(t("DESKTOP-UB20P0O", 0.99, 1000, 700, 1250, 725));
+        tokens.add(t("13th", 0.99, 1000, 735, 1050, 760));
+        tokens.add(t("Gen", 0.99, 1055, 735, 1100, 760));
+        tokens.add(t("Intel(R)", 0.99, 1105, 735, 1200, 760));
+        tokens.add(t("Core(TM)", 0.99, 1205, 735, 1300, 760));
+        tokens.add(t("i7-13700H(2.40", 0.99, 1305, 735, 1450, 760));
+        tokens.add(t("GHz)", 0.99, 1455, 735, 1500, 760));
+        tokens.add(t("32.0GB(31.6GB", 0.99, 1000, 770, 1150, 795));
+        tokens.add(t("사용", 0.99, 1155, 770, 1200, 795));
+        tokens.add(t("가능)", 0.99, 1205, 770, 1260, 795));
+        return tokens;
+    }
+
+    @Test
+    void prefersDeviceSpecTableValueOverCardValueForCpuAndRam() {
+        List<OcrFieldExtraction> results =
+                parser.parse(deviceSpecTableTokens(), OcrFieldExpectations.SCREENSHOT_FIELD_TYPES);
+
+        assertThat(fieldValue(results, OcrFieldType.CPU))
+                .isEqualTo("13th Gen Intel(R) Core(TM) i7-13700H(2.40 GHz)");
+        assertThat(fieldValue(results, OcrFieldType.RAM)).isEqualTo("32.0GB");
+        // 표에 없는 필드는 카드에서 뽑은 값을 그대로 유지한다.
+        assertThat(fieldValue(results, OcrFieldType.STORAGE_CAPACITY)).isEqualTo("954 GB");
+    }
+
+    @Test
+    void keepsCardValueWhenDeviceSpecTableLabelsAreMissing() {
+        // "장치 사양"을 펼치지 않은 화면 등 표 라벨이 아예 없으면 카드 값을 그대로 둔다.
+        List<OcrFieldExtraction> results =
+                parser.parse(fullScreenshotTokens(), OcrFieldExpectations.SCREENSHOT_FIELD_TYPES);
+
+        assertThat(fieldValue(results, OcrFieldType.CPU)).isEqualTo("13th Gen Intel(R) Core(TM) i7-13700H");
+        assertThat(fieldValue(results, OcrFieldType.RAM)).isEqualTo("32.0GB");
+    }
+
     @Test
     void extractsAllExpectedFieldsFromRealisticLayout() {
         List<OcrFieldExtraction> results =

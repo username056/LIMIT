@@ -29,6 +29,13 @@ import {
   updateProductImageOrder,
   uploadToPresignedUrl,
 } from '../api/products'
+import {
+  confirmDiagnosisValue,
+  extractOcrText,
+  getDiagnosis,
+  parseBatteryReport,
+  parseDxdiag,
+} from '../api/inspection'
 import { compressImage, compressVideo } from '../utils/mediaOptimize'
 import { MAX_PRICE_DIGITS, formatPriceDigits, toPriceDigits } from '../utils/priceInput'
 
@@ -167,6 +174,48 @@ const activeCaptureItemId = ref(null)
 // captureState[checklistItemId] = { media: [...], busy: '' | 'optimizing' | 'uploading', progress: 0..100 }
 const captureState = reactive({})
 const confirmState = reactive({})
+// diagnosisState[checklistItemId] = { status: 'parsing'|'ready'|'error', fields: [...], errorMessage }
+// fields의 각 항목은 취합 응답(fieldName/ocrValue/fileParseValue/conflict/confirmedValue)에
+// draftValue(입력창 값)와 saving(저장 중 여부)을 더한 것입니다.
+const diagnosisState = reactive({})
+const DIAGNOSIS_FIELD_LABELS = {
+  MODEL_NAME: '모델명',
+  CPU: 'CPU',
+  RAM: 'RAM',
+  GPU: 'GPU',
+  GPU_MEMORY: 'GPU 메모리',
+  STORAGE_CAPACITY: '저장용량',
+  OS_VERSION: 'OS 버전',
+  DRIVER_VERSION: '그래픽 드라이버 버전',
+  SOUND_DEVICE: '사운드 장치',
+  DESIGN_CAPACITY: '배터리 설계 용량',
+  FULL_CHARGE_CAPACITY: '배터리 완전충전 용량',
+  CYCLE_COUNT: '배터리 충전 사이클',
+  BATTERY_MANUFACTURER: '배터리 제조사',
+  CAPACITY_RATIO: '배터리 용량 비율(%)',
+}
+
+function diagnosisFieldLabel(fieldName) {
+  return DIAGNOSIS_FIELD_LABELS[fieldName] || fieldName
+}
+
+// 항목의 자동화 종류가 다룰 수 있는 필드 전체 목록입니다. 자동 인식이 실패했거나(값 없음)
+// 일부만 인식됐을 때도, 인식 못한 필드까지 빈 입력 칸으로 미리 보여줘서 드롭다운 없이
+// 바로 타이핑해 저장할 수 있게 합니다.
+const OCR_FIELD_NAMES = ['MODEL_NAME', 'CPU', 'RAM', 'GPU', 'OS_VERSION', 'STORAGE_CAPACITY']
+const DXDIAG_FIELD_NAMES = ['CPU', 'RAM', 'GPU', 'GPU_MEMORY', 'DRIVER_VERSION', 'SOUND_DEVICE']
+const BATTERY_REPORT_FIELD_NAMES = [
+  'DESIGN_CAPACITY', 'FULL_CHARGE_CAPACITY', 'CYCLE_COUNT', 'BATTERY_MANUFACTURER', 'CAPACITY_RATIO',
+]
+
+function allDiagnosisFieldNamesFor(item) {
+  if (!item) return []
+  if (item.automationType === 'OCR') return OCR_FIELD_NAMES
+  if (item.automationType === 'FILE_PARSE' && item.parserType === 'BATTERY_REPORT') return BATTERY_REPORT_FIELD_NAMES
+  if (item.automationType === 'FILE_PARSE' && item.parserType === 'DXDIAG') return DXDIAG_FIELD_NAMES
+  return []
+}
+
 const mediaPreview = ref(null)
 const listingImages = ref([])
 const listingImageBusy = ref(false)
@@ -317,6 +366,7 @@ function clearCaptureState() {
     mediaOf(key).forEach((media) => URL.revokeObjectURL(media.previewUrl))
     delete captureState[key]
   })
+  Object.keys(diagnosisState).forEach((key) => delete diagnosisState[key])
   mediaPreview.value = null
 }
 
@@ -619,6 +669,92 @@ function readVideoDuration(file) {
   })
 }
 
+// 항목 하나의 취합된 진단값을 다시 조회해 draftValue(입력창 초기값)와 saving 상태를 붙여 저장하고,
+// 인식되지 못한 필드도 빈 입력 칸(placeholder row)으로 함께 채워 바로 타이핑해 저장할 수 있게 합니다.
+async function refreshDiagnosis(item) {
+  const result = await getDiagnosis(item.checklistItemId)
+  const detectedFields = (result.fields || []).map((field) => ({
+    ...field,
+    draftValue: field.confirmedValue ?? field.fileParseValue ?? field.ocrValue ?? '',
+    saving: false,
+  }))
+  const detectedFieldNames = new Set(detectedFields.map((field) => field.fieldName))
+  const placeholderFields = allDiagnosisFieldNamesFor(item)
+    .filter((fieldName) => !detectedFieldNames.has(fieldName))
+    .map((fieldName) => ({
+      fieldName,
+      ocrValue: null,
+      fileParseValue: null,
+      conflict: false,
+      confirmedValue: null,
+      draftValue: '',
+      saving: false,
+    }))
+  diagnosisState[item.checklistItemId] = {
+    status: 'ready',
+    fields: [...detectedFields, ...placeholderFields],
+    errorMessage: '',
+  }
+}
+
+// 업로드가 끝난 증거를 자동화 유형에 맞춰 OCR/DxDiag/배터리 리포트 파싱 API로 넘기고,
+// 결과(성공하든 실패하든)를 취합 조회로 다시 불러와 진단 패널에 보여줍니다.
+async function runDiagnosisAutomation(item, evidenceId) {
+  const automationType = item.automationType
+  if (!automationType || automationType === 'NONE') return
+
+  diagnosisState[item.checklistItemId] = {
+    status: 'parsing',
+    fields: diagnosisState[item.checklistItemId]?.fields || [],
+    errorMessage: '',
+  }
+
+  let parseErrorMessage = ''
+  try {
+    if (automationType === 'OCR') {
+      await extractOcrText(evidenceId)
+    } else if (item.parserType === 'BATTERY_REPORT') {
+      await parseBatteryReport(evidenceId)
+    } else if (item.parserType === 'DXDIAG') {
+      await parseDxdiag(evidenceId)
+    }
+  } catch (error) {
+    parseErrorMessage = error.message || '자동 인식에 실패했습니다. 값을 직접 입력해 주세요.'
+  }
+
+  try {
+    await refreshDiagnosis(item)
+  } catch {
+    // 취합 조회 실패는 아래 에러 메시지로 안내합니다.
+  }
+
+  if (parseErrorMessage) {
+    diagnosisState[item.checklistItemId] = {
+      ...diagnosisState[item.checklistItemId],
+      status: 'error',
+      errorMessage: parseErrorMessage,
+    }
+  }
+}
+
+async function saveDiagnosisValue(checklistItemId, field) {
+  const confirmedValue = field.draftValue?.trim()
+  if (!confirmedValue) return
+  field.saving = true
+  try {
+    const result = await confirmDiagnosisValue(checklistItemId, {
+      fieldName: field.fieldName,
+      confirmedValue,
+    })
+    field.confirmedValue = result.confirmedValue
+    field.draftValue = result.confirmedValue
+  } catch (error) {
+    errorMessage.value = error.message || '진단값을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+  } finally {
+    field.saving = false
+  }
+}
+
 async function handleCaptureFile(item, file) {
   if (!item || !file || !currentProductId.value) return
   const itemId = item.checklistItemId
@@ -675,6 +811,8 @@ async function handleCaptureFile(item, file) {
       name: optimizedFile.name,
       attemptNo: completed.attemptNo,
     })
+    // 업로드 자체는 끝났으니 버튼은 바로 풀어 주고, 자동 인식은 진단 패널에서 별도로 진행 상태를 보여줍니다.
+    if (completed.evidenceId) runDiagnosisAutomation(item, completed.evidenceId)
   } catch {
     URL.revokeObjectURL(previewUrl)
     errorMessage.value = `‘${item.name}’ 자료를 업로드하지 못했습니다. 잠시 후 다시 시도해 주세요.`
@@ -834,6 +972,13 @@ async function startEdit(productId) {
           attemptNo: evidence.attemptNo,
           restored: true,
         })),
+      }
+      if (item.automationType && item.automationType !== 'NONE' && history.length) {
+        try {
+          await refreshDiagnosis(item)
+        } catch {
+          // 조회 실패는 조용히 넘어가고, 새로 업로드하면 다시 자동 인식을 시도합니다.
+        }
       }
     }))
     const draftProgress = product.status === 'DRAFT'
@@ -1490,6 +1635,80 @@ onMounted(async () => {
                   </li>
                 </ul>
               </div>
+
+              <div
+                v-if="activeCaptureItem && diagnosisState[activeCaptureItem.checklistItemId]"
+                class="mt-4 rounded-lg border border-border bg-bg p-4"
+              >
+                <p class="text-sm font-bold text-text-main">
+                  자동 인식된 사양
+                </p>
+                <p
+                  v-if="diagnosisState[activeCaptureItem.checklistItemId].status === 'parsing'"
+                  class="mt-2 text-xs text-text-sub"
+                >
+                  업로드한 파일에서 사양을 인식하는 중입니다…
+                </p>
+                <p
+                  v-if="diagnosisState[activeCaptureItem.checklistItemId].errorMessage"
+                  class="mt-2 text-xs text-red-600"
+                >
+                  {{ diagnosisState[activeCaptureItem.checklistItemId].errorMessage }}
+                </p>
+
+                <ul
+                  v-if="diagnosisState[activeCaptureItem.checklistItemId].fields.length"
+                  class="mt-3 space-y-3"
+                >
+                  <li
+                    v-for="field in diagnosisState[activeCaptureItem.checklistItemId].fields"
+                    :key="field.fieldName"
+                  >
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-xs font-semibold text-text-main">
+                        {{ diagnosisFieldLabel(field.fieldName) }}
+                      </span>
+                      <BaseBadge
+                        v-if="field.conflict"
+                        variant="danger"
+                      >
+                        값이 서로 다름
+                      </BaseBadge>
+                    </div>
+                    <p
+                      v-if="field.conflict"
+                      class="mt-1 text-[11px] text-text-sub"
+                    >
+                      스크린샷 인식값: {{ field.ocrValue || '-' }} · 파일 인식값: {{ field.fileParseValue || '-' }}
+                    </p>
+                    <div class="mt-1 flex items-center gap-2">
+                      <input
+                        v-model="field.draftValue"
+                        type="text"
+                        :aria-label="`${diagnosisFieldLabel(field.fieldName)} 값`"
+                        class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
+                      >
+                      <BaseButton
+                        type="button"
+                        variant="outline"
+                        class="shrink-0 px-3 py-2 text-xs"
+                        :aria-label="`${diagnosisFieldLabel(field.fieldName)} 저장`"
+                        :disabled="field.saving || !field.draftValue"
+                        @click="saveDiagnosisValue(activeCaptureItem.checklistItemId, field)"
+                      >
+                        {{ field.saving ? '저장 중…' : '저장' }}
+                      </BaseButton>
+                    </div>
+                  </li>
+                </ul>
+                <p
+                  v-else-if="diagnosisState[activeCaptureItem.checklistItemId].status === 'ready'"
+                  class="mt-2 text-xs text-text-sub"
+                >
+                  인식된 값이 없습니다. 파일을 다시 확인하거나 다른 파일로 다시 업로드해 주세요.
+                </p>
+              </div>
+
               <p class="mt-2 text-center text-[11px] text-text-sub">
                 항목별 최대 파일 개수와 크기·영상 길이를 적용합니다.
                 사진은 자동으로 리사이즈, 영상은 브라우저에서 자동 압축된 뒤 업로드됩니다.

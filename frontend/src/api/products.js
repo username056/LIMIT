@@ -120,7 +120,7 @@ export function deleteProductImage(productId, imageId) {
 }
 
 export function updateProductImageOrder(productId, payload) {
-  return apiClient.put(`/products/${productId}/images/order`, payload).then(unwrap)
+  return apiClient.put(`/products/${productId}/images/order`, payload)
 }
 
 export function getHandoverGuide(modelId) {

@@ -16,7 +16,15 @@ import {
   getEvidenceHistory,
   getProductImages,
   transitionProductStatus,
+  updateProductImageOrder,
 } from '../../api/products'
+import {
+  confirmDiagnosisValue,
+  extractOcrText,
+  getDiagnosis,
+  parseBatteryReport,
+  parseDxdiag,
+} from '../../api/inspection'
 
 const { routerPushMock } = vi.hoisted(() => ({ routerPushMock: vi.fn() }))
 
@@ -52,7 +60,16 @@ vi.mock('../../api/products', () => ({
   transitionProductStatus: vi.fn(),
   updateProduct: vi.fn(),
   updateProductDraftProgress: vi.fn(),
+  updateProductImageOrder: vi.fn(),
   uploadToPresignedUrl: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('../../api/inspection', () => ({
+  extractOcrText: vi.fn(),
+  parseDxdiag: vi.fn(),
+  parseBatteryReport: vi.fn(),
+  getDiagnosis: vi.fn(),
+  confirmDiagnosisValue: vi.fn(),
 }))
 
 const buttonStub = {
@@ -428,6 +445,120 @@ describe('ProductRegisterPage', () => {
     expect(wrapper.text()).toContain('첨부 3 / 3')
   })
 
+  it('OCR 자동화 항목은 업로드 후 자동 인식을 호출하고 인식값을 수정해 저장할 수 있다', async () => {
+    getProductChecklist.mockResolvedValue([
+      {
+        checklistItemId: 7003,
+        itemCode: 'LAP-SCR-013',
+        name: '설정 정보 화면',
+        evidenceType: 'PHOTO',
+        automationType: 'OCR',
+        isRequired: true,
+        status: 'PENDING',
+      },
+      { checklistItemId: 7001, itemCode: 'EXT-001', name: '전면·후면·측면 외관', evidenceType: 'PHOTO', isRequired: true, status: 'PENDING' },
+      { checklistItemId: 7002, itemCode: 'PRV-004', name: '계정 제거 및 초기화', evidenceType: 'SELLER_CONFIRMATION', isRequired: true, status: 'PENDING' },
+    ])
+    completeEvidence.mockResolvedValue({ evidenceId: 9101, mediaUrl: 'https://storage.test/evidence', attemptNo: 1 })
+    extractOcrText.mockResolvedValue({})
+    getDiagnosis.mockResolvedValue({
+      itemId: 7003,
+      fields: [
+        { fieldName: 'CPU', ocrValue: 'Intel i7-1165G7', fileParseValue: null, conflict: false, confirmedValue: null },
+      ],
+    })
+    confirmDiagnosisValue.mockResolvedValue({
+      itemId: 7003,
+      fieldName: 'CPU',
+      originalValue: 'Intel i7-1165G7',
+      confirmedValue: 'Intel i7-1165G7 (확인함)',
+      updatedAt: '2026-07-30T10:00:00',
+    })
+
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await goToCaptureStep(wrapper)
+
+    await attachFile(
+      wrapper.find('input[accept="image/*"]'),
+      new File(['x'], 'system-info.png', { type: 'image/png' }),
+    )
+    await flushPromises()
+
+    expect(extractOcrText).toHaveBeenCalledWith(9101)
+    expect(getDiagnosis).toHaveBeenCalledWith(7003)
+    expect(wrapper.text()).toContain('자동 인식된 사양')
+    expect(wrapper.text()).toContain('CPU')
+
+    const valueInput = wrapper.find('input[aria-label="CPU 값"]')
+    expect(valueInput.element.value).toBe('Intel i7-1165G7')
+
+    await valueInput.setValue('Intel i7-1165G7 (확인함)')
+    await wrapper.find('button[aria-label="CPU 저장"]').trigger('click')
+    await flushPromises()
+
+    expect(confirmDiagnosisValue).toHaveBeenCalledWith(7003, {
+      fieldName: 'CPU',
+      confirmedValue: 'Intel i7-1165G7 (확인함)',
+    })
+    expect(wrapper.text()).not.toContain('저장 중…')
+
+    // CPU 외에 인식되지 않은 필드(RAM 등)도 드롭다운 없이 바로 타이핑할 수 있는 빈 입력으로 보인다.
+    const ramInput = wrapper.find('input[aria-label="RAM 값"]')
+    expect(ramInput.exists()).toBe(true)
+    expect(ramInput.element.value).toBe('')
+  })
+
+  it('자동 인식이 완전히 실패하면 오류 안내와 함께 필드마다 직접 입력해 저장할 수 있다', async () => {
+    getProductChecklist.mockResolvedValue([
+      {
+        checklistItemId: 7003,
+        itemCode: 'LAP-SCR-013',
+        name: '설정 정보 화면',
+        evidenceType: 'PHOTO',
+        automationType: 'OCR',
+        isRequired: true,
+        status: 'PENDING',
+      },
+    ])
+    completeEvidence.mockResolvedValue({ evidenceId: 9101, mediaUrl: 'https://storage.test/evidence', attemptNo: 1 })
+    extractOcrText.mockRejectedValue(new Error('OCR 인식에 실패했습니다.'))
+    getDiagnosis.mockResolvedValue({ itemId: 7003, fields: [] })
+    confirmDiagnosisValue.mockResolvedValue({
+      itemId: 7003,
+      fieldName: 'MODEL_NAME',
+      originalValue: null,
+      confirmedValue: 'Galaxy Book4 Pro',
+      updatedAt: '2026-07-30T10:00:00',
+    })
+
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await goToCaptureStep(wrapper)
+
+    await attachFile(
+      wrapper.find('input[accept="image/*"]'),
+      new File(['x'], 'system-info.png', { type: 'image/png' }),
+    )
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('OCR 인식에 실패했습니다.')
+    // 드롭다운으로 항목을 고르는 게 아니라, 인식되지 못한 필드마다 바로 입력창이 보인다.
+    expect(wrapper.find('select[aria-label="직접 추가할 항목 선택"]').exists()).toBe(false)
+
+    const modelNameInput = wrapper.find('input[aria-label="모델명 값"]')
+    expect(modelNameInput.element.value).toBe('')
+    await modelNameInput.setValue('Galaxy Book4 Pro')
+    await wrapper.find('button[aria-label="모델명 저장"]').trigger('click')
+    await flushPromises()
+
+    expect(confirmDiagnosisValue).toHaveBeenCalledWith(7003, {
+      fieldName: 'MODEL_NAME',
+      confirmedValue: 'Galaxy Book4 Pro',
+    })
+    expect(modelNameInput.element.value).toBe('Galaxy Book4 Pro')
+  })
+
   it('첨부 썸네일을 누르면 확인 모달이 열리고 삭제할 수 있다', async () => {
     const wrapper = mount(ProductRegisterPage, { global: globalOptions })
     await flushPromises()
@@ -469,6 +600,49 @@ describe('ProductRegisterPage', () => {
     await wrapper.find('button[aria-label="상품 이미지 삭제"]').trigger('click')
     await flushPromises()
     expect(deleteProductImage).toHaveBeenCalledWith(1001, 1)
+  })
+
+  it('대표 이미지를 바꾸면 순서 변경 API 응답을 그대로 반영한다', async () => {
+    completeProductImage
+      .mockResolvedValueOnce({
+        imageId: 1,
+        imageType: 'THUMBNAIL',
+        displayOrder: 0,
+        imageUrl: 'https://storage.test/image-1',
+        mimeType: 'image/jpeg',
+      })
+      .mockResolvedValueOnce({
+        imageId: 2,
+        imageType: 'DETAIL',
+        displayOrder: 1,
+        imageUrl: 'https://storage.test/image-2',
+        mimeType: 'image/jpeg',
+      })
+    updateProductImageOrder.mockResolvedValue([
+      { imageId: 2, imageType: 'THUMBNAIL', displayOrder: 0, imageUrl: 'https://storage.test/image-2', mimeType: 'image/jpeg' },
+      { imageId: 1, imageType: 'DETAIL', displayOrder: 1, imageUrl: 'https://storage.test/image-1', mimeType: 'image/jpeg' },
+    ])
+
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await goToCaptureStep(wrapper)
+
+    const imageInput = wrapper.find('input[accept="image/jpeg,image/png,image/webp"]')
+    await attachFile(imageInput, new File(['a'], 'a.jpg', { type: 'image/jpeg' }))
+    await flushPromises()
+    await attachFile(imageInput, new File(['b'], 'b.jpg', { type: 'image/jpeg' }))
+    await flushPromises()
+
+    const promoteButton = wrapper.findAll('button')
+      .find((button) => button.text() === '대표' && button.attributes('disabled') === undefined)
+    await promoteButton.trigger('click')
+    await flushPromises()
+
+    expect(updateProductImageOrder).toHaveBeenCalledWith(1001, {
+      imageIds: [1, 2],
+      thumbnailImageId: 2,
+    })
+    expect(wrapper.text()).not.toContain('상품 이미지 순서를 변경하지 못했습니다.')
   })
 
   it('등록을 완료하면 판매 상태로 올리고 등록한 상품 상세로 이동한다', async () => {

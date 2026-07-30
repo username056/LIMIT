@@ -52,7 +52,7 @@ class ChecklistGenerationServiceTests {
                 service.generateForModel(201L, Set.of(LaptopFeatureCode.CAMERA));
 
         assertThat(result.aiApplied()).isTrue();
-        assertThat(result.items()).hasSize(13);
+        assertThat(result.items()).hasSize(14);
         assertThat(result.aiSuggestions()).hasSize(1);
         assertThat(result.reviewCandidates()).containsExactly("조도 센서");
         assertThat(result.items())
@@ -75,7 +75,7 @@ class ChecklistGenerationServiceTests {
         GeneratedChecklist result = service.generateForModel(201L, Set.of());
 
         assertThat(result.aiApplied()).isFalse();
-        assertThat(result.items()).hasSize(12);
+        assertThat(result.items()).hasSize(13);
         assertThat(result.aiSuggestions()).isEmpty();
     }
 
@@ -89,7 +89,7 @@ class ChecklistGenerationServiceTests {
                 .orElseThrow();
 
         assertThat(result.aiApplied()).isFalse();
-        assertThat(result.items()).hasSize(13);
+        assertThat(result.items()).hasSize(14);
         assertThat(result.items())
                 .extracting(GeneratedChecklistItem::featureCode)
                 .contains(LaptopFeatureCode.CAMERA);

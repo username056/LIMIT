@@ -9,6 +9,7 @@ import {
   getProduct,
   transitionProductStatus,
   updateProduct,
+  updateProductImageOrder,
 } from '../products'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
@@ -53,5 +54,20 @@ describe('products api', () => {
       [`${API_BASE_URL}/products/1001/status-transitions`, 'POST'],
       [`${API_BASE_URL}/products/1001`, 'DELETE'],
     ])
+  })
+
+  it('이미지 순서 변경은 언랩된 이미지 목록을 그대로 반환한다', async () => {
+    const images = [
+      { imageId: 2, imageType: 'THUMBNAIL', displayOrder: 0 },
+      { imageId: 1, imageType: 'DETAIL', displayOrder: 1 },
+    ]
+    const fetchMock = vi.fn().mockResolvedValue(ok(images))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await updateProductImageOrder(1001, { imageIds: [2, 1], thumbnailImageId: 2 })
+
+    expect(fetchMock.mock.calls[0][0]).toBe(`${API_BASE_URL}/products/1001/images/order`)
+    expect(fetchMock.mock.calls[0][1].method).toBe('PUT')
+    expect(result).toEqual(images)
   })
 })
