@@ -359,7 +359,8 @@ describe('ProductDetailPage', () => {
     expect(getSellerProfile).toHaveBeenCalledWith(55)
     expect(wrapper.text()).toContain('리미트판매자')
     expect(wrapper.text()).toContain('개인 판매자')
-    expect(wrapper.text()).toContain('판매 중 3개')
+    // 판매 중 개수와 '판매자' 라벨은 이 화면에 두지 않습니다(프로필 페이지에서 봅니다).
+    expect(wrapper.text()).not.toContain('판매 중 3개')
 
     const link = wrapper.findAll('[data-to]')
       .find((node) => node.text().includes('리미트판매자'))

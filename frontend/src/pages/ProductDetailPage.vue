@@ -438,7 +438,44 @@ onMounted(async () => {
               {{ formatPrice(product.price) }}원
             </p>
 
-            <dl class="mt-8 grid grid-cols-2 gap-x-6 gap-y-5 border-y border-border py-5 text-sm">
+            <!--
+              가격 바로 아래에 판매자를 둡니다. 누구에게 사는지가 기기 옵션보다 먼저 읽혀야 합니다.
+              누르면 그 판매자의 판매 목록으로 갑니다.
+              판매 중 개수는 여기서 보여주지 않습니다 — 이 화면의 관심은 '이 상품'이고, 판매자의
+              재고 규모는 프로필 페이지에서 볼 내용입니다.
+              정산 계좌 같은 값은 공개 프로필에 담기지 않습니다.
+            -->
+            <RouterLink
+              v-if="sellerProfile"
+              :to="{ name: 'seller-profile', params: { sellerId: sellerProfile.sellerId } }"
+              class="mt-6 flex items-center gap-3 rounded-lg border border-border bg-surface p-3 transition hover:border-primary/50 hover:shadow-card"
+            >
+              <span
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-gradient text-sm font-bold text-white"
+                aria-hidden="true"
+              >{{ (sellerProfile.nickname || '판').trim().charAt(0) }}</span>
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-sm font-semibold text-text-main">
+                  {{ sellerProfile.nickname }}
+                </span>
+                <!-- 판매자 등록 행이 없는 회원이면 sellerType이 비어 옵니다. -->
+                <span
+                  v-if="sellerProfile.sellerType"
+                  class="mt-0.5 block text-xs text-text-sub"
+                >
+                  {{ sellerProfile.sellerType === 'BUSINESS' ? '사업자 판매자' : '개인 판매자' }}
+                </span>
+              </span>
+              <span class="shrink-0 text-xs font-semibold text-primary">판매자 상품 보기 →</span>
+            </RouterLink>
+            <p
+              v-else
+              class="mt-6 text-sm text-text-sub"
+            >
+              판매자 정보를 불러오지 못했습니다.
+            </p>
+
+            <dl class="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-border pt-5 text-sm">
               <div>
                 <dt class="text-xs text-text-sub">
                   색상
@@ -453,45 +490,6 @@ onMounted(async () => {
                 </dt>
                 <dd class="mt-1 font-semibold text-text-main">
                   {{ product.device?.storageGb ? `${product.device.storageGb}GB` : '미입력' }}
-                </dd>
-              </div>
-              <!--
-                상품 번호 자리에 판매자를 둡니다. 번호는 구매 판단에 쓰이지 않고, 누구에게 사는지가
-                훨씬 중요합니다. 누르면 그 판매자의 판매 목록으로 갑니다.
-                정산 계좌 같은 값은 공개 프로필에 담기지 않습니다.
-              -->
-              <div class="col-span-2">
-                <dt class="text-xs text-text-sub">
-                  판매자
-                </dt>
-                <dd class="mt-1">
-                  <RouterLink
-                    v-if="sellerProfile"
-                    :to="{ name: 'seller-profile', params: { sellerId: sellerProfile.sellerId } }"
-                    class="flex items-center gap-3 rounded-lg border border-border bg-surface p-3 transition hover:border-primary/50 hover:shadow-card"
-                  >
-                    <span
-                      class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-gradient text-sm font-bold text-white"
-                      aria-hidden="true"
-                    >{{ (sellerProfile.nickname || '판').trim().charAt(0) }}</span>
-                    <span class="min-w-0 flex-1">
-                      <span class="block truncate font-semibold text-text-main">
-                        {{ sellerProfile.nickname }}
-                      </span>
-                      <!-- 판매자 등록 행이 없는 회원이면 sellerType이 비어 옵니다. -->
-                      <span class="mt-0.5 block text-xs font-normal text-text-sub">
-                        <template v-if="sellerProfile.sellerType">
-                          {{ sellerProfile.sellerType === 'BUSINESS' ? '사업자 판매자' : '개인 판매자' }} ·
-                        </template>
-                        판매 중 {{ sellerProfile.onSaleCount }}개
-                      </span>
-                    </span>
-                    <span class="shrink-0 text-xs font-semibold text-primary">판매자 상품 보기 →</span>
-                  </RouterLink>
-                  <span
-                    v-else
-                    class="text-sm font-normal text-text-sub"
-                  >판매자 정보를 불러오지 못했습니다.</span>
                 </dd>
               </div>
             </dl>
