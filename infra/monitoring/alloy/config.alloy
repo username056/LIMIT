@@ -7,6 +7,12 @@ discovery.relabel "containers" {
   targets = discovery.docker.containers.targets
 
   rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    regex         = "limit-(local|prod)"
+    action        = "keep"
+  }
+
+  rule {
     source_labels = ["__meta_docker_container_name"]
     regex         = "/(.*)"
     target_label  = "container"
@@ -29,6 +35,24 @@ loki.source.docker "containers" {
   targets    = discovery.relabel.containers.output
   labels     = { source = "docker" }
   forward_to = [loki.write.default.receiver]
+}
+
+local.file_match "nginx_access" {
+  path_targets = [
+    {
+      __path__ = "/var/log/nginx/access.log",
+      service  = "nginx",
+      stream   = "access",
+      source   = "file",
+    },
+  ]
+  sync_period = "10s"
+}
+
+loki.source.file "nginx_access" {
+  targets       = local.file_match.nginx_access.targets
+  tail_from_end = true
+  forward_to    = [loki.write.default.receiver]
 }
 
 loki.write "default" {
