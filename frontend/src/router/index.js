@@ -9,6 +9,7 @@ const MyOrdersPage = () => import('../pages/MyOrdersPage.vue')
 const SellerApplyPage = () => import('../pages/SellerApplyPage.vue')
 const ProductManagePage = () => import('../pages/ProductManagePage.vue')
 const ProductRegisterPage = () => import('../pages/ProductRegisterPage.vue')
+const DeviceCheckPage = () => import('../pages/DeviceCheckPage.vue')
 const AdminPage = () => import('../pages/AdminPage.vue')
 const DevToolsPage = () => import('../pages/DevToolsPage.vue')
 const SignupPage = () => import('../pages/SignupPage.vue')
@@ -100,6 +101,12 @@ const routes = [
     path: '/seller/products/:productId/edit',
     name: 'seller-product-edit',
     component: ProductRegisterPage,
+    meta: { requiresAuth: true, requiresRole: 'SELLER' },
+  },
+  {
+    path: '/seller/products/:productId/device-check',
+    name: 'seller-product-device-check',
+    component: DeviceCheckPage,
     meta: { requiresAuth: true, requiresRole: 'SELLER' },
   },
   { path: '/admin', name: 'admin', component: AdminPage },
