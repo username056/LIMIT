@@ -1,26 +1,77 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseCard from '../components/BaseCard.vue'
 import BaseButton from '../components/BaseButton.vue'
-import { buildProductById } from '../mock/products'
-
-// TODO(주문/결제 API 연동): 실제 주문 생성 응답(주문 번호, 결제 상태 등)이 준비되면
-// 아래 mock 주문 정보 대신 API 응답을 사용하세요. 지금은 PurchasePage에서 만든 mock 주문 번호를
-// 쿼리로 그대로 전달받아 보여줍니다.
+import { confirmPayment } from '../api/payment'
 
 const route = useRoute()
-const product = computed(() => buildProductById(route.params.productId))
-const orderNumber = computed(() => route.query.orderNumber || '-')
-const receiverName = computed(() => route.query.receiverName || '-')
+const payment = ref(null)
+const isConfirming = ref(true)
+const confirmError = ref('')
+
 const address = computed(() => route.query.address || '-')
+const productName = computed(() => route.query.productName || '-')
+const manufacturer = computed(() => route.query.manufacturer || '')
+
+onMounted(async () => {
+  try {
+    const { paymentId, paymentKey, orderId, amount } = route.query
+    if (!paymentId || !paymentKey || !orderId || !amount) {
+      confirmError.value = '결제 승인 정보가 올바르지 않습니다.'
+      return
+    }
+
+    payment.value = await confirmPayment(paymentId, {
+      paymentKey,
+      orderId,
+      amount: Number(amount),
+    })
+  } catch (error) {
+    confirmError.value = error.message || '결제 승인에 실패했습니다.'
+  } finally {
+    isConfirming.value = false
+  }
+})
 </script>
 
 <template>
   <DefaultLayout>
     <div class="mx-auto flex min-h-[70vh] max-w-2xl items-center px-6 py-16">
-      <BaseCard class="w-full p-8 sm:p-10">
+      <BaseCard
+        v-if="isConfirming"
+        class="w-full p-8 text-center sm:p-10"
+      >
+        <p class="text-sm text-text-sub">
+          결제를 승인하는 중입니다...
+        </p>
+      </BaseCard>
+
+      <BaseCard
+        v-else-if="confirmError"
+        class="w-full p-8 sm:p-10"
+      >
+        <h1 class="text-center text-xl font-bold text-text-main">
+          결제 승인에 실패했습니다
+        </h1>
+        <p class="mx-auto mt-3 max-w-md text-center text-sm leading-6 text-red-600">
+          {{ confirmError }}
+        </p>
+        <div class="mt-6 flex flex-col gap-3">
+          <BaseButton
+            :to="`/purchase/${route.params.productId}`"
+            block
+          >
+            다시 시도하기
+          </BaseButton>
+        </div>
+      </BaseCard>
+
+      <BaseCard
+        v-else
+        class="w-full p-8 sm:p-10"
+      >
         <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary-gradient">
           <svg
             class="h-8 w-8 text-white"
@@ -53,26 +104,25 @@ const address = computed(() => route.query.address || '-')
           <div class="h-14 w-14 shrink-0 rounded-md bg-primary-gradient" />
           <div>
             <p class="text-sm font-bold text-text-main group-hover:text-primary group-hover:underline">
-              {{ product.name }}
+              {{ productName }}
             </p>
             <p class="mt-1 text-xs text-text-sub">
-              {{ product.brand }}
+              {{ manufacturer }}
             </p>
           </div>
         </RouterLink>
 
-        <div class="mt-6 space-y-2 border-t border-border pt-4 text-sm">
+        <div
+          v-if="payment"
+          class="mt-6 space-y-2 border-t border-border pt-4 text-sm"
+        >
           <div class="flex items-center justify-between">
-            <span class="text-text-sub">주문 번호</span>
-            <span class="font-semibold text-text-main">{{ orderNumber }}</span>
+            <span class="text-text-sub">결제 번호</span>
+            <span class="font-semibold text-text-main">{{ payment.paymentId }}</span>
           </div>
           <div class="flex items-center justify-between">
             <span class="text-text-sub">최종 결제 금액</span>
-            <span class="font-semibold text-text-main">₩{{ product.price.toLocaleString('ko-KR') }} (일시불)</span>
-          </div>
-          <div class="flex items-center justify-between">
-            <span class="text-text-sub">수령인</span>
-            <span class="font-semibold text-text-main">{{ receiverName }}</span>
+            <span class="font-semibold text-text-main">₩{{ Number(payment.approvedAmount).toLocaleString('ko-KR') }}</span>
           </div>
           <div class="flex items-center justify-between gap-4">
             <span class="shrink-0 text-text-sub">배송 주소</span>
