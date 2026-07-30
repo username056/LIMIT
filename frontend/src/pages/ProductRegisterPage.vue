@@ -95,6 +95,7 @@ const models = ref([])
 const modelKeyword = ref('')
 const isLoadingModels = ref(false)
 const modelLoadError = ref('')
+let modelRequestId = 0
 const isSaving = ref(false)
 const errorMessage = ref('')
 const notice = ref('')
@@ -286,7 +287,11 @@ const modelGroups = computed(() => {
     if (!groups.has(manufacturer)) groups.set(manufacturer, [])
     groups.get(manufacturer).push(item)
   })
-  return Array.from(groups, ([manufacturer, items]) => ({ manufacturer, items }))
+  return Array.from(groups, ([manufacturer, items]) => ({
+    manufacturer,
+    items: items.slice().sort((a, b) => String(a.modelName || '')
+      .localeCompare(String(b.modelName || ''))),
+  }))
 })
 const customModelCarrier = computed(
   () => models.value.find(
@@ -460,6 +465,7 @@ function resetForm() {
 }
 
 async function loadModels() {
+  const requestId = ++modelRequestId
   form.deviceModelId = ''
   templateItems.value = []
   checklistGeneration.value = null
@@ -467,14 +473,20 @@ async function loadModels() {
   models.value = []
   modelKeyword.value = ''
   modelLoadError.value = ''
-  if (!form.categoryId) return
+  if (!form.categoryId) {
+    isLoadingModels.value = false
+    return
+  }
   isLoadingModels.value = true
   try {
-    models.value = await getDeviceModels({ categoryId: form.categoryId, page: 0, size: 100 })
+    const response = await getDeviceModels({ categoryId: form.categoryId, page: 0, size: 100 })
+    if (requestId !== modelRequestId) return
+    models.value = Array.isArray(response) ? response : []
   } catch {
+    if (requestId !== modelRequestId) return
     modelLoadError.value = '모델 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'
   } finally {
-    isLoadingModels.value = false
+    if (requestId === modelRequestId) isLoadingModels.value = false
   }
 }
 
