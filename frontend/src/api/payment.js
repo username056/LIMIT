@@ -11,3 +11,7 @@ export function confirmPayment(paymentId, payload) {
 export function getPayment(paymentId) {
   return apiClient.get(`/payments/${paymentId}`)
 }
+
+export function cancelPayment(paymentId) {
+  return apiClient.post(`/payments/${paymentId}/cancel`)
+}

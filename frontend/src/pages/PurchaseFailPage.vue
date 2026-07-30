@@ -1,10 +1,22 @@
 <script setup>
+import { onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseCard from '../components/BaseCard.vue'
 import BaseButton from '../components/BaseButton.vue'
+import { cancelPayment } from '../api/payment'
 
 const route = useRoute()
+
+// Toss 결제창 취소·이탈로 여기 도착하면 매물 예약을 즉시 풀어준다. 이 호출이 실패하거나
+// 브라우저가 아예 닫혀 도달하지 못해도, 서버의 예약 만료 스케줄러가 최종 안전망으로 남는다 —
+// 그래서 여기서는 실패해도 사용자에게 에러를 보여주지 않고 조용히 넘어간다.
+onMounted(() => {
+  const { paymentId } = route.query
+  if (paymentId) {
+    cancelPayment(paymentId).catch(() => {})
+  }
+})
 </script>
 
 <template>
