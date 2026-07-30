@@ -13,6 +13,6 @@ public class DisabledChecklistSupplementClient implements ChecklistSupplementCli
 
     @Override
     public ChecklistSupplementResult suggest(ChecklistGenerationContext context) {
-        return ChecklistSupplementResult.unavailable();
+        return ChecklistSupplementResult.configurationUnavailable();
     }
 }

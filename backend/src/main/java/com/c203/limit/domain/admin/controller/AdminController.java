@@ -146,6 +146,12 @@ public class AdminController implements AdminApi {
     }
 
     @Override
+    public ResponseEntity<?> retryChecklistResearch(Long researchId) {
+        return ResponseEntity.ok(
+                ApiResponse.ok(checklistResearchService.retry(researchId, currentUser.adminId())));
+    }
+
+    @Override
     public ResponseEntity<?> listDeviceModelRequests(DeviceModelRequestStatus status) {
         return ResponseEntity.ok(ApiResponse.ok(deviceModelRequestService.list(status)));
     }

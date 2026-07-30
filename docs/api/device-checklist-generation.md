@@ -14,6 +14,9 @@
 - AI 조사는 `(deviceModelId, researchVersion)`별로 한 번만 수행하고 결과를 저장한다.
 - 조사 상태는 `PROCESSING`, `PENDING_REVIEW`, `APPROVED`, `REJECTED`, `FAILED`다.
 - 동일 모델을 다시 선택하면 저장된 상태를 반환하므로 매물이나 판매자마다 AI를 다시 호출하지 않는다.
+- `FAILED` 상태에는 민감 정보를 제외한 오류 코드와 사용자 안내 문구를 저장한다.
+- 실패한 조사는 관리자만 재시도할 수 있으며, 재조사 중에는 `PROCESSING`, 성공하면
+  `PENDING_REVIEW`, 다시 실패하면 새 실패 사유와 함께 `FAILED`가 된다.
 - `PENDING_REVIEW` 결과는 판매자 체크리스트에 섞지 않고 관리자 화면에서만 근거와 함께 보여준다.
 - 관리자가 기능 코드를 승인하면 새 버전의 `PUBLISHED` 템플릿을 발행한다.
 - 이후 같은 모델의 상품은 해당 공용 템플릿을 사용하고, 상품 등록 시점에는 항목을 `listing_checklist_item`으로 복사해 스냅샷을 고정한다.
@@ -46,7 +49,7 @@ ACTIVE 판매자만 호출할 수 있다.
 }
 ```
 
-응답의 `researchId`, `researchStatus`로 조사 상태를 확인한다. `aiApplied`는 관리자 승인본이 현재 게시 템플릿에 반영됐는지를 나타낸다. `false`여도 `items`에는 게시된 기본 항목이 포함된다.
+응답의 `researchId`, `researchStatus`로 조사 상태를 확인한다. `aiApplied`는 관리자 승인본이 현재 게시 템플릿에 반영됐는지를 나타낸다. `false`여도 `items`에는 게시된 기본 항목이 포함된다. `researchStatus`가 `FAILED`이면 판매 화면은 AI 조사 실패와 기본 정책 적용을 구분해 안내한다.
 
 판매자 응답에는 승인 전 `aiSuggestions`와 `reviewCandidates`를 노출하지 않는다. 관리자 조사 응답의 기능 후보는 다음 정보를 포함한다.
 
@@ -60,10 +63,16 @@ ACTIVE 판매자만 호출할 수 있다.
 ### 관리자 조사 검토
 
 - `GET /api/v1/admin/checklist-researches?status=PENDING_REVIEW`
+- `GET /api/v1/admin/checklist-researches?status=FAILED`
 - `POST /api/v1/admin/checklist-researches/{researchId}/approval`
 - `POST /api/v1/admin/checklist-researches/{researchId}/rejection`
+- `POST /api/v1/admin/checklist-researches/{researchId}/retry`
 
 승인 요청에서 `approvedFeatureCodes`를 생략하면 검증된 전체 후보를 승인한다. 배열을 보내면 해당 코드만 새 템플릿에 포함한다. 승인·반려는 관리자 작업 로그에 기록된다.
+
+실패 목록 응답에는 `failureCode`, `failureMessage`가 포함된다. 재시도 API는 `FAILED`
+상태에서만 호출할 수 있으며 AI 호출이 다시 실패해도 HTTP 요청 자체는 성공하고 갱신된
+`FAILED` 조사 결과를 반환한다. 관리자는 응답 상태와 실패 사유를 확인해 다시 시도할 수 있다.
 
 ### 직접 입력 모델 요청
 

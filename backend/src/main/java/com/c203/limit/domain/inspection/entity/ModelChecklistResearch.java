@@ -69,9 +69,20 @@ public class ModelChecklistResearch {
         this.updatedAt = LocalDateTime.now();
     }
 
-    public void fail() {
+    public void fail(String resultJson) {
         require(ModelChecklistResearchStatus.PROCESSING);
+        this.resultJson = resultJson;
         this.status = ModelChecklistResearchStatus.FAILED;
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    public void retry() {
+        require(ModelChecklistResearchStatus.FAILED);
+        this.status = ModelChecklistResearchStatus.PROCESSING;
+        this.resultJson = null;
+        this.reviewedByAdminId = null;
+        this.publishedTemplateId = null;
+        this.reviewNote = null;
         this.updatedAt = LocalDateTime.now();
     }
 

@@ -67,7 +67,7 @@ public class OpenAiChecklistSupplementClient implements ChecklistSupplementClien
     @Override
     public ChecklistSupplementResult suggest(ChecklistGenerationContext context) {
         if (apiKey.isBlank() || allowedDomains.isEmpty()) {
-            return ChecklistSupplementResult.unavailable();
+            return ChecklistSupplementResult.configurationUnavailable();
         }
         try {
             String response = restClient
@@ -81,7 +81,7 @@ public class OpenAiChecklistSupplementClient implements ChecklistSupplementClien
             return parse(response, context.deviceType());
         } catch (RestClientException | IllegalArgumentException exception) {
             log.warn("AI checklist supplement unavailable: {}", exception.getClass().getSimpleName());
-            return ChecklistSupplementResult.unavailable();
+            return ChecklistSupplementResult.requestFailed();
         }
     }
 
@@ -91,13 +91,13 @@ public class OpenAiChecklistSupplementClient implements ChecklistSupplementClien
 
     ChecklistSupplementResult parse(String responseBody, DeviceType deviceType) {
         if (responseBody == null || responseBody.isBlank()) {
-            return ChecklistSupplementResult.unavailable();
+            return ChecklistSupplementResult.invalidResponse();
         }
         try {
             JsonNode response = objectMapper.readTree(responseBody);
             String outputText = extractOutputText(response);
             if (outputText == null) {
-                return ChecklistSupplementResult.unavailable();
+                return ChecklistSupplementResult.invalidResponse();
             }
             JsonNode result = objectMapper.readTree(outputText);
             List<ChecklistSuggestion> suggestions = new ArrayList<>();
@@ -131,7 +131,7 @@ public class OpenAiChecklistSupplementClient implements ChecklistSupplementClien
             return new ChecklistSupplementResult(true, suggestions, reviewCandidates);
         } catch (Exception exception) {
             log.warn("AI checklist response rejected: {}", exception.getClass().getSimpleName());
-            return ChecklistSupplementResult.unavailable();
+            return ChecklistSupplementResult.invalidResponse();
         }
     }
 
