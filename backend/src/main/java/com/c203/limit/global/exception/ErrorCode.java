@@ -101,7 +101,10 @@ public enum ErrorCode {
     LISTING_NOT_PAID("PRD003", HttpStatus.CONFLICT, "결제완료 상태의 매물만 검수를 시작할 수 있습니다."),
     LISTING_NOT_INSPECTING("PRD004", HttpStatus.CONFLICT, "검수중 상태의 매물만 확정할 수 있습니다."),
     LISTING_NOT_CONFIRMED("PRD005", HttpStatus.CONFLICT, "확정 상태의 매물만 정산할 수 있습니다."),
-    PRODUCT_EDIT_NOT_ALLOWED("PRD006", HttpStatus.CONFLICT, "초안 상태의 상품만 수정할 수 있습니다."),
+    PRODUCT_EDIT_NOT_ALLOWED(
+            "PRD006",
+            HttpStatus.CONFLICT,
+            "거래가 시작된 상품은 수정할 수 없습니다. 초안·판매 중·숨김 상태에서만 수정할 수 있습니다."),
     PRODUCT_DELETE_NOT_ALLOWED("PRD007", HttpStatus.CONFLICT, "현재 상태의 상품은 삭제할 수 없습니다."),
     INVALID_PRODUCT_STATUS_TRANSITION("PRD008", HttpStatus.CONFLICT, "허용되지 않은 상품 상태 전환입니다."),
     REQUIRED_EVIDENCE_INCOMPLETE("PRD009", HttpStatus.UNPROCESSABLE_ENTITY, "필수 체크리스트를 완료해 주세요."),

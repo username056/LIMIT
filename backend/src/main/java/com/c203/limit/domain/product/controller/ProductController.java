@@ -47,10 +47,20 @@ public class ProductController implements ProductApi {
     public ResponseEntity<ApiResponse<ProductCreatedResponse>> createProduct(
             CreateProductRequest request) {
         Long sellerId = currentSellerMemberId();
-        GeneratedChecklist checklist = checklistGenerationService
-                .generateSnapshotIfLaptop(
-                        request.getDeviceModelId(), request.getConfirmedFeatures())
-                .orElse(null);
+        // 카탈로그에 없는 기기를 직접 입력했다면 판매자가 적은 제조사·모델명으로 체크리스트를 만든다.
+        // '기타 (직접 입력)' 모델 행에서 읽으면 제조사·모델명이 비어 있어 근거 자료를 찾을 수 없다.
+        GeneratedChecklist checklist = request.hasCustomModel()
+                ? checklistGenerationService.generateCustomForModel(
+                        request.getDeviceModelId(),
+                        request.getCustomManufacturer(),
+                        request.getCustomModelName(),
+                        request.getCustomModelCode(),
+                        request.getCustomOsFamily(),
+                        request.getConfirmedFeatures())
+                : checklistGenerationService
+                        .generateSnapshotIfLaptop(
+                                request.getDeviceModelId(), request.getConfirmedFeatures())
+                        .orElse(null);
         ProductCreatedResponse response = productService.create(sellerId, request, checklist);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
     }

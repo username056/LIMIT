@@ -519,4 +519,211 @@ describe('ProductRegisterPage', () => {
     expect(transitionProductStatus).not.toHaveBeenCalled()
     expect(routerPushMock).toHaveBeenCalledWith({ name: 'seller-products' })
   })
+
+  // 대표 이미지는 고르는 순간 서버에 올라가야 합니다. 그러지 않으면 이탈 시 선택이 사라집니다.
+  it('1단계 필수값이 채워져 있으면 대표 이미지를 고르는 즉시 초안을 만들고 업로드한다', async () => {
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await fillDeviceStep(wrapper)
+
+    const file = new File(['thumb'], 'thumb.jpg', { type: 'image/jpeg' })
+    await attachFile(wrapper.find('input[aria-label="대표 이미지 선택"]'), file)
+    await flushPromises()
+
+    // '다음 단계'를 누르지 않았는데도 상품이 만들어지고 업로드까지 끝나 있어야 합니다.
+    expect(createProduct).toHaveBeenCalledTimes(1)
+    expect(createProductImageUploadUrl).toHaveBeenCalledWith(1001, {
+      filename: 'thumb.jpg',
+      contentType: 'image/jpeg',
+      fileSize: file.size,
+    })
+    expect(completeProductImage).toHaveBeenCalledWith(1001, {
+      uploadId: 'image-upload-1',
+      imageType: 'THUMBNAIL',
+      displayOrder: 0,
+    })
+    expect(wrapper.text()).toContain('서버에 저장됨')
+  })
+
+  it('webp 대표 이미지는 원본 형식 그대로 업로드한다', async () => {
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await fillDeviceStep(wrapper)
+
+    const file = new File(['thumb'], 'thumb.webp', { type: 'image/webp' })
+    await attachFile(wrapper.find('input[aria-label="대표 이미지 선택"]'), file)
+    await flushPromises()
+
+    expect(createProductImageUploadUrl).toHaveBeenCalledWith(1001, {
+      filename: 'thumb.webp',
+      contentType: 'image/webp',
+      fileSize: file.size,
+    })
+  })
+
+  it('필수값이 비어 있으면 대표 이미지를 붙들고 있으면서 아직 저장되지 않았다고 알린다', async () => {
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+
+    await attachFile(
+      wrapper.find('input[aria-label="대표 이미지 선택"]'),
+      new File(['thumb'], 'thumb.jpg', { type: 'image/jpeg' }),
+    )
+    await flushPromises()
+
+    expect(createProduct).not.toHaveBeenCalled()
+    expect(createProductImageUploadUrl).not.toHaveBeenCalled()
+    expect(wrapper.find('img[alt="대표 이미지 미리보기"]').attributes('src')).toBe('blob:preview')
+    expect(wrapper.text()).toContain('아직 저장되지 않았습니다')
+    expect(wrapper.text()).toContain('대표 이미지가 바로 저장됩니다')
+
+    // 값을 채우고 다음 단계로 넘어가면 그때 함께 올라갑니다.
+    await fillDeviceStep(wrapper)
+    await buttonByText(wrapper, '다음 단계').trigger('click')
+    await flushPromises()
+
+    expect(completeProductImage).toHaveBeenCalledWith(1001, {
+      uploadId: 'image-upload-1',
+      imageType: 'THUMBNAIL',
+      displayOrder: 0,
+    })
+  })
+
+  // 카탈로그에 없는 기기를 가진 판매자가 등록할 길이 아예 없었습니다.
+  describe('카탈로그에 없는 기기 직접 입력', () => {
+    const laptopModels = [
+      {
+        deviceModelId: 101,
+        manufacturerName: 'Samsung',
+        modelName: 'Galaxy Book',
+        modelCode: 'NT750XGK',
+        defaultOs: 'WINDOWS',
+      },
+      {
+        deviceModelId: 199,
+        manufacturerName: null,
+        modelName: '기타 (직접 입력)',
+        modelCode: 'ETC-LAPTOP',
+      },
+    ]
+
+    async function openCustomModel(wrapper) {
+      await wrapper.findAll('select')[0].setValue('10')
+      await flushPromises()
+      await wrapper.findAll('select')[1].setValue('custom')
+      await flushPromises()
+    }
+
+    it("carrier 행은 목록에서 감추고 맨 아래 '직접 입력'을 제공한다", async () => {
+      getDeviceModels.mockResolvedValue(laptopModels)
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await wrapper.findAll('select')[0].setValue('10')
+      await flushPromises()
+
+      const options = wrapper.findAll('select')[1].findAll('option')
+      const labels = options.map((node) => node.text())
+      expect(labels).not.toContain('기타 (직접 입력)')
+      expect(labels[labels.length - 1]).toBe('직접 입력')
+      expect(options[options.length - 1].attributes('value')).toBe('custom')
+    })
+
+    it('노트북이 아닌 카테고리에는 직접 입력을 제공하지 않는다', async () => {
+      getDeviceModels.mockResolvedValue([
+        { deviceModelId: 301, manufacturerName: 'Samsung', modelName: 'Galaxy Tab S9', modelCode: 'SM-X710N' },
+        { deviceModelId: 399, manufacturerName: null, modelName: '기타 (직접 입력)', modelCode: 'ETC-TABLET' },
+      ])
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await wrapper.findAll('select')[0].setValue('10')
+      await flushPromises()
+
+      const labels = wrapper.findAll('select')[1].findAll('option').map((node) => node.text())
+      expect(labels).not.toContain('직접 입력')
+      expect(labels).not.toContain('기타 (직접 입력)')
+    })
+
+    it('입력한 제조사·모델명으로 체크리스트를 생성한다', async () => {
+      getDeviceModels.mockResolvedValue(laptopModels)
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await openCustomModel(wrapper)
+
+      // 값이 다 차기 전에는 생성을 요청하지 않습니다.
+      expect(generateChecklist).not.toHaveBeenCalled()
+
+      await wrapper.find('input[aria-label="직접 입력 제조사"]').setValue('LG')
+      await wrapper.find('input[aria-label="직접 입력 모델명"]').setValue('gram Pro 17')
+      await wrapper.find('input[aria-label="직접 입력 모델명"]').trigger('change')
+      await flushPromises()
+
+      expect(generateChecklist).toHaveBeenCalledWith({
+        manufacturer: 'LG',
+        modelName: 'gram Pro 17',
+        modelCode: null,
+        osFamily: 'WINDOWS',
+        confirmedFeatures: [],
+      })
+    })
+
+    it('등록 시 carrier 모델 ID와 직접 입력 값을 함께 보낸다', async () => {
+      getDeviceModels.mockResolvedValue(laptopModels)
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await openCustomModel(wrapper)
+
+      await wrapper.find('input[aria-label="직접 입력 제조사"]').setValue('LG')
+      await wrapper.find('input[aria-label="직접 입력 모델명"]').setValue('gram Pro 17')
+      await wrapper.find('input[aria-label="직접 입력 모델 코드"]').setValue('17Z90SP')
+      await wrapper.find('input[aria-label="직접 입력 모델명"]').trigger('change')
+      await flushPromises()
+
+      await wrapper.find('input[placeholder="예: 갤럭시 S24 256GB 자급제"]').setValue('그램 프로 17 팝니다')
+      await wrapper.find('input[placeholder="판매 가격"]').setValue('1500000')
+      await buttonByText(wrapper, '다음 단계').trigger('click')
+      await flushPromises()
+
+      expect(createProduct).toHaveBeenCalledWith(expect.objectContaining({
+        deviceModelId: 199,
+        customManufacturer: 'LG',
+        customModelName: 'gram Pro 17',
+        customModelCode: '17Z90SP',
+        customOsFamily: 'WINDOWS',
+      }))
+    })
+
+    it('직접 입력 값이 비어 있으면 다음 단계로 넘기지 않는다', async () => {
+      getDeviceModels.mockResolvedValue(laptopModels)
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await openCustomModel(wrapper)
+
+      await wrapper.find('input[placeholder="예: 갤럭시 S24 256GB 자급제"]').setValue('그램 프로 17 팝니다')
+      await wrapper.find('input[placeholder="판매 가격"]').setValue('1500000')
+      await buttonByText(wrapper, '다음 단계').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('제조사, 모델명, 운영체제를 모두 채워 주세요')
+      expect(createProduct).not.toHaveBeenCalled()
+    })
+  })
+
+  it('압축 후에도 15MB를 넘는 대표 이미지는 업로드하지 않고 안내한다', async () => {
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await fillDeviceStep(wrapper)
+
+    const huge = new File(['x'], 'huge.jpg', { type: 'image/jpeg' })
+    Object.defineProperty(huge, 'size', { value: 16 * 1024 * 1024 })
+    await attachFile(wrapper.find('input[aria-label="대표 이미지 선택"]'), huge)
+    await flushPromises()
+
+    expect(createProductImageUploadUrl).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('15MB를 넘을 수 없습니다')
+  })
 })
