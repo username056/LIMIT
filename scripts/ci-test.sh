@@ -50,6 +50,8 @@ run_backend_scripts() {
   bash -n scripts/bootstrap-ec2-stack.sh
   sh -n scripts/apply-ec2-env-remote.sh
   sh -n scripts/apply-ec2-env-remote.test.sh
+  sh -n scripts/apply-ci-s3-env-remote.sh
+  bash -n scripts/apply-ci-s3-env-remote.test.sh
   sh -n scripts/check-backend-logging.sh
   sh -n scripts/check-backend-logging.test.sh
   bash -n scripts/cors-config.test.sh
@@ -90,6 +92,7 @@ run_backend_scripts() {
   bash scripts/recover-seller-migration.test.sh
   bash scripts/recover-seller-migration-remote.test.sh
   sh scripts/apply-ec2-env-remote.test.sh
+  bash scripts/apply-ci-s3-env-remote.test.sh
 }
 
 run_backend() {

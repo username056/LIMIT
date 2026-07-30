@@ -96,7 +96,10 @@ EC2에서는 `AWS_ACCESS_KEY_ID`와 `AWS_SECRET_ACCESS_KEY`를 비워 두고 Ins
 
 운영 백엔드는 장기 Access Key를 사용하지 않습니다. `l1mit-prod-backend` Role을 운영 EC2의
 Instance Profile에 연결하고, 서버의 `infra/.env`에는 아래 비밀이 아닌 설정만 둡니다.
-`infra/.env`는 GitLab 배포가 복사하거나 덮어쓰지 않으므로 최초 1회 서버에서 직접 설정해야 합니다.
+GitLab의 앱·모니터링 배포는 `apply-ci-s3-env-remote.sh`를 통해 아래 S3 런타임
+설정만 서버 `infra/.env`에 원자적으로 반영한 뒤 Compose 설정을 검증합니다.
+기존 파일은 타임스탬프 백업으로 보존됩니다. `AWS_ACCESS_KEY_ID`와
+`AWS_SECRET_ACCESS_KEY`는 전달 대상에서 제외하며 EC2 Instance Profile을 사용합니다.
 
 ```dotenv
 AWS_REGION=ap-northeast-2
@@ -112,7 +115,8 @@ S3_FFPROBE_TIMEOUT=10s
 ```
 
 GitLab CI/CD 변수에도 동일한 이름을 `production` environment scope와 `Protected`로 등록해
-배포 전 설정 검증에 사용합니다. `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`는 등록하지 않습니다.
+배포 전 서버 환경 갱신과 설정 검증에 사용합니다. `AWS_ACCESS_KEY_ID`,
+`AWS_SECRET_ACCESS_KEY`는 등록하거나 서버로 전달하지 않습니다.
 CI 작업이 AWS API를 직접 호출해야 할 때만 기존 GitLab OIDC 토큰으로 Role을 assume하고,
 그 작업 안에서 발급되는 단기 자격 증명을 사용합니다.
 
