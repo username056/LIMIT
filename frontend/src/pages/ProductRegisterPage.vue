@@ -253,6 +253,12 @@ const selectedModel = computed(
 const supportsGeneratedChecklist = computed(
   () => ['WINDOWS', 'LINUX'].includes(selectedModel.value?.defaultOs),
 )
+// 목록에 없는 기기를 위한 '기타 (직접 입력)' 모델입니다. 서버 시드의 model_code와 규칙을
+// 공유합니다(V20260806__seed_generic_device_models.sql). 이 모델을 고르면 세부 모델명을
+// 글제목에 직접 적어야 하므로 그 안내를 띄웁니다.
+const isCustomModelSelected = computed(
+  () => String(selectedModel.value?.modelCode || '').startsWith('ETC-'),
+)
 const confirmedFeatureLimitReached = computed(() => confirmedFeatures.value.length >= 5)
 const mediaChecklistItems = computed(
   () => checklistItems.value.filter((item) => item.evidenceType !== 'SELLER_CONFIRMATION'),
@@ -1071,8 +1077,19 @@ onMounted(async () => {
                     v-for="item in models"
                     :key="item.deviceModelId"
                     :value="item.deviceModelId"
-                  >{{ item.manufacturerName }} {{ item.modelName }}</option>
+                  >{{ item.manufacturerName ? `${item.manufacturerName} ` : '' }}{{ item.modelName }}</option>
                 </select>
+                <!--
+                  목록에 없는 기기는 '기타 (직접 입력)'을 고르고 세부 모델명을 글제목에 적습니다.
+                  기기 모델은 체크리스트 템플릿이 묶인 실제 카탈로그 행이라 임의 문자열을 보낼 수 없습니다.
+                -->
+                <span
+                  v-if="isCustomModelSelected"
+                  class="mt-2 block rounded-md bg-accent px-3 py-2 text-xs font-normal leading-5 text-primary-dark"
+                >
+                  목록에 없는 기기를 고르셨습니다. 정확한 제조사와 모델명을 아래 <strong class="font-bold">글제목</strong>에
+                  적어 주세요. 검증 항목은 모든 기기에 공통인 4가지로 준비됩니다.
+                </span>
               </label>
             </div>
 
@@ -1314,14 +1331,8 @@ onMounted(async () => {
               <h3 class="text-sm font-bold text-text-main">
                 대표 이미지
               </h3>
-              <p class="mt-1 text-xs leading-5 text-text-sub">
-                판매글과 전체 상품 페이지 내에서 가장 먼저 보이는 사진입니다.
-              </p>
               <p class="mt-0.5 text-xs leading-5 text-text-sub">
-                JPG·PNG·WebP, 15MB까지 올릴 수 있습니다. 업로드 시 서버에 저장됩니다.
-              </p>
-              <p class="mt-0.5 text-xs leading-5 text-text-sub">
-                추가 사진은 다음 단계에서 더 올릴 수 있습니다.
+                JPG·PNG 파일만을 지원하며 이미지 용량은 15MB까지 가능해요.
               </p>
 
               <!-- 버튼은 미리보기 상자의 오른쪽 아래에 맞춰 둡니다(items-end). -->

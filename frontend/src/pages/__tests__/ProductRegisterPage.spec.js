@@ -589,6 +589,58 @@ describe('ProductRegisterPage', () => {
     })
   })
 
+  // 카탈로그에 없는 기기를 가진 판매자가 등록할 길이 아예 없었습니다.
+  it("'기타 (직접 입력)' 모델을 고르면 글제목에 모델명을 적으라고 안내한다", async () => {
+    getDeviceModels.mockResolvedValue([
+      {
+        deviceModelId: 101,
+        manufacturerName: 'Samsung',
+        modelName: 'Galaxy Book',
+        modelCode: 'NT750XGK',
+      },
+      {
+        deviceModelId: 199,
+        manufacturerName: null,
+        modelName: '기타 (직접 입력)',
+        modelCode: 'ETC-LAPTOP',
+      },
+    ])
+
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+
+    await wrapper.findAll('select')[0].setValue('10')
+    await flushPromises()
+
+    // 카탈로그 모델을 고르면 안내가 뜨지 않습니다.
+    await wrapper.findAll('select')[1].setValue('101')
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('목록에 없는 기기를 고르셨습니다')
+
+    await wrapper.findAll('select')[1].setValue('199')
+    await flushPromises()
+    expect(wrapper.text()).toContain('목록에 없는 기기를 고르셨습니다')
+    expect(wrapper.text()).toContain('글제목')
+  })
+
+  it("제조사가 없는 모델은 앞에 빈칸 없이 이름만 보여준다", async () => {
+    getDeviceModels.mockResolvedValue([{
+      deviceModelId: 199,
+      manufacturerName: null,
+      modelName: '기타 (직접 입력)',
+      modelCode: 'ETC-TABLET',
+    }])
+
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await wrapper.findAll('select')[0].setValue('10')
+    await flushPromises()
+
+    const option = wrapper.findAll('select')[1].findAll('option')
+      .find((node) => node.attributes('value') === '199')
+    expect(option.text()).toBe('기타 (직접 입력)')
+  })
+
   it('압축 후에도 15MB를 넘는 대표 이미지는 업로드하지 않고 안내한다', async () => {
     const wrapper = mount(ProductRegisterPage, { global: globalOptions })
     await flushPromises()
