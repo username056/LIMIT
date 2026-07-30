@@ -1320,6 +1320,9 @@ onMounted(async () => {
               <p class="mt-0.5 text-xs leading-5 text-text-sub">
                 JPG·PNG·WebP, 15MB까지 올릴 수 있습니다. 업로드 시 서버에 저장됩니다.
               </p>
+              <p class="mt-0.5 text-xs leading-5 text-text-sub">
+                추가 사진은 다음 단계에서 더 올릴 수 있습니다.
+              </p>
 
               <!-- 버튼은 미리보기 상자의 오른쪽 아래에 맞춰 둡니다(items-end). -->
               <div class="mt-4 flex items-end gap-3">
