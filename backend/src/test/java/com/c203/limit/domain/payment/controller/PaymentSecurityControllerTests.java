@@ -107,6 +107,24 @@ class PaymentSecurityControllerTests {
     }
 
     @Test
+    void cancelPaymentWithoutTokenIsUnauthorized() throws Exception {
+        mockMvc.perform(post("/api/v1/payments/{paymentId}/cancel", 500L))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void cancelPaymentReturnsConflictWithCommonEnvelopeWhenNotCancellable() throws Exception {
+        when(paymentService.cancel(BUYER_ID, 500L))
+                .thenThrow(new BusinessException(ErrorCode.PAYMENT_NOT_CANCELLABLE));
+
+        mockMvc.perform(
+                        post("/api/v1/payments/{paymentId}/cancel", 500L)
+                                .header("Authorization", memberBearer(BUYER_ID)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("PAY015"));
+    }
+
+    @Test
     void confirmPaymentReturnsUnprocessableEntityWithCommonEnvelopeWhenTossRejects() throws Exception {
         when(paymentService.confirm(org.mockito.ArgumentMatchers.eq(BUYER_ID), org.mockito.ArgumentMatchers.eq(500L), any()))
                 .thenThrow(new BusinessException(ErrorCode.PAYMENT_CONFIRM_REJECTED, "카드 승인이 거절되었습니다."));
