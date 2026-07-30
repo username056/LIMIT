@@ -146,6 +146,18 @@ public class Payment extends BaseTimeEntity {
     }
 
     /**
+     * 결제창 진입 전(REQUESTED) 단계에서 구매자가 명시적으로 취소할 때 호출한다. 이미 진행된 결제는
+     * 취소 대상이 아니므로 REQUESTED 상태에서만 허용한다 — 승인된 결제는 환불 흐름으로 유도한다.
+     */
+    public void cancel(String reason) {
+        if (this.status != PaymentStatus.REQUESTED) {
+            throw new BusinessException(ErrorCode.PAYMENT_NOT_CANCELLABLE);
+        }
+        this.status = PaymentStatus.CANCELLED;
+        this.failedReason = reason;
+    }
+
+    /**
      * 예약 유예 시간 안에 결제가 완료되지 않아 시스템이 요청을 만료 처리할 때 호출한다. 이미
      * 승인·거절·환불 등으로 진행된 결제는 만료 대상이 아니므로 REQUESTED 상태에서만 허용한다.
      */

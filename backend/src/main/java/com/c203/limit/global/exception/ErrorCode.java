@@ -143,6 +143,8 @@ public enum ErrorCode {
             "PAY013", HttpStatus.CONFLICT, "결제는 승인되었으나 매물 예약 상태가 유효하지 않습니다. 고객센터로 문의해 주세요."),
     PAYMENT_CONFIRM_RESERVATION_EXPIRED(
             "PAY014", HttpStatus.CONFLICT, "예약이 만료되었거나 유효하지 않아 결제를 확정할 수 없습니다."),
+    PAYMENT_NOT_CANCELLABLE(
+            "PAY015", HttpStatus.CONFLICT, "요청 상태의 결제만 취소할 수 있습니다. 이미 승인된 결제는 환불을 이용해 주세요."),
 
     // ========== 장소 검색 에러 ==========
     PLACE_SEARCH_UNAVAILABLE("PLC001", HttpStatus.SERVICE_UNAVAILABLE, "장소 검색 설정을 확인해 주세요."),
