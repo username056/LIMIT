@@ -34,6 +34,7 @@ import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
 import com.c203.limit.domain.product.repository.ListingThumbnailProjection;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
+import com.c203.limit.domain.product.storage.MediaUrlResolver;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -53,6 +54,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @Service
 public class ProductApplicationService {
@@ -69,6 +71,27 @@ public class ProductApplicationService {
     private final ListingChecklistItemRepository checklistItemRepository;
     private final ListingStatusHistoryRepository statusHistoryRepository;
     private final ListingImageRepository imageRepository;
+    private final MediaUrlResolver mediaUrlResolver;
+
+    @Autowired
+    public ProductApplicationService(
+            ListingRepository listingRepository,
+            CategoryRepository categoryRepository,
+            ChecklistTemplateRepository templateRepository,
+            ChecklistTemplateItemRepository templateItemRepository,
+            ListingChecklistItemRepository checklistItemRepository,
+            ListingStatusHistoryRepository statusHistoryRepository,
+            ListingImageRepository imageRepository,
+            MediaUrlResolver mediaUrlResolver) {
+        this.listingRepository = listingRepository;
+        this.categoryRepository = categoryRepository;
+        this.templateRepository = templateRepository;
+        this.templateItemRepository = templateItemRepository;
+        this.checklistItemRepository = checklistItemRepository;
+        this.statusHistoryRepository = statusHistoryRepository;
+        this.imageRepository = imageRepository;
+        this.mediaUrlResolver = mediaUrlResolver;
+    }
 
     public ProductApplicationService(
             ListingRepository listingRepository,
@@ -78,13 +101,15 @@ public class ProductApplicationService {
             ListingChecklistItemRepository checklistItemRepository,
             ListingStatusHistoryRepository statusHistoryRepository,
             ListingImageRepository imageRepository) {
-        this.listingRepository = listingRepository;
-        this.categoryRepository = categoryRepository;
-        this.templateRepository = templateRepository;
-        this.templateItemRepository = templateItemRepository;
-        this.checklistItemRepository = checklistItemRepository;
-        this.statusHistoryRepository = statusHistoryRepository;
-        this.imageRepository = imageRepository;
+        this(
+                listingRepository,
+                categoryRepository,
+                templateRepository,
+                templateItemRepository,
+                checklistItemRepository,
+                statusHistoryRepository,
+                imageRepository,
+                null);
     }
 
     @Transactional
@@ -119,17 +144,19 @@ public class ProductApplicationService {
                     .toList();
             templateItems = templateItemRepository.saveAllAndFlush(generatedItems);
         }
-        Listing listing = listingRepository.saveAndFlush(
-                Listing.createDraft(
-                        sellerId,
-                        model,
-                        request.getName(),
-                        request.getDescription(),
-                        price(request.getPrice()),
-                        request.getColor(),
-                        request.getStorageGb(),
-                        request.getTradeRegion(),
-                        template.getId()));
+        Listing draft = Listing.createDraft(
+                sellerId,
+                model,
+                request.getName(),
+                request.getDescription(),
+                price(request.getPrice()),
+                request.getColor(),
+                request.getStorageGb(),
+                request.getTradeRegion(),
+                template.getId());
+        // '기타 (직접 입력)' 모델 한 행에 여러 기기가 매달리므로 실제 제조사·모델명은 매물에 남긴다.
+        draft.applyCustomModel(request.getCustomManufacturer(), request.getCustomModelName());
+        Listing listing = listingRepository.saveAndFlush(draft);
         List<ListingChecklistItem> snapshots = templateItems.stream()
                 .map(item -> ListingChecklistItem.createFromTemplateItem(listing.getId(), item))
                 .toList();
@@ -176,7 +203,7 @@ public class ProductApplicationService {
     @Transactional
     public ProductDetailResponse update(Long sellerId, Long productId, UpdateProductRequest request) {
         Listing listing = owned(productId, sellerId);
-        listing.updateDraft(
+        listing.updateBySeller(
                 request.getName(),
                 request.getDescription(),
                 request.isDescriptionSpecified(),
@@ -186,7 +213,20 @@ public class ProductApplicationService {
                 request.getStorageGb(),
                 request.isStorageGbSpecified(),
                 request.getTradeRegion());
-        log.info("product draft updated: productId={}", productId);
+        // 직접 입력 모델은 오타를 고칠 수 있어야 한다. 값을 보내지 않으면 기존 값을 유지한다.
+        if (request.getCustomManufacturer() != null || request.getCustomModelName() != null) {
+            listing.applyCustomModel(
+                    request.getCustomManufacturer() != null
+                            ? request.getCustomManufacturer()
+                            : listing.getCustomManufacturer(),
+                    request.getCustomModelName() != null
+                            ? request.getCustomModelName()
+                            : listing.getCustomModelName());
+        }
+        log.info(
+                "product updated by seller: productId={}, status={}",
+                productId,
+                listing.getStatus());
         return detail(listing);
     }
 
@@ -302,13 +342,15 @@ public class ProductApplicationService {
             throw new BusinessException(ErrorCode.INVALID_PRODUCT_STATUS_TRANSITION);
         }
         if (target == ListingStatus.ON_SALE) {
-            if (required(listing.getId()) != completedRequired(listing.getId())) {
-                throw new BusinessException(ErrorCode.REQUIRED_EVIDENCE_INCOMPLETE);
-            }
+            // 판매 시작은 체크리스트 완료 여부로 막지 않는다. 등록을 마친 판매자가 다시 '판매 시작'을
+            // 눌러야 하는 흐름을 없애기 위한 정책이며, 남은 항목은 상세의 검증 진행률로 구매자에게 드러난다.
             listing.completePrecheck();
             listing.publish();
         } else if (target == ListingStatus.HIDDEN) {
             listing.hide();
+        } else if (target == ListingStatus.SOLD) {
+            // 직거래로 팔린 매물을 판매자가 직접 닫는 경로다. 결제 흐름을 거치지 않는다.
+            listing.markSoldBySeller();
         } else {
             throw new BusinessException(ErrorCode.INVALID_PRODUCT_STATUS_TRANSITION);
         }
@@ -327,6 +369,22 @@ public class ProductApplicationService {
                 listing.getStatus().name(),
                 request.getReason(),
                 offset(history.getCreatedAt()));
+    }
+
+    /**
+     * 판매자가 직접 입력한 값이 있으면 그것을 보여준다. 카탈로그의 '기타 (직접 입력)' 행은 여러 기기가
+     * 공유하는 자리표시자여서 그 이름을 그대로 노출하면 구매자가 기기를 특정할 수 없다.
+     */
+    private String displayManufacturer(Listing listing, Category model) {
+        return listing.getCustomManufacturer() != null
+                ? listing.getCustomManufacturer()
+                : model.getManufacturer();
+    }
+
+    private String displayModelName(Listing listing, Category model) {
+        return listing.getCustomModelName() != null
+                ? listing.getCustomModelName()
+                : model.getName();
     }
 
     private Listing owned(Long productId, Long sellerId) {
@@ -351,8 +409,8 @@ public class ProductApplicationService {
                 categoryResponse(parent == null ? model : parent),
                 new DeviceInfoResponse(
                         model.getId(),
-                        model.getManufacturer(),
-                        model.getName(),
+                        displayManufacturer(listing, model),
+                        displayModelName(listing, model),
                         model.getOsFamily() == null ? null : model.getOsFamily().name(),
                         listing.getColor(),
                         listing.getStorageGb()),
@@ -374,8 +432,8 @@ public class ProductApplicationService {
         return new ProductSummaryResponse(
                 listing.getId(),
                 listing.getTitle(),
-                listing.getCategory().getManufacturer(),
-                listing.getCategory().getName(),
+                displayManufacturer(listing, listing.getCategory()),
+                displayModelName(listing, listing.getCategory()),
                 BigDecimal.valueOf(listing.getPrice()),
                 listing.getStatus().name(),
                 verification,
@@ -397,6 +455,7 @@ public class ProductApplicationService {
                         listingId, ChecklistItemCompletionStatus.COMPLETED));
     }
 
+
     private Map<Long, ProductMetrics> loadMetrics(List<Listing> listings) {
         if (listings.isEmpty()) return Map.of();
         List<Long> listingIds = listings.stream().map(Listing::getId).toList();
@@ -409,7 +468,9 @@ public class ProductApplicationService {
                 .stream()
                 .collect(Collectors.toMap(
                         ListingThumbnailProjection::getListingId,
-                        ListingThumbnailProjection::getCdnUrl));
+                        image -> mediaUrlResolver == null
+                                ? image.getCdnUrl()
+                                : mediaUrlResolver.resolve(image.getS3Key(), image.getCdnUrl())));
         Map<Long, ProductMetrics> result = new HashMap<>();
         listingIds.forEach(listingId -> {
             ListingChecklistCountProjection count = counts.get(listingId);
@@ -436,9 +497,13 @@ public class ProductApplicationService {
         }
     }
 
-    private int price(BigDecimal price) {
+    private long price(BigDecimal price) {
         try {
-            return price.intValueExact();
+            long value = price.longValueExact();
+            if (value < 1 || value > 999_999_999_999L) {
+                throw new ArithmeticException("price out of contract");
+            }
+            return value;
         } catch (ArithmeticException exception) {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
         }

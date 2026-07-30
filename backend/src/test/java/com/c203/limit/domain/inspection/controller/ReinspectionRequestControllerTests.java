@@ -68,6 +68,7 @@ class ReinspectionRequestControllerTests {
 
     private ReinspectionRequestResponse response(String status, LocalDateTime completedAt) {
         return new ReinspectionRequestResponse(
+                10L,
                 "request-key",
                 status,
                 "외관을 다시 확인해 주세요",

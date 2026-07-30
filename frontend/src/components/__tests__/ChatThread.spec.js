@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ChatThread from '../ChatThread.vue'
 import { getChatMessages } from '../../api/chat'
 import { createChatSocket } from '../../api/chatSocket'
-import { getProduct } from '../../api/products'
+import { getProduct, getProductChecklist } from '../../api/products'
 import { getMyRtcCalls, requestRtcCall, respondRtcCall } from '../../api/rtc'
 
 vi.mock('../../api/chat', () => ({
@@ -12,7 +12,7 @@ vi.mock('../../api/chat', () => ({
   uploadChatMedia: vi.fn(),
 }))
 vi.mock('../../api/chatSocket', () => ({ createChatSocket: vi.fn() }))
-vi.mock('../../api/products', () => ({ getProduct: vi.fn() }))
+vi.mock('../../api/products', () => ({ getProduct: vi.fn(), getProductChecklist: vi.fn() }))
 vi.mock('../../api/rtc', () => ({
   getMyRtcCalls: vi.fn(),
   requestRtcCall: vi.fn(),
@@ -81,6 +81,33 @@ describe('ChatThread', () => {
         },
       ],
     })
+  })
+
+  it('상품의 체크리스트를 펼쳐서 항목과 진행 상태를 보여준다', async () => {
+    getProductChecklist.mockResolvedValue([
+      { checklistItemId: 7001, name: '전면·후면·측면 외관', evidenceType: 'PHOTO', isRequired: true, status: 'COMPLETED' },
+      { checklistItemId: 7002, name: '화면 밝기', evidenceType: 'VIDEO', isRequired: true, status: 'PENDING' },
+    ])
+
+    const wrapper = mountThread()
+    await flushPromises()
+
+    expect(getProductChecklist).toHaveBeenCalledWith(1)
+    // 기본은 접힌 상태라 항목이 보이지 않습니다.
+    expect(wrapper.text()).toContain('검증 체크리스트')
+    expect(wrapper.text()).toContain('1 / 2')
+    expect(wrapper.text()).not.toContain('전면·후면·측면 외관')
+
+    await wrapper.findAll('button').find((button) => button.text().includes('펼치기')).trigger('click')
+
+    expect(wrapper.text()).toContain('전면·후면·측면 외관')
+    expect(wrapper.text()).toContain('화면 밝기')
+    expect(wrapper.text()).toContain('자료 확인')
+    expect(wrapper.text()).toContain('미등록')
+
+    // 항목이 많아도 채팅 영역을 밀지 않도록 스크롤 영역에 담습니다.
+    const list = wrapper.findAll('ul').find((node) => node.text().includes('전면·후면·측면 외관'))
+    expect(list.classes()).toContain('overflow-y-auto')
   })
 
   it('상대방이 읽은 내 메시지에만 읽음을 표시한다', async () => {

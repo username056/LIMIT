@@ -26,10 +26,13 @@ public class ListingImage {
     @Column(name = "image_type", nullable = false, length = 30)
     private ListingImageType imageType;
 
+    @Column(name = "display_order", nullable = false)
+    private int displayOrder;
+
     @Column(name = "s3_key", nullable = false, length = 500)
     private String s3Key;
 
-    @Column(name = "cdn_url", nullable = false, length = 500)
+    @Column(name = "cdn_url", length = 500)
     private String cdnUrl;
 
     @Column(name = "mime_type", nullable = false, length = 50)
@@ -40,13 +43,32 @@ public class ListingImage {
 
     public static ListingImage create(
             Listing listing, ListingImageType imageType, String s3Key, String cdnUrl, String mimeType) {
+        return create(listing, imageType, 0, s3Key, cdnUrl, mimeType);
+    }
+
+    public static ListingImage create(
+            Listing listing,
+            ListingImageType imageType,
+            int displayOrder,
+            String s3Key,
+            String cdnUrl,
+            String mimeType) {
         ListingImage image = new ListingImage();
         image.listing = listing;
         image.imageType = imageType;
+        image.displayOrder = displayOrder;
         image.s3Key = s3Key;
         image.cdnUrl = cdnUrl;
         image.mimeType = mimeType;
         image.createdAt = LocalDateTime.now();
         return image;
+    }
+
+    public void changeType(ListingImageType imageType) {
+        this.imageType = imageType;
+    }
+
+    public void changeOrder(int displayOrder) {
+        this.displayOrder = displayOrder;
     }
 }

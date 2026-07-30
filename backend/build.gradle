@@ -43,6 +43,8 @@ repositories {
     mavenCentral()
 }
 
+ext['netty.version'] = '4.2.16.Final'
+
 dependencyCheck {
     failBuildOnCVSS = 7.0
     formats = ['HTML', 'JSON']
@@ -56,6 +58,7 @@ dependencyCheck {
 
 dependencies {
     testImplementation platform('org.testcontainers:testcontainers-bom:2.0.5')
+    implementation platform('software.amazon.awssdk:bom:2.46.8')
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
@@ -66,9 +69,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-mail'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
-    implementation 'org.springframework.boot:spring-boot-starter-websocket'
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
     implementation 'org.jsoup:jsoup:1.17.2'
+    implementation 'software.amazon.awssdk:s3'
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
     testCompileOnly 'org.projectlombok:lombok'
@@ -103,6 +106,26 @@ tasks.register('integrationTest', Test) {
     testClassesDirs = sourceSets.integrationTest.output.classesDirs
     classpath = sourceSets.integrationTest.runtimeClasspath
     shouldRunAfter tasks.named('test')
+    def integrationSuite = providers.gradleProperty('integrationSuite').orNull
+    if (integrationSuite == 'core') {
+        filter {
+            includeTestsMatching 'com.c203.limit.DatabaseSchemaIntegrationTests'
+            includeTestsMatching 'com.c203.limit.domain.chat.repository.*'
+            includeTestsMatching 'com.c203.limit.domain.payment.*'
+            includeTestsMatching 'com.c203.limit.domain.product.repository.*'
+        }
+    } else if (integrationSuite == 'support') {
+        // core에 명시적으로 포함되지 않은 현재·미래 통합 테스트를 전부 실행한다.
+        // 새 테스트가 어느 shard에도 속하지 않아 조용히 누락되는 상황을 막는다.
+        filter {
+            excludeTestsMatching 'com.c203.limit.DatabaseSchemaIntegrationTests'
+            excludeTestsMatching 'com.c203.limit.domain.chat.repository.*'
+            excludeTestsMatching 'com.c203.limit.domain.payment.*'
+            excludeTestsMatching 'com.c203.limit.domain.product.repository.*'
+        }
+    } else if (integrationSuite != null) {
+        throw new GradleException("Unknown integrationSuite: ${integrationSuite}")
+    }
     useJUnitPlatform {
         excludeTags 'full-infrastructure'
     }
@@ -123,6 +146,11 @@ tasks.named('test') {
     useJUnitPlatform()
     // 단위·슬라이스 테스트에서 예약 만료 @Scheduled 자동 실행이 직접 호출과 경합하지 않도록 끈다.
     systemProperty 'limit.payment.reservation-expiration.enabled', 'false'
+    // CI의 별도 openApiExport Gradle job을 없애고 이미 부팅한 계약 테스트 Context에서
+    // 현재 계약을 함께 내보낸다.
+    def openApiOutput = layout.buildDirectory.file('openapi/current.json').get().asFile
+    systemProperty 'openapi.output', openApiOutput.absolutePath
+    outputs.file(openApiOutput)
 }
 
 tasks.named('jacocoTestReport') {

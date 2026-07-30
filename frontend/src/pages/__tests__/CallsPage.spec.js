@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CallsPage from '../CallsPage.vue'
 import { cancelRtcCall, getMyRtcCalls, updateRtcCall } from '../../api/rtc'
+import { getMyReinspectionRequests } from '../../api/products'
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -12,6 +13,9 @@ vi.mock('../../api/rtc', () => ({
   getMyRtcCalls: vi.fn(),
   respondRtcCall: vi.fn(),
   updateRtcCall: vi.fn(),
+}))
+vi.mock('../../api/products', () => ({
+  getMyReinspectionRequests: vi.fn(),
 }))
 
 const outgoingCall = {
@@ -47,6 +51,7 @@ describe('CallsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     getMyRtcCalls.mockResolvedValue([outgoingCall])
+    getMyReinspectionRequests.mockResolvedValue([])
   })
 
   it('보낸 통화 약속의 시간과 메모를 변경한다', async () => {

@@ -6,6 +6,8 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -29,6 +31,7 @@ public class UpdateProductRequest {
 
     @Schema(description = "판매 가격", example = "630000")
     @Positive
+    @Digits(integer = 12, fraction = 0)
     private BigDecimal price;
 
     @Schema(description = "색상", example = "Onyx Black", nullable = true)
@@ -40,6 +43,7 @@ public class UpdateProductRequest {
 
     @Schema(description = "저장 용량(GB)", example = "256", nullable = true)
     @Min(1)
+    @Max(16384)
     private Integer storageGb;
 
     @JsonIgnore
@@ -48,6 +52,16 @@ public class UpdateProductRequest {
     @Schema(description = "거래 지역", example = "서울 송파구")
     @Size(max = 100)
     private String tradeRegion;
+
+    @Schema(
+            description = "직접 입력 제조사. '기타 (직접 입력)' 모델로 등록한 매물에서만 의미가 있다.",
+            example = "Samsung")
+    @Size(max = 50)
+    private String customManufacturer;
+
+    @Schema(description = "직접 입력 모델명", example = "Galaxy Book4 Pro")
+    @Size(max = 100)
+    private String customModelName;
 
     @JsonSetter("name")
     public void setName(String name) {
@@ -80,5 +94,15 @@ public class UpdateProductRequest {
     @JsonSetter("tradeRegion")
     public void setTradeRegion(String tradeRegion) {
         this.tradeRegion = tradeRegion;
+    }
+
+    @JsonSetter("customManufacturer")
+    public void setCustomManufacturer(String customManufacturer) {
+        this.customManufacturer = customManufacturer;
+    }
+
+    @JsonSetter("customModelName")
+    public void setCustomModelName(String customModelName) {
+        this.customModelName = customModelName;
     }
 }

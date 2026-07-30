@@ -12,8 +12,8 @@ MySQL 스키마는 애플리케이션 시작 시 Flyway가 적용하고, Hiberna
 - `V20260722__member_terms_agreement.sql`: 회원 약관 동의 이력 테이블 보정
 - `V20260723__create_product_checklist_tables.sql`: 상품·체크리스트·증거·재검수 스키마 추가
 - `V20260802__create_instant_seller_profiles.sql`: 즉시 판매자 등록 프로필과 기존 판매자 데이터 호환 이관
-- `V20260804__create_model_checklist_research.sql`: 모델별 AI 조사 상태·결과·승인 템플릿 연결 추가
-- `V20260805__create_device_model_request.sql`: 판매자의 미등록 기기 모델 검토 요청 추가
+- `V20260809__create_model_checklist_research.sql`: 모델별 AI 조사 상태·결과·승인 템플릿 연결 추가
+- `V20260810__create_device_model_request.sql`: 판매자의 미등록 기기 모델 검토 요청 추가
 
 `V20260721`은 기존 `member_role`, `user_sanction`, `user_account.member_type`을 삭제하지 않는다. 기존 `member_type` 값도 보존하며, 신규 회원 INSERT를 막지 않도록 해당 컬럼만 nullable/default 호환 상태로 바꾼다.
 

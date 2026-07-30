@@ -28,7 +28,6 @@ const filters = reactive({
   categoryId: '',
   minPrice: '',
   maxPrice: '',
-  tradeRegion: '',
   verificationCountRanges: [], // 빈 배열 = 전체
   sort: 'createdAt,desc',
 })
@@ -74,7 +73,6 @@ const activeFilterCount = computed(() => [
   filters.categoryId,
   filters.minPrice,
   filters.maxPrice,
-  filters.tradeRegion,
   ...filters.verificationCountRanges,
 ].filter(Boolean).length)
 
@@ -132,7 +130,6 @@ async function resetFilters() {
     categoryId: '',
     minPrice: '',
     maxPrice: '',
-    tradeRegion: '',
     verificationCountRanges: [],
     sort: 'createdAt,desc',
   })
@@ -302,15 +299,6 @@ watch(() => [route.query.q, route.query.categoryId], async ([keyword, categoryId
               </div>
             </fieldset>
 
-            <label class="mt-5 block text-xs font-semibold text-text-main">
-              거래 지역
-              <input
-                v-model.trim="filters.tradeRegion"
-                placeholder="예: 서울 강남구"
-                class="mt-2 w-full rounded-md border border-border bg-bg px-3 py-2.5 text-sm outline-none focus:border-primary"
-              >
-            </label>
-
             <BaseButton
               class="mt-6"
               type="submit"
@@ -416,9 +404,8 @@ watch(() => [route.query.q, route.query.categoryId], async ([keyword, categoryId
                 <p class="mt-3 text-lg font-bold text-text-main">
                   {{ formatPrice(product.price) }}원
                 </p>
-                <div class="mt-3 flex items-center justify-between border-t border-border pt-3 text-xs text-text-sub">
-                  <span class="truncate">{{ product.tradeRegion || '거래 지역 협의' }}</span>
-                  <span class="ml-2 shrink-0 font-semibold text-primary">상세 보기 →</span>
+                <div class="mt-3 flex items-center justify-end border-t border-border pt-3 text-xs text-text-sub">
+                  <span class="shrink-0 font-semibold text-primary">상세 보기 →</span>
                 </div>
               </div>
             </RouterLink>

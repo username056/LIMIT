@@ -1,5 +1,6 @@
 package com.c203.limit.domain.payment.controller;
 
+import com.c203.limit.domain.payment.dto.request.ConfirmPaymentRequest;
 import com.c203.limit.domain.payment.dto.request.CreatePaymentRequest;
 import com.c203.limit.domain.payment.dto.response.PaymentApiResponse;
 import com.c203.limit.domain.payment.dto.response.PaymentResponse;
@@ -45,6 +46,35 @@ public interface PaymentApi {
             produces = MediaType.APPLICATION_JSON_VALUE)
     ResponseEntity<ApiResponse<PaymentResponse>> createPayment(
             @Valid @RequestBody CreatePaymentRequest request);
+
+    @Operation(
+            operationId = "payment03",
+            summary = "결제 승인(confirm)",
+            description = "Toss 결제창에서 승인된 결제를 서버에서 확정합니다. orderId·금액을 저장된 결제 "
+                    + "요청과 대조한 뒤 Toss 승인 API를 호출하고, 성공하면 결제를 APPROVED로, 매물을 "
+                    + "PAID로 전환합니다.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "200",
+                description = "결제 승인 성공",
+                content = @Content(schema = @Schema(implementation = PaymentApiResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "400",
+                description = "PAYMENT_ORDER_ID_MISMATCH / PAYMENT_AMOUNT_MISMATCH"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "UNAUTHORIZED"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "PAYMENT_ACCESS_DENIED"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "PAYMENT_NOT_FOUND"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "PAYMENT_NOT_CONFIRMABLE"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "422", description = "PAYMENT_CONFIRM_REJECTED"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "PAYMENT_CONFIRM_RETRYABLE")
+    })
+    @PostMapping(
+            path = "/api/v1/payments/{paymentId}/confirm",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    ResponseEntity<ApiResponse<PaymentResponse>> confirmPayment(
+            @PathVariable Long paymentId, @Valid @RequestBody ConfirmPaymentRequest request);
 
     @Operation(
             operationId = "payment02",

@@ -42,6 +42,8 @@ import com.c203.limit.domain.inspection.repository.OcrResultRepository;
 import com.c203.limit.domain.product.repository.ListingRepository;
 import com.c203.limit.domain.product.repository.WishlistRepository;
 import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
+import com.c203.limit.domain.product.repository.ListingImageRepository;
+import com.c203.limit.domain.product.repository.MediaUploadSessionRepository;
 import com.c203.limit.domain.product.service.ProductApplicationService;
 import com.c203.limit.domain.product.service.ProductCatalogService;
 import com.c203.limit.domain.payment.service.PaymentService;
@@ -93,6 +95,8 @@ class AdminAuthorizationTests {
     com.c203.limit.domain.inspection.checklist.ChecklistGenerationService
             checklistGenerationService;
     @MockitoBean ListingStatusHistoryRepository listingStatusHistoryRepository;
+    @MockitoBean ListingImageRepository listingImageRepository;
+    @MockitoBean MediaUploadSessionRepository mediaUploadSessionRepository;
     @MockitoBean PaymentService paymentService;
     @MockitoBean com.c203.limit.domain.payment.repository.PaymentRepository paymentRepository;
     @MockitoBean EvidenceRepository evidenceRepository;

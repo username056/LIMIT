@@ -11,12 +11,26 @@ run_backend_compile() {
 
 run_backend_unit() {
   cd "$root_dir/backend"
-  ./gradlew test --no-daemon
+  if [ "${VERIFY_BOOT_JAR:-false}" = "true" ]; then
+    ./gradlew test bootJar --no-daemon
+  else
+    ./gradlew test --no-daemon
+  fi
 }
 
 run_backend_integration() {
   cd "$root_dir/backend"
   ./gradlew integrationTest --no-daemon
+}
+
+run_backend_integration_core() {
+  cd "$root_dir/backend"
+  ./gradlew integrationTest -PintegrationSuite=core --no-daemon
+}
+
+run_backend_integration_support() {
+  cd "$root_dir/backend"
+  ./gradlew integrationTest -PintegrationSuite=support --no-daemon
 }
 
 run_backend_infrastructure() {
@@ -31,10 +45,13 @@ run_backend_package() {
 
 run_backend_scripts() {
   cd "$root_dir"
+  sh -n scripts/build-image.sh
   bash -n scripts/deploy-blue-green.sh
   bash -n scripts/bootstrap-ec2-stack.sh
   sh -n scripts/apply-ec2-env-remote.sh
   sh -n scripts/apply-ec2-env-remote.test.sh
+  sh -n scripts/apply-ci-s3-env-remote.sh
+  bash -n scripts/apply-ci-s3-env-remote.test.sh
   sh -n scripts/check-backend-logging.sh
   sh -n scripts/check-backend-logging.test.sh
   bash -n scripts/cors-config.test.sh
@@ -75,6 +92,7 @@ run_backend_scripts() {
   bash scripts/recover-seller-migration.test.sh
   bash scripts/recover-seller-migration-remote.test.sh
   sh scripts/apply-ec2-env-remote.test.sh
+  bash scripts/apply-ci-s3-env-remote.test.sh
 }
 
 run_backend() {
@@ -90,21 +108,49 @@ run_frontend() {
   npm run build
 }
 
+run_frontend_lint() {
+  cd "$root_dir"
+  sh -n scripts/deploy-frontend.sh
+  grep -Fq 'aws s3 sync "$source_dir/assets/"' scripts/deploy-frontend.sh
+  grep -Fq -- '--size-only' scripts/deploy-frontend.sh
+  grep -Fq -- '--exclude "assets/*"' scripts/deploy-frontend.sh
+  cd "$root_dir/frontend"
+  npm ci --no-audit --no-fund
+  npm run lint
+}
+
+run_frontend_test() {
+  cd "$root_dir/frontend"
+  npm ci --no-audit --no-fund
+  npm run test
+}
+
+run_frontend_build() {
+  cd "$root_dir/frontend"
+  npm ci --no-audit --no-fund
+  npm run build
+}
+
 case "$scope" in
   backend-compile) run_backend_compile ;;
   backend-unit) run_backend_unit ;;
   backend-integration) run_backend_integration ;;
+  backend-integration-core) run_backend_integration_core ;;
+  backend-integration-support) run_backend_integration_support ;;
   backend-infrastructure) run_backend_infrastructure ;;
   backend-package) run_backend_package ;;
   backend-scripts) run_backend_scripts ;;
   backend) run_backend ;;
+  frontend-lint) run_frontend_lint ;;
+  frontend-test) run_frontend_test ;;
+  frontend-build) run_frontend_build ;;
   frontend) run_frontend ;;
   all)
     run_backend
     run_frontend
     ;;
   *)
-    echo "usage: $0 [backend-compile|backend-unit|backend-integration|backend-infrastructure|backend-package|backend-scripts|backend|frontend|all]" >&2
+    echo "usage: $0 [backend-compile|backend-unit|backend-integration|backend-integration-core|backend-integration-support|backend-infrastructure|backend-package|backend-scripts|backend|frontend-lint|frontend-test|frontend-build|frontend|all]" >&2
     exit 64
     ;;
 esac

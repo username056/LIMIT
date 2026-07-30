@@ -1,7 +1,13 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ProductDetailPage from '../ProductDetailPage.vue'
-import { getMyProduct, getProduct, getProductChecklist } from '../../api/products'
+import {
+  getMyProduct,
+  getProduct,
+  getProductChecklist,
+  getEvidenceHistory,
+  getProductImages,
+} from '../../api/products'
 import { getFavoriteStatus, removeFavorite } from '../../api/favorites'
 import { getAccessToken, getSessionMember } from '../../auth/session'
 import { createOrGetChatRoom } from '../../api/chat'
@@ -17,7 +23,9 @@ vi.mock('../../api/products', () => ({
   getMyProduct: vi.fn(),
   getProduct: vi.fn(),
   getProductChecklist: vi.fn(),
-  requestRecapture: vi.fn(),
+  getEvidenceHistory: vi.fn(),
+  getProductImages: vi.fn(),
+  createReinspectionRequest: vi.fn(),
 }))
 vi.mock('../../api/favorites', () => ({
   addFavorite: vi.fn(),
@@ -47,6 +55,8 @@ describe('ProductDetailPage', () => {
       checklistSummary: {},
     })
     getProductChecklist.mockResolvedValue([])
+    getEvidenceHistory.mockResolvedValue([])
+    getProductImages.mockResolvedValue([])
   })
 
   it('기존 좋아요한 상품 상태를 불러와 첫 클릭으로 해제한다', async () => {
@@ -165,6 +175,21 @@ describe('ProductDetailPage', () => {
     expect(purchaseButton.props('to')).toBe('')
   })
 
+  it('상세에서 거래 지역 항목을 보여주지 않는다', async () => {
+    const wrapper = mount(ProductDetailPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('거래 지역')
+  })
+
   it('본인이 등록한 상품에는 구매·문의 대신 수정 동선을 보여준다', async () => {
     getAccessToken.mockReturnValue('test-token')
     getSessionMember.mockReturnValue({ memberId: 55 })
@@ -245,5 +270,80 @@ describe('ProductDetailPage', () => {
 
     expect(wrapper.text()).toContain('상품을 찾을 수 없습니다.')
     expect(wrapper.text()).not.toContain('권한이 없습니다.')
+  })
+
+  it('판매글 체크리스트 항목과 그 증빙을 항목별로 묶어 보여준다', async () => {
+    getAccessToken.mockReturnValue(null)
+    getProductChecklist.mockResolvedValue([{
+      checklistItemId: 7001,
+      name: '화면 전체 터치',
+      visibleToBuyer: true,
+      evidenceType: 'PHOTO',
+      status: 'COMPLETED',
+      required: true,
+    }])
+    getEvidenceHistory.mockResolvedValue([{
+      evidenceId: 9001,
+      evidenceType: 'PHOTO',
+      mediaUrl: 'https://example.test/evidence.jpg',
+    }])
+
+    const wrapper = mount(ProductDetailPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    const itemRow = wrapper.get('ul[aria-label="검증 체크리스트 항목"] > li')
+    expect(itemRow.text()).toContain('화면 전체 터치')
+    expect(itemRow.text()).toContain('판매자 확인 완료')
+    expect(itemRow.get('img').attributes('src')).toBe('https://example.test/evidence.jpg')
+  })
+
+  it('숨겨진 체크리스트 항목은 구매자에게 보여주지 않는다', async () => {
+    getAccessToken.mockReturnValue(null)
+    getProductChecklist.mockResolvedValue([
+      { checklistItemId: 7001, name: '공개 항목', visibleToBuyer: true, evidenceType: 'PHOTO' },
+      { checklistItemId: 7002, name: '비공개 항목', visibleToBuyer: false, evidenceType: 'PHOTO' },
+    ])
+    getEvidenceHistory.mockResolvedValue([])
+
+    const wrapper = mount(ProductDetailPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    const rows = wrapper.findAll('ul[aria-label="검증 체크리스트 항목"] > li')
+    expect(rows).toHaveLength(1)
+    expect(rows[0].text()).toContain('공개 항목')
+  })
+
+  it('상세 화면 행동 버튼은 구매하기와 문의하기 두 개만 둔다', async () => {
+    getAccessToken.mockReturnValue(null)
+
+    const wrapper = mount(ProductDetailPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('판매자에게 문의하기')
+    expect(wrapper.text()).not.toContain('1:1 영상으로 상태 추가 확인')
   })
 })

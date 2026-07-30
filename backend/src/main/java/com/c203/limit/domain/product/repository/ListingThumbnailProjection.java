@@ -4,4 +4,6 @@ public interface ListingThumbnailProjection {
     Long getListingId();
 
     String getCdnUrl();
+
+    String getS3Key();
 }

@@ -1,0 +1,36 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ListMediaPrefixes",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket"
+      ],
+      "Resource": "arn:aws:s3:::l1mit-prod-media-0b849303",
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": [
+            "tmp/*",
+            "listings/*",
+            "evidence/*"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "ManageMediaObjects",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::l1mit-prod-media-0b849303/tmp/*",
+        "arn:aws:s3:::l1mit-prod-media-0b849303/listings/*",
+        "arn:aws:s3:::l1mit-prod-media-0b849303/evidence/*"
+      ]
+    }
+  ]
+}

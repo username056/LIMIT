@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.c203.limit.domain.inspection.enums.ChecklistItemCompletionStatus;
 import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
 import com.c203.limit.domain.product.entity.Wishlist;
+import com.c203.limit.testsupport.AbstractMySqlIntegrationTest;
 import jakarta.persistence.EntityManagerFactory;
 import java.util.List;
 import java.util.Optional;
@@ -22,16 +23,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.transaction.annotation.Transactional;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.mysql.MySQLContainer;
-import org.testcontainers.utility.DockerImageName;
 
-@Testcontainers(disabledWithoutDocker = true)
 @SpringBootTest(
         properties =
                 "spring.autoconfigure.exclude="
@@ -39,7 +33,7 @@ import org.testcontainers.utility.DockerImageName;
                         + "org.springframework.boot.data.mongodb.autoconfigure.DataMongoRepositoriesAutoConfiguration,"
                         + "org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration,"
                         + "org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration")
-class WishlistRepositoryIntegrationTests {
+class WishlistRepositoryIntegrationTests extends AbstractMySqlIntegrationTest {
     private static final long MEMBER_ID = 95_001L;
     private static final long OTHER_MEMBER_ID = 95_002L;
     private static final long CONCURRENT_MEMBER_ID = 95_003L;
@@ -52,13 +46,6 @@ class WishlistRepositoryIntegrationTests {
     private static final long TEMPLATE_ID = 98_001L;
     private static final long TEMPLATE_ITEM_ID = 98_101L;
 
-    @Container
-    static final MySQLContainer MYSQL =
-            new MySQLContainer(DockerImageName.parse("mysql:8.4"))
-                    .withDatabaseName("limit")
-                    .withUsername("limit")
-                    .withPassword("test-only-password");
-
     @Autowired WishlistRepository repository;
     @Autowired CategoryRepository categoryRepository;
     @Autowired ListingChecklistItemRepository checklistItemRepository;
@@ -66,15 +53,6 @@ class WishlistRepositoryIntegrationTests {
     @Autowired JdbcTemplate jdbcTemplate;
     @Autowired TransactionTemplate transactionTemplate;
     @Autowired EntityManagerFactory entityManagerFactory;
-
-    @DynamicPropertySource
-    static void databaseProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
-        registry.add("spring.jpa.properties.hibernate.generate_statistics", () -> "true");
-    }
 
     @BeforeEach
     void setUp() {

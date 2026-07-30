@@ -5,7 +5,7 @@ import BaseButton from '../components/BaseButton.vue'
 import BaseBadge from '../components/BaseBadge.vue'
 import BaseTable from '../components/BaseTable.vue'
 import { deleteProduct, getMyProducts, transitionProductStatus } from '../api/products'
-import { productStatusLabel } from '../utils/productStatus'
+import { canSellerMarkSold, isProductEditable, productStatusLabel } from '../utils/productStatus'
 
 // 이 화면은 내가 등록한 상품을 확인하고 관리하는 곳입니다.
 // 등록·수정 위자드는 ProductRegisterPage로 분리되어 있습니다.
@@ -59,6 +59,23 @@ async function publish(product) {
   }
 }
 
+// 서비스 결제를 거치지 않은 직거래를 판매자가 직접 닫는 경로입니다. 되돌릴 수 없어 한 번 확인합니다.
+async function markSold(product) {
+  const confirmed = window.confirm(
+    `‘${product.name}’을 판매 완료로 바꿀까요?\n\n`
+    + '구매자에게 더 이상 노출되지 않고, 되돌리거나 수정할 수 없습니다.',
+  )
+  if (!confirmed) return
+  errorMessage.value = ''
+  try {
+    await transitionProductStatus(product.productId, 'SOLD', '판매자 직거래 판매 완료')
+    notice.value = '판매 완료로 처리했습니다.'
+    await loadProducts(pageMeta.value.page)
+  } catch (error) {
+    errorMessage.value = error.message || '판매 완료로 처리하지 못했습니다.'
+  }
+}
+
 watch(statusFilter, () => loadProducts(0))
 onMounted(() => loadProducts(0))
 </script>
@@ -109,6 +126,8 @@ onMounted(() => loadProducts(0))
           판매 중
         </option><option value="HIDDEN">
           숨김
+        </option><option value="SOLD">
+          판매 완료
         </option>
       </select>
     </div>
@@ -146,16 +165,29 @@ onMounted(() => loadProducts(0))
         </td>
         <td class="space-x-3 px-4 py-3 text-sm">
           <RouterLink
+            v-if="isProductEditable(product.status)"
             class="text-primary"
             :to="{ name: 'seller-product-edit', params: { productId: product.productId } }"
           >
             수정
-          </RouterLink><button
+          </RouterLink><span
+            v-else
+            class="text-text-sub"
+            title="거래가 시작된 상품은 수정할 수 없습니다."
+          >
+            수정 불가
+          </span><button
             v-if="product.status === 'DRAFT'"
             class="text-primary"
             @click="publish(product)"
           >
             판매 시작
+          </button><button
+            v-if="canSellerMarkSold(product.status)"
+            class="text-primary"
+            @click="markSold(product)"
+          >
+            판매 완료 처리
           </button><button
             class="text-red-600"
             @click="remove(product)"

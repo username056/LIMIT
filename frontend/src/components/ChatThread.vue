@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { getChatMediaBlob, getChatMessages, uploadChatMedia } from '../api/chat'
 import { createChatSocket } from '../api/chatSocket'
-import { getProduct } from '../api/products'
+import { getProduct, getProductChecklist } from '../api/products'
 import { getMyRtcCalls, requestRtcCall, respondRtcCall } from '../api/rtc'
 import { useAuthSession } from '../auth/session'
 
@@ -18,6 +18,8 @@ const session = useAuthSession()
 const myMemberId = computed(() => session.value?.member?.memberId ?? null)
 
 const product = ref(null)
+const checklistItems = ref([])
+const isChecklistOpen = ref(false)
 const messages = ref([])
 const isLoadingMessages = ref(true)
 const messagesError = ref('')
@@ -180,6 +182,30 @@ async function loadProduct(listingId) {
   }
 }
 
+function evidenceTypeLabel(type) {
+  return {
+    PHOTO: '사진',
+    VIDEO: '영상',
+    DIAGNOSTIC_FILE: '진단파일',
+    SELLER_CONFIRMATION: '확인',
+  }[type] || type
+}
+
+function isCheckedChecklistItem(item) {
+  return item.status === 'COMPLETED' || Boolean(item.latestEvidenceId)
+}
+
+// 이 방에서 이야기하는 상품의 체크리스트입니다. 항목 구성은 기기 모델마다 다르고,
+// 상품 생성 시 고정된 스냅샷을 그대로 조회합니다.
+async function loadChecklist(listingId) {
+  checklistItems.value = []
+  try {
+    checklistItems.value = await getProductChecklist(listingId)
+  } catch {
+    checklistItems.value = []
+  }
+}
+
 async function loadAppointments(roomId) {
   try {
     const result = await getMyRtcCalls()
@@ -197,6 +223,9 @@ async function loadAppointments(roomId) {
 }
 
 const latestAppointment = computed(() => appointments.value[0] || null)
+const checkedChecklistCount = computed(
+  () => checklistItems.value.filter((item) => isCheckedChecklistItem(item)).length,
+)
 
 watch(
   () => props.room.roomId,
@@ -206,7 +235,9 @@ watch(
     appointmentAnchorSequence.value = 0
     await loadMessages(roomId)
     await loadAppointments(roomId)
+    isChecklistOpen.value = false
     loadProduct(props.room.listingId)
+    loadChecklist(props.room.listingId)
     connectSocket(roomId)
   },
   { immediate: true },
@@ -410,6 +441,57 @@ onBeforeUnmount(() => {
       >
         상품 보기
       </RouterLink>
+    </div>
+
+    <!-- 이 상품의 검증 체크리스트. 기기 모델마다 항목이 달라 상품별 스냅샷을 그대로 보여줍니다.
+         채팅 영역을 좁히지 않도록 접어두고, 펼쳐도 4개 정도만 보이고 나머지는 스크롤합니다. -->
+    <div
+      v-if="checklistItems.length"
+      class="border-b border-border px-5 py-2"
+    >
+      <button
+        type="button"
+        class="flex w-full items-center justify-between gap-2 py-1 text-left"
+        :aria-expanded="isChecklistOpen"
+        @click="isChecklistOpen = !isChecklistOpen"
+      >
+        <span class="text-xs font-bold text-text-main">
+          검증 체크리스트
+          <span class="ml-1 font-semibold text-primary">
+            {{ checkedChecklistCount }} / {{ checklistItems.length }}
+          </span>
+        </span>
+        <span class="text-xs text-text-sub">{{ isChecklistOpen ? '접기' : '펼치기' }}</span>
+      </button>
+
+      <ul
+        v-if="isChecklistOpen"
+        class="mt-1 max-h-40 space-y-1.5 overflow-y-auto pr-1 pb-1"
+      >
+        <li
+          v-for="item in checklistItems"
+          :key="item.checklistItemId"
+          class="flex items-start gap-2 rounded-md bg-bg px-2.5 py-1.5"
+        >
+          <span
+            class="mt-0.5 shrink-0 text-xs font-bold"
+            :class="isCheckedChecklistItem(item) ? 'text-primary' : 'text-text-sub'"
+            aria-hidden="true"
+          >{{ isCheckedChecklistItem(item) ? '✓' : '·' }}</span>
+          <span class="min-w-0 flex-1">
+            <span class="block truncate text-xs font-semibold text-text-main">
+              {{ item.name }}<span
+                v-if="item.required ?? item.isRequired"
+                class="ml-1 text-red-500"
+              >*</span>
+            </span>
+            <span class="mt-0.5 block text-[11px] text-text-sub">
+              {{ evidenceTypeLabel(item.evidenceType) }}
+              · {{ isCheckedChecklistItem(item) ? '자료 확인' : '미등록' }}
+            </span>
+          </span>
+        </li>
+      </ul>
     </div>
 
     <div class="flex-1 space-y-3 overflow-y-auto px-5 py-5">

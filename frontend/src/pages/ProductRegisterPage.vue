@@ -5,23 +5,33 @@ import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseBadge from '../components/BaseBadge.vue'
 import {
+  completeReinspectionRequest,
   completeEvidence,
+  completeProductImage,
   createEvidenceUploadUrl,
+  createProductImageUploadUrl,
   createProduct,
   generateChecklist,
   getChecklistTemplate,
   getDeviceCategories,
   getDeviceModels,
   getHandoverGuide,
+  getEvidenceHistory,
+  getReinspectionRequest,
   getMyProduct,
   getProductChecklist,
   requestDeviceModel,
+  getProductDraftProgress,
+  getProductImages,
+  deleteProductImage,
   transitionProductStatus,
   updateProduct,
+  updateProductDraftProgress,
+  updateProductImageOrder,
+  uploadToPresignedUrl,
 } from '../api/products'
 import { compressImage, compressVideo } from '../utils/mediaOptimize'
 import { MAX_PRICE_DIGITS, formatPriceDigits, toPriceDigits } from '../utils/priceInput'
-import { searchPlaces } from '../api/places'
 
 const WIZARD_STEPS = [
   { number: 1, label: '기기 등록' },
@@ -31,7 +41,17 @@ const WIZARD_STEPS = [
 ]
 
 // 체크리스트 항목 하나에 첨부할 수 있는 사진·영상 개수 상한입니다.
-const MAX_MEDIA_PER_ITEM = 3
+const DEFAULT_MAX_MEDIA_PER_ITEM = 3
+
+// ListingImageUploadService.MAX_IMAGE_BYTES와 같은 값입니다. 서버가 거절하기 전에 안내하려고 둡니다.
+const MAX_LISTING_IMAGE_BYTES = 15 * 1024 * 1024
+
+// 대표 이미지는 1단계에서 받습니다(pendingThumbnail 참고). 아직 '최소 1장 필수'로는 두지 않았습니다 —
+// 이미 이미지 없이 임시저장된 상품들이 있어서, 필수로 바꾸면 그 상품들이 수정 저장조차 못 하게 됩니다.
+// 필수로 올릴 때는 기존 초안 처리 방침을 먼저 정하고 validateSaleInfo에 규칙을 붙이세요.
+// 화면에서 거래 지역을 받지 않기로 했지만 CreateProductRequest의 tradeRegion에 @NotBlank가 남아 있어
+// 값을 비우면 등록이 400으로 실패합니다. 백엔드에서 해당 제약이 풀리면 이 상수와 payload 항목을 함께 지우세요.
+const DEFAULT_TRADE_REGION = '협의'
 
 // 실제로 많이 쓰이는 용량만 골라 두고, 해당하지 않으면 직접 입력으로 넘어갑니다.
 const STORAGE_OPTIONS = [16, 32, 64, 128, 256, 512, 1024]
@@ -85,19 +105,20 @@ const customModel = reactive({
 const isSaving = ref(false)
 const errorMessage = ref('')
 const notice = ref('')
+const reinspectionRequest = ref(null)
+const reinspectionRequestKey = computed(
+  () => String(route.query.reinspectionRequestKey || '').trim(),
+)
 const editingId = ref(null)
+// 수정 모드로 열린 상품의 현재 상태입니다. 판매 중인 상품을 고칠 때는 임시저장(초안) 진행도를
+// 서버에 밀어 넣지 않아야 하므로 상태를 들고 있습니다.
+const editingStatus = ref('')
 const draftProductId = ref(null)
 const activeStep = ref(1)
 const form = reactive({
   categoryId: '', deviceModelId: '', name: '', description: '', price: '',
-  color: '', storageGb: '', tradeRegion: '',
+  color: '', storageGb: '',
 })
-
-const tradeRegionResults = ref([])
-const isSearchingTradeRegion = ref(false)
-const showTradeRegionResults = ref(false)
-const hasSearchedTradeRegion = ref(false)
-let tradeRegionSearchTimer = null
 
 // 사용자가 직접 입력을 고른 상태. 수정 진입 시 목록에 없는 용량이면 자동으로 직접 입력으로 보여줍니다.
 const isCustomStorage = ref(false)
@@ -148,44 +169,6 @@ function onStorageSelect(event) {
   form.storageGb = value
 }
 
-function clearTradeRegion() {
-  form.tradeRegion = ''
-  tradeRegionResults.value = []
-  hasSearchedTradeRegion.value = false
-  showTradeRegionResults.value = false
-}
-
-function onTradeRegionInput() {
-  showTradeRegionResults.value = true
-  clearTimeout(tradeRegionSearchTimer)
-  const keyword = form.tradeRegion.trim()
-  if (keyword.length < 2) {
-    tradeRegionResults.value = []
-    hasSearchedTradeRegion.value = false
-    return
-  }
-  tradeRegionSearchTimer = setTimeout(async () => {
-    isSearchingTradeRegion.value = true
-    try {
-      tradeRegionResults.value = await searchPlaces(keyword)
-    } catch {
-      tradeRegionResults.value = []
-    } finally {
-      isSearchingTradeRegion.value = false
-      hasSearchedTradeRegion.value = true
-    }
-  }, 300)
-}
-
-function selectTradeRegion(place) {
-  const address = place.roadAddressName || place.addressName
-  form.tradeRegion = place.placeName && place.placeName !== address
-    ? `${place.placeName} (${address})`
-    : address
-  tradeRegionResults.value = []
-  hasSearchedTradeRegion.value = false
-  showTradeRegionResults.value = false
-}
 
 // 체크리스트 관련: templateItems는 항목 가이드/허용 형식을 보여주기 위한 모델 템플릿,
 // checklistItems는 상품 생성 시 고정된 실제 스냅샷(evidence API 호출에 필요한 checklistItemId 포함).
@@ -195,14 +178,53 @@ const confirmedFeatures = ref([])
 const isGeneratingChecklist = ref(false)
 const checklistItems = ref([])
 const activeCaptureItemId = ref(null)
-// 백엔드 증거 업로드 API가 아직 스텁이라(항상 더미 응답) 실제 진행 상태를 신뢰할 수 없어
-// 촬영 진행 상태는 화면(세션) 안에서만 관리합니다.
-// captureState[checklistItemId] = { media: [{ key, previewUrl, evidenceType, name }], busy: '' | 'optimizing' | 'uploading' }
+// captureState[checklistItemId] = { media: [...], busy: '' | 'optimizing' | 'uploading', progress: 0..100 }
 const captureState = reactive({})
 const confirmState = reactive({})
 const mediaPreview = ref(null)
+const listingImages = ref([])
+const listingImageBusy = ref(false)
+const listingImageProgress = ref(0)
+let listingImageInFlight = 0
+
+// 대표 이미지는 고르는 즉시 서버에 올립니다. presigned URL이 productId 기준이라 상품이 없으면
+// 올릴 수 없어서, 상품이 아직 없을 때는 초안을 먼저 만든 뒤 업로드합니다.
+// 초안을 만들 수 없는 상태(카테고리·모델·글제목·가격 미입력)에서만 파일을 임시로 들고 있다가
+// '다음 단계'/'임시저장' 시점에 올립니다. 이때는 새로고침하면 선택이 사라지므로 화면에 그렇게 안내합니다.
+const pendingThumbnail = ref(null)
+const listingThumbnail = computed(
+  () => listingImages.value.find((image) => image.imageType === 'THUMBNAIL') || null,
+)
+const thumbnailPreviewUrl = computed(() => pendingThumbnail.value?.previewUrl
+  || listingThumbnail.value?.previewUrl
+  || listingThumbnail.value?.imageUrl
+  || '')
+const registrationMetrics = reactive({
+  checklistMs: null,
+  imageCompressionMs: null,
+  videoCompressionMs: null,
+  s3UploadMs: null,
+})
 // 체크리스트를 덜 채운 채 다음 단계를 누르면 인라인 문구만으로는 놓치기 쉬워 팝업으로 알립니다.
 const alertMessage = ref('')
+// 확인을 누르면 그대로 진행할 동작. 진행 없이 알리기만 할 때는 null입니다.
+const alertProceed = ref(null)
+
+function openAlert(message, proceed = null) {
+  alertMessage.value = message
+  alertProceed.value = proceed
+}
+
+function closeAlert() {
+  alertMessage.value = ''
+  alertProceed.value = null
+}
+
+function confirmAlert() {
+  const proceed = alertProceed.value
+  closeAlert()
+  if (proceed) proceed()
+}
 let mediaKeySeq = 0
 
 function mediaOf(checklistItemId) {
@@ -213,12 +235,21 @@ function busyOf(checklistItemId) {
   return captureState[checklistItemId]?.busy || ''
 }
 
+function progressOf(checklistItemId) {
+  return captureState[checklistItemId]?.progress || 0
+}
+
 function captureStatusOf(checklistItemId) {
   return busyOf(checklistItemId) || (mediaOf(checklistItemId).length ? 'captured' : 'idle')
 }
 
+function maxMediaFor(item) {
+  return Number(item?.maxCount) > 0 ? Number(item.maxCount) : DEFAULT_MAX_MEDIA_PER_ITEM
+}
+
 function remainingSlots(checklistItemId) {
-  return MAX_MEDIA_PER_ITEM - mediaOf(checklistItemId).length
+  const item = checklistItems.value.find((candidate) => candidate.checklistItemId === checklistItemId)
+  return maxMediaFor(item) - mediaOf(checklistItemId).length
 }
 const handoverGuide = ref(null)
 const isLoadingHandoverGuide = ref(false)
@@ -229,17 +260,18 @@ const selectedModel = computed(
 )
 const modelGroups = computed(() => {
   const groups = new Map()
-  models.value.forEach((model) => {
+  models.value
+    .filter((model) => !String(model.modelCode || '').startsWith('ETC-'))
+    .forEach((model) => {
     const manufacturer = model.manufacturerName || '기타'
     if (!groups.has(manufacturer)) groups.set(manufacturer, [])
     groups.get(manufacturer).push(model)
-  })
+    })
   return [...groups.entries()].map(([manufacturer, items]) => ({ manufacturer, items }))
 })
 const supportsGeneratedChecklist = computed(
   () => Boolean(selectedModel.value),
 )
-const confirmedFeatureLimitReached = computed(() => confirmedFeatures.value.length >= 5)
 const mediaChecklistItems = computed(
   () => checklistItems.value.filter((item) => item.evidenceType !== 'SELLER_CONFIRMATION'),
 )
@@ -263,13 +295,15 @@ const isActiveItemBusy = computed(
 const activeItemMedia = computed(
   () => (activeCaptureItem.value ? mediaOf(activeCaptureItem.value.checklistItemId) : []),
 )
-const isActiveItemFull = computed(() => activeItemMedia.value.length >= MAX_MEDIA_PER_ITEM)
+const isActiveItemFull = computed(
+  () => activeItemMedia.value.length >= maxMediaFor(activeCaptureItem.value),
+)
 const activeItemLatestMedia = computed(() => activeItemMedia.value[activeItemMedia.value.length - 1] || null)
 const activeItemStatusLabel = computed(() => {
   const busy = activeCaptureItem.value && busyOf(activeCaptureItem.value.checklistItemId)
   if (busy === 'optimizing') return '최적화 중…'
   if (busy === 'uploading') return '업로드 중…'
-  if (isActiveItemFull.value) return `최대 ${MAX_MEDIA_PER_ITEM}개까지 첨부했습니다`
+  if (isActiveItemFull.value) return `최대 ${maxMediaFor(activeCaptureItem.value)}개까지 첨부했습니다`
   return activeItemMedia.value.length ? '사진·영상 추가하기' : '촬영 또는 파일 업로드'
 })
 const previewedMedia = computed(() => {
@@ -283,15 +317,6 @@ function templateFor(itemCode) {
 
 function guideFor(item) {
   return item?.guide || templateFor(item?.itemCode)?.guide || ''
-}
-
-function evidenceStatusLabel(status) {
-  return {
-    VERIFIED: '공식 확인',
-    LIKELY: '제품군 확인',
-    UNKNOWN: '근거 부족',
-    CONFLICTED: '자료 충돌',
-  }[status] || status
 }
 
 // 자동 생성 체크리스트는 required, 기존 템플릿은 isRequired를 씁니다.
@@ -327,19 +352,48 @@ function scrollToTop() {
   window.scrollTo(0, 0)
 }
 
+async function measureRegistrationPhase(name, task) {
+  const startedAt = performance.now()
+  try {
+    return await task()
+  } finally {
+    registrationMetrics[name] = Math.round(performance.now() - startedAt)
+  }
+}
+
 // 단계가 바뀌면 위자드 상단(단계 표시줄)부터 보이도록 항상 스크롤을 올립니다.
 function setStep(step) {
   activeStep.value = step
+  persistDraftProgress()
   scrollToTop()
+}
+
+async function persistDraftProgress() {
+  if (!currentProductId.value || reinspectionRequestKey.value) return
+  // 이미 판매 중·숨김인 상품은 초안 진행도를 갖지 않습니다. 서버가 409로 거절하므로 호출하지 않습니다.
+  if (editingStatus.value && editingStatus.value !== 'DRAFT') return
+  try {
+    await updateProductDraftProgress(currentProductId.value, {
+      step: activeStep.value,
+      confirmedChecklistItemIds: confirmationChecklistItems.value
+        .filter((item) => confirmState[item.checklistItemId])
+        .map((item) => item.checklistItemId),
+    })
+  } catch {
+    notice.value = '임시저장 상태를 서버에 반영하지 못했습니다.'
+  }
 }
 
 function resetForm() {
   editingId.value = null
+  editingStatus.value = ''
   draftProductId.value = null
+  if (pendingThumbnail.value) URL.revokeObjectURL(pendingThumbnail.value.previewUrl)
+  pendingThumbnail.value = null
   activeStep.value = 1
   Object.assign(form, {
     categoryId: '', deviceModelId: '', name: '', description: '', price: '',
-    color: '', storageGb: '', tradeRegion: '',
+    color: '', storageGb: '',
   })
   models.value = []
   isCustomModelInput.value = false
@@ -358,7 +412,6 @@ function resetForm() {
   activeCaptureItemId.value = null
   handoverGuide.value = null
   isCustomStorage.value = false
-  hasSearchedTradeRegion.value = false
   priceRejection.value = ''
   clearCaptureState()
   Object.keys(confirmState).forEach((key) => delete confirmState[key])
@@ -417,10 +470,10 @@ async function loadTemplatePreview() {
   errorMessage.value = ''
   try {
     if (supportsGeneratedChecklist.value) {
-      const generated = await generateChecklist({
+      const generated = await measureRegistrationPhase('checklistMs', () => generateChecklist({
         deviceModelId: Number(form.deviceModelId),
         confirmedFeatures: [],
-      })
+      }))
       checklistGeneration.value = generated
       templateItems.value = generated.items || []
     } else {
@@ -434,61 +487,109 @@ async function loadTemplatePreview() {
   }
 }
 
+// 기기 등록(1단계)이 실제 필수 구간입니다. 여기서 빠진 값이 있으면 다음 단계로 넘기지 않습니다.
+// 반대로 2단계 촬영 체크리스트는 필수가 아니어서 건너뛸 수 있습니다.
+// requireStorage: '다음 단계'는 저장 용량까지 요구하고, 중간 이탈용 '임시저장'은 요구하지 않습니다.
+// TODO(필수 항목): 저장 용량·대표 이미지는 아직 선택 입력입니다. 필수로 바꾸려면 이미지 없이
+// 임시저장된 기존 상품의 처리 방침을 먼저 정하세요(위 대표 이미지 주석 참고).
 function validateSaleInfo() {
-  if (!form.name || form.price === '' || !form.tradeRegion) {
-    errorMessage.value = '상품명, 가격, 거래 지역을 입력해 주세요.'
+  if (!form.name || form.price === '') {
+    errorMessage.value = '글제목과 가격을 입력해 주세요.'
     return false
   }
   if (!Number.isFinite(Number(form.price)) || Number(form.price) < 1) {
     errorMessage.value = '가격은 1원 이상 입력해 주세요.'
     return false
   }
-  if (form.storageGb !== '' && (!Number.isFinite(Number(form.storageGb)) || Number(form.storageGb) < 1)) {
-    errorMessage.value = '저장 용량은 1GB 이상 입력해 주세요.'
+  if (form.storageGb !== '' && (
+    !Number.isInteger(Number(form.storageGb))
+    || Number(form.storageGb) < 1
+    || Number(form.storageGb) > 16384
+  )) {
+    errorMessage.value = '저장 용량은 1~16,384GB 범위의 정수로 입력해 주세요.'
     return false
   }
   return true
 }
 
-async function goToStep2() {
+// 1단계 입력을 서버에 저장하고 체크리스트 스냅샷을 받아옵니다.
+// '다음 단계'와 '임시저장'이 같은 저장 경로를 쓰도록 분리했습니다.
+async function persistSaleInfo() {
+  const payload = {
+    name: form.name,
+    description: form.description || null,
+    price: Number(form.price),
+    color: form.color || null,
+    storageGb: form.storageGb ? Number(form.storageGb) : null,
+    tradeRegion: DEFAULT_TRADE_REGION,
+  }
+  let productId = editingId.value
+  if (productId) {
+    await updateProduct(productId, payload)
+  } else {
+    const created = await createProduct({
+      ...payload,
+      categoryId: Number(form.categoryId),
+      deviceModelId: Number(form.deviceModelId),
+      confirmedFeatures: [],
+    })
+    productId = created.productId
+    draftProductId.value = productId
+  }
+  // 상품이 생긴 다음이라야 대표 이미지 presigned URL을 받을 수 있습니다.
+  await flushPendingThumbnail()
+  checklistItems.value = await getProductChecklist(productId)
+  activeCaptureItemId.value = mediaChecklistItems.value[0]?.checklistItemId || null
+  return productId
+}
+
+function validateDeviceStep() {
   errorMessage.value = ''
   if (!form.categoryId || !form.deviceModelId) {
     errorMessage.value = '카테고리와 기기 모델을 선택해 주세요.'
-    return
+    return false
   }
-  if (!validateSaleInfo()) return
+  return validateSaleInfo()
+}
+
+async function goToStep2() {
+  if (!validateDeviceStep()) return
 
   isSaving.value = true
   try {
-    const payload = {
-      name: form.name,
-      description: form.description || null,
-      price: Number(form.price),
-      color: form.color || null,
-      storageGb: form.storageGb ? Number(form.storageGb) : null,
-      tradeRegion: form.tradeRegion,
-    }
-    let productId = editingId.value
-    if (productId) {
-      await updateProduct(productId, payload)
-    } else {
-      const created = await createProduct({
-        ...payload,
-        categoryId: Number(form.categoryId),
-        deviceModelId: Number(form.deviceModelId),
-        confirmedFeatures: [...confirmedFeatures.value],
-      })
-      productId = created.productId
-      draftProductId.value = productId
-    }
-    checklistItems.value = await getProductChecklist(productId)
-    activeCaptureItemId.value = mediaChecklistItems.value[0]?.checklistItemId || null
+    await persistSaleInfo()
     setStep(2)
   } catch (error) {
     errorMessage.value = error.message || '상품 정보를 저장하지 못했습니다.'
   } finally {
     isSaving.value = false
   }
+}
+
+// 등록 중간에 이탈해야 할 때 쓰는 저장입니다. 지금까지 입력과 올린 사진은 그대로 남고,
+// 상품은 '임시 저장 중' 상태로 상품 관리 목록에 남습니다.
+async function saveDraft() {
+  errorMessage.value = ''
+  if (activeStep.value === 1) {
+    if (!validateDeviceStep()) return
+    isSaving.value = true
+    try {
+      await persistSaleInfo()
+    } catch (error) {
+      errorMessage.value = error.message || '임시 저장하지 못했습니다.'
+      return
+    } finally {
+      isSaving.value = false
+    }
+  }
+
+  if (!currentProductId.value) {
+    errorMessage.value = '아직 임시 저장할 내용이 없습니다.'
+    return
+  }
+
+  resetForm()
+  await router.push({ name: 'seller-products' })
 }
 
 async function loadHandoverGuide() {
@@ -510,34 +611,46 @@ async function loadHandoverGuide() {
   }
 }
 
+// 체크리스트 항목이 많아 전부 채우지 않고 등록하려는 판매자도 있습니다.
+// 남은 항목을 알려주되, 확인을 누르면 그대로 다음 단계로 넘어갈 수 있게 합니다.
 function goToStep3() {
   errorMessage.value = ''
+  const proceed = () => {
+    setStep(3)
+    loadHandoverGuide()
+  }
   const missingRequired = mediaChecklistItems.value.filter(
     (item) => isRequiredItem(item) && mediaOf(item.checklistItemId).length === 0,
   )
   if (missingRequired.length) {
-    alertMessage.value = `아직 촬영하지 않은 필수 항목이 ${missingRequired.length}개 있습니다.\n${missingRequired.map((item) => `· ${item.name}`).join('\n')}`
     activeCaptureItemId.value = missingRequired[0].checklistItemId
+    openAlert(
+      `아직 촬영하지 않은 필수 항목이 ${missingRequired.length}개 있습니다.\n${missingRequired.map((item) => `· ${item.name}`).join('\n')}\n\n지금 넘어가도 나중에 이어서 등록할 수 있지만, 자료가 많을수록 구매자의 신뢰를 얻기 쉽습니다.`,
+      proceed,
+    )
     return
   }
-  setStep(3)
-  loadHandoverGuide()
+  proceed()
 }
 
+// 개인정보 확인은 체크 몇 번이면 되는 일이고 기기를 넘긴 뒤에는 되돌릴 수 없어 필수로 둡니다.
+// 촬영 체크리스트와 달리 건너뛸 수 없습니다.
 function goToStep4() {
   errorMessage.value = ''
   const missingConfirm = confirmationChecklistItems.value.filter(
     (item) => isRequiredItem(item) && !confirmState[item.checklistItemId],
   )
   if (missingConfirm.length) {
-    alertMessage.value = `개인정보 정리 확인이 남아 있습니다.\n${missingConfirm.map((item) => `· ${item.name}`).join('\n')}`
+    openAlert(
+      `개인정보 정리 확인이 남아 있습니다.\n${missingConfirm.map((item) => `· ${item.name}`).join('\n')}\n\n기기를 넘기기 전에 반드시 초기화해야 하는 항목이라 건너뛸 수 없습니다.`,
+    )
     return
   }
   setStep(4)
 }
 
-// 등록을 마치면 '임시 저장 중'으로 남지 않도록 판매 상태로 올린 뒤,
-// 목록을 거치지 않고 방금 등록한 상품 상세로 바로 이동합니다.
+// 등록을 마치면 별도의 '판매 시작'을 누르지 않아도 바로 판매가 시작되게 합니다.
+// 임시 저장은 중간 이탈용이지, 등록을 끝낸 사용자가 한 번 더 눌러야 하는 단계가 아닙니다.
 async function finishWizard() {
   const productId = currentProductId.value
   if (!productId) {
@@ -548,8 +661,18 @@ async function finishWizard() {
 
   isSaving.value = true
   try {
-    await transitionProductStatus(productId, 'ON_SALE', '등록 완료')
-  } catch {
+    if (reinspectionRequestKey.value) {
+      await completeReinspectionRequest(reinspectionRequestKey.value)
+    } else if (!editingStatus.value || editingStatus.value === 'DRAFT') {
+      await transitionProductStatus(productId, 'ON_SALE', '등록 완료')
+    }
+    // 이미 판매 중·숨김인 상품을 고친 경우에는 상태를 그대로 둡니다. 숨겨 둔 상품이 수정만으로
+    // 다시 공개되면 판매자가 의도하지 않은 노출이 생기기 때문입니다.
+  } catch (error) {
+    if (reinspectionRequestKey.value) {
+      errorMessage.value = error.message || '재검수 완료 처리에 실패했습니다.'
+      return
+    }
     // 필수 자료가 서버에 아직 반영되지 않았거나 이미 판매 중이면 상태는 그대로 둡니다.
     // 상세 화면에서 현재 상태를 그대로 보여주므로 등록 흐름 자체는 막지 않습니다.
   } finally {
@@ -576,20 +699,24 @@ function readVideoDuration(file) {
 async function handleCaptureFile(item, file) {
   if (!item || !file || !currentProductId.value) return
   const itemId = item.checklistItemId
-  if (!captureState[itemId]) captureState[itemId] = { media: [], busy: '' }
-  if (captureState[itemId].media.length >= MAX_MEDIA_PER_ITEM) {
-    alertMessage.value = `‘${item.name}’ 항목은 최대 ${MAX_MEDIA_PER_ITEM}개까지 첨부할 수 있습니다.`
+  if (!captureState[itemId]) captureState[itemId] = { media: [], busy: '', progress: 0 }
+  if (captureState[itemId].media.length >= maxMediaFor(item)) {
+    alertMessage.value = `‘${item.name}’ 항목은 최대 ${maxMediaFor(item)}개까지 첨부할 수 있습니다.`
     return
   }
   errorMessage.value = ''
   captureState[itemId].busy = 'optimizing'
+  captureState[itemId].progress = 0
 
   // 업로드 용량과 서버 비용을 줄이기 위해 사진은 Canvas로, 영상은 ffmpeg.wasm으로
   // 브라우저에서 먼저 압축한 뒤 업로드합니다. 압축에 실패하면 원본으로 계속 진행합니다.
   let optimizedFile = file
   try {
-    if (item.evidenceType === 'PHOTO') optimizedFile = await compressImage(file)
-    else if (item.evidenceType === 'VIDEO') optimizedFile = await compressVideo(file)
+    if (item.evidenceType === 'PHOTO') {
+      optimizedFile = await measureRegistrationPhase('imageCompressionMs', () => compressImage(file))
+    } else if (item.evidenceType === 'VIDEO') {
+      optimizedFile = await measureRegistrationPhase('videoCompressionMs', () => compressVideo(file))
+    }
   } catch {
     optimizedFile = file
   }
@@ -605,36 +732,197 @@ async function handleCaptureFile(item, file) {
       fileSize: optimizedFile.size,
       durationSeconds,
     })
-    try {
-      // 로컬 환경에는 실제 오브젝트 스토리지가 없어 presignedUrl 업로드가 실패할 수 있습니다.
-      // 백엔드 증거 API 구현이 끝나면 이 업로드가 실제로 저장됩니다.
-      await fetch(uploadUrl.presignedUrl, {
-        method: 'PUT',
-        body: optimizedFile,
-        headers: uploadUrl.requiredHeaders || {},
-      })
-    } catch {
-      // 스토리지 미구현 환경에서는 무시하고 촬영 완료로만 처리합니다.
-    }
-    await completeEvidence(currentProductId.value, item.checklistItemId, { uploadId: uploadUrl.uploadId })
-  } catch {
-    // 증거 업로드 API 자체가 실패해도 화면상 촬영 진행은 막지 않습니다(스텁 백엔드).
-  } finally {
+    await measureRegistrationPhase('s3UploadMs', () => uploadToPresignedUrl(
+      uploadUrl.presignedUrl,
+      optimizedFile,
+      uploadUrl.requiredHeaders || {},
+      (progress) => { captureState[itemId].progress = progress },
+    ))
+    const completed = await completeEvidence(
+      currentProductId.value,
+      item.checklistItemId,
+      { uploadId: uploadUrl.uploadId },
+    )
     mediaKeySeq += 1
     captureState[itemId].media.push({
-      key: mediaKeySeq,
+      key: completed.evidenceId || mediaKeySeq,
       previewUrl,
+      mediaUrl: completed.mediaUrl,
       evidenceType: item.evidenceType,
       name: optimizedFile.name,
+      attemptNo: completed.attemptNo,
     })
+  } catch {
+    URL.revokeObjectURL(previewUrl)
+    errorMessage.value = `‘${item.name}’ 자료를 업로드하지 못했습니다. 잠시 후 다시 시도해 주세요.`
+  } finally {
     captureState[itemId].busy = ''
+    captureState[itemId].progress = 0
   }
 }
 
-function onCaptureInput(event, item) {
-  const file = event.target.files?.[0]
+async function handleListingImage(file, displayOrder = listingImages.value.length) {
+  if (!file || !currentProductId.value || listingImages.value.length >= 10) return
+  listingImageInFlight += 1
+  listingImageBusy.value = true
+  listingImageProgress.value = 0
+  errorMessage.value = ''
+  let optimizedFile = file
+  try {
+    optimizedFile = await measureRegistrationPhase('imageCompressionMs', () => compressImage(file))
+    // 서버 상한과 같은 값을 미리 걸러 냅니다. 그냥 보내면 MEDIA_UPLOAD_INVALID로만 돌아와
+    // 사용자는 무엇이 문제인지 알 수 없습니다.
+    if (optimizedFile.size > MAX_LISTING_IMAGE_BYTES) {
+      errorMessage.value = '대표 이미지는 압축 후에도 15MB를 넘을 수 없습니다. 더 작은 파일을 올려 주세요.'
+      return
+    }
+    const upload = await createProductImageUploadUrl(currentProductId.value, {
+      filename: optimizedFile.name,
+      contentType: optimizedFile.type || 'application/octet-stream',
+      fileSize: optimizedFile.size,
+    })
+    await measureRegistrationPhase('s3UploadMs', () => uploadToPresignedUrl(
+      upload.presignedUrl,
+      optimizedFile,
+      upload.requiredHeaders || {},
+      (progress) => { listingImageProgress.value = progress },
+    ))
+    const image = await completeProductImage(currentProductId.value, {
+      uploadId: upload.uploadId,
+      imageType: displayOrder === 0 ? 'THUMBNAIL' : 'DETAIL',
+      displayOrder,
+    })
+    listingImages.value.push({
+      ...image,
+      previewUrl: URL.createObjectURL(optimizedFile),
+    })
+  } catch {
+    errorMessage.value = '상품 이미지를 업로드하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+  } finally {
+    listingImageInFlight -= 1
+    listingImageBusy.value = listingImageInFlight > 0
+    if (!listingImageBusy.value) listingImageProgress.value = 0
+  }
+}
+
+// 대표 이미지를 고르면 바로 서버에 저장합니다. 상품이 없으면 초안을 먼저 만들어서
+// 새로고침이나 이탈로 선택이 날아가지 않게 합니다.
+async function onThumbnailInput(event) {
+  const file = (event.target.files || [])[0]
   event.target.value = ''
-  if (file) handleCaptureFile(item, file)
+  if (!file) return
+  errorMessage.value = ''
+  notice.value = ''
+
+  if (!currentProductId.value) {
+    // 초안 생성에 필요한 값이 아직 없으면 서버에 올릴 방법이 없습니다. 파일만 들고 있다가
+    // 다음 저장 시점에 올리고, 지금은 아직 저장되지 않았다는 사실을 분명히 알립니다.
+    if (!validateDeviceStep()) {
+      if (pendingThumbnail.value) URL.revokeObjectURL(pendingThumbnail.value.previewUrl)
+      pendingThumbnail.value = { file, previewUrl: URL.createObjectURL(file) }
+      errorMessage.value = `${errorMessage.value} 이 항목을 채우면 대표 이미지가 바로 저장됩니다.`
+      return
+    }
+
+    isSaving.value = true
+    try {
+      pendingThumbnail.value = { file, previewUrl: URL.createObjectURL(file) }
+      // persistSaleInfo가 상품을 만든 뒤 flushPendingThumbnail로 업로드까지 이어집니다.
+      await persistSaleInfo()
+      notice.value = '대표 이미지를 저장했습니다. 이어서 작성하다 나가도 남아 있습니다.'
+    } catch (error) {
+      errorMessage.value = error.message || '대표 이미지를 저장하지 못했습니다.'
+    } finally {
+      isSaving.value = false
+    }
+    return
+  }
+
+  const existing = listingThumbnail.value
+  if (existing) await removeListingImage(existing)
+  await handleListingImage(file, 0)
+  if (!errorMessage.value) notice.value = '대표 이미지를 저장했습니다.'
+}
+
+async function removeThumbnail() {
+  if (pendingThumbnail.value) {
+    URL.revokeObjectURL(pendingThumbnail.value.previewUrl)
+    pendingThumbnail.value = null
+    return
+  }
+  if (listingThumbnail.value) await removeListingImage(listingThumbnail.value)
+}
+
+// 상품이 만들어진 직후 보류 중인 대표 이미지를 올립니다. 업로드가 실패해도 상품 저장 자체는
+// 유지하고 안내만 남깁니다 — 여기서 예외를 던지면 1단계 입력이 통째로 날아가기 때문입니다.
+async function flushPendingThumbnail() {
+  if (!pendingThumbnail.value || !currentProductId.value) return
+  const { file, previewUrl } = pendingThumbnail.value
+  pendingThumbnail.value = null
+  await handleListingImage(file, 0)
+  URL.revokeObjectURL(previewUrl)
+}
+
+async function onListingImageInput(event) {
+  const files = [...(event.target.files || [])].slice(0, 10 - listingImages.value.length)
+  const startOrder = listingImages.value.length
+  event.target.value = ''
+  await Promise.allSettled(files.map(
+    (file, index) => handleListingImage(file, startOrder + index),
+  ))
+}
+
+async function removeListingImage(image) {
+  if (!currentProductId.value || !image?.imageId) return
+  listingImageBusy.value = true
+  try {
+    await deleteProductImage(currentProductId.value, image.imageId)
+    if (image.previewUrl) URL.revokeObjectURL(image.previewUrl)
+    listingImages.value = await getProductImages(currentProductId.value)
+  } catch {
+    errorMessage.value = '상품 이미지를 삭제하지 못했습니다.'
+  } finally {
+    listingImageBusy.value = false
+  }
+}
+
+async function saveListingImageOrder(imageIds, thumbnailImageId) {
+  if (!currentProductId.value || listingImageBusy.value) return
+  listingImageBusy.value = true
+  try {
+    listingImages.value = await updateProductImageOrder(currentProductId.value, {
+      imageIds,
+      thumbnailImageId,
+    })
+  } catch {
+    errorMessage.value = '상품 이미지 순서를 변경하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+  } finally {
+    listingImageBusy.value = false
+  }
+}
+
+async function moveListingImage(image, offset) {
+  const currentIndex = listingImages.value.findIndex((item) => item.imageId === image.imageId)
+  const nextIndex = currentIndex + offset
+  if (currentIndex < 0 || nextIndex < 0 || nextIndex >= listingImages.value.length) return
+  const imageIds = listingImages.value.map((item) => item.imageId)
+  ;[imageIds[currentIndex], imageIds[nextIndex]] = [imageIds[nextIndex], imageIds[currentIndex]]
+  const thumbnailImageId = listingImages.value.find((item) => item.imageType === 'THUMBNAIL')?.imageId
+    || imageIds[0]
+  await saveListingImageOrder(imageIds, thumbnailImageId)
+}
+
+async function makeListingThumbnail(image) {
+  await saveListingImageOrder(
+    listingImages.value.map((item) => item.imageId),
+    image.imageId,
+  )
+}
+
+async function onCaptureInput(event, item) {
+  const files = [...(event.target.files || [])].slice(0, remainingSlots(item.checklistItemId))
+  event.target.value = ''
+  if (files.length) await Promise.allSettled(files.map((file) => handleCaptureFile(item, file)))
 }
 
 function openMediaPreview(item, index) {
@@ -655,22 +943,60 @@ async function startEdit(productId) {
   errorMessage.value = ''
   try {
     const product = await getMyProduct(productId)
+    listingImages.value = await getProductImages(productId)
     editingId.value = productId
+    editingStatus.value = product.status || ''
     draftProductId.value = null
     Object.assign(form, {
       categoryId: product.category?.categoryId || '',
       deviceModelId: product.device?.deviceModelId || '',
       name: product.name || '', description: product.description || '', price: product.price || '',
       color: product.device?.color || '', storageGb: product.device?.storageGb || '',
-      tradeRegion: product.tradeRegion || '',
     })
     if (form.categoryId) models.value = await getDeviceModels({ categoryId: form.categoryId, page: 0, size: 100 })
     if (form.deviceModelId) await loadTemplatePreview()
-    checklistItems.value = await getProductChecklist(productId)
-    activeCaptureItemId.value = mediaChecklistItems.value[0]?.checklistItemId || null
     clearCaptureState()
     Object.keys(confirmState).forEach((key) => delete confirmState[key])
-    activeStep.value = 1
+    checklistItems.value = await getProductChecklist(productId)
+    await Promise.all(checklistItems.value.map(async (item) => {
+      if (item.evidenceType === 'SELLER_CONFIRMATION') {
+        confirmState[item.checklistItemId] = item.status === 'COMPLETED'
+        return
+      }
+      const history = await getEvidenceHistory(productId, item.checklistItemId)
+      captureState[item.checklistItemId] = {
+        busy: '',
+        progress: 0,
+        media: history.map((evidence) => ({
+          key: evidence.evidenceId,
+          previewUrl: evidence.mediaUrl,
+          mediaUrl: evidence.mediaUrl,
+          evidenceType: evidence.evidenceType,
+          name: `증빙 ${evidence.attemptNo}`,
+          attemptNo: evidence.attemptNo,
+          restored: true,
+        })),
+      }
+    }))
+    const draftProgress = product.status === 'DRAFT'
+      ? await getProductDraftProgress(productId)
+      : null
+    if (draftProgress) {
+      Object.keys(confirmState).forEach((key) => { confirmState[key] = false })
+      draftProgress.confirmedChecklistItemIds.forEach((itemId) => {
+        confirmState[itemId] = true
+      })
+    }
+    activeCaptureItemId.value = mediaChecklistItems.value[0]?.checklistItemId || null
+    const hasEvidence = mediaChecklistItems.value.some(
+      (item) => mediaOf(item.checklistItemId).length > 0,
+    )
+    activeStep.value = draftProgress?.step || (hasEvidence ? 2 : 1)
+    if (editingStatus.value && editingStatus.value !== 'DRAFT') {
+      notice.value = '판매 중인 상품을 수정하고 있습니다. 저장하면 구매자에게 보이는 정보가 바로 바뀝니다.'
+    } else if (hasEvidence) {
+      notice.value = '임시저장된 상품 정보와 기존 S3 증빙을 복구했습니다.'
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' })
   } catch (error) {
     errorMessage.value = error.message || '상품 상세를 불러오지 못했습니다.'
@@ -685,7 +1011,18 @@ onMounted(async () => {
   }
 
   // /seller/products/:productId/edit 로 들어오면 기존 데이터를 불러 수정 모드로 엽니다.
-  if (route.params.productId) await startEdit(Number(route.params.productId))
+  if (route.params.productId) {
+    await startEdit(Number(route.params.productId))
+    if (reinspectionRequestKey.value) {
+      try {
+        reinspectionRequest.value = await getReinspectionRequest(reinspectionRequestKey.value)
+        notice.value = '재검수 요청 항목에 새 증빙을 업로드한 뒤 완료해 주세요.'
+        activeStep.value = 2
+      } catch (error) {
+        errorMessage.value = error.message || '재검수 요청을 불러오지 못했습니다.'
+      }
+    }
+  }
 })
 </script>
 
@@ -703,7 +1040,7 @@ onMounted(async () => {
               {{ editingId ? '상품 수정' : '상품 등록' }}
             </h1>
             <p class="mt-1 text-sm text-text-sub">
-              기기 정보와 검증 체크리스트를 순서대로 완료하면 상품이 등록됩니다. 진행 중인 내용은 임시 저장됩니다.
+              기기 정보와 검증 체크리스트를 순서대로 완료하면 바로 판매가 시작됩니다. 중간에 나가야 하면 임시저장을 눌러 주세요.
             </p>
           </div>
           <RouterLink
@@ -712,6 +1049,21 @@ onMounted(async () => {
           >
             상품 관리로 이동
           </RouterLink>
+        </div>
+
+        <div
+          v-if="reinspectionRequest"
+          class="border-b border-amber-200 bg-amber-50 px-6 py-4 text-sm text-amber-900"
+        >
+          <strong>재검수 요청:</strong> {{ reinspectionRequest.reason }}
+          <ul class="mt-2 list-disc pl-5 text-xs">
+            <li
+              v-for="item in reinspectionRequest.items"
+              :key="item.checklistItemId"
+            >
+              {{ item.itemName }} — {{ item.requestContent }}
+            </li>
+          </ul>
         </div>
 
         <ol
@@ -741,7 +1093,7 @@ onMounted(async () => {
               선택한 모델에 맞는 검증 체크리스트가 자동으로 연결됩니다. 다음 단계에서 항목별로 사진·영상을 등록하게 됩니다.
             </p>
             <div class="mt-6 grid gap-5 sm:grid-cols-2">
-              <label class="text-sm font-semibold text-text-main">카테고리
+              <label class="text-sm font-semibold text-text-main">카테고리<span class="ml-0.5 text-red-500">*</span>
                 <select
                   v-model="form.categoryId"
                   :disabled="Boolean(editingId)"
@@ -756,7 +1108,7 @@ onMounted(async () => {
                   >{{ item.name }}</option>
                 </select>
               </label>
-              <label class="text-sm font-semibold text-text-main">기기 모델
+              <label class="text-sm font-semibold text-text-main">기기 모델<span class="ml-0.5 text-red-500">*</span>
                 <select
                   v-model="form.deviceModelId"
                   :disabled="Boolean(editingId) || !form.categoryId"
@@ -947,85 +1299,9 @@ onMounted(async () => {
               </li>
             </ul>
 
-            <section
-              v-if="checklistGeneration?.aiSuggestions?.length && !editingId"
-              class="mt-5 rounded-lg border border-border p-4"
-            >
-              <div class="flex flex-wrap items-end justify-between gap-2">
-                <div>
-                  <h3 class="text-sm font-bold text-text-main">
-                    AI 공식자료 확인 후보
-                  </h3>
-                  <p class="mt-1 text-xs leading-5 text-text-sub">
-                    실제 기기에 있는 기능만 선택해 주세요. 선택한 기능은 촬영 체크리스트에 추가됩니다.
-                  </p>
-                </div>
-                <span
-                  v-if="confirmedFeatures.length"
-                  class="text-xs font-semibold text-primary"
-                >
-                  {{ confirmedFeatures.length }}개 선택
-                </span>
-              </div>
-
-              <ul class="mt-3 space-y-3">
-                <li
-                  v-for="suggestion in checklistGeneration.aiSuggestions"
-                  :key="suggestion.featureCode"
-                  class="rounded-md border border-border bg-bg p-3"
-                >
-                  <label class="flex cursor-pointer items-start gap-3">
-                    <input
-                      v-model="confirmedFeatures"
-                      type="checkbox"
-                      :value="suggestion.featureCode"
-                      :disabled="confirmedFeatureLimitReached && !confirmedFeatures.includes(suggestion.featureCode)"
-                      class="mt-1 h-4 w-4 rounded border-border"
-                    >
-                    <span class="min-w-0 flex-1">
-                      <span class="flex flex-wrap items-center gap-2">
-                        <span class="text-sm font-bold text-text-main">
-                          {{ suggestion.featureName || suggestion.featureCode }}
-                        </span>
-                        <BaseBadge :variant="suggestion.evidenceStatus === 'VERIFIED' ? 'primary' : 'gray'">
-                          {{ evidenceStatusLabel(suggestion.evidenceStatus) }}
-                        </BaseBadge>
-                      </span>
-                      <span class="mt-2 block text-xs leading-5 text-text-sub">
-                        <strong class="font-bold text-text-main">선정 이유</strong>
-                        {{ suggestion.reason }}
-                      </span>
-                      <span class="mt-1 block text-xs leading-5 text-text-sub">
-                        <strong class="font-bold text-text-main">점검 방법</strong>
-                        {{ suggestion.checkGuide }}
-                      </span>
-                      <a
-                        v-if="suggestion.sourceUrl"
-                        :href="suggestion.sourceUrl"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="mt-1 inline-block text-xs font-semibold text-primary underline underline-offset-2"
-                        @click.stop
-                      >
-                        {{ suggestion.sourceTitle || '공식 자료 보기' }}
-                      </a>
-                    </span>
-                  </label>
-                </li>
-              </ul>
-            </section>
-
-            <p
-              v-if="checklistGeneration?.reviewCandidates?.length"
-              class="mt-3 rounded-md bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800"
-            >
-              <strong class="block font-bold">추가 검토가 필요한 기능</strong>
-              AI가 공식 자료에서 찾았지만 아직 서비스에 전용 점검 방법이 정의되지 않아 체크리스트에는 넣지 않았습니다.
-              관리자 검토 후보: {{ checklistGeneration.reviewCandidates.join(', ') }}
-            </p>
-
             <div class="mt-6 grid gap-5 sm:grid-cols-2">
-              <label class="text-sm font-semibold text-text-main">상품명<input
+              <!-- 서버 필드명은 name이지만, 판매자가 쓰는 것은 판매글의 제목이라 화면에서는 '글제목'으로 부릅니다. -->
+              <label class="text-sm font-semibold text-text-main">글제목<span class="ml-0.5 text-red-500">*</span><input
                 v-model.trim="form.name"
                 required
                 maxlength="100"
@@ -1033,7 +1309,7 @@ onMounted(async () => {
                 class="mt-2 w-full rounded-md border border-border px-3 py-3 font-normal outline-none focus:border-primary"
               ></label>
               <label class="text-sm font-semibold text-text-main">
-                가격
+                가격<span class="ml-0.5 text-red-500">*</span>
                 <div class="relative mt-2">
                   <input
                     :value="priceFormatted"
@@ -1086,64 +1362,6 @@ onMounted(async () => {
                   class="mt-2 w-full rounded-md border border-border px-3 py-3 font-normal outline-none focus:border-primary"
                 >
               </label>
-              <label class="relative text-sm font-semibold text-text-main sm:col-span-2">
-                거래 지역
-                <div class="relative mt-2">
-                  <input
-                    v-model.trim="form.tradeRegion"
-                    required
-                    maxlength="100"
-                    placeholder="역, 랜드마크로 검색 (예: 상동역)"
-                    autocomplete="off"
-                    class="w-full rounded-md border border-border px-3 py-3 pr-10 font-normal outline-none focus:border-primary"
-                    @input="onTradeRegionInput"
-                    @focus="showTradeRegionResults = true"
-                    @blur="showTradeRegionResults = false"
-                  >
-                  <button
-                    v-if="form.tradeRegion"
-                    type="button"
-                    class="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-text-sub transition hover:bg-bg hover:text-text-main"
-                    aria-label="거래 지역 지우기"
-                    @click="clearTradeRegion"
-                  >
-                    ×
-                  </button>
-                </div>
-                <span class="mt-1 block text-xs font-normal text-text-sub">
-                  두 글자 이상 입력하면 장소를 검색합니다. 검색 결과가 없으면 직접 적어도 됩니다.
-                </span>
-                <ul
-                  v-if="showTradeRegionResults && (tradeRegionResults.length || isSearchingTradeRegion || hasSearchedTradeRegion)"
-                  class="absolute z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-md border border-border bg-white text-left shadow-lg"
-                >
-                  <li
-                    v-if="isSearchingTradeRegion"
-                    class="px-3 py-2 text-xs font-normal text-text-sub"
-                  >
-                    검색 중...
-                  </li>
-                  <li
-                    v-else-if="!tradeRegionResults.length"
-                    class="px-3 py-2 text-xs font-normal text-text-sub"
-                  >
-                    검색 결과가 없습니다. 입력한 내용을 그대로 사용할 수 있습니다.
-                  </li>
-                  <li
-                    v-for="place in tradeRegionResults"
-                    :key="`${place.placeName}-${place.addressName}`"
-                  >
-                    <button
-                      type="button"
-                      class="w-full px-3 py-2 text-left text-sm font-normal hover:bg-accent"
-                      @mousedown.prevent="selectTradeRegion(place)"
-                    >
-                      <span class="block font-semibold text-text-main">{{ place.placeName || place.addressName }}</span>
-                      <span class="block text-xs text-text-sub">{{ place.roadAddressName || place.addressName }}</span>
-                    </button>
-                  </li>
-                </ul>
-              </label>
               <label class="text-sm font-semibold text-text-main sm:col-span-2">
                 상품 설명
                 <textarea
@@ -1155,12 +1373,204 @@ onMounted(async () => {
                 />
               </label>
             </div>
+
+            <!--
+              대표 이미지는 목록·상세의 첫인상이라 기기 정보와 같은 화면에서 받습니다.
+              선택 버튼과 안내 문구는 미리보기 바로 아래에 세로로 둡니다 — 버튼이 사진에서 멀면
+              무엇을 누르라는 건지 눈이 한 번 더 움직여야 합니다.
+            -->
+            <div class="mt-6 rounded-lg border border-border bg-white p-4">
+              <h3 class="text-sm font-bold text-text-main">
+                대표 이미지
+              </h3>
+              <p class="mt-0.5 text-xs leading-5 text-text-sub">
+                JPG·PNG 파일만을 지원하며 이미지 용량은 15MB까지 가능해요.
+              </p>
+
+              <!-- 버튼은 미리보기 상자의 오른쪽 아래에 맞춰 둡니다(items-end). -->
+              <div class="mt-4 flex items-end gap-3">
+                <div class="relative h-28 w-40 shrink-0 overflow-hidden rounded-md border border-border bg-bg">
+                  <img
+                    v-if="thumbnailPreviewUrl"
+                    :src="thumbnailPreviewUrl"
+                    alt="대표 이미지 미리보기"
+                    class="h-full w-full object-cover"
+                  >
+                  <span
+                    v-else
+                    class="flex h-full w-full items-center justify-center text-center text-[11px] leading-4 text-text-sub"
+                  >대표 이미지<br>미등록</span>
+                </div>
+
+                <div class="w-40 shrink-0">
+                  <label
+                    class="block cursor-pointer rounded-md border border-primary px-3 py-2 text-center text-sm font-semibold text-primary"
+                    :class="listingImageBusy ? 'pointer-events-none opacity-60' : ''"
+                  >
+                    {{ listingImageBusy ? '업로드 중…' : (thumbnailPreviewUrl ? '이미지 변경' : '이미지 선택') }}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      class="sr-only"
+                      aria-label="대표 이미지 선택"
+                      :disabled="listingImageBusy"
+                      @change="onThumbnailInput"
+                    >
+                  </label>
+
+                  <button
+                    v-if="thumbnailPreviewUrl"
+                    type="button"
+                    class="mt-1.5 block w-full rounded-md border border-border px-3 py-1.5 text-xs font-semibold text-text-sub hover:bg-bg"
+                    :disabled="listingImageBusy"
+                    @click="removeThumbnail"
+                  >
+                    이미지 삭제
+                  </button>
+                </div>
+              </div>
+
+              <div
+                v-if="listingImageBusy"
+                class="mt-3 h-1.5 max-w-[21rem] overflow-hidden rounded-pill bg-slate-100"
+                role="progressbar"
+                :aria-valuenow="listingImageProgress"
+                aria-valuemin="0"
+                aria-valuemax="100"
+              >
+                <div
+                  class="h-full bg-primary transition-all"
+                  :style="{ width: `${listingImageProgress}%` }"
+                />
+              </div>
+
+              <p
+                v-if="pendingThumbnail"
+                class="mt-2 text-xs leading-5 text-amber-700"
+              >
+                아직 저장되지 않았습니다. 위에 표시된 항목을 채우면 바로 저장되고,
+                그전에 새로고침하면 선택이 사라집니다.
+              </p>
+              <p
+                v-else-if="listingThumbnail"
+                class="mt-2 text-xs leading-5 text-primary"
+              >
+                서버에 저장됨 · 지금 나가도 남아 있습니다.
+              </p>
+            </div>
           </section>
 
           <section
             v-else-if="activeStep === 2"
             class="grid gap-6 lg:grid-cols-[1fr_1.15fr]"
           >
+            <div class="rounded-lg border border-border bg-white p-4 lg:col-span-2">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 class="font-bold text-text-main">
+                    상품 이미지
+                  </h2>
+                  <p class="mt-1 text-sm text-text-sub">
+                    1단계에서 고른 대표 이미지가 맨 앞에 있습니다. 여기서 사진을 최대 10개까지 더하고
+                    '대표'를 눌러 대표 이미지를 바꿀 수 있습니다.
+                  </p>
+                </div>
+                <label class="cursor-pointer rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white">
+                  {{ listingImageBusy ? '업로드 중…' : '이미지 추가' }}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    multiple
+                    class="sr-only"
+                    :disabled="listingImageBusy || listingImages.length >= 10"
+                    @change="onListingImageInput"
+                  >
+                </label>
+              </div>
+              <div
+                v-if="listingImageBusy"
+                class="mt-3 h-2 overflow-hidden rounded-pill bg-slate-100"
+                role="progressbar"
+                :aria-valuenow="listingImageProgress"
+                aria-valuemin="0"
+                aria-valuemax="100"
+              >
+                <div
+                  class="h-full bg-primary transition-all"
+                  :style="{ width: `${listingImageProgress}%` }"
+                />
+              </div>
+              <p class="mt-2 text-[11px] text-text-sub">
+                최근 처리시간:
+                체크리스트 {{ registrationMetrics.checklistMs ?? '-' }}ms ·
+                이미지 압축 {{ registrationMetrics.imageCompressionMs ?? '-' }}ms ·
+                영상 압축 {{ registrationMetrics.videoCompressionMs ?? '-' }}ms ·
+                S3 업로드 {{ registrationMetrics.s3UploadMs ?? '-' }}ms
+              </p>
+              <p
+                v-if="!listingImages.length"
+                class="mt-4 rounded-md bg-bg px-4 py-5 text-center text-sm text-text-sub"
+              >
+                등록된 상품 이미지가 없습니다.
+              </p>
+              <ul
+                v-else
+                class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5"
+              >
+                <li
+                  v-for="image in listingImages"
+                  :key="image.imageId"
+                  class="relative overflow-hidden rounded-md border border-border"
+                >
+                  <img
+                    :src="image.previewUrl || image.imageUrl"
+                    alt="상품 등록 이미지"
+                    class="aspect-square w-full object-cover"
+                  >
+                  <span
+                    v-if="image.imageType === 'THUMBNAIL'"
+                    class="absolute left-1 top-1 rounded bg-primary px-2 py-1 text-[11px] font-bold text-white"
+                  >대표</span>
+                  <button
+                    type="button"
+                    class="absolute right-1 top-1 rounded bg-black/65 px-2 py-1 text-xs text-white"
+                    aria-label="상품 이미지 삭제"
+                    :disabled="listingImageBusy"
+                    @click="removeListingImage(image)"
+                  >
+                    삭제
+                  </button>
+                  <div class="flex items-center justify-center gap-1 border-t border-border bg-white p-1">
+                    <button
+                      type="button"
+                      class="rounded px-2 py-1 text-xs font-semibold text-text-sub hover:bg-bg"
+                      :disabled="listingImageBusy || image.displayOrder === 0"
+                      aria-label="이미지 순서를 앞으로 이동"
+                      @click="moveListingImage(image, -1)"
+                    >
+                      ←
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded px-2 py-1 text-xs font-semibold text-primary hover:bg-accent"
+                      :disabled="listingImageBusy || image.imageType === 'THUMBNAIL'"
+                      @click="makeListingThumbnail(image)"
+                    >
+                      대표
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded px-2 py-1 text-xs font-semibold text-text-sub hover:bg-bg"
+                      :disabled="listingImageBusy || image.displayOrder === listingImages.length - 1"
+                      aria-label="이미지 순서를 뒤로 이동"
+                      @click="moveListingImage(image, 1)"
+                    >
+                      →
+                    </button>
+                  </div>
+                </li>
+              </ul>
+            </div>
             <div>
               <h2 class="text-lg font-bold text-text-main">
                 검수용 기기 촬영
@@ -1173,7 +1583,8 @@ onMounted(async () => {
                 현재 진행률: {{ mediaChecklistItems.length }}개 중 {{ capturedMediaCount }}개 촬영 완료
               </p>
 
-              <ul class="mt-4 space-y-3">
+              <!-- 항목이 많으면 화면이 길어져서 6개 정도만 보이고 나머지는 스크롤로 봅니다. -->
+              <ul class="mt-4 max-h-[32rem] space-y-3 overflow-y-auto pr-1">
                 <li
                   v-for="item in mediaChecklistItems"
                   :key="item.checklistItemId"
@@ -1220,7 +1631,7 @@ onMounted(async () => {
                         :class="captureStatusOf(item.checklistItemId) === 'captured' ? 'text-primary' : 'text-text-sub'"
                       >
                         <template v-if="captureStatusOf(item.checklistItemId) === 'captured'">
-                          첨부 {{ mediaOf(item.checklistItemId).length }} / {{ MAX_MEDIA_PER_ITEM }}
+                          첨부 {{ mediaOf(item.checklistItemId).length }} / {{ maxMediaFor(item) }}
                         </template>
                         <template v-else-if="captureStatusOf(item.checklistItemId) === 'optimizing'">최적화 중…</template>
                         <template v-else-if="captureStatusOf(item.checklistItemId) === 'uploading'">업로드 중…</template>
@@ -1277,6 +1688,7 @@ onMounted(async () => {
                     class="hidden"
                     :accept="captureAccept(activeCaptureItem)"
                     capture="environment"
+                    multiple
                     :disabled="!activeCaptureItem || isActiveItemBusy || isActiveItemFull"
                     @change="onCaptureInput($event, activeCaptureItem)"
                   >
@@ -1287,6 +1699,16 @@ onMounted(async () => {
                       : 'cursor-not-allowed opacity-60'"
                   >
                     {{ activeItemStatusLabel }}
+                  </span>
+                  <span
+                    v-if="activeCaptureItem && busyOf(activeCaptureItem.checklistItemId) === 'uploading'"
+                    class="mt-2 block text-center text-xs font-medium text-primary"
+                    role="progressbar"
+                    :aria-valuenow="progressOf(activeCaptureItem.checklistItemId)"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                  >
+                    S3 업로드 {{ progressOf(activeCaptureItem.checklistItemId) }}%
                   </span>
                 </label>
 
@@ -1322,7 +1744,7 @@ onMounted(async () => {
                 </ul>
               </div>
               <p class="mt-2 text-center text-[11px] text-text-sub">
-                항목당 최대 {{ MAX_MEDIA_PER_ITEM }}개까지 첨부할 수 있습니다.
+                항목별 최대 파일 개수와 크기·영상 길이를 적용합니다.
                 사진은 자동으로 리사이즈, 영상은 브라우저에서 자동 압축된 뒤 업로드됩니다.
               </p>
 
@@ -1396,6 +1818,7 @@ onMounted(async () => {
                     v-model="confirmState[item.checklistItemId]"
                     type="checkbox"
                     class="mt-1 h-4 w-4 rounded border-border"
+                    @change="persistDraftProgress"
                   >
                   <span>
                     <span class="block text-sm font-bold text-text-main">
@@ -1440,13 +1863,13 @@ onMounted(async () => {
               체크리스트 등록이 완료되었습니다.
             </h2>
             <p class="mt-2 text-sm text-text-sub">
-              ‘{{ form.name }}’ 등록이 끝났어요. 완료를 누르면 등록한 상품 상세 페이지로 이동합니다.
+              ‘{{ form.name }}’ 등록이 끝났어요. 완료를 누르면 바로 판매가 시작되고 상품 상세 페이지로 이동합니다.
             </p>
 
             <dl class="mt-6 grid grid-cols-2 gap-4 rounded-lg border border-border bg-bg p-6 text-left text-sm">
               <div>
                 <dt class="text-xs text-text-sub">
-                  상품명
+                  글제목
                 </dt><dd class="mt-1 font-semibold text-text-main">
                   {{ form.name }}
                 </dd>
@@ -1485,6 +1908,18 @@ onMounted(async () => {
               이전 단계로
             </BaseButton>
             <span v-else />
+
+            <!-- 등록 도중 이탈해야 할 때만 쓰는 버튼입니다. 등록을 끝내면 '완료'가 바로 판매를 시작합니다. -->
+            <BaseButton
+              v-if="activeStep < 4"
+              type="button"
+              variant="ghost"
+              class="ml-auto mr-3 px-3 py-2 text-sm"
+              :disabled="isSaving"
+              @click="saveDraft"
+            >
+              임시저장
+            </BaseButton>
 
             <BaseButton
               v-if="activeStep === 1"
@@ -1541,22 +1976,31 @@ onMounted(async () => {
         role="alertdialog"
         aria-modal="true"
         aria-label="확인 필요"
-        @click.self="alertMessage = ''"
+        @click.self="closeAlert"
       >
         <div class="w-full max-w-sm rounded-lg bg-surface p-6 text-center shadow-elevated">
           <div class="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-accent text-xl font-bold text-primary">
             !
           </div>
-          <p class="mt-4 whitespace-pre-line text-sm leading-6 text-text-main">
+          <p class="mt-4 whitespace-pre-line text-left text-sm leading-6 text-text-main">
             {{ alertMessage }}
           </p>
-          <BaseButton
-            block
-            class="mt-5"
-            @click="alertMessage = ''"
-          >
-            확인
-          </BaseButton>
+          <div class="mt-5 flex gap-3">
+            <BaseButton
+              v-if="alertProceed"
+              variant="outline"
+              class="flex-1"
+              @click="closeAlert"
+            >
+              계속 작성하기
+            </BaseButton>
+            <BaseButton
+              class="flex-1"
+              @click="confirmAlert"
+            >
+              확인
+            </BaseButton>
+          </div>
         </div>
       </div>
 

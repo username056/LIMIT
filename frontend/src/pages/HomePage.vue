@@ -6,6 +6,12 @@ import BaseBadge from '../components/BaseBadge.vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseCard from '../components/BaseCard.vue'
 import { getDeviceCategories } from '../api/products'
+// 파일 형식이 서로 달라 확장자를 실제 형식에 맞춰 두었습니다(확장자와 내용이 다르면 MIME이 틀어집니다).
+import galaxyFlip from '../assets/galaxy_flip.png'
+import galaxyNotebook from '../assets/galaxy_notebook.avif'
+import galaxyPhone from '../assets/galaxy_phone.png'
+import galaxyTap from '../assets/galaxy_tap.webp'
+import mainHeroBanner from '../assets/main_hero_banner.png'
 
 const route = useRoute()
 const router = useRouter()
@@ -20,6 +26,18 @@ onMounted(() => {
 
 // 실제 판매 카테고리를 그대로 보여줍니다. 하위 기종은 빼고 최상위 카테고리만 노출합니다.
 const categories = ref([])
+
+// 카테고리 대표 이미지. 이름이 바뀌어도 깨지지 않도록 code(deviceType)로 연결합니다.
+const CATEGORY_IMAGES = {
+  SMARTPHONE: galaxyPhone,
+  FOLDABLE: galaxyFlip,
+  TABLET: galaxyTap,
+  LAPTOP: galaxyNotebook,
+}
+
+function categoryImage(category) {
+  return CATEGORY_IMAGES[category.code] || ''
+}
 
 onMounted(async () => {
   try {
@@ -43,32 +61,17 @@ const steps = [
   },
 ]
 
-const products = [
-  {
-    brand: 'Samsung',
-    category: '노트북 / 랩탑',
-    name: 'Galaxy Book4 Pro',
-    price: '1,890,000',
-  },
-  {
-    brand: 'Samsung',
-    category: '스마트폰 / 모바일',
-    name: 'Galaxy S24 Ultra',
-    price: '1,050,000',
-  },
-  {
-    brand: 'Samsung',
-    category: '태블릿 / 패드',
-    name: 'Galaxy Tab S9 Ultra',
-    price: '920,000',
-  },
-  {
-    brand: 'Samsung',
-    category: '이어폰 / 오디오',
-    name: 'Galaxy Buds3 Pro',
-    price: '290,000',
-  },
-]
+// '최근 올라온 실시간 확인 가능 상품' 섹션은 잠시 내려 두었습니다(템플릿도 함께 주석 처리).
+// 아래 목업 배열이 실제 판매 상품이 아니라 하드코딩된 가짜 데이터여서, 그대로 노출하면
+// 홈에서 눌러도 존재하지 않는 상품으로 이어지기 때문입니다.
+// 다시 살릴 때는 목업을 지우고 /products와 같은 데이터를 쓰세요.
+//   const recentProducts = ref([])
+//   onMounted(async () => {
+//     const page = await getProducts({ page: 0, size: 4, sort: 'createdAt,desc' })
+//     recentProducts.value = page?.data || []
+//   })
+// 카드에는 thumbnailUrl·name·price를 쓰고, 링크는 { name: 'product-detail',
+// params: { productId } }로 걸어야 실제 상품 상세로 이어집니다.
 </script>
 
 <template>
@@ -88,13 +91,17 @@ const products = [
             판매자가 올린 체크리스트 자료를 눈으로 직접 검증하고
             WebRTC 화상 채팅을 통해 제품 작동 상태를 1:1로 확인하는 중고 거래 플랫폼.
           </p>
-          <BaseButton to="/#products">
+          <BaseButton :to="{ name: 'products' }">
             상품 둘러보기
           </BaseButton>
         </div>
 
-        <div class="flex aspect-[4/3] items-center justify-center rounded-lg bg-surface text-text-sub shadow-elevated lg:aspect-[16/11]">
-          실시간 화상 검수 이미지
+        <div class="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg bg-surface shadow-elevated lg:aspect-[16/11]">
+          <img
+            :src="mainHeroBanner"
+            alt="실시간 화상으로 중고 기기 상태를 확인하는 모습"
+            class="h-full w-full object-cover"
+          >
         </div>
       </div>
     </section>
@@ -114,7 +121,18 @@ const products = [
           :to="{ name: 'products', query: { categoryId: category.categoryId } }"
           class="group overflow-hidden rounded-lg border border-border bg-surface transition-shadow hover:shadow-elevated"
         >
-          <div class="aspect-square bg-text-main" />
+          <div class="flex aspect-square items-center justify-center overflow-hidden bg-bg">
+            <img
+              v-if="categoryImage(category)"
+              :src="categoryImage(category)"
+              :alt="category.name"
+              class="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+            >
+            <span
+              v-else
+              class="text-xs text-text-sub"
+            >이미지 준비 중</span>
+          </div>
           <div class="flex items-center justify-between px-4 py-3">
             <span class="text-sm font-semibold text-text-main">{{ category.name }}</span>
           </div>
@@ -157,11 +175,12 @@ const products = [
       </BaseCard>
     </section>
 
-    <!-- Products -->
-    <section
-      id="products"
-      class="mx-auto max-w-[1200px] scroll-mt-20 px-6 pb-16 lg:px-10"
-    >
+    <!--
+      Products: '최근 올라온 실시간 확인 가능 상품' 섹션을 잠시 내려 두었습니다.
+      목업 데이터라 눌러도 실제 상품으로 가지 않아, /products의 최신 4개를 붙일 때 되살립니다.
+      복구 방법은 script의 recentProducts 주석을 참고하세요.
+
+    <section class="mx-auto max-w-[1200px] px-6 pb-16 lg:px-10">
       <div class="mb-5 flex items-center justify-between">
         <h2 class="text-lg font-bold text-text-main">
           최근 올라온 실시간 확인 가능 상품
@@ -176,30 +195,35 @@ const products = [
 
       <div class="grid grid-cols-2 gap-6 lg:grid-cols-4">
         <RouterLink
-          v-for="product in products"
-          :key="product.name"
-          :to="{ name: 'products' }"
+          v-for="product in recentProducts"
+          :key="product.productId"
+          :to="{ name: 'product-detail', params: { productId: product.productId } }"
           class="group overflow-hidden rounded-lg border border-border bg-surface transition-shadow hover:shadow-elevated"
         >
           <div class="flex aspect-square items-center justify-center bg-bg text-xs text-text-sub">
             상품 이미지
           </div>
           <div class="p-4">
-            <p class="text-xs text-text-sub">
-              {{ product.brand }}
-            </p>
             <p class="mt-1 text-sm font-semibold text-text-main">
               {{ product.name }}
             </p>
             <p class="mt-1 text-sm font-bold text-text-main">
               ₩{{ product.price }}
             </p>
-            <span class="mt-2 inline-block text-xs font-semibold text-primary">
-              보러가기 →
-            </span>
           </div>
         </RouterLink>
       </div>
+    </section>
+    -->
+
+    <!-- 목업 섹션을 내린 자리에 전체 상품으로 가는 동선만 남겨 둡니다. -->
+    <section class="mx-auto max-w-[1200px] px-6 pb-16 lg:px-10">
+      <RouterLink
+        :to="{ name: 'products' }"
+        class="flex items-center justify-center rounded-lg border border-border bg-surface px-6 py-8 text-sm font-semibold text-primary transition-shadow hover:shadow-elevated"
+      >
+        전체 상품 보기 →
+      </RouterLink>
     </section>
 
     <div

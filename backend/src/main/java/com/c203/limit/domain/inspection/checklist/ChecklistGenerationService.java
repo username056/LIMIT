@@ -115,6 +115,37 @@ public class ChecklistGenerationService {
                 context, laptopChecklist(osFamily, context.confirmedFeatures()));
     }
 
+    /**
+     * 기존 직접 입력 상품 등록 계약을 유지하기 위한 호환 경로다. 신규 판매 화면에서는 모델 검토
+     * 요청을 사용하지만, 이미 직접 입력을 사용하는 클라이언트는 carrier 모델 ID로 스냅샷을 만들 수
+     * 있다.
+     */
+    public GeneratedChecklist generateCustomForModel(
+            Long carrierDeviceModelId,
+            String manufacturer,
+            String modelName,
+            String modelCode,
+            OsFamily osFamily,
+            Set<String> confirmedFeatures) {
+        Category carrier = activeModel(carrierDeviceModelId);
+        if (carrier.getDeviceType() != DeviceType.LAPTOP) {
+            throw new BusinessException(ErrorCode.CHECKLIST_DEVICE_TYPE_NOT_SUPPORTED);
+        }
+        if (isBlank(manufacturer) || isBlank(modelName) || osFamily == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+        ChecklistGenerationContext context = context(
+                carrier.getId(),
+                carrier.getDeviceType(),
+                manufacturer.trim(),
+                modelName.trim(),
+                trimToNull(modelCode),
+                osFamily,
+                confirmedFeatures);
+        return generateWithSupplement(
+                context, laptopChecklist(osFamily, context.confirmedFeatures()));
+    }
+
     private GeneratedChecklist generateWithSupplement(
             ChecklistGenerationContext context, BaseChecklist baseChecklist) {
         ChecklistSupplementResult supplement;

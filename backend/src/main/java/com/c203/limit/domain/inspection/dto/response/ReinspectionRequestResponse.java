@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public record ReinspectionRequestResponse(
+        Long listingId,
         String requestKey,
         String status,
         String reason,
@@ -16,6 +17,7 @@ public record ReinspectionRequestResponse(
     public static ReinspectionRequestResponse from(
             ReinspectionRequest request, List<ReinspectionRequestItem> items) {
         return new ReinspectionRequestResponse(
+                request.getListingId(),
                 request.getRequestKey(),
                 request.getStatus().name(),
                 request.getReason(),

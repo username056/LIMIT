@@ -6,18 +6,13 @@ import com.c203.limit.domain.admin.entity.AdminAccount;
 import com.c203.limit.domain.admin.repository.AdminAccountRepository;
 import com.c203.limit.domain.member.entity.Member;
 import com.c203.limit.domain.member.repository.MemberRepository;
+import com.c203.limit.testsupport.AbstractMySqlIntegrationTest;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.mysql.MySQLContainer;
-import org.testcontainers.utility.DockerImageName;
 
-@Testcontainers(disabledWithoutDocker = true)
 @SpringBootTest(
         properties =
                 "spring.autoconfigure.exclude="
@@ -25,25 +20,16 @@ import org.testcontainers.utility.DockerImageName;
                         + "org.springframework.boot.data.mongodb.autoconfigure.DataMongoRepositoriesAutoConfiguration,"
                         + "org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration,"
                         + "org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration")
-class DatabaseSchemaIntegrationTests {
-
-    @Container
-    static final MySQLContainer MYSQL =
-            new MySQLContainer(DockerImageName.parse("mysql:8.4"))
-                    .withDatabaseName("limit")
-                    .withUsername("limit")
-                    .withPassword("test-only-password");
+class DatabaseSchemaIntegrationTests extends AbstractMySqlIntegrationTest {
 
     @Autowired JdbcTemplate jdbcTemplate;
     @Autowired MemberRepository memberRepository;
     @Autowired AdminAccountRepository adminAccountRepository;
 
-    @DynamicPropertySource
-    static void databaseProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
-        registry.add("spring.datasource.username", MYSQL::getUsername);
-        registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
+    @AfterEach
+    void tearDown() {
+        adminAccountRepository.deleteAll();
+        memberRepository.deleteAll();
     }
 
     @Test

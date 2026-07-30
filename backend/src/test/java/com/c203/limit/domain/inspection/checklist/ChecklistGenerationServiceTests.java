@@ -20,6 +20,8 @@ import com.c203.limit.domain.inspection.repository.ModelChecklistResearchReposit
 import com.c203.limit.domain.product.entity.Category;
 import com.c203.limit.domain.product.entity.OsFamily;
 import com.c203.limit.domain.product.repository.CategoryRepository;
+import com.c203.limit.global.exception.BusinessException;
+import com.c203.limit.global.exception.ErrorCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Optional;
@@ -190,6 +192,52 @@ class ChecklistGenerationServiceTests {
         assertThat(result.deviceModelId()).isNull();
         assertThat(result.osFamily()).isEqualTo(OsFamily.LINUX);
         assertThat(result.items()).hasSize(12);
+    }
+
+    // 등록 경로는 생성 결과와 매물의 모델이 같은지 검증하므로, 직접 입력이라도 매물이 매달릴
+    // '기타 (직접 입력)' 모델 ID가 결과에 찍혀야 한다.
+    @Test
+    void stampsCarrierModelIdOnDirectInputChecklistForRegistration() {
+        Category carrier = laptop(OsFamily.WINDOWS);
+        when(categoryRepository.findById(201L)).thenReturn(Optional.of(carrier));
+        when(supplementClient.suggest(org.mockito.ArgumentMatchers.any()))
+                .thenReturn(ChecklistSupplementResult.unavailable());
+
+        GeneratedChecklist result = service.generateCustomForModel(
+                201L, "LG", "gram Pro 17", "17Z90SP", OsFamily.WINDOWS, Set.of());
+
+        assertThat(result.deviceModelId()).isEqualTo(201L);
+        assertThat(result.manufacturer()).isEqualTo("LG");
+        assertThat(result.modelName()).isEqualTo("gram Pro 17");
+        assertThat(result.items()).isNotEmpty();
+    }
+
+    @Test
+    void rejectsDirectInputWithoutManufacturerOrModelName() {
+        Category carrier = laptop(OsFamily.WINDOWS);
+        when(categoryRepository.findById(201L)).thenReturn(Optional.of(carrier));
+
+        assertThatThrownBy(() -> service.generateCustomForModel(
+                        201L, "LG", "  ", null, OsFamily.WINDOWS, Set.of()))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+        verifyNoInteractions(supplementClient);
+    }
+
+    @Test
+    void rejectsDirectInputOnNonLaptopCarrier() {
+        Category phone = Category.createTopLevel("Smartphone", DeviceType.SMARTPHONE, 1);
+        ReflectionTestUtils.setField(phone, "id", 101L);
+        when(categoryRepository.findById(101L)).thenReturn(Optional.of(phone));
+
+        assertThatThrownBy(() -> service.generateCustomForModel(
+                        101L, "Apple", "iPhone 99", null, OsFamily.WINDOWS, Set.of()))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.CHECKLIST_DEVICE_TYPE_NOT_SUPPORTED));
     }
 
     private void stubPublishedTemplate(Long modelId) {
