@@ -270,10 +270,18 @@ public class Listing extends BaseTimeEntity {
         this.status = ListingStatus.ON_SALE;
     }
 
-    public void markPaid() {
+    /**
+     * 결제 확정 시점에 이 예약이 여전히 같은 구매자의 유효한 예약인지 함께 검증한다. 스케줄러가
+     * 만료 처리를 하기 전에 다른 구매자가 새로 예약했거나 유예 시간이 지난 상태에서 뒤늦게 결제가
+     * 확정되면, 엉뚱한 예약을 결제완료로 덮어쓰지 않고 명시적으로 거부한다.
+     */
+    public void markPaid(Long buyerId, LocalDateTime now) {
         requireStatus(ListingStatus.RESERVED, ErrorCode.LISTING_NOT_RESERVED);
+        if (!buyerId.equals(this.buyerId) || this.reservedUntil == null || this.reservedUntil.isBefore(now)) {
+            throw new BusinessException(ErrorCode.LISTING_RESERVATION_MISMATCH);
+        }
         this.status = ListingStatus.PAID;
-        this.paidAt = LocalDateTime.now();
+        this.paidAt = now;
     }
 
     /** 결제 완료된 매물을 검수 단계로 전환한다. */

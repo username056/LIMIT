@@ -3,6 +3,8 @@ package com.c203.limit.domain.payment.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -13,6 +15,10 @@ import static org.mockito.Mockito.when;
 
 import com.c203.limit.domain.member.entity.Member;
 import com.c203.limit.domain.member.repository.MemberRepository;
+import com.c203.limit.domain.payment.client.TossPaymentClient;
+import com.c203.limit.domain.payment.client.TossPaymentClientException;
+import com.c203.limit.domain.payment.client.TossPaymentResponse;
+import com.c203.limit.domain.payment.dto.request.ConfirmPaymentRequest;
 import com.c203.limit.domain.payment.dto.request.CreatePaymentRequest;
 import com.c203.limit.domain.payment.dto.response.PaymentResponse;
 import com.c203.limit.domain.payment.entity.Payment;
@@ -45,6 +51,7 @@ class PaymentServiceTests {
     @Mock PaymentRepository paymentRepository;
     @Mock MemberRepository memberRepository;
     @Mock ListingService listingService;
+    @Mock TossPaymentClient tossPaymentClient;
     @Mock PlatformTransactionManager transactionManager;
 
     PaymentService service;
@@ -54,7 +61,9 @@ class PaymentServiceTests {
         lenient()
                 .when(transactionManager.getTransaction(any()))
                 .thenReturn(mock(TransactionStatus.class));
-        service = new PaymentService(paymentRepository, memberRepository, listingService, transactionManager);
+        lenient().when(listingService.isReservationActive(any(), any())).thenReturn(true);
+        service = new PaymentService(
+                paymentRepository, memberRepository, listingService, tossPaymentClient, transactionManager);
     }
 
     private ListingReservationView listingView(Long sellerId) {
@@ -69,6 +78,15 @@ class PaymentServiceTests {
 
     private CreatePaymentRequest request(String idempotencyKey) {
         return new CreatePaymentRequest(LISTING_ID, PaymentMethod.CARD, idempotencyKey);
+    }
+
+    private Payment requestedPayment() {
+        Payment payment =
+                Payment.request(
+                        LISTING_ID, buyer(), "idem-1", java.math.BigDecimal.valueOf(650_000), PaymentMethod.CARD);
+        ReflectionTestUtils.setField(payment, "id", PAYMENT_ID);
+        payment.assignProviderOrderId();
+        return payment;
     }
 
     @Test
@@ -93,6 +111,7 @@ class PaymentServiceTests {
         assertThat(response.getStatus()).isEqualTo("REQUESTED");
         assertThat(response.getMethod()).isEqualTo("CARD");
         assertThat(response.getRequestedAmount()).isEqualByComparingTo("650000");
+        assertThat(response.getProviderOrderId()).isEqualTo("PAY-" + PAYMENT_ID + "-1");
     }
 
     @Test
@@ -232,6 +251,73 @@ class PaymentServiceTests {
     }
 
     @Test
+    void retryAttemptIssuesNewProviderOrderIdWhenReservationStillActive() {
+        Payment payment =
+                Payment.request(
+                        LISTING_ID, buyer(), "idem-1", java.math.BigDecimal.valueOf(650_000), PaymentMethod.CARD);
+        ReflectionTestUtils.setField(payment, "id", PAYMENT_ID);
+        payment.assignProviderOrderId();
+        String firstOrderId = payment.getProviderOrderId();
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        when(listingService.isReservationActive(LISTING_ID, BUYER_ID)).thenReturn(true);
+
+        PaymentResponse response = service.retryAttempt(BUYER_ID, PAYMENT_ID);
+
+        assertThat(response.getStatus()).isEqualTo("REQUESTED");
+        assertThat(payment.getAttemptNo()).isEqualTo(2);
+        assertThat(payment.getProviderOrderId()).isEqualTo("PAY-" + PAYMENT_ID + "-2");
+        assertThat(payment.getProviderOrderId()).isNotEqualTo(firstOrderId);
+    }
+
+    @Test
+    void retryAttemptRejectsWhenReservationExpired() {
+        Payment payment =
+                Payment.request(
+                        LISTING_ID, buyer(), "idem-1", java.math.BigDecimal.valueOf(650_000), PaymentMethod.CARD);
+        ReflectionTestUtils.setField(payment, "id", PAYMENT_ID);
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        when(listingService.isReservationActive(LISTING_ID, BUYER_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.retryAttempt(BUYER_ID, PAYMENT_ID))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PAYMENT_RETRY_NOT_ALLOWED));
+        assertThat(payment.getAttemptNo()).isEqualTo(1);
+    }
+
+    @Test
+    void retryAttemptRejectsNonOwner() {
+        Payment payment =
+                Payment.request(
+                        LISTING_ID, buyer(), "idem-1", java.math.BigDecimal.valueOf(650_000), PaymentMethod.CARD);
+        ReflectionTestUtils.setField(payment, "id", PAYMENT_ID);
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+
+        Long otherMemberId = 999L;
+        assertThatThrownBy(() -> service.retryAttempt(otherMemberId, PAYMENT_ID))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PAYMENT_ACCESS_DENIED));
+        verifyNoInteractions(listingService);
+    }
+
+    @Test
+    void retryAttemptThrowsNotFoundWhenPaymentMissing() {
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.retryAttempt(BUYER_ID, PAYMENT_ID))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PAYMENT_NOT_FOUND));
+    }
+
+    @Test
     void getReturnsPaymentForOwner() {
         Payment payment =
                 Payment.request(
@@ -249,6 +335,221 @@ class PaymentServiceTests {
         when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.get(BUYER_ID, PAYMENT_ID))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PAYMENT_NOT_FOUND));
+    }
+
+    @Test
+    void confirmApprovesPaymentAndMarksListingPaidOnSuccess() {
+        Payment payment = requestedPayment();
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        when(tossPaymentClient.confirm(
+                        "payment-key-1", payment.getProviderOrderId(), 650_000L, "payment-confirm-" + PAYMENT_ID + "-1"))
+                .thenReturn(new TossPaymentResponse(
+                        "payment-key-1", payment.getProviderOrderId(), "DONE", 650_000L, "CARD", null));
+
+        PaymentResponse response = service.confirm(
+                BUYER_ID,
+                PAYMENT_ID,
+                new ConfirmPaymentRequest("payment-key-1", payment.getProviderOrderId(), 650_000L));
+
+        assertThat(response.getStatus()).isEqualTo("APPROVED");
+        assertThat(response.getApprovedAmount()).isEqualByComparingTo("650000");
+        verify(listingService, times(1)).markPaid(LISTING_ID, BUYER_ID);
+    }
+
+    @Test
+    void confirmEscalatesButKeepsApprovalWhenListingReservationNoLongerValid() {
+        Payment payment = requestedPayment();
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        when(tossPaymentClient.confirm(
+                        "payment-key-1", payment.getProviderOrderId(), 650_000L, "payment-confirm-" + PAYMENT_ID + "-1"))
+                .thenReturn(new TossPaymentResponse(
+                        "payment-key-1", payment.getProviderOrderId(), "DONE", 650_000L, "CARD", null));
+        doThrow(new BusinessException(ErrorCode.LISTING_RESERVATION_MISMATCH))
+                .when(listingService)
+                .markPaid(LISTING_ID, BUYER_ID);
+
+        assertThatThrownBy(() -> service.confirm(
+                        BUYER_ID,
+                        PAYMENT_ID,
+                        new ConfirmPaymentRequest("payment-key-1", payment.getProviderOrderId(), 650_000L)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PAYMENT_CONFIRM_RESERVATION_INVALID));
+
+        assertThat(payment.getStatus().name()).isEqualTo("APPROVED");
+    }
+
+    @Test
+    void confirmEscalatesForUnexpectedRuntimeExceptionDuringListingUpdate() {
+        Payment payment = requestedPayment();
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        when(tossPaymentClient.confirm(
+                        "payment-key-1", payment.getProviderOrderId(), 650_000L, "payment-confirm-" + PAYMENT_ID + "-1"))
+                .thenReturn(new TossPaymentResponse(
+                        "payment-key-1", payment.getProviderOrderId(), "DONE", 650_000L, "CARD", null));
+        doThrow(new IllegalStateException("db hiccup"))
+                .when(listingService)
+                .markPaid(LISTING_ID, BUYER_ID);
+
+        assertThatThrownBy(() -> service.confirm(
+                        BUYER_ID,
+                        PAYMENT_ID,
+                        new ConfirmPaymentRequest("payment-key-1", payment.getProviderOrderId(), 650_000L)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PAYMENT_CONFIRM_RESERVATION_INVALID));
+
+        assertThat(payment.getStatus().name()).isEqualTo("APPROVED");
+    }
+
+    @Test
+    void confirmRejectsWhenReservationNoLongerActiveWithoutCallingToss() {
+        Payment payment = requestedPayment();
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        when(listingService.isReservationActive(LISTING_ID, BUYER_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.confirm(
+                        BUYER_ID,
+                        PAYMENT_ID,
+                        new ConfirmPaymentRequest("payment-key-1", payment.getProviderOrderId(), 650_000L)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PAYMENT_CONFIRM_RESERVATION_EXPIRED));
+
+        assertThat(payment.getStatus().name()).isEqualTo("REQUESTED");
+        verifyNoInteractions(tossPaymentClient);
+    }
+
+    @Test
+    void confirmRejectsOrderIdMismatch() {
+        Payment payment = requestedPayment();
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+
+        assertThatThrownBy(() -> service.confirm(
+                        BUYER_ID, PAYMENT_ID, new ConfirmPaymentRequest("payment-key-1", "PAY-wrong", 650_000L)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PAYMENT_ORDER_ID_MISMATCH));
+        verifyNoInteractions(tossPaymentClient);
+    }
+
+    @Test
+    void confirmRejectsAmountMismatch() {
+        Payment payment = requestedPayment();
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+
+        assertThatThrownBy(() -> service.confirm(
+                        BUYER_ID,
+                        PAYMENT_ID,
+                        new ConfirmPaymentRequest("payment-key-1", payment.getProviderOrderId(), 1_000L)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PAYMENT_AMOUNT_MISMATCH));
+        verifyNoInteractions(tossPaymentClient);
+    }
+
+    @Test
+    void confirmRejectsWhenPaymentAlreadyApproved() {
+        Payment payment = requestedPayment();
+        payment.approve(java.math.BigDecimal.valueOf(650_000), "txn-1");
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+
+        assertThatThrownBy(() -> service.confirm(
+                        BUYER_ID,
+                        PAYMENT_ID,
+                        new ConfirmPaymentRequest("payment-key-1", payment.getProviderOrderId(), 650_000L)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PAYMENT_NOT_CONFIRMABLE));
+        verifyNoInteractions(tossPaymentClient);
+    }
+
+    @Test
+    void confirmThrowsRetryableErrorWithoutFailingPaymentWhenTossFailureIsRetryable() {
+        Payment payment = requestedPayment();
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        TossPaymentClientException retryable = mock(TossPaymentClientException.class);
+        when(retryable.isRetryable()).thenReturn(true);
+        when(tossPaymentClient.confirm(any(), any(), anyLong(), any())).thenThrow(retryable);
+
+        assertThatThrownBy(() -> service.confirm(
+                        BUYER_ID,
+                        PAYMENT_ID,
+                        new ConfirmPaymentRequest("payment-key-1", payment.getProviderOrderId(), 650_000L)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PAYMENT_CONFIRM_RETRYABLE));
+        assertThat(payment.getStatus().name()).isEqualTo("REQUESTED");
+        verify(listingService, never()).markPaid(any(), any());
+    }
+
+    @Test
+    void confirmMarksPaymentFailedWhenTossRejectsNonRetryable() {
+        Payment payment = requestedPayment();
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        TossPaymentClientException rejected = mock(TossPaymentClientException.class);
+        when(rejected.isRetryable()).thenReturn(false);
+        when(rejected.getTossMessage()).thenReturn("카드 승인이 거절되었습니다.");
+        when(tossPaymentClient.confirm(any(), any(), anyLong(), any())).thenThrow(rejected);
+
+        assertThatThrownBy(() -> service.confirm(
+                        BUYER_ID,
+                        PAYMENT_ID,
+                        new ConfirmPaymentRequest("payment-key-1", payment.getProviderOrderId(), 650_000L)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> {
+                            assertThat(exception.getErrorCode())
+                                    .isEqualTo(ErrorCode.PAYMENT_CONFIRM_REJECTED);
+                            assertThat(exception.getMessage()).isEqualTo("카드 승인이 거절되었습니다.");
+                        });
+        assertThat(payment.getStatus().name()).isEqualTo("FAILED");
+        verify(listingService, never()).markPaid(any(), any());
+    }
+
+    @Test
+    void confirmRejectsNonOwner() {
+        Payment payment = requestedPayment();
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+
+        Long otherMemberId = 999L;
+        assertThatThrownBy(() -> service.confirm(
+                        otherMemberId,
+                        PAYMENT_ID,
+                        new ConfirmPaymentRequest("payment-key-1", payment.getProviderOrderId(), 650_000L)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PAYMENT_ACCESS_DENIED));
+        verifyNoInteractions(tossPaymentClient);
+    }
+
+    @Test
+    void confirmThrowsNotFoundWhenPaymentMissing() {
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.confirm(
+                        BUYER_ID, PAYMENT_ID, new ConfirmPaymentRequest("payment-key-1", "PAY-1-1", 650_000L)))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         exception ->

@@ -54,6 +54,11 @@ limit:
     turn-url: ${RTC_TURN_URL:}
     turn-username: ${RTC_TURN_USERNAME:}
     turn-credential: ${RTC_TURN_CREDENTIAL:}
+  payment:
+    toss:
+      secret-key: ${TOSS_PAYMENTS_SECRET_KEY:}
+      security-key: ${TOSS_PAYMENTS_SECURITY_KEY:}
+      api-version: ${TOSS_PAYMENTS_API_VERSION:}
   ai:
     checklist:
       enabled: ${AI_CHECKLIST_ENABLED:false}

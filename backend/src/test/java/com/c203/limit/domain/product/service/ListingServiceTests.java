@@ -76,6 +76,47 @@ class ListingServiceTests {
     }
 
     @Test
+    void isReservationActiveReturnsTrueWhileReservedBeforeDeadline() {
+        Listing listing = listingWithStatus(ListingStatus.RESERVED);
+        ReflectionTestUtils.setField(listing, "buyerId", BUYER_ID);
+        ReflectionTestUtils.setField(
+                listing, "reservedUntil", LocalDateTime.now(FIXED_CLOCK).plusMinutes(1));
+        when(listingRepository.findById(LISTING_ID)).thenReturn(Optional.of(listing));
+
+        assertThat(service.isReservationActive(LISTING_ID, BUYER_ID)).isTrue();
+    }
+
+    @Test
+    void isReservationActiveReturnsFalseAfterDeadlinePassed() {
+        Listing listing = listingWithStatus(ListingStatus.RESERVED);
+        ReflectionTestUtils.setField(listing, "buyerId", BUYER_ID);
+        ReflectionTestUtils.setField(
+                listing, "reservedUntil", LocalDateTime.now(FIXED_CLOCK).minusMinutes(1));
+        when(listingRepository.findById(LISTING_ID)).thenReturn(Optional.of(listing));
+
+        assertThat(service.isReservationActive(LISTING_ID, BUYER_ID)).isFalse();
+    }
+
+    @Test
+    void isReservationActiveReturnsFalseForDifferentBuyer() {
+        Listing listing = listingWithStatus(ListingStatus.RESERVED);
+        ReflectionTestUtils.setField(listing, "buyerId", BUYER_ID);
+        ReflectionTestUtils.setField(
+                listing, "reservedUntil", LocalDateTime.now(FIXED_CLOCK).plusMinutes(1));
+        when(listingRepository.findById(LISTING_ID)).thenReturn(Optional.of(listing));
+
+        assertThat(service.isReservationActive(LISTING_ID, BUYER_ID + 1)).isFalse();
+    }
+
+    @Test
+    void isReservationActiveReturnsFalseWhenNotReserved() {
+        Listing listing = listingWithStatus(ListingStatus.ON_SALE);
+        when(listingRepository.findById(LISTING_ID)).thenReturn(Optional.of(listing));
+
+        assertThat(service.isReservationActive(LISTING_ID, BUYER_ID)).isFalse();
+    }
+
+    @Test
     void getReturnsReservationViewWithoutMutatingListing() {
         Listing listing = listingWithStatus(ListingStatus.ON_SALE);
         when(listingRepository.findById(LISTING_ID)).thenReturn(Optional.of(listing));
@@ -126,6 +167,38 @@ class ListingServiceTests {
                                 assertThat(exception.getErrorCode())
                                         .isEqualTo(ErrorCode.LISTING_NOT_ON_SALE));
 
+        verifyNoInteractions(listingStatusHistoryRepository);
+    }
+
+    @Test
+    void markPaidTransitionsListingAndRecordsHistory() {
+        Listing listing = listingWithStatus(ListingStatus.RESERVED);
+        ReflectionTestUtils.setField(listing, "buyerId", BUYER_ID);
+        ReflectionTestUtils.setField(
+                listing, "reservedUntil", LocalDateTime.now(FIXED_CLOCK).plusMinutes(1));
+        when(listingRepository.findById(LISTING_ID)).thenReturn(Optional.of(listing));
+
+        Listing result = service.markPaid(LISTING_ID, BUYER_ID);
+
+        assertThat(result.getStatus()).isEqualTo(ListingStatus.PAID);
+        verify(listingStatusHistoryRepository).save(any(ListingStatusHistory.class));
+    }
+
+    @Test
+    void markPaidRejectsWhenReservationBelongsToAnotherBuyer() {
+        Listing listing = listingWithStatus(ListingStatus.RESERVED);
+        ReflectionTestUtils.setField(listing, "buyerId", BUYER_ID);
+        ReflectionTestUtils.setField(
+                listing, "reservedUntil", LocalDateTime.now(FIXED_CLOCK).plusMinutes(1));
+        when(listingRepository.findById(LISTING_ID)).thenReturn(Optional.of(listing));
+
+        assertThatThrownBy(() -> service.markPaid(LISTING_ID, BUYER_ID + 1))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.LISTING_RESERVATION_MISMATCH));
+        assertThat(listing.getStatus()).isEqualTo(ListingStatus.RESERVED);
         verifyNoInteractions(listingStatusHistoryRepository);
     }
 
