@@ -85,7 +85,21 @@ run_backend_scripts() {
   grep -Fq 'tail_from_end = true' infra/monitoring/alloy/config.alloy
   grep -Fq 'log_format limit_observability' infra/nginx/limit.conf
   grep -Fq 'path=$uri' infra/nginx/limit.conf
-  chat_ws_block=$(sed -n '/^[[:space:]]*location = \/ws {/,/^[[:space:]]*}/p' infra/nginx/limit.conf)
+  chat_ws_block=$(awk '
+    /^[[:space:]]*location = \/ws[[:space:]]*\{/ {
+      in_block = 1
+    }
+    in_block {
+      print
+      line = $0
+      depth += gsub(/\{/, "{", line)
+      line = $0
+      depth -= gsub(/\}/, "}", line)
+      if (depth == 0) {
+        exit
+      }
+    }
+  ' infra/nginx/limit.conf)
   test -n "$chat_ws_block"
   printf '%s\n' "$chat_ws_block" | grep -Fq 'proxy_pass http://limit_backend;'
   printf '%s\n' "$chat_ws_block" | grep -Fq 'proxy_http_version 1.1;'
