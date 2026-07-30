@@ -4,6 +4,7 @@
 
 - 결제 요청 생성 `POST /api/v1/payments`
 - 결제 승인(confirm) `POST /api/v1/payments/{paymentId}/confirm`
+- 결제 전 예약 취소 `POST /api/v1/payments/{paymentId}/cancel`
 - 결제 상세 조회 `GET /api/v1/payments/{paymentId}`
 - 예약 유예 시간이 지난 미결제 건 자동 만료 스케줄러
 
@@ -50,6 +51,16 @@ confirm 연동 시 `payment-confirm-{paymentId}-{attemptNo}` 형태로 결정적
 `IDEMPOTENCY_KEY_CONFLICT`(`PAY004`, 409)를 반환한다. 이 유니크 제약 위반은 재시도해도 해소되지
 않는 영구적 충돌일 수 있어(다른 구매자가 이미 그 키를 점유), 감지 즉시 재조회로 복구를 시도하고
 내 것이 아니면 남은 재시도를 소진하지 않고 바로 `IDEMPOTENCY_KEY_CONFLICT`로 응답한다.
+
+`POST /api/v1/payments/{paymentId}/cancel`은 Toss 결제창 진입 전(`REQUESTED`) 단계에서 구매자가
+명시적으로 취소할 때 쓴다. 결제창을 취소하거나 브라우저를 닫아도 자동 만료 스케줄러가 예약
+유예(`reservation-ttl-minutes`, 기본 30분)를 다 채워야 매물을 풀어주므로, 이 API가 그 대기 없이
+`Payment.CANCELLED` 전환과 `Listing.cancelReservation()`(`RESERVED -> ON_SALE`)을 한 트랜잭션으로
+묶어 즉시 처리한다 — 스케줄러는 이 호출이 유실됐을 때의 최종 안전망으로 계속 남는다. 이미
+`CANCELLED`·`EXPIRED`인 결제는 같은 결과를 그대로 반환하고(멱등), `APPROVED`·`FAILED`처럼 이미
+진행된 결제는 `PAYMENT_NOT_CANCELLABLE`(`PAY015`, 409)로 거부해 환불 흐름으로 유도한다.
+프론트엔드는 `PurchaseFailPage`가 마운트될 때 `paymentId`가 있으면 이 API를 호출하고, 실패해도
+화면에는 영향을 주지 않는다(스케줄러가 안전망이므로).
 
 동일 매물에 대한 서로 다른 구매자의 동시 요청은 `Listing`의 낙관적 락(`payment_version` 아님,
 `Listing.version`) 경합으로 이어질 수 있어, 실패한 트랜잭션을 버리고 새 트랜잭션으로 최대 3회까지

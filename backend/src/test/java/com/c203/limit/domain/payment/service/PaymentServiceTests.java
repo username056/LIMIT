@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -572,5 +573,98 @@ class PaymentServiceTests {
                         exception ->
                                 assertThat(exception.getErrorCode())
                                         .isEqualTo(ErrorCode.PAYMENT_ACCESS_DENIED));
+    }
+
+    @Test
+    void cancelReleasesReservationWhenRequested() {
+        Payment payment = requestedPayment();
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+
+        PaymentResponse response = service.cancel(BUYER_ID, PAYMENT_ID);
+
+        assertThat(response.getStatus()).isEqualTo("CANCELLED");
+        assertThat(payment.getStatus().name()).isEqualTo("CANCELLED");
+        verify(listingService, times(1)).cancelReservation(eq(LISTING_ID), eq(BUYER_ID), any());
+    }
+
+    @Test
+    void cancelIsIdempotentWhenAlreadyCancelled() {
+        Payment payment = requestedPayment();
+        payment.cancel("이미 취소됨");
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+
+        PaymentResponse response = service.cancel(BUYER_ID, PAYMENT_ID);
+
+        assertThat(response.getStatus()).isEqualTo("CANCELLED");
+        verifyNoInteractions(listingService);
+    }
+
+    @Test
+    void cancelIsIdempotentWhenAlreadyExpired() {
+        Payment payment = requestedPayment();
+        payment.expire("예약 유예 시간 초과로 자동 만료");
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+
+        PaymentResponse response = service.cancel(BUYER_ID, PAYMENT_ID);
+
+        assertThat(response.getStatus()).isEqualTo("EXPIRED");
+        verifyNoInteractions(listingService);
+    }
+
+    @Test
+    void cancelRejectsWhenAlreadyApproved() {
+        Payment payment = requestedPayment();
+        payment.approve(java.math.BigDecimal.valueOf(650_000), "txn-1");
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+
+        assertThatThrownBy(() -> service.cancel(BUYER_ID, PAYMENT_ID))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PAYMENT_NOT_CANCELLABLE));
+        verifyNoInteractions(listingService);
+    }
+
+    @Test
+    void cancelRejectsWhenAlreadyFailed() {
+        Payment payment = requestedPayment();
+        payment.fail("카드 승인이 거절되었습니다.");
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+
+        assertThatThrownBy(() -> service.cancel(BUYER_ID, PAYMENT_ID))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PAYMENT_NOT_CANCELLABLE));
+        verifyNoInteractions(listingService);
+    }
+
+    @Test
+    void cancelRejectsNonOwner() {
+        Payment payment = requestedPayment();
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+
+        Long otherMemberId = 999L;
+        assertThatThrownBy(() -> service.cancel(otherMemberId, PAYMENT_ID))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PAYMENT_ACCESS_DENIED));
+        verifyNoInteractions(listingService);
+    }
+
+    @Test
+    void cancelThrowsNotFoundWhenPaymentMissing() {
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.cancel(BUYER_ID, PAYMENT_ID))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PAYMENT_NOT_FOUND));
     }
 }

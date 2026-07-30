@@ -77,6 +77,26 @@ public interface PaymentApi {
             @PathVariable Long paymentId, @Valid @RequestBody ConfirmPaymentRequest request);
 
     @Operation(
+            operationId = "payment04",
+            summary = "결제 전 예약 취소",
+            description = "결제창 진입 전(REQUESTED) 결제 요청을 취소하고 매물 예약을 즉시 해제합니다. "
+                    + "이미 취소·만료된 결제는 같은 결과를 그대로 반환합니다(멱등). 이미 승인된 결제는 "
+                    + "이 API로 취소할 수 없고 환불 절차를 이용해야 합니다.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "200",
+                description = "결제 취소 성공(또는 이미 취소·만료된 결제의 현재 상태)",
+                content = @Content(schema = @Schema(implementation = PaymentApiResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "UNAUTHORIZED"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "PAYMENT_ACCESS_DENIED"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "PAYMENT_NOT_FOUND"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "PAYMENT_NOT_CANCELLABLE")
+    })
+    @PostMapping(path = "/api/v1/payments/{paymentId}/cancel", produces = MediaType.APPLICATION_JSON_VALUE)
+    ResponseEntity<ApiResponse<PaymentResponse>> cancelPayment(@PathVariable Long paymentId);
+
+    @Operation(
             operationId = "payment02",
             summary = "결제 상세 조회",
             description = "본인이 요청한 결제 내역을 조회합니다.",

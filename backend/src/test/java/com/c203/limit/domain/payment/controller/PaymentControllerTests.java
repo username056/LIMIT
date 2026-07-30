@@ -115,6 +115,16 @@ class PaymentControllerTests {
     }
 
     @Test
+    void cancelPaymentReturns200() throws Exception {
+        when(paymentService.cancel(BUYER_ID, PAYMENT_ID)).thenReturn(response());
+
+        mockMvc.perform(post("/api/v1/payments/{paymentId}/cancel", PAYMENT_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.paymentId").value(PAYMENT_ID))
+                .andExpect(jsonPath("$.data.status").value("REQUESTED"));
+    }
+
+    @Test
     void getPaymentReturnsDetail() throws Exception {
         when(paymentService.get(BUYER_ID, PAYMENT_ID)).thenReturn(response());
 
