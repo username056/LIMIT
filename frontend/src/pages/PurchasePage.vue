@@ -1,24 +1,32 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseCard from '../components/BaseCard.vue'
 import BaseInput from '../components/BaseInput.vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseAddressInput from '../components/BaseAddressInput.vue'
-import { buildProductById } from '../mock/products'
 import { formatAddress } from '../utils/daumPostcode'
 import { getAccessToken } from '../auth/session'
 import { getMyProfile } from '../api/member'
+import { getProduct } from '../api/products'
+import { createPayment } from '../api/payment'
 import { getDefaultAddress } from '../stores/addressBook'
-
-// TODO(주문/결제 API 연동): 주문 생성·결제 API가 준비되면 이 페이지의 mock 배송지·결제 흐름을
-// 실제 요청으로 교체하세요. 지금은 결제 버튼을 눌러도 서버 요청이 전혀 없고, mock 주문번호
-// (LMT-날짜-4자리)를 만들어 구매 완료 페이지로 이동만 합니다. 결제와 주문 저장은 일어나지 않습니다.
 
 const route = useRoute()
 const router = useRouter()
-const product = computed(() => buildProductById(route.params.productId))
+const product = ref(null)
+const isLoadingProduct = ref(true)
+
+onMounted(async () => {
+  try {
+    product.value = await getProduct(route.params.productId)
+  } catch (error) {
+    checkoutError.value = error.message || '상품 정보를 불러오지 못했습니다.'
+  } finally {
+    isLoadingProduct.value = false
+  }
+})
 
 const isLoggedIn = Boolean(getAccessToken())
 const showLoginRequiredModal = ref(!isLoggedIn)
@@ -65,16 +73,16 @@ async function toggleUseDefaultAddress() {
 }
 
 const PAYMENT_METHODS = [
-  { value: 'card', label: '신용/체크카드' },
-  { value: 'tosspay', label: '토스페이' },
-  { value: 'transfer', label: '실시간 계좌이체' },
+  { value: 'card', label: '신용/체크카드', apiMethod: 'CARD', tossMethod: '카드' },
+  { value: 'tosspay', label: '토스페이', apiMethod: 'TOSSPAY', tossMethod: '토스페이' },
+  { value: 'transfer', label: '실시간 계좌이체', apiMethod: 'ACCOUNT_TRANSFER', tossMethod: '계좌이체' },
 ]
 const selectedPaymentMethod = ref('card')
-const selectedPaymentLabel = computed(
-  () => PAYMENT_METHODS.find((method) => method.value === selectedPaymentMethod.value)?.label || '',
+const selectedPayment = computed(
+  () => PAYMENT_METHODS.find((method) => method.value === selectedPaymentMethod.value),
 )
+const selectedPaymentLabel = computed(() => selectedPayment.value?.label || '')
 
-// mock 주문 생성: 실제 주문 API가 준비되면 이 함수 대신 생성된 주문 응답을 사용하세요.
 function validateCheckout() {
   if (!receiverName.value.trim() || !receiverPhone.value.trim()) {
     checkoutError.value = '수령인 이름과 연락처를 입력해 주세요.'
@@ -90,21 +98,41 @@ function validateCheckout() {
 async function submitPayment() {
   checkoutError.value = ''
   if (!validateCheckout()) return
-  isSubmitting.value = true
-  const now = new Date()
-  const dateCode = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
-  const orderNumber = `LMT-${dateCode}-${String(Math.floor(1000 + Math.random() * 9000))}`
+  if (!product.value) return
 
-  await router.push({
-    name: 'purchase-success',
-    params: { productId: route.params.productId },
-    query: {
-      orderNumber,
-      receiverName: receiverName.value,
-      address: formatAddress(address.value),
-    },
-  })
-  isSubmitting.value = false
+  const clientKey = import.meta.env.VITE_TOSS_PAYMENTS_CLIENT_KEY
+  if (!clientKey) {
+    checkoutError.value = '결제 설정이 완료되지 않았습니다. 잠시 후 다시 시도해 주세요.'
+    return
+  }
+  if (!window.TossPayments) {
+    checkoutError.value = '결제 모듈을 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.'
+    return
+  }
+
+  isSubmitting.value = true
+  try {
+    const payment = await createPayment({
+      listingId: Number(route.params.productId),
+      method: selectedPayment.value.apiMethod,
+      idempotencyKey: crypto.randomUUID(),
+    })
+
+    const origin = window.location.origin
+    const productId = route.params.productId
+    const tossPayments = window.TossPayments(clientKey)
+    await tossPayments.requestPayment(selectedPayment.value.tossMethod, {
+      amount: Number(payment.requestedAmount),
+      orderId: payment.providerOrderId,
+      orderName: product.value.name,
+      customerName: receiverName.value,
+      successUrl: `${origin}/purchase/${productId}/success?paymentId=${payment.paymentId}&address=${encodeURIComponent(formatAddress(address.value))}&productName=${encodeURIComponent(product.value.name)}&manufacturer=${encodeURIComponent(product.value.device?.manufacturer || '')}`,
+      failUrl: `${origin}/purchase/${productId}/fail?paymentId=${payment.paymentId}`,
+    })
+  } catch (error) {
+    checkoutError.value = error.message || '결제 요청을 처리하지 못했습니다.'
+    isSubmitting.value = false
+  }
 }
 </script>
 
@@ -207,7 +235,18 @@ async function submitPayment() {
         </div>
 
         <div>
-          <BaseCard class="sticky top-6">
+          <BaseCard
+            v-if="isLoadingProduct"
+            class="sticky top-6"
+          >
+            <p class="text-sm text-text-sub">
+              상품 정보를 불러오는 중...
+            </p>
+          </BaseCard>
+          <BaseCard
+            v-else-if="product"
+            class="sticky top-6"
+          >
             <h2 class="mb-4 text-base font-bold text-text-main">
               주문 요약
             </h2>
@@ -221,7 +260,7 @@ async function submitPayment() {
                   {{ product.name }}
                 </p>
                 <p class="mt-1 text-xs text-text-sub">
-                  {{ product.brand }}
+                  {{ product.device?.manufacturer }}
                 </p>
               </div>
             </RouterLink>
@@ -229,11 +268,11 @@ async function submitPayment() {
             <div class="mt-5 space-y-2 border-t border-border pt-4 text-sm">
               <div class="flex items-center justify-between text-text-sub">
                 <span>상품 금액</span>
-                <span>₩{{ product.price.toLocaleString('ko-KR') }}</span>
+                <span>₩{{ Number(product.price).toLocaleString('ko-KR') }}</span>
               </div>
               <div class="flex items-center justify-between text-base font-bold text-text-main">
                 <span>최종 결제 금액</span>
-                <span class="text-primary">₩{{ product.price.toLocaleString('ko-KR') }}</span>
+                <span class="text-primary">₩{{ Number(product.price).toLocaleString('ko-KR') }}</span>
               </div>
             </div>
 

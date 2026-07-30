@@ -15,6 +15,7 @@ import {
   getProductChecklist,
   getEvidenceHistory,
   getProductImages,
+  requestDeviceModel,
   transitionProductStatus,
 } from '../../api/products'
 
@@ -49,6 +50,7 @@ vi.mock('../../api/products', () => ({
   getEvidenceHistory: vi.fn(),
   getProductImages: vi.fn(),
   deleteProductImage: vi.fn(),
+  requestDeviceModel: vi.fn(),
   transitionProductStatus: vi.fn(),
   updateProduct: vi.fn(),
   updateProductDraftProgress: vi.fn(),
@@ -131,6 +133,7 @@ describe('ProductRegisterPage', () => {
       requiredHeaders: { 'Content-Type': 'image/jpeg' },
     })
     getProductImages.mockResolvedValue([])
+    requestDeviceModel.mockResolvedValue({ requestId: 9001, status: 'PENDING' })
     getDeviceCategories.mockResolvedValue([{ categoryId: 10, name: '노트북' }])
     getDeviceModels.mockResolvedValue([{
       deviceModelId: 101,
@@ -160,7 +163,10 @@ describe('ProductRegisterPage', () => {
     await flushPromises()
 
     await fillDeviceStep(wrapper)
-    expect(getChecklistTemplate).toHaveBeenCalledWith(101)
+    expect(generateChecklist).toHaveBeenCalledWith({
+      deviceModelId: 101,
+      confirmedFeatures: [],
+    })
 
     await wrapper.find('input[placeholder="예: 오닉스 블랙"]').setValue('그라파이트')
     await wrapper.find('select[aria-label="저장 용량 선택"]').setValue('512')
@@ -178,12 +184,13 @@ describe('ProductRegisterPage', () => {
       storageGb: 512,
       // 화면에서는 거래 지역을 받지 않지만 백엔드 @NotBlank 때문에 기본값을 채워 보냅니다.
       tradeRegion: '협의',
+      confirmedFeatures: [],
     })
     expect(getProductChecklist).toHaveBeenCalledWith(1001)
     expect(wrapper.text()).toContain('검수용 기기 촬영')
   })
 
-  it('Windows 모델은 자동 생성 체크리스트와 AI 확인 후보를 보여주고 선택한 기능을 함께 보낸다', async () => {
+  it('Windows 모델은 승인된 자동 생성 체크리스트만 보여주고 판매자 기능 선택은 받지 않는다', async () => {
     getDeviceModels.mockResolvedValue([{
       deviceModelId: 101,
       manufacturerName: 'Samsung',
@@ -220,22 +227,60 @@ describe('ProductRegisterPage', () => {
     expect(getChecklistTemplate).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('자동 생성 체크리스트')
     expect(wrapper.text()).toContain('AI 공식자료 반영')
-    expect(wrapper.text()).toContain('AI 공식자료 확인 후보')
-    expect(wrapper.text()).toContain('내장 카메라')
-    expect(wrapper.text()).toContain('선정 이유')
-    expect(wrapper.text()).toContain('점검 방법')
-    expect(wrapper.text()).toContain('추가 검토가 필요한 기능')
-    expect(wrapper.text()).not.toContain('/ 5개 선택')
-    expect(wrapper.text()).not.toContain('0개 선택')
-
-    await wrapper.find('input[type="checkbox"][value="CAMERA"]').setValue(true)
-    expect(wrapper.text()).toContain('1개 선택')
-    expect(wrapper.text()).not.toContain('/ 5개 선택')
+    expect(wrapper.text()).not.toContain('AI 공식자료 확인 후보')
+    expect(wrapper.text()).not.toContain('내장 카메라')
+    expect(wrapper.find('input[type="checkbox"][value="CAMERA"]').exists()).toBe(false)
     await buttonByText(wrapper, '다음 단계').trigger('click')
     await flushPromises()
 
     expect(createProduct).toHaveBeenCalledWith(expect.objectContaining({
-      confirmedFeatures: ['CAMERA'],
+      confirmedFeatures: [],
+    }))
+  })
+
+  it('스마트폰 모델도 승인 전 AI 후보를 판매자에게 노출하지 않는다', async () => {
+    getDeviceCategories.mockResolvedValue([{ categoryId: 10, name: '스마트폰' }])
+    getDeviceModels.mockResolvedValue([{
+      deviceModelId: 101,
+      manufacturerName: 'Samsung',
+      modelName: 'Galaxy S24',
+      defaultOs: 'ANDROID',
+    }])
+    generateChecklist.mockResolvedValue({
+      deviceModelId: 101,
+      manufacturer: 'Samsung',
+      modelName: 'Galaxy S24',
+      osFamily: 'ANDROID',
+      aiApplied: true,
+      items: templateItems.map((item) => ({ ...item, required: item.isRequired })),
+      aiSuggestions: [{
+        featureCode: 'WIRELESS_CHARGING',
+        featureName: '무선 충전',
+        evidenceStatus: 'VERIFIED',
+        reason: '공식 사양에서 무선 충전을 확인했습니다.',
+        checkGuide: '호환 충전기로 충전 상태를 확인하세요.',
+        sourceUrl: 'https://www.samsung.com/example',
+        sourceTitle: 'Galaxy S24 공식 사양',
+      }],
+      reviewCandidates: [],
+    })
+
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await fillDeviceStep(wrapper)
+
+    expect(generateChecklist).toHaveBeenCalledWith({
+      deviceModelId: 101,
+      confirmedFeatures: [],
+    })
+    expect(getChecklistTemplate).not.toHaveBeenCalled()
+    expect(wrapper.text()).not.toContain('무선 충전')
+
+    await buttonByText(wrapper, '다음 단계').trigger('click')
+    await flushPromises()
+
+    expect(createProduct).toHaveBeenCalledWith(expect.objectContaining({
+      confirmedFeatures: [],
     }))
   })
 
@@ -518,5 +563,147 @@ describe('ProductRegisterPage', () => {
 
     expect(transitionProductStatus).not.toHaveBeenCalled()
     expect(routerPushMock).toHaveBeenCalledWith({ name: 'seller-products' })
+  })
+
+  // 대표 이미지는 고르는 순간 서버에 올라가야 합니다. 그러지 않으면 이탈 시 선택이 사라집니다.
+  it('1단계 필수값이 채워져 있으면 대표 이미지를 고르는 즉시 초안을 만들고 업로드한다', async () => {
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await fillDeviceStep(wrapper)
+
+    const file = new File(['thumb'], 'thumb.jpg', { type: 'image/jpeg' })
+    await attachFile(wrapper.find('input[aria-label="대표 이미지 선택"]'), file)
+    await flushPromises()
+
+    // '다음 단계'를 누르지 않았는데도 상품이 만들어지고 업로드까지 끝나 있어야 합니다.
+    expect(createProduct).toHaveBeenCalledTimes(1)
+    expect(createProductImageUploadUrl).toHaveBeenCalledWith(1001, {
+      filename: 'thumb.jpg',
+      contentType: 'image/jpeg',
+      fileSize: file.size,
+    })
+    expect(completeProductImage).toHaveBeenCalledWith(1001, {
+      uploadId: 'image-upload-1',
+      imageType: 'THUMBNAIL',
+      displayOrder: 0,
+    })
+    expect(wrapper.text()).toContain('서버에 저장됨')
+  })
+
+  it('webp 대표 이미지는 원본 형식 그대로 업로드한다', async () => {
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await fillDeviceStep(wrapper)
+
+    const file = new File(['thumb'], 'thumb.webp', { type: 'image/webp' })
+    await attachFile(wrapper.find('input[aria-label="대표 이미지 선택"]'), file)
+    await flushPromises()
+
+    expect(createProductImageUploadUrl).toHaveBeenCalledWith(1001, {
+      filename: 'thumb.webp',
+      contentType: 'image/webp',
+      fileSize: file.size,
+    })
+  })
+
+  it('필수값이 비어 있으면 대표 이미지를 붙들고 있으면서 아직 저장되지 않았다고 알린다', async () => {
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+
+    await attachFile(
+      wrapper.find('input[aria-label="대표 이미지 선택"]'),
+      new File(['thumb'], 'thumb.jpg', { type: 'image/jpeg' }),
+    )
+    await flushPromises()
+
+    expect(createProduct).not.toHaveBeenCalled()
+    expect(createProductImageUploadUrl).not.toHaveBeenCalled()
+    expect(wrapper.find('img[alt="대표 이미지 미리보기"]').attributes('src')).toBe('blob:preview')
+    expect(wrapper.text()).toContain('아직 저장되지 않았습니다')
+    expect(wrapper.text()).toContain('대표 이미지가 바로 저장됩니다')
+
+    // 값을 채우고 다음 단계로 넘어가면 그때 함께 올라갑니다.
+    await fillDeviceStep(wrapper)
+    await buttonByText(wrapper, '다음 단계').trigger('click')
+    await flushPromises()
+
+    expect(completeProductImage).toHaveBeenCalledWith(1001, {
+      uploadId: 'image-upload-1',
+      imageType: 'THUMBNAIL',
+      displayOrder: 0,
+    })
+  })
+
+  describe('카탈로그에 없는 기기 모델 검토 요청', () => {
+    it('모델을 제조사별로 묶고 내부 carrier 모델은 숨긴다', async () => {
+      getDeviceModels.mockResolvedValue([
+        {
+          deviceModelId: 101,
+          manufacturerName: 'Samsung',
+          modelName: 'Galaxy Book',
+          modelCode: 'NT750XGK',
+        },
+        {
+          deviceModelId: 102,
+          manufacturerName: 'LG',
+          modelName: 'gram Pro',
+          modelCode: '17Z90SP',
+        },
+        {
+          deviceModelId: 199,
+          manufacturerName: null,
+          modelName: '기타 (직접 입력)',
+          modelCode: 'ETC-LAPTOP',
+        },
+      ])
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await wrapper.findAll('select')[0].setValue('10')
+      await flushPromises()
+
+      expect(wrapper.findAll('select')[1].findAll('optgroup').map((node) => node.attributes('label')))
+        .toEqual(['Samsung', 'LG'])
+      expect(wrapper.findAll('select')[1].text()).not.toContain('기타 (직접 입력)')
+    })
+
+    it('직접 입력한 모델은 상품을 만들지 않고 관리자 검토 요청으로 등록한다', async () => {
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await wrapper.findAll('select')[0].setValue('10')
+      await buttonByText(wrapper, '찾는 모델이 없나요? 직접 입력').trigger('click')
+
+      await wrapper.find('input[placeholder="예: Samsung"]').setValue('LG')
+      await wrapper.find('input[placeholder="예: Galaxy S25"]').setValue('gram Pro 17')
+      await wrapper.findAll('input[maxlength="50"]')
+        .find((input) => !input.attributes('placeholder'))
+        .setValue('17Z90SP')
+      await buttonByText(wrapper, '모델 검토 요청').trigger('click')
+      await flushPromises()
+
+      expect(requestDeviceModel).toHaveBeenCalledWith({
+        categoryId: 10,
+        manufacturer: 'LG',
+        modelName: 'gram Pro 17',
+        modelCode: '17Z90SP',
+        osFamily: 'ANDROID',
+      })
+      expect(createProduct).not.toHaveBeenCalled()
+      expect(wrapper.text()).toContain('관리자 승인 후 모델 목록에서 선택해 상품을 등록할 수 있습니다.')
+    })
+  })
+
+  it('압축 후에도 15MB를 넘는 대표 이미지는 업로드하지 않고 안내한다', async () => {
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await fillDeviceStep(wrapper)
+
+    const huge = new File(['x'], 'huge.jpg', { type: 'image/jpeg' })
+    Object.defineProperty(huge, 'size', { value: 16 * 1024 * 1024 })
+    await attachFile(wrapper.find('input[aria-label="대표 이미지 선택"]'), huge)
+    await flushPromises()
+
+    expect(createProductImageUploadUrl).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('15MB를 넘을 수 없습니다')
   })
 })

@@ -1,7 +1,8 @@
 package com.c203.limit.domain.inspection.checklist;
 
 public record ChecklistSuggestion(
-        LaptopFeatureCode featureCode,
+        String featureCode,
+        String featureName,
         ChecklistEvidenceStatus evidenceStatus,
         String reason,
         String checkGuide,

@@ -6,6 +6,8 @@ import com.c203.limit.domain.product.dto.request.GenerateChecklistRequest;
 import com.c203.limit.domain.product.dto.response.ChecklistGenerationResponse;
 import com.c203.limit.domain.seller.service.SellerStatusReader;
 import com.c203.limit.global.response.ApiResponse;
+import com.c203.limit.global.exception.BusinessException;
+import com.c203.limit.global.exception.ErrorCode;
 import com.c203.limit.global.security.CurrentUser;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -31,15 +33,11 @@ public class ChecklistGenerationController implements ChecklistGenerationApi {
     public ResponseEntity<ApiResponse<ChecklistGenerationResponse>> generateChecklist(
             GenerateChecklistRequest request) {
         sellerStatusReader.requireActiveSeller(currentUser.memberId());
-        GeneratedChecklist generated = request.deviceModelId() == null
-                ? generationService.generateCustom(
-                        request.manufacturer(),
-                        request.modelName(),
-                        request.modelCode(),
-                        request.osFamily(),
-                        request.confirmedFeatures())
-                : generationService.generateForModel(
-                        request.deviceModelId(), request.confirmedFeatures());
+        if (request.deviceModelId() == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+        GeneratedChecklist generated = generationService.generateForModel(
+                request.deviceModelId(), request.confirmedFeatures());
         return ResponseEntity.ok(ApiResponse.ok(ChecklistGenerationResponse.from(generated)));
     }
 }

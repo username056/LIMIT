@@ -144,17 +144,19 @@ public class ProductApplicationService {
                     .toList();
             templateItems = templateItemRepository.saveAllAndFlush(generatedItems);
         }
-        Listing listing = listingRepository.saveAndFlush(
-                Listing.createDraft(
-                        sellerId,
-                        model,
-                        request.getName(),
-                        request.getDescription(),
-                        price(request.getPrice()),
-                        request.getColor(),
-                        request.getStorageGb(),
-                        request.getTradeRegion(),
-                        template.getId()));
+        Listing draft = Listing.createDraft(
+                sellerId,
+                model,
+                request.getName(),
+                request.getDescription(),
+                price(request.getPrice()),
+                request.getColor(),
+                request.getStorageGb(),
+                request.getTradeRegion(),
+                template.getId());
+        // '기타 (직접 입력)' 모델 한 행에 여러 기기가 매달리므로 실제 제조사·모델명은 매물에 남긴다.
+        draft.applyCustomModel(request.getCustomManufacturer(), request.getCustomModelName());
+        Listing listing = listingRepository.saveAndFlush(draft);
         List<ListingChecklistItem> snapshots = templateItems.stream()
                 .map(item -> ListingChecklistItem.createFromTemplateItem(listing.getId(), item))
                 .toList();
@@ -201,7 +203,7 @@ public class ProductApplicationService {
     @Transactional
     public ProductDetailResponse update(Long sellerId, Long productId, UpdateProductRequest request) {
         Listing listing = owned(productId, sellerId);
-        listing.updateDraft(
+        listing.updateBySeller(
                 request.getName(),
                 request.getDescription(),
                 request.isDescriptionSpecified(),
@@ -211,7 +213,20 @@ public class ProductApplicationService {
                 request.getStorageGb(),
                 request.isStorageGbSpecified(),
                 request.getTradeRegion());
-        log.info("product draft updated: productId={}", productId);
+        // 직접 입력 모델은 오타를 고칠 수 있어야 한다. 값을 보내지 않으면 기존 값을 유지한다.
+        if (request.getCustomManufacturer() != null || request.getCustomModelName() != null) {
+            listing.applyCustomModel(
+                    request.getCustomManufacturer() != null
+                            ? request.getCustomManufacturer()
+                            : listing.getCustomManufacturer(),
+                    request.getCustomModelName() != null
+                            ? request.getCustomModelName()
+                            : listing.getCustomModelName());
+        }
+        log.info(
+                "product updated by seller: productId={}, status={}",
+                productId,
+                listing.getStatus());
         return detail(listing);
     }
 
@@ -333,6 +348,9 @@ public class ProductApplicationService {
             listing.publish();
         } else if (target == ListingStatus.HIDDEN) {
             listing.hide();
+        } else if (target == ListingStatus.SOLD) {
+            // 직거래로 팔린 매물을 판매자가 직접 닫는 경로다. 결제 흐름을 거치지 않는다.
+            listing.markSoldBySeller();
         } else {
             throw new BusinessException(ErrorCode.INVALID_PRODUCT_STATUS_TRANSITION);
         }
@@ -351,6 +369,22 @@ public class ProductApplicationService {
                 listing.getStatus().name(),
                 request.getReason(),
                 offset(history.getCreatedAt()));
+    }
+
+    /**
+     * 판매자가 직접 입력한 값이 있으면 그것을 보여준다. 카탈로그의 '기타 (직접 입력)' 행은 여러 기기가
+     * 공유하는 자리표시자여서 그 이름을 그대로 노출하면 구매자가 기기를 특정할 수 없다.
+     */
+    private String displayManufacturer(Listing listing, Category model) {
+        return listing.getCustomManufacturer() != null
+                ? listing.getCustomManufacturer()
+                : model.getManufacturer();
+    }
+
+    private String displayModelName(Listing listing, Category model) {
+        return listing.getCustomModelName() != null
+                ? listing.getCustomModelName()
+                : model.getName();
     }
 
     private Listing owned(Long productId, Long sellerId) {
@@ -375,8 +409,8 @@ public class ProductApplicationService {
                 categoryResponse(parent == null ? model : parent),
                 new DeviceInfoResponse(
                         model.getId(),
-                        model.getManufacturer(),
-                        model.getName(),
+                        displayManufacturer(listing, model),
+                        displayModelName(listing, model),
                         model.getOsFamily() == null ? null : model.getOsFamily().name(),
                         listing.getColor(),
                         listing.getStorageGb()),
@@ -398,8 +432,8 @@ public class ProductApplicationService {
         return new ProductSummaryResponse(
                 listing.getId(),
                 listing.getTitle(),
-                listing.getCategory().getManufacturer(),
-                listing.getCategory().getName(),
+                displayManufacturer(listing, listing.getCategory()),
+                displayModelName(listing, listing.getCategory()),
                 BigDecimal.valueOf(listing.getPrice()),
                 listing.getStatus().name(),
                 verification,

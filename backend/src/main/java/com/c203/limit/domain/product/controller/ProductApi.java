@@ -39,7 +39,7 @@ import jakarta.validation.Valid;
 @Tag(name = "03. 상품", description = "중고 전자기기 상품 CRUD와 거래 상태 API")
 public interface ProductApi {
 
-    @Operation(operationId = "product01", summary = "상품 등록", description = "ACTIVE 판매자만 상품 초안을 생성할 수 있습니다. 노트북은 확인된 기능을 반영한 전용 체크리스트를 생성해 스냅샷으로 고정하고, 그 외 기기는 최신 게시 템플릿을 고정합니다.", security = @SecurityRequirement(name = "bearerAuth"))
+    @Operation(operationId = "product01", summary = "상품 등록", description = "ACTIVE 판매자만 상품 초안을 생성할 수 있습니다. 판매자가 확인한 모델별 기능이 있으면 기본 체크리스트에 추가해 스냅샷으로 고정하고, 선택 기능이 없는 비노트북 기기는 최신 게시 템플릿을 고정합니다.", security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "상품 초안 생성 성공", content = @Content(schema = @Schema(implementation = ProductCreatedApiResponse.class))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "VALIDATION_FAILED"),
@@ -51,7 +51,7 @@ public interface ProductApi {
     @PostMapping(path = "/api/v1/products", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     ResponseEntity<ApiResponse<ProductCreatedResponse>> createProduct(@Valid @RequestBody CreateProductRequest request);
 
-    @Operation(operationId = "product02", summary = "상품 수정", description = "본인 상품을 부분 수정합니다. 예약 이후에는 모델과 주요 기기 정보를 수정할 수 없습니다.", security = @SecurityRequirement(name = "bearerAuth"))
+    @Operation(operationId = "product02", summary = "상품 수정", description = "본인 상품을 부분 수정합니다. 초안·판매 중·숨김 상태에서 수정할 수 있고, 예약 이후에는 수정할 수 없습니다.", security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "상품 수정 성공", content = @Content(schema = @Schema(implementation = ProductDetailApiResponse.class))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "FORBIDDEN"),
@@ -125,7 +125,7 @@ public interface ProductApi {
             @RequestParam(defaultValue = "updatedAt,desc") String sort
     );
 
-    @Operation(operationId = "product07", summary = "상품 상태 전환", description = "허용된 상태 전이만 수행합니다. ON_SALE 전환에는 필수 체크리스트 완료가 필요합니다.", security = @SecurityRequirement(name = "bearerAuth"))
+    @Operation(operationId = "product07", summary = "상품 상태 전환", description = "허용된 상태 전이만 수행합니다. ON_SALE(판매 시작), HIDDEN(숨김), SOLD(판매자가 직거래를 직접 판매 완료 처리)를 지원하며 SOLD는 ON_SALE·HIDDEN에서만 가능합니다.", security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "상품 상태 전환 성공", content = @Content(schema = @Schema(implementation = ProductStatusTransitionApiResponse.class))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "INVALID_PRODUCT_STATUS_TRANSITION"),

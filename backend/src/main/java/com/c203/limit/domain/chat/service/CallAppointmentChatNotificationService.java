@@ -9,12 +9,16 @@ import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.stereotype.Service;
 
 @Service
 public class CallAppointmentChatNotificationService {
+    private static final Logger log =
+            LoggerFactory.getLogger(CallAppointmentChatNotificationService.class);
     private static final DateTimeFormatter SCHEDULE_FORMAT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
@@ -54,6 +58,11 @@ public class CallAppointmentChatNotificationService {
                 content,
                 LocalDateTime.now()));
         room.recordMessage(message.getId(), sequence, message.getSentAt());
+        log.info(
+                "call appointment chat notification saved: eventId={}, roomId={}, messageId={}",
+                event.eventId(),
+                event.chatRoomId(),
+                message.getId());
         return new NotificationResult(
                 ChatMessageResponse.from(message, java.util.List.of()), true);
     }

@@ -49,6 +49,17 @@ public class ListingService {
         return toReservationView(listing);
     }
 
+    @Transactional(readOnly = true)
+    public boolean isReservationActive(Long listingId, Long buyerId) {
+        Listing listing = listingRepository
+                .findById(listingId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.LISTING_NOT_FOUND));
+        return listing.getStatus() == ListingStatus.RESERVED
+                && buyerId.equals(listing.getBuyerId())
+                && listing.getReservedUntil() != null
+                && listing.getReservedUntil().isAfter(LocalDateTime.now(clock));
+    }
+
     @Transactional
     public ListingReservationView reserve(Long listingId, Long buyerId) {
         LocalDateTime reservedUntil = LocalDateTime.now(clock).plusMinutes(reservationTtlMinutes);
@@ -71,8 +82,9 @@ public class ListingService {
     }
 
     @Transactional
-    public Listing markPaid(Long listingId) {
-        return transition(listingId, null, null, Listing::markPaid);
+    public Listing markPaid(Long listingId, Long buyerId) {
+        LocalDateTime now = LocalDateTime.now(clock);
+        return transition(listingId, buyerId, null, listing -> listing.markPaid(buyerId, now));
     }
 
     @Transactional

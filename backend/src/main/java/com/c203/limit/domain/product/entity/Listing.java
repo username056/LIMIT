@@ -5,6 +5,7 @@ import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import java.util.Set;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -18,6 +19,15 @@ import lombok.NoArgsConstructor;
 @Table(name = "listing")
 public class Listing extends BaseTimeEntity {
 
+    /**
+     * 판매자가 상품 정보(제목·설명·가격·옵션)를 고칠 수 있는 상태.
+     * 초안뿐 아니라 이미 등록을 끝낸 판매 중·숨김 매물도 허용한다 — 가격 오타처럼 등록 후에야
+     * 발견하는 실수를 되돌릴 방법이 필요하기 때문이다. 반면 RESERVED 이후는 구매자가 그 조건을
+     * 보고 결제·검수에 들어간 뒤라 수정을 막는다.
+     */
+    private static final Set<ListingStatus> EDITABLE_STATUSES =
+            Set.of(ListingStatus.DRAFT, ListingStatus.ON_SALE, ListingStatus.HIDDEN);
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id")
@@ -29,6 +39,17 @@ public class Listing extends BaseTimeEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "category_id")
     private Category category;
+
+    /**
+     * 카탈로그에 없는 기기를 '기타 (직접 입력)' 모델로 등록할 때 판매자가 적은 실제 제조사·모델명.
+     * 그 모델 행 하나에 여러 기기가 매달리므로 매물마다 따로 보관하고, 값이 있으면 상세·목록에서
+     * 카탈로그 모델명 대신 이 값을 노출한다.
+     */
+    @Column(name = "custom_manufacturer", length = 50)
+    private String customManufacturer;
+
+    @Column(name = "custom_model_name", length = 100)
+    private String customModelName;
 
     @Column(nullable = false, length = 200)
     private String title;
@@ -136,13 +157,26 @@ public class Listing extends BaseTimeEntity {
         return listing;
     }
 
+    /** 카탈로그에 없는 기기를 판매자가 직접 입력한 제조사·모델명과 함께 등록한다. */
+    public void applyCustomModel(String customManufacturer, String customModelName) {
+        this.customManufacturer = trimToNull(customManufacturer);
+        this.customModelName = trimToNull(customModelName);
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
     public void updateDraft(String title, String description, long price) {
         if (title != null) this.title = title;
         if (description != null) this.description = description;
         this.price = price;
     }
 
-    public void updateDraft(
+    /** 판매자가 상품 정보를 고친다. 초안·판매 중·숨김 상태에서만 허용한다. */
+    public void updateBySeller(
             String title,
             String description,
             boolean descriptionSpecified,
@@ -152,7 +186,9 @@ public class Listing extends BaseTimeEntity {
             Integer storageGb,
             boolean storageGbSpecified,
             String tradeRegion) {
-        requireStatus(ListingStatus.DRAFT, ErrorCode.PRODUCT_EDIT_NOT_ALLOWED);
+        if (!EDITABLE_STATUSES.contains(this.status)) {
+            throw new BusinessException(ErrorCode.PRODUCT_EDIT_NOT_ALLOWED);
+        }
         if (title != null) this.title = title;
         if (descriptionSpecified) this.description = description;
         if (price != null) this.price = price;
@@ -189,6 +225,20 @@ public class Listing extends BaseTimeEntity {
     }
 
     /**
+     * 판매자가 직접 판매 완료로 종료한다. 서비스 결제를 거치지 않는 직거래를 정리하기 위한 출구다.
+     *
+     * <p>판매 중이거나 숨겨 둔 매물에서만 허용한다. RESERVED 이후는 구매자가 이미 결제·검수 절차에
+     * 들어가 있어, 판매자가 임의로 종료하면 진행 중인 주문과 상태가 어긋난다 — 그 경우는 주문 취소나
+     * 환불 흐름으로 처리해야 한다.
+     */
+    public void markSoldBySeller() {
+        if (status != ListingStatus.ON_SALE && status != ListingStatus.HIDDEN) {
+            throw new BusinessException(ErrorCode.INVALID_PRODUCT_STATUS_TRANSITION);
+        }
+        this.status = ListingStatus.SOLD;
+    }
+
+    /**
      * ON_SALE 매물을 구매자에게 예약 처리한다. 예약 유예 만료 시각은 Entity가 직접 계산하지 않고
      * 호출자(ListingService)가 Clock 기반으로 계산해 전달한다 — 테스트에서 시간을 결정적으로
      * 제어하기 위함이다.
@@ -220,10 +270,18 @@ public class Listing extends BaseTimeEntity {
         this.status = ListingStatus.ON_SALE;
     }
 
-    public void markPaid() {
+    /**
+     * 결제 확정 시점에 이 예약이 여전히 같은 구매자의 유효한 예약인지 함께 검증한다. 스케줄러가
+     * 만료 처리를 하기 전에 다른 구매자가 새로 예약했거나 유예 시간이 지난 상태에서 뒤늦게 결제가
+     * 확정되면, 엉뚱한 예약을 결제완료로 덮어쓰지 않고 명시적으로 거부한다.
+     */
+    public void markPaid(Long buyerId, LocalDateTime now) {
         requireStatus(ListingStatus.RESERVED, ErrorCode.LISTING_NOT_RESERVED);
+        if (!buyerId.equals(this.buyerId) || this.reservedUntil == null || this.reservedUntil.isBefore(now)) {
+            throw new BusinessException(ErrorCode.LISTING_RESERVATION_MISMATCH);
+        }
         this.status = ListingStatus.PAID;
-        this.paidAt = LocalDateTime.now();
+        this.paidAt = now;
     }
 
     /** 결제 완료된 매물을 검수 단계로 전환한다. */
