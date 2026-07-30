@@ -114,4 +114,8 @@ public class ListingChecklistItem {
     public void markCompleted() {
         this.completionStatus = ChecklistItemCompletionStatus.COMPLETED;
     }
+
+    public void markPending() {
+        this.completionStatus = ChecklistItemCompletionStatus.PENDING;
+    }
 }

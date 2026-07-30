@@ -5,7 +5,14 @@ import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseCard from '../components/BaseCard.vue'
 import { addFavorite, getFavoriteStatus, removeFavorite } from '../api/favorites'
-import { getMyProduct, getProduct, getProductChecklist, requestRecapture } from '../api/products'
+import {
+  createReinspectionRequest,
+  getEvidenceHistory,
+  getMyProduct,
+  getProduct,
+  getProductChecklist,
+  getProductImages,
+} from '../api/products'
 import { createChatRoom, requestRtcCall } from '../api/rtc'
 import { createOrGetChatRoom } from '../api/chat'
 import { getAccessToken, getSessionMember } from '../auth/session'
@@ -20,6 +27,8 @@ const isUpdatingFavorite = ref(false)
 const isRequestingCall = ref(false)
 const isOpeningChat = ref(false)
 const errorMessage = ref('')
+const productImages = ref([])
+const activeImageUrl = ref('')
 // 소유자 전용 조회로 불러온 경우(비공개 상품)와, 판매 중인 내 상품을 공개 조회로 본 경우를 함께 다룹니다.
 const loadedViaOwnerApi = ref(false)
 const isOwner = computed(() => {
@@ -46,6 +55,13 @@ const purchaseButtonLabel = computed(() => {
 
 // 재촬영 요청 팝업
 const checklistItems = ref([])
+const evidenceByChecklistItem = ref({})
+const buyerChecklistItems = computed(
+  () => checklistItems.value.filter((item) => item.visibleToBuyer !== false),
+)
+const publicEvidence = computed(() => checklistItems.value.flatMap(
+  (item) => evidenceByChecklistItem.value[item.checklistItemId] || [],
+))
 const isRecaptureModalOpen = ref(false)
 const checkedItemIds = ref([])
 const recaptureReason = ref('')
@@ -81,11 +97,13 @@ async function submitRecaptureRequest() {
 
   isSubmittingRecapture.value = true
   try {
-    await Promise.all(checkedItemIds.value.map((checklistItemId) => requestRecapture(
-      product.value.productId,
-      checklistItemId,
-      { reasonCode: 'BUYER_REQUESTED', reason: recaptureReason.value.trim() },
-    )))
+    await createReinspectionRequest(product.value.productId, {
+      reason: recaptureReason.value.trim(),
+      items: checkedItemIds.value.map((checklistItemId) => ({
+        checklistItemId,
+        requestContent: recaptureReason.value.trim(),
+      })),
+    })
     recaptureSubmitted.value = true
   } catch (error) {
     recaptureError.value = error.message || '재촬영 요청을 보내지 못했습니다.'
@@ -168,14 +186,30 @@ async function loadProduct(productId) {
 onMounted(async () => {
   try {
     await loadProduct(route.params.productId)
+    try {
+      productImages.value = await getProductImages(route.params.productId)
+      activeImageUrl.value = productImages.value.find((image) => image.imageType === 'THUMBNAIL')?.imageUrl
+        || productImages.value[0]?.imageUrl
+        || product.value.thumbnailUrl
+        || ''
+    } catch {
+      productImages.value = []
+      activeImageUrl.value = product.value.thumbnailUrl || ''
+    }
     if (getAccessToken()) {
       const favoriteStatus = await getFavoriteStatus(route.params.productId)
       isFavorite.value = Boolean(favoriteStatus?.favorite)
     }
     try {
       checklistItems.value = await getProductChecklist(product.value.productId)
+      const histories = await Promise.all(checklistItems.value.map(async (item) => [
+        item.checklistItemId,
+        await getEvidenceHistory(product.value.productId, item.checklistItemId),
+      ]))
+      evidenceByChecklistItem.value = Object.fromEntries(histories)
     } catch {
       checklistItems.value = []
+      evidenceByChecklistItem.value = {}
     }
   } catch (error) {
     errorMessage.value = error.message || '상품을 불러오지 못했습니다.'
@@ -268,8 +302,8 @@ onMounted(async () => {
           <section aria-label="상품 이미지">
             <div class="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-md bg-slate-50">
               <img
-                v-if="product.thumbnailUrl"
-                :src="product.thumbnailUrl"
+                v-if="activeImageUrl"
+                :src="activeImageUrl"
                 :alt="product.name"
                 class="h-full w-full object-cover"
               >
@@ -290,6 +324,29 @@ onMounted(async () => {
                 <span class="text-xl font-bold text-white">판매 완료</span>
               </div>
             </div>
+            <ul
+              v-if="productImages.length > 1"
+              class="mt-3 grid grid-cols-5 gap-2"
+              aria-label="상품 추가 이미지"
+            >
+              <li
+                v-for="image in productImages"
+                :key="image.imageId"
+              >
+                <button
+                  type="button"
+                  class="aspect-square w-full overflow-hidden rounded-md border"
+                  :class="activeImageUrl === image.imageUrl ? 'border-primary' : 'border-border'"
+                  @click="activeImageUrl = image.imageUrl"
+                >
+                  <img
+                    :src="image.imageUrl"
+                    :alt="`${product.name} 추가 이미지`"
+                    class="h-full w-full object-cover"
+                  >
+                </button>
+              </li>
+            </ul>
           </section>
 
           <section>
@@ -434,6 +491,38 @@ onMounted(async () => {
             <p class="mt-4 text-xs leading-5 text-text-sub">
               원본 상태 자료는 상품과 연결된 체크리스트 기준으로 관리됩니다.
             </p>
+            <ul
+              v-if="publicEvidence.length"
+              class="mt-4 grid grid-cols-3 gap-2"
+              aria-label="구매자 공개 검수 증빙"
+            >
+              <li
+                v-for="evidence in publicEvidence"
+                :key="evidence.evidenceId"
+                class="overflow-hidden rounded-md border border-border bg-white"
+              >
+                <video
+                  v-if="evidence.evidenceType === 'VIDEO'"
+                  :src="evidence.mediaUrl"
+                  controls
+                  preload="metadata"
+                  class="aspect-square w-full object-cover"
+                />
+                <img
+                  v-else-if="evidence.evidenceType === 'PHOTO'"
+                  :src="evidence.mediaUrl"
+                  alt="판매자가 공개한 검수 증빙"
+                  class="aspect-square w-full object-cover"
+                >
+                <a
+                  v-else
+                  :href="evidence.mediaUrl"
+                  class="block px-2 py-5 text-center text-xs font-medium text-primary"
+                >
+                  검수 파일 보기
+                </a>
+              </li>
+            </ul>
             <BaseButton
               class="mt-4 px-3 py-2 text-sm"
               variant="outline"
@@ -459,7 +548,7 @@ onMounted(async () => {
 
               <ul class="mt-5 max-h-48 space-y-2 overflow-y-auto">
                 <li
-                  v-for="item in checklistItems"
+                  v-for="item in buyerChecklistItems"
                   :key="item.checklistItemId"
                 >
                   <label class="flex cursor-pointer items-center gap-3 rounded-md border border-border px-3 py-2.5 text-sm">
@@ -473,7 +562,7 @@ onMounted(async () => {
                   </label>
                 </li>
                 <li
-                  v-if="!checklistItems.length"
+                  v-if="!buyerChecklistItems.length"
                   class="rounded-md bg-bg px-3 py-4 text-center text-sm text-text-sub"
                 >
                   등록된 체크리스트 항목이 없습니다.

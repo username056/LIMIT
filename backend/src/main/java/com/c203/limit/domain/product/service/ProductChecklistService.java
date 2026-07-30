@@ -92,7 +92,13 @@ public class ProductChecklistService {
                 item.isRequired(),
                 item.getCompletionStatus().name(),
                 latestEvidenceId,
-                evidenceHistory.size());
+                evidenceHistory.size(),
+                item.isVisibleToBuyer(),
+                item.getMinCount(),
+                item.getMaxCount(),
+                item.getMaxFileSizeMb(),
+                item.getMinDurationSec(),
+                item.getMaxDurationSec());
     }
 
     private ChecklistItemCompletionStatus completionStatus(String status) {

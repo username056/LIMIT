@@ -5,18 +5,29 @@ import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseBadge from '../components/BaseBadge.vue'
 import {
+  completeReinspectionRequest,
   completeEvidence,
+  completeProductImage,
   createEvidenceUploadUrl,
+  createProductImageUploadUrl,
   createProduct,
   generateChecklist,
   getChecklistTemplate,
   getDeviceCategories,
   getDeviceModels,
   getHandoverGuide,
+  getEvidenceHistory,
+  getReinspectionRequest,
   getMyProduct,
   getProductChecklist,
+  getProductDraftProgress,
+  getProductImages,
+  deleteProductImage,
   transitionProductStatus,
   updateProduct,
+  updateProductDraftProgress,
+  updateProductImageOrder,
+  uploadToPresignedUrl,
 } from '../api/products'
 import { compressImage, compressVideo } from '../utils/mediaOptimize'
 import { MAX_PRICE_DIGITS, formatPriceDigits, toPriceDigits } from '../utils/priceInput'
@@ -29,7 +40,7 @@ const WIZARD_STEPS = [
 ]
 
 // 체크리스트 항목 하나에 첨부할 수 있는 사진·영상 개수 상한입니다.
-const MAX_MEDIA_PER_ITEM = 3
+const DEFAULT_MAX_MEDIA_PER_ITEM = 3
 
 // TODO(대표 이미지): 필수 입력으로 두기로 했지만, S3 업로드 구현(feat/s3-media-storage)과
 // 같은 파일에서 충돌하므로 임시 미리보기 UI를 걷어냈습니다. 그 브랜치가 dev에 들어오면
@@ -81,6 +92,10 @@ const models = ref([])
 const isSaving = ref(false)
 const errorMessage = ref('')
 const notice = ref('')
+const reinspectionRequest = ref(null)
+const reinspectionRequestKey = computed(
+  () => String(route.query.reinspectionRequestKey || '').trim(),
+)
 const editingId = ref(null)
 const draftProductId = ref(null)
 const activeStep = ref(1)
@@ -149,12 +164,20 @@ const confirmedFeatures = ref([])
 const isGeneratingChecklist = ref(false)
 const checklistItems = ref([])
 const activeCaptureItemId = ref(null)
-// 백엔드 증거 업로드 API가 아직 스텁이라(항상 더미 응답) 실제 진행 상태를 신뢰할 수 없어
-// 촬영 진행 상태는 화면(세션) 안에서만 관리합니다.
-// captureState[checklistItemId] = { media: [{ key, previewUrl, evidenceType, name }], busy: '' | 'optimizing' | 'uploading' }
+// captureState[checklistItemId] = { media: [...], busy: '' | 'optimizing' | 'uploading', progress: 0..100 }
 const captureState = reactive({})
 const confirmState = reactive({})
 const mediaPreview = ref(null)
+const listingImages = ref([])
+const listingImageBusy = ref(false)
+const listingImageProgress = ref(0)
+let listingImageInFlight = 0
+const registrationMetrics = reactive({
+  checklistMs: null,
+  imageCompressionMs: null,
+  videoCompressionMs: null,
+  s3UploadMs: null,
+})
 // 체크리스트를 덜 채운 채 다음 단계를 누르면 인라인 문구만으로는 놓치기 쉬워 팝업으로 알립니다.
 const alertMessage = ref('')
 // 확인을 누르면 그대로 진행할 동작. 진행 없이 알리기만 할 때는 null입니다.
@@ -185,12 +208,21 @@ function busyOf(checklistItemId) {
   return captureState[checklistItemId]?.busy || ''
 }
 
+function progressOf(checklistItemId) {
+  return captureState[checklistItemId]?.progress || 0
+}
+
 function captureStatusOf(checklistItemId) {
   return busyOf(checklistItemId) || (mediaOf(checklistItemId).length ? 'captured' : 'idle')
 }
 
+function maxMediaFor(item) {
+  return Number(item?.maxCount) > 0 ? Number(item.maxCount) : DEFAULT_MAX_MEDIA_PER_ITEM
+}
+
 function remainingSlots(checklistItemId) {
-  return MAX_MEDIA_PER_ITEM - mediaOf(checklistItemId).length
+  const item = checklistItems.value.find((candidate) => candidate.checklistItemId === checklistItemId)
+  return maxMediaFor(item) - mediaOf(checklistItemId).length
 }
 const handoverGuide = ref(null)
 const isLoadingHandoverGuide = ref(false)
@@ -226,13 +258,15 @@ const isActiveItemBusy = computed(
 const activeItemMedia = computed(
   () => (activeCaptureItem.value ? mediaOf(activeCaptureItem.value.checklistItemId) : []),
 )
-const isActiveItemFull = computed(() => activeItemMedia.value.length >= MAX_MEDIA_PER_ITEM)
+const isActiveItemFull = computed(
+  () => activeItemMedia.value.length >= maxMediaFor(activeCaptureItem.value),
+)
 const activeItemLatestMedia = computed(() => activeItemMedia.value[activeItemMedia.value.length - 1] || null)
 const activeItemStatusLabel = computed(() => {
   const busy = activeCaptureItem.value && busyOf(activeCaptureItem.value.checklistItemId)
   if (busy === 'optimizing') return '최적화 중…'
   if (busy === 'uploading') return '업로드 중…'
-  if (isActiveItemFull.value) return `최대 ${MAX_MEDIA_PER_ITEM}개까지 첨부했습니다`
+  if (isActiveItemFull.value) return `최대 ${maxMediaFor(activeCaptureItem.value)}개까지 첨부했습니다`
   return activeItemMedia.value.length ? '사진·영상 추가하기' : '촬영 또는 파일 업로드'
 })
 const previewedMedia = computed(() => {
@@ -290,10 +324,34 @@ function scrollToTop() {
   window.scrollTo(0, 0)
 }
 
+async function measureRegistrationPhase(name, task) {
+  const startedAt = performance.now()
+  try {
+    return await task()
+  } finally {
+    registrationMetrics[name] = Math.round(performance.now() - startedAt)
+  }
+}
+
 // 단계가 바뀌면 위자드 상단(단계 표시줄)부터 보이도록 항상 스크롤을 올립니다.
 function setStep(step) {
   activeStep.value = step
+  persistDraftProgress()
   scrollToTop()
+}
+
+async function persistDraftProgress() {
+  if (!currentProductId.value || reinspectionRequestKey.value) return
+  try {
+    await updateProductDraftProgress(currentProductId.value, {
+      step: activeStep.value,
+      confirmedChecklistItemIds: confirmationChecklistItems.value
+        .filter((item) => confirmState[item.checklistItemId])
+        .map((item) => item.checklistItemId),
+    })
+  } catch {
+    notice.value = '임시저장 상태를 서버에 반영하지 못했습니다.'
+  }
 }
 
 function resetForm() {
@@ -337,10 +395,10 @@ async function loadTemplatePreview() {
   errorMessage.value = ''
   try {
     if (supportsGeneratedChecklist.value) {
-      const generated = await generateChecklist({
+      const generated = await measureRegistrationPhase('checklistMs', () => generateChecklist({
         deviceModelId: Number(form.deviceModelId),
         confirmedFeatures: [],
-      })
+      }))
       checklistGeneration.value = generated
       templateItems.value = generated.items || []
     } else {
@@ -368,8 +426,12 @@ function validateSaleInfo() {
     errorMessage.value = '가격은 1원 이상 입력해 주세요.'
     return false
   }
-  if (form.storageGb !== '' && (!Number.isFinite(Number(form.storageGb)) || Number(form.storageGb) < 1)) {
-    errorMessage.value = '저장 용량은 1GB 이상 입력해 주세요.'
+  if (form.storageGb !== '' && (
+    !Number.isInteger(Number(form.storageGb))
+    || Number(form.storageGb) < 1
+    || Number(form.storageGb) > 16384
+  )) {
+    errorMessage.value = '저장 용량은 1~16,384GB 범위의 정수로 입력해 주세요.'
     return false
   }
   return true
@@ -524,8 +586,16 @@ async function finishWizard() {
 
   isSaving.value = true
   try {
-    await transitionProductStatus(productId, 'ON_SALE', '등록 완료')
-  } catch {
+    if (reinspectionRequestKey.value) {
+      await completeReinspectionRequest(reinspectionRequestKey.value)
+    } else {
+      await transitionProductStatus(productId, 'ON_SALE', '등록 완료')
+    }
+  } catch (error) {
+    if (reinspectionRequestKey.value) {
+      errorMessage.value = error.message || '재검수 완료 처리에 실패했습니다.'
+      return
+    }
     // 필수 자료가 서버에 아직 반영되지 않았거나 이미 판매 중이면 상태는 그대로 둡니다.
     // 상세 화면에서 현재 상태를 그대로 보여주므로 등록 흐름 자체는 막지 않습니다.
   } finally {
@@ -552,20 +622,24 @@ function readVideoDuration(file) {
 async function handleCaptureFile(item, file) {
   if (!item || !file || !currentProductId.value) return
   const itemId = item.checklistItemId
-  if (!captureState[itemId]) captureState[itemId] = { media: [], busy: '' }
-  if (captureState[itemId].media.length >= MAX_MEDIA_PER_ITEM) {
-    alertMessage.value = `‘${item.name}’ 항목은 최대 ${MAX_MEDIA_PER_ITEM}개까지 첨부할 수 있습니다.`
+  if (!captureState[itemId]) captureState[itemId] = { media: [], busy: '', progress: 0 }
+  if (captureState[itemId].media.length >= maxMediaFor(item)) {
+    alertMessage.value = `‘${item.name}’ 항목은 최대 ${maxMediaFor(item)}개까지 첨부할 수 있습니다.`
     return
   }
   errorMessage.value = ''
   captureState[itemId].busy = 'optimizing'
+  captureState[itemId].progress = 0
 
   // 업로드 용량과 서버 비용을 줄이기 위해 사진은 Canvas로, 영상은 ffmpeg.wasm으로
   // 브라우저에서 먼저 압축한 뒤 업로드합니다. 압축에 실패하면 원본으로 계속 진행합니다.
   let optimizedFile = file
   try {
-    if (item.evidenceType === 'PHOTO') optimizedFile = await compressImage(file)
-    else if (item.evidenceType === 'VIDEO') optimizedFile = await compressVideo(file)
+    if (item.evidenceType === 'PHOTO') {
+      optimizedFile = await measureRegistrationPhase('imageCompressionMs', () => compressImage(file))
+    } else if (item.evidenceType === 'VIDEO') {
+      optimizedFile = await measureRegistrationPhase('videoCompressionMs', () => compressVideo(file))
+    }
   } catch {
     optimizedFile = file
   }
@@ -581,36 +655,133 @@ async function handleCaptureFile(item, file) {
       fileSize: optimizedFile.size,
       durationSeconds,
     })
-    try {
-      // 로컬 환경에는 실제 오브젝트 스토리지가 없어 presignedUrl 업로드가 실패할 수 있습니다.
-      // 백엔드 증거 API 구현이 끝나면 이 업로드가 실제로 저장됩니다.
-      await fetch(uploadUrl.presignedUrl, {
-        method: 'PUT',
-        body: optimizedFile,
-        headers: uploadUrl.requiredHeaders || {},
-      })
-    } catch {
-      // 스토리지 미구현 환경에서는 무시하고 촬영 완료로만 처리합니다.
-    }
-    await completeEvidence(currentProductId.value, item.checklistItemId, { uploadId: uploadUrl.uploadId })
-  } catch {
-    // 증거 업로드 API 자체가 실패해도 화면상 촬영 진행은 막지 않습니다(스텁 백엔드).
-  } finally {
+    await measureRegistrationPhase('s3UploadMs', () => uploadToPresignedUrl(
+      uploadUrl.presignedUrl,
+      optimizedFile,
+      uploadUrl.requiredHeaders || {},
+      (progress) => { captureState[itemId].progress = progress },
+    ))
+    const completed = await completeEvidence(
+      currentProductId.value,
+      item.checklistItemId,
+      { uploadId: uploadUrl.uploadId },
+    )
     mediaKeySeq += 1
     captureState[itemId].media.push({
-      key: mediaKeySeq,
+      key: completed.evidenceId || mediaKeySeq,
       previewUrl,
+      mediaUrl: completed.mediaUrl,
       evidenceType: item.evidenceType,
       name: optimizedFile.name,
+      attemptNo: completed.attemptNo,
     })
+  } catch {
+    URL.revokeObjectURL(previewUrl)
+    errorMessage.value = `‘${item.name}’ 자료를 업로드하지 못했습니다. 잠시 후 다시 시도해 주세요.`
+  } finally {
     captureState[itemId].busy = ''
+    captureState[itemId].progress = 0
   }
 }
 
-function onCaptureInput(event, item) {
-  const file = event.target.files?.[0]
+async function handleListingImage(file, displayOrder = listingImages.value.length) {
+  if (!file || !currentProductId.value || listingImages.value.length >= 10) return
+  listingImageInFlight += 1
+  listingImageBusy.value = true
+  listingImageProgress.value = 0
+  errorMessage.value = ''
+  let optimizedFile = file
+  try {
+    optimizedFile = await measureRegistrationPhase('imageCompressionMs', () => compressImage(file))
+    const upload = await createProductImageUploadUrl(currentProductId.value, {
+      filename: optimizedFile.name,
+      contentType: optimizedFile.type || 'application/octet-stream',
+      fileSize: optimizedFile.size,
+    })
+    await measureRegistrationPhase('s3UploadMs', () => uploadToPresignedUrl(
+      upload.presignedUrl,
+      optimizedFile,
+      upload.requiredHeaders || {},
+      (progress) => { listingImageProgress.value = progress },
+    ))
+    const image = await completeProductImage(currentProductId.value, {
+      uploadId: upload.uploadId,
+      imageType: displayOrder === 0 ? 'THUMBNAIL' : 'DETAIL',
+      displayOrder,
+    })
+    listingImages.value.push({
+      ...image,
+      previewUrl: URL.createObjectURL(optimizedFile),
+    })
+  } catch {
+    errorMessage.value = '상품 이미지를 업로드하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+  } finally {
+    listingImageInFlight -= 1
+    listingImageBusy.value = listingImageInFlight > 0
+    if (!listingImageBusy.value) listingImageProgress.value = 0
+  }
+}
+
+async function onListingImageInput(event) {
+  const files = [...(event.target.files || [])].slice(0, 10 - listingImages.value.length)
+  const startOrder = listingImages.value.length
   event.target.value = ''
-  if (file) handleCaptureFile(item, file)
+  await Promise.allSettled(files.map(
+    (file, index) => handleListingImage(file, startOrder + index),
+  ))
+}
+
+async function removeListingImage(image) {
+  if (!currentProductId.value || !image?.imageId) return
+  listingImageBusy.value = true
+  try {
+    await deleteProductImage(currentProductId.value, image.imageId)
+    if (image.previewUrl) URL.revokeObjectURL(image.previewUrl)
+    listingImages.value = await getProductImages(currentProductId.value)
+  } catch {
+    errorMessage.value = '상품 이미지를 삭제하지 못했습니다.'
+  } finally {
+    listingImageBusy.value = false
+  }
+}
+
+async function saveListingImageOrder(imageIds, thumbnailImageId) {
+  if (!currentProductId.value || listingImageBusy.value) return
+  listingImageBusy.value = true
+  try {
+    listingImages.value = await updateProductImageOrder(currentProductId.value, {
+      imageIds,
+      thumbnailImageId,
+    })
+  } catch {
+    errorMessage.value = '상품 이미지 순서를 변경하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+  } finally {
+    listingImageBusy.value = false
+  }
+}
+
+async function moveListingImage(image, offset) {
+  const currentIndex = listingImages.value.findIndex((item) => item.imageId === image.imageId)
+  const nextIndex = currentIndex + offset
+  if (currentIndex < 0 || nextIndex < 0 || nextIndex >= listingImages.value.length) return
+  const imageIds = listingImages.value.map((item) => item.imageId)
+  ;[imageIds[currentIndex], imageIds[nextIndex]] = [imageIds[nextIndex], imageIds[currentIndex]]
+  const thumbnailImageId = listingImages.value.find((item) => item.imageType === 'THUMBNAIL')?.imageId
+    || imageIds[0]
+  await saveListingImageOrder(imageIds, thumbnailImageId)
+}
+
+async function makeListingThumbnail(image) {
+  await saveListingImageOrder(
+    listingImages.value.map((item) => item.imageId),
+    image.imageId,
+  )
+}
+
+async function onCaptureInput(event, item) {
+  const files = [...(event.target.files || [])].slice(0, remainingSlots(item.checklistItemId))
+  event.target.value = ''
+  if (files.length) await Promise.allSettled(files.map((file) => handleCaptureFile(item, file)))
 }
 
 function openMediaPreview(item, index) {
@@ -631,6 +802,7 @@ async function startEdit(productId) {
   errorMessage.value = ''
   try {
     const product = await getMyProduct(productId)
+    listingImages.value = await getProductImages(productId)
     editingId.value = productId
     draftProductId.value = null
     Object.assign(form, {
@@ -641,11 +813,44 @@ async function startEdit(productId) {
     })
     if (form.categoryId) models.value = await getDeviceModels({ categoryId: form.categoryId, page: 0, size: 100 })
     if (form.deviceModelId) await loadTemplatePreview()
-    checklistItems.value = await getProductChecklist(productId)
-    activeCaptureItemId.value = mediaChecklistItems.value[0]?.checklistItemId || null
     clearCaptureState()
     Object.keys(confirmState).forEach((key) => delete confirmState[key])
-    activeStep.value = 1
+    checklistItems.value = await getProductChecklist(productId)
+    await Promise.all(checklistItems.value.map(async (item) => {
+      if (item.evidenceType === 'SELLER_CONFIRMATION') {
+        confirmState[item.checklistItemId] = item.status === 'COMPLETED'
+        return
+      }
+      const history = await getEvidenceHistory(productId, item.checklistItemId)
+      captureState[item.checklistItemId] = {
+        busy: '',
+        progress: 0,
+        media: history.map((evidence) => ({
+          key: evidence.evidenceId,
+          previewUrl: evidence.mediaUrl,
+          mediaUrl: evidence.mediaUrl,
+          evidenceType: evidence.evidenceType,
+          name: `증빙 ${evidence.attemptNo}`,
+          attemptNo: evidence.attemptNo,
+          restored: true,
+        })),
+      }
+    }))
+    const draftProgress = product.status === 'DRAFT'
+      ? await getProductDraftProgress(productId)
+      : null
+    if (draftProgress) {
+      Object.keys(confirmState).forEach((key) => { confirmState[key] = false })
+      draftProgress.confirmedChecklistItemIds.forEach((itemId) => {
+        confirmState[itemId] = true
+      })
+    }
+    activeCaptureItemId.value = mediaChecklistItems.value[0]?.checklistItemId || null
+    const hasEvidence = mediaChecklistItems.value.some(
+      (item) => mediaOf(item.checklistItemId).length > 0,
+    )
+    activeStep.value = draftProgress?.step || (hasEvidence ? 2 : 1)
+    if (hasEvidence) notice.value = '임시저장된 상품 정보와 기존 S3 증빙을 복구했습니다.'
     window.scrollTo({ top: 0, behavior: 'smooth' })
   } catch (error) {
     errorMessage.value = error.message || '상품 상세를 불러오지 못했습니다.'
@@ -660,7 +865,18 @@ onMounted(async () => {
   }
 
   // /seller/products/:productId/edit 로 들어오면 기존 데이터를 불러 수정 모드로 엽니다.
-  if (route.params.productId) await startEdit(Number(route.params.productId))
+  if (route.params.productId) {
+    await startEdit(Number(route.params.productId))
+    if (reinspectionRequestKey.value) {
+      try {
+        reinspectionRequest.value = await getReinspectionRequest(reinspectionRequestKey.value)
+        notice.value = '재검수 요청 항목에 새 증빙을 업로드한 뒤 완료해 주세요.'
+        activeStep.value = 2
+      } catch (error) {
+        errorMessage.value = error.message || '재검수 요청을 불러오지 못했습니다.'
+      }
+    }
+  }
 })
 </script>
 
@@ -687,6 +903,21 @@ onMounted(async () => {
           >
             상품 관리로 이동
           </RouterLink>
+        </div>
+
+        <div
+          v-if="reinspectionRequest"
+          class="border-b border-amber-200 bg-amber-50 px-6 py-4 text-sm text-amber-900"
+        >
+          <strong>재검수 요청:</strong> {{ reinspectionRequest.reason }}
+          <ul class="mt-2 list-disc pl-5 text-xs">
+            <li
+              v-for="item in reinspectionRequest.items"
+              :key="item.checklistItemId"
+            >
+              {{ item.itemName }} — {{ item.requestContent }}
+            </li>
+          </ul>
         </div>
 
         <ol
@@ -981,6 +1212,112 @@ onMounted(async () => {
             v-else-if="activeStep === 2"
             class="grid gap-6 lg:grid-cols-[1fr_1.15fr]"
           >
+            <div class="rounded-lg border border-border bg-white p-4 lg:col-span-2">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 class="font-bold text-text-main">
+                    상품 이미지
+                  </h2>
+                  <p class="mt-1 text-sm text-text-sub">
+                    첫 번째 이미지는 대표 이미지로 등록되며 최대 10개까지 추가할 수 있습니다.
+                  </p>
+                </div>
+                <label class="cursor-pointer rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white">
+                  {{ listingImageBusy ? '업로드 중…' : '이미지 추가' }}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    multiple
+                    class="sr-only"
+                    :disabled="listingImageBusy || listingImages.length >= 10"
+                    @change="onListingImageInput"
+                  >
+                </label>
+              </div>
+              <div
+                v-if="listingImageBusy"
+                class="mt-3 h-2 overflow-hidden rounded-pill bg-slate-100"
+                role="progressbar"
+                :aria-valuenow="listingImageProgress"
+                aria-valuemin="0"
+                aria-valuemax="100"
+              >
+                <div
+                  class="h-full bg-primary transition-all"
+                  :style="{ width: `${listingImageProgress}%` }"
+                />
+              </div>
+              <p class="mt-2 text-[11px] text-text-sub">
+                최근 처리시간:
+                체크리스트 {{ registrationMetrics.checklistMs ?? '-' }}ms ·
+                이미지 압축 {{ registrationMetrics.imageCompressionMs ?? '-' }}ms ·
+                영상 압축 {{ registrationMetrics.videoCompressionMs ?? '-' }}ms ·
+                S3 업로드 {{ registrationMetrics.s3UploadMs ?? '-' }}ms
+              </p>
+              <p
+                v-if="!listingImages.length"
+                class="mt-4 rounded-md bg-bg px-4 py-5 text-center text-sm text-text-sub"
+              >
+                등록된 상품 이미지가 없습니다.
+              </p>
+              <ul
+                v-else
+                class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5"
+              >
+                <li
+                  v-for="image in listingImages"
+                  :key="image.imageId"
+                  class="relative overflow-hidden rounded-md border border-border"
+                >
+                  <img
+                    :src="image.previewUrl || image.imageUrl"
+                    alt="상품 등록 이미지"
+                    class="aspect-square w-full object-cover"
+                  >
+                  <span
+                    v-if="image.imageType === 'THUMBNAIL'"
+                    class="absolute left-1 top-1 rounded bg-primary px-2 py-1 text-[11px] font-bold text-white"
+                  >대표</span>
+                  <button
+                    type="button"
+                    class="absolute right-1 top-1 rounded bg-black/65 px-2 py-1 text-xs text-white"
+                    aria-label="상품 이미지 삭제"
+                    :disabled="listingImageBusy"
+                    @click="removeListingImage(image)"
+                  >
+                    삭제
+                  </button>
+                  <div class="flex items-center justify-center gap-1 border-t border-border bg-white p-1">
+                    <button
+                      type="button"
+                      class="rounded px-2 py-1 text-xs font-semibold text-text-sub hover:bg-bg"
+                      :disabled="listingImageBusy || image.displayOrder === 0"
+                      aria-label="이미지 순서를 앞으로 이동"
+                      @click="moveListingImage(image, -1)"
+                    >
+                      ←
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded px-2 py-1 text-xs font-semibold text-primary hover:bg-accent"
+                      :disabled="listingImageBusy || image.imageType === 'THUMBNAIL'"
+                      @click="makeListingThumbnail(image)"
+                    >
+                      대표
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded px-2 py-1 text-xs font-semibold text-text-sub hover:bg-bg"
+                      :disabled="listingImageBusy || image.displayOrder === listingImages.length - 1"
+                      aria-label="이미지 순서를 뒤로 이동"
+                      @click="moveListingImage(image, 1)"
+                    >
+                      →
+                    </button>
+                  </div>
+                </li>
+              </ul>
+            </div>
             <div>
               <h2 class="text-lg font-bold text-text-main">
                 검수용 기기 촬영
@@ -1041,7 +1378,7 @@ onMounted(async () => {
                         :class="captureStatusOf(item.checklistItemId) === 'captured' ? 'text-primary' : 'text-text-sub'"
                       >
                         <template v-if="captureStatusOf(item.checklistItemId) === 'captured'">
-                          첨부 {{ mediaOf(item.checklistItemId).length }} / {{ MAX_MEDIA_PER_ITEM }}
+                          첨부 {{ mediaOf(item.checklistItemId).length }} / {{ maxMediaFor(item) }}
                         </template>
                         <template v-else-if="captureStatusOf(item.checklistItemId) === 'optimizing'">최적화 중…</template>
                         <template v-else-if="captureStatusOf(item.checklistItemId) === 'uploading'">업로드 중…</template>
@@ -1098,6 +1435,7 @@ onMounted(async () => {
                     class="hidden"
                     :accept="captureAccept(activeCaptureItem)"
                     capture="environment"
+                    multiple
                     :disabled="!activeCaptureItem || isActiveItemBusy || isActiveItemFull"
                     @change="onCaptureInput($event, activeCaptureItem)"
                   >
@@ -1108,6 +1446,16 @@ onMounted(async () => {
                       : 'cursor-not-allowed opacity-60'"
                   >
                     {{ activeItemStatusLabel }}
+                  </span>
+                  <span
+                    v-if="activeCaptureItem && busyOf(activeCaptureItem.checklistItemId) === 'uploading'"
+                    class="mt-2 block text-center text-xs font-medium text-primary"
+                    role="progressbar"
+                    :aria-valuenow="progressOf(activeCaptureItem.checklistItemId)"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                  >
+                    S3 업로드 {{ progressOf(activeCaptureItem.checklistItemId) }}%
                   </span>
                 </label>
 
@@ -1143,7 +1491,7 @@ onMounted(async () => {
                 </ul>
               </div>
               <p class="mt-2 text-center text-[11px] text-text-sub">
-                항목당 최대 {{ MAX_MEDIA_PER_ITEM }}개까지 첨부할 수 있습니다.
+                항목별 최대 파일 개수와 크기·영상 길이를 적용합니다.
                 사진은 자동으로 리사이즈, 영상은 브라우저에서 자동 압축된 뒤 업로드됩니다.
               </p>
 
@@ -1217,6 +1565,7 @@ onMounted(async () => {
                     v-model="confirmState[item.checklistItemId]"
                     type="checkbox"
                     class="mt-1 h-4 w-4 rounded border-border"
+                    @change="persistDraftProgress"
                   >
                   <span>
                     <span class="block text-sm font-bold text-text-main">

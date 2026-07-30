@@ -1,5 +1,6 @@
 package com.c203.limit.domain.inspection.controller;
 
+import java.util.List;
 import com.c203.limit.domain.inspection.dto.request.ReinspectionRequestCreateRequest;
 import com.c203.limit.domain.inspection.dto.response.ReinspectionRequestResponse;
 import com.c203.limit.domain.inspection.service.ReinspectionRequestService;
@@ -18,6 +19,17 @@ public class ReinspectionRequestController implements ReinspectionRequestApi {
             ReinspectionRequestService service, CurrentUser currentUser) {
         this.service = service;
         this.currentUser = currentUser;
+    }
+
+    @Override
+    public ResponseEntity<ApiResponse<List<ReinspectionRequestResponse>>> getMine() {
+        return ResponseEntity.ok(ApiResponse.ok(service.findForSeller(currentUser.memberId())));
+    }
+
+    @Override
+    public ResponseEntity<ApiResponse<ReinspectionRequestResponse>> get(String requestKey) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                service.find(requestKey, currentUser.memberId())));
     }
 
     @Override

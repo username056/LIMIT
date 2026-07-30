@@ -16,6 +16,7 @@ import com.c203.limit.domain.inspection.entity.ReinspectionRequest;
 import com.c203.limit.domain.inspection.entity.ReinspectionRequestItem;
 import com.c203.limit.domain.inspection.event.ReinspectionNotificationEvent;
 import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
+import com.c203.limit.domain.inspection.repository.EvidenceRepository;
 import com.c203.limit.domain.inspection.repository.ListingOwnerReader;
 import com.c203.limit.domain.inspection.repository.ListingOwnerReader.ListingOwnerInfo;
 import com.c203.limit.domain.inspection.repository.ReinspectionRequestItemRepository;
@@ -45,6 +46,7 @@ class ReinspectionRequestServiceTests {
     @Mock ListingChecklistItemRepository checklistItemRepository;
     @Mock ReinspectionRequestRepository requestRepository;
     @Mock ReinspectionRequestItemRepository requestItemRepository;
+    @Mock EvidenceRepository evidenceRepository;
     @Mock ApplicationEventPublisher eventPublisher;
 
     ReinspectionRequestService service;
@@ -57,6 +59,7 @@ class ReinspectionRequestServiceTests {
                 checklistItemRepository,
                 requestRepository,
                 requestItemRepository,
+                evidenceRepository,
                 eventPublisher);
     }
 
@@ -170,6 +173,7 @@ class ReinspectionRequestServiceTests {
         ListingChecklistItem item = mock(ListingChecklistItem.class);
         when(item.getId()).thenReturn(id);
         when(item.getName()).thenReturn(name);
+        when(item.isVisibleToBuyer()).thenReturn(true);
         return item;
     }
 }

@@ -35,4 +35,22 @@ public class ProductChecklistItemResponse {
 
     @Schema(example = "1")
     private final Integer attemptCount;
+
+    @Schema(example = "true", description = "구매자에게 항목과 증빙을 공개할지 여부")
+    private final boolean visibleToBuyer;
+
+    @Schema(example = "1")
+    private final Integer minCount;
+
+    @Schema(example = "3")
+    private final Integer maxCount;
+
+    @Schema(example = "20", description = "MiB 단위")
+    private final Integer maxFileSizeMb;
+
+    @Schema(example = "3", description = "초 단위")
+    private final Integer minDurationSec;
+
+    @Schema(example = "30", description = "초 단위")
+    private final Integer maxDurationSec;
 }

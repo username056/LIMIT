@@ -1,5 +1,6 @@
 package com.c203.limit.domain.inspection.controller;
 
+import java.util.List;
 import com.c203.limit.domain.inspection.dto.request.ReinspectionRequestCreateRequest;
 import com.c203.limit.domain.inspection.dto.response.ReinspectionRequestResponse;
 import com.c203.limit.global.response.ApiResponse;
@@ -10,11 +11,27 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 
 @Tag(name = "09. 검수")
 public interface ReinspectionRequestApi {
+
+    @Operation(
+            operationId = "reinspectionList",
+            summary = "판매자 재검수 요청 목록",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @GetMapping("/api/v1/members/me/reinspection-requests")
+    ResponseEntity<ApiResponse<List<ReinspectionRequestResponse>>> getMine();
+
+    @Operation(
+            operationId = "reinspection00",
+            summary = "재검수 요청 상세 조회",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @GetMapping("/api/v1/reinspection-requests/{requestKey}")
+    ResponseEntity<ApiResponse<ReinspectionRequestResponse>> get(
+            @PathVariable String requestKey);
 
     @Operation(
             operationId = "reinspection01",

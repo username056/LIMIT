@@ -1,34 +1,35 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomePage from '../pages/HomePage.vue'
-import LoginPage from '../pages/LoginPage.vue'
-import OAuthCallbackPage from '../pages/OAuthCallbackPage.vue'
-import SellerDashboardPage from '../pages/SellerDashboardPage.vue'
-import MyOrdersPage from '../pages/MyOrdersPage.vue'
-import SellerApplyPage from '../pages/SellerApplyPage.vue'
-import ProductManagePage from '../pages/ProductManagePage.vue'
-import ProductRegisterPage from '../pages/ProductRegisterPage.vue'
-import AdminPage from '../pages/AdminPage.vue'
-import DevToolsPage from '../pages/DevToolsPage.vue'
-import SignupPage from '../pages/SignupPage.vue'
-import SocialSignupPage from '../pages/SocialSignupPage.vue'
-import VerifyEmailPage from '../pages/VerifyEmailPage.vue'
-import EmailVerificationRequestedPage from '../pages/EmailVerificationRequestedPage.vue'
-import ForgotPasswordPage from '../pages/ForgotPasswordPage.vue'
-import ResetPasswordPage from '../pages/ResetPasswordPage.vue'
-import TermsPage from '../pages/TermsPage.vue'
-import PrivacyPage from '../pages/PrivacyPage.vue'
-import ComingSoonPage from '../pages/ComingSoonPage.vue'
-import NotFoundPage from '../pages/NotFoundPage.vue'
-import MyFavoritesPage from '../pages/MyFavoritesPage.vue'
-import MyProfilePage from '../pages/MyProfilePage.vue'
-import PurchasePage from '../pages/PurchasePage.vue'
-import PurchaseSuccessPage from '../pages/PurchaseSuccessPage.vue'
-import ChatPage from '../pages/ChatPage.vue'
-import ProductListPage from '../pages/ProductListPage.vue'
-import ProductDetailPage from '../pages/ProductDetailPage.vue'
-import CallsPage from '../pages/CallsPage.vue'
-import RtcCallPage from '../pages/RtcCallPage.vue'
 import { getAccessToken, hasRole } from '../auth/session'
+
+const LoginPage = () => import('../pages/LoginPage.vue')
+const OAuthCallbackPage = () => import('../pages/OAuthCallbackPage.vue')
+const SellerDashboardPage = () => import('../pages/SellerDashboardPage.vue')
+const MyOrdersPage = () => import('../pages/MyOrdersPage.vue')
+const SellerApplyPage = () => import('../pages/SellerApplyPage.vue')
+const ProductManagePage = () => import('../pages/ProductManagePage.vue')
+const ProductRegisterPage = () => import('../pages/ProductRegisterPage.vue')
+const AdminPage = () => import('../pages/AdminPage.vue')
+const DevToolsPage = () => import('../pages/DevToolsPage.vue')
+const SignupPage = () => import('../pages/SignupPage.vue')
+const SocialSignupPage = () => import('../pages/SocialSignupPage.vue')
+const VerifyEmailPage = () => import('../pages/VerifyEmailPage.vue')
+const EmailVerificationRequestedPage = () => import('../pages/EmailVerificationRequestedPage.vue')
+const ForgotPasswordPage = () => import('../pages/ForgotPasswordPage.vue')
+const ResetPasswordPage = () => import('../pages/ResetPasswordPage.vue')
+const TermsPage = () => import('../pages/TermsPage.vue')
+const PrivacyPage = () => import('../pages/PrivacyPage.vue')
+const ComingSoonPage = () => import('../pages/ComingSoonPage.vue')
+const NotFoundPage = () => import('../pages/NotFoundPage.vue')
+const MyFavoritesPage = () => import('../pages/MyFavoritesPage.vue')
+const MyProfilePage = () => import('../pages/MyProfilePage.vue')
+const PurchasePage = () => import('../pages/PurchasePage.vue')
+const PurchaseSuccessPage = () => import('../pages/PurchaseSuccessPage.vue')
+const ChatPage = () => import('../pages/ChatPage.vue')
+const ProductListPage = () => import('../pages/ProductListPage.vue')
+const ProductDetailPage = () => import('../pages/ProductDetailPage.vue')
+const CallsPage = () => import('../pages/CallsPage.vue')
+const RtcCallPage = () => import('../pages/RtcCallPage.vue')
 
 const routes = [
   { path: '/', name: 'home', component: HomePage },
