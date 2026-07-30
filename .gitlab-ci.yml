@@ -78,6 +78,8 @@ variables:
         - scripts/apply-ec2-env.ps1
         - scripts/apply-ec2-env-remote.sh
         - scripts/apply-ec2-env-remote.test.sh
+        - scripts/apply-ci-s3-env-remote.sh
+        - scripts/apply-ci-s3-env-remote.test.sh
         - scripts/check-backend-logging.sh
         - scripts/check-backend-logging.test.sh
         - scripts/build-image.sh
@@ -616,6 +618,7 @@ deploy_prod:
     - printf '%s' "$DEPLOY_IMAGE" | grep -Eq '@sha256:[a-f0-9]{64}$'
   script:
     - sh scripts/sync-deploy-files.sh
+    - sh scripts/apply-ci-s3-env-remote.sh
     - sh scripts/deploy-remote.sh prod "$DEPLOY_IMAGE"
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
@@ -644,6 +647,7 @@ monitoring_deploy_prod:
     - export DEPLOY_SSH_KEY_FILE=/tmp/limit-deploy-key
   script:
     - sh scripts/sync-deploy-files.sh monitoring
+    - sh scripts/apply-ci-s3-env-remote.sh
     - sh scripts/deploy-monitoring-remote.sh
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
