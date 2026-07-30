@@ -248,11 +248,11 @@ public class ChecklistGenerationService {
         try {
             supplement = supplementClient.suggest(context);
         } catch (RuntimeException exception) {
-            research.fail();
+            research.fail(writeSupplement(ChecklistSupplementResult.requestFailed()));
             return researchRepository.saveAndFlush(research);
         }
         if (!supplement.available()) {
-            research.fail();
+            research.fail(writeSupplement(supplement));
             return researchRepository.saveAndFlush(research);
         }
         research.complete(writeSupplement(supplement));
