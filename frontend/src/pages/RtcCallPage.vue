@@ -13,7 +13,8 @@ import {
   respondRtcCall,
   signalingSocketUrl,
 } from '../api/rtc'
-import { createReinspectionRequest } from '../api/products'
+// 재촬영 요청을 되살릴 때 함께 풉니다.
+// import { createReinspectionRequest } from '../api/products'
 import { useAuthSession } from '../auth/session'
 
 const route = useRoute()
@@ -322,55 +323,56 @@ function goToChat() {
   router.push({ name: 'chat', params: { roomId: call.value.chatRoomId } })
 }
 
-// 통화 중에 "이 항목은 다시 찍어 달라"고 남기는 경로입니다. 화면만 있고 API에 붙어 있지 않아
-// 요청이 판매자에게 전달되지 않았습니다. 상품 상세와 같은 reinspection-requests API를 씁니다.
-// 판매자에게는 보이지 않습니다 — 자기 물건에 재촬영을 요청할 일이 없습니다.
-const recaptureItemIds = ref([])
-const recaptureReason = ref('')
-const recaptureError = ref('')
-const recaptureNotice = ref('')
-const isSubmittingRecapture = ref(false)
-const canRequestRecapture = computed(
-  () => !isSeller.value && Boolean(rtcSession.value?.listingId),
-)
-
-function toggleRecaptureItem(checklistItemId) {
-  const index = recaptureItemIds.value.indexOf(checklistItemId)
-  if (index === -1) recaptureItemIds.value.push(checklistItemId)
-  else recaptureItemIds.value.splice(index, 1)
-}
-
-async function submitRecaptureRequest() {
-  recaptureError.value = ''
-  recaptureNotice.value = ''
-  if (!recaptureItemIds.value.length) {
-    recaptureError.value = '재촬영을 요청할 항목을 하나 이상 선택해 주세요.'
-    return
-  }
-  const reason = recaptureReason.value.trim()
-  if (!reason) {
-    recaptureError.value = '어떤 부분을 다시 보고 싶은지 적어 주세요.'
-    return
-  }
-
-  isSubmittingRecapture.value = true
-  try {
-    await createReinspectionRequest(rtcSession.value.listingId, {
-      reason,
-      items: recaptureItemIds.value.map((checklistItemId) => ({
-        checklistItemId,
-        requestContent: reason,
-      })),
-    })
-    recaptureNotice.value = '재촬영 요청을 보냈습니다. 판매자가 새 자료를 올리면 알려드립니다.'
-    recaptureItemIds.value = []
-    recaptureReason.value = ''
-  } catch (error) {
-    recaptureError.value = error.message || '재촬영 요청을 보내지 못했습니다.'
-  } finally {
-    isSubmittingRecapture.value = false
-  }
-}
+// 통화 중 재촬영 요청은 잠시 내려 두었습니다. 이미 얼굴을 보고 이야기하는 중이라 채팅으로
+// 말하는 편이 빠르고, 같은 화면에 요청 폼까지 두면 체크리스트를 읽기 어려워집니다.
+// 되살릴 때는 아래 주석과 템플릿의 대응 블록을 함께 풀고, api/products의
+// createReinspectionRequest import를 다시 추가하세요.
+//
+// const recaptureItemIds = ref([])
+// const recaptureReason = ref('')
+// const recaptureError = ref('')
+// const recaptureNotice = ref('')
+// const isSubmittingRecapture = ref(false)
+// const canRequestRecapture = computed(
+//   () => !isSeller.value && Boolean(rtcSession.value?.listingId),
+// )
+//
+// function toggleRecaptureItem(checklistItemId) {
+//   const index = recaptureItemIds.value.indexOf(checklistItemId)
+//   if (index === -1) recaptureItemIds.value.push(checklistItemId)
+//   else recaptureItemIds.value.splice(index, 1)
+// }
+//
+// async function submitRecaptureRequest() {
+//   recaptureError.value = ''
+//   recaptureNotice.value = ''
+//   if (!recaptureItemIds.value.length) {
+//     recaptureError.value = '재촬영을 요청할 항목을 하나 이상 선택해 주세요.'
+//     return
+//   }
+//   const reason = recaptureReason.value.trim()
+//   if (!reason) {
+//     recaptureError.value = '어떤 부분을 다시 보고 싶은지 적어 주세요.'
+//     return
+//   }
+//   isSubmittingRecapture.value = true
+//   try {
+//     await createReinspectionRequest(rtcSession.value.listingId, {
+//       reason,
+//       items: recaptureItemIds.value.map((checklistItemId) => ({
+//         checklistItemId,
+//         requestContent: reason,
+//       })),
+//     })
+//     recaptureNotice.value = '재촬영 요청을 보냈습니다. 판매자가 새 자료를 올리면 알려드립니다.'
+//     recaptureItemIds.value = []
+//     recaptureReason.value = ''
+//   } catch (error) {
+//     recaptureError.value = error.message || '재촬영 요청을 보내지 못했습니다.'
+//   } finally {
+//     isSubmittingRecapture.value = false
+//   }
+// }
 
 function showError(error) {
   errorMessage.value = error.message || '통화 연결 중 오류가 발생했습니다.'
@@ -539,42 +541,23 @@ onBeforeUnmount(() => {
             <h2 class="text-lg font-bold text-text-main">
               상품 검증 체크리스트
             </h2>
-            <p
-              v-if="canRequestRecapture"
-              class="mt-1 text-sm text-text-sub"
-            >
-              통화 중에 더 보고 싶은 항목이 있으면 선택해서 재촬영을 요청하세요.
+            <p class="mt-1 text-sm text-text-sub">
+              판매글에 등록된 검증 항목과 같은 목록입니다. 더 보고 싶은 부분은 아래 채팅으로 말씀하세요.
             </p>
             <ul class="mt-4 space-y-3">
               <li
                 v-for="item in rtcSession.checklistItems"
                 :key="item.checklistItemId"
-                class="rounded-lg border border-border px-4 py-3 text-sm text-text-sub"
-                :class="recaptureItemIds.includes(item.checklistItemId) ? 'border-primary bg-accent' : ''"
+                class="flex gap-3 rounded-lg border border-border px-4 py-3 text-sm text-text-sub"
               >
-                <label
-                  class="flex gap-3"
-                  :class="canRequestRecapture ? 'cursor-pointer' : ''"
-                >
-                  <input
-                    v-if="canRequestRecapture"
-                    type="checkbox"
-                    class="mt-1 h-4 w-4 shrink-0 rounded border-border"
-                    :checked="recaptureItemIds.includes(item.checklistItemId)"
-                    @change="toggleRecaptureItem(item.checklistItemId)"
-                  >
-                  <span
-                    v-else
-                    class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
-                  />
-                  <span>
-                    <strong class="block font-semibold text-text-main">{{ item.name }}</strong>
-                    <small
-                      v-if="item.captureGuide"
-                      class="mt-1 block leading-5 text-text-sub"
-                    >{{ item.captureGuide }}</small>
-                  </span>
-                </label>
+                <span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                <span>
+                  <strong class="block font-semibold text-text-main">{{ item.name }}</strong>
+                  <small
+                    v-if="item.captureGuide"
+                    class="mt-1 block leading-5 text-text-sub"
+                  >{{ item.captureGuide }}</small>
+                </span>
               </li>
               <li
                 v-if="!rtcSession.checklistItems.length"
@@ -583,6 +566,11 @@ onBeforeUnmount(() => {
                 등록된 체크리스트가 없습니다.
               </li>
             </ul>
+
+            <!--
+              재촬영 요청은 잠시 내려 두었습니다(채팅으로 말하는 편이 빠릅니다).
+              되살릴 때는 script의 recapture 주석과 이 블록을 함께 풀고, 위 목록의 항목을
+              체크박스로 되돌리세요(항목마다 toggleRecaptureItem 연결).
 
             <div
               v-if="canRequestRecapture && rtcSession.checklistItems.length"
@@ -618,9 +606,10 @@ onBeforeUnmount(() => {
                 :disabled="isSubmittingRecapture"
                 @click="submitRecaptureRequest"
               >
-                {{ isSubmittingRecapture ? '요청 보내는 중…' : `재촬영 요청 보내기${recaptureItemIds.length ? ` (${recaptureItemIds.length}개)` : ''}` }}
+                재촬영 요청 보내기
               </button>
             </div>
+            -->
           </section>
 
           <section class="flex h-[330px] flex-col overflow-hidden rounded-xl border border-border bg-white sm:h-[350px]">

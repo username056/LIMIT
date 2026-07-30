@@ -329,6 +329,52 @@ class ProductApplicationServiceTests {
         assertThat(listing.getStatus()).isEqualTo(ListingStatus.RESERVED);
     }
 
+    // 직거래는 약속이 깨질 수 있어 판매자가 원래 글로 돌아갈 길이 필요하다.
+    @Test
+    void letsSellerReopenASoldListing() {
+        Listing listing = listing();
+        ReflectionTestUtils.setField(listing, "status", ListingStatus.SOLD);
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(statusHistoryRepository.saveAndFlush(any(ListingStatusHistory.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = service.transition(
+                55L, 1001L, new TransitionProductStatusRequest("ON_SALE", "거래 파기로 판매 재개"));
+
+        assertThat(result.getPreviousStatus()).isEqualTo("SOLD");
+        assertThat(result.getCurrentStatus()).isEqualTo("ON_SALE");
+        assertThat(listing.getStatus()).isEqualTo(ListingStatus.ON_SALE);
+    }
+
+    // 되돌린 매물은 다시 수정할 수 있어야 한다.
+    @Test
+    void allowsEditingAfterReopeningASoldListing() {
+        Listing listing = listing();
+        ReflectionTestUtils.setField(listing, "status", ListingStatus.SOLD);
+        listing.reopenSoldBySeller();
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        UpdateProductRequest request = new UpdateProductRequest();
+        request.setPrice(BigDecimal.valueOf(100000));
+
+        service.update(55L, 1001L, request);
+
+        assertThat(listing.getPrice()).isEqualTo(100000L);
+    }
+
+    @Test
+    void rejectsReopeningAListingThatIsNotSold() {
+        Listing listing = listing();
+        ReflectionTestUtils.setField(listing, "status", ListingStatus.HIDDEN);
+
+        assertThatThrownBy(listing::reopenSoldBySeller)
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INVALID_PRODUCT_STATUS_TRANSITION));
+    }
+
     @Test
     void rejectsEditingASoldListing() {
         Listing listing = listing();
@@ -399,7 +445,7 @@ class ProductApplicationServiceTests {
                 .thenReturn(List.of(thumbnail));
 
         var result = service.findPublic(
-                null, null, null, null, null, null, null, null, 0, 20, "price,asc");
+                null, null, null, null, null, null, null, null, null, 0, 20, "price,asc");
 
         assertThat(result.content()).hasSize(2);
         assertThat(result.content().get(0).getVerificationStatus()).isEqualTo("COMPLETED");
@@ -419,7 +465,7 @@ class ProductApplicationServiceTests {
     @Test
     void rejectsUnsupportedVerificationStatusAndSort() {
         assertThatThrownBy(() -> service.findPublic(
-                        null, null, null, null, null, null, null, "UNKNOWN", 0, 20,
+                        null, null, null, null, null, null, null, "UNKNOWN", null, 0, 20,
                         "createdAt,desc"))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
@@ -427,7 +473,7 @@ class ProductApplicationServiceTests {
                                 .isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
 
         assertThatThrownBy(() -> service.findPublic(
-                        null, null, null, null, null, null, null, null, 0, 20,
+                        null, null, null, null, null, null, null, null, null, 0, 20,
                         "sellerId,asc"))
                 .isInstanceOfSatisfying(
                         BusinessException.class,

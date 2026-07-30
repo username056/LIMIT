@@ -55,10 +55,15 @@ public class SecurityConfig {
                                         .permitAll()
                                         .requestMatchers(HttpMethod.GET, "/actuator/prometheus")
                                         .permitAll()
+                                        // /sellers/me는 본인 전용이라 아래 공개 규칙보다 먼저 잠근다.
+                                        // {sellerId} 패턴이 'me'까지 삼켜 공개돼 버리는 것을 막기 위함이다.
+                                        .requestMatchers(HttpMethod.GET, "/api/v1/sellers/me")
+                                        .authenticated()
                                         .requestMatchers(
                                                 HttpMethod.GET,
                                                 "/api/v1/products",
                                                 "/api/v1/products/{productId}",
+                                                "/api/v1/sellers/{sellerId}",
                                                 "/api/v1/device-categories",
                                                 "/api/v1/device-models/**",
                                                 "/api/v1/inspections/products/{productId}/diagnosis-summary")

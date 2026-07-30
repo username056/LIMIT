@@ -466,7 +466,7 @@ describe('ProductRegisterPage', () => {
     await buttonByText(wrapper, '다음 단계로').trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('건너뛸 수 없습니다')
+    expect(wrapper.text()).toContain('개인 정보 보호를 위해 반드시 초기화를 진행해주세요.')
     expect(buttonByText(wrapper, '계속 작성하기')).toBeUndefined()
     await buttonByText(wrapper, '확인').trigger('click')
     await flushPromises()
@@ -609,7 +609,27 @@ describe('ProductRegisterPage', () => {
       imageType: 'THUMBNAIL',
       displayOrder: 0,
     })
-    expect(wrapper.text()).toContain('서버에 저장됨')
+    expect(wrapper.text()).toContain('서버에 저장되었습니다.')
+    expect(wrapper.text()).toContain('대표 이미지를 저장했습니다.')
+  })
+
+  // 업로드 실패는 예외를 던지지 않고 errorMessage만 세웁니다. 그래서 성공 안내를 걸러내지 않으면
+  // 실패 메시지와 '저장했습니다'가 같이 떠서, 문제가 있는데 없는 것처럼 보입니다.
+  it('업로드가 실패하면 저장했다고 알리지 않는다', async () => {
+    createProductImageUploadUrl.mockRejectedValue(new Error('미디어 저장소 설정을 확인해 주세요.'))
+
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await fillDeviceStep(wrapper)
+
+    await attachFile(
+      wrapper.find('input[aria-label="대표 이미지 선택"]'),
+      new File(['thumb'], 'thumb.jpg', { type: 'image/jpeg' }),
+    )
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('상품 이미지를 업로드하지 못했습니다')
+    expect(wrapper.text()).not.toContain('대표 이미지를 저장했습니다.')
   })
 
   it('webp 대표 이미지는 원본 형식 그대로 업로드한다', async () => {
