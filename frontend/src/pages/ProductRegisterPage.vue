@@ -1206,7 +1206,7 @@ onMounted(async () => {
                 <span
                   v-else-if="form.categoryId && !isLoadingModels && modelGroups.length === 0 && modelKeyword"
                   class="mt-2 block text-xs font-normal text-text-muted"
-                >검색 결과가 없습니다. 직접 입력을 이용해 주세요.</span>
+                >검색 결과가 없습니다.</span>
 
                 <!--
                   목록에 없는 기기는 여기에 직접 적습니다. 이 값으로 서버가 공식 자료를 찾아
