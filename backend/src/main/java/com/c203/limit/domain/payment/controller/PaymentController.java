@@ -34,6 +34,12 @@ public class PaymentController implements PaymentApi {
     }
 
     @Override
+    public ResponseEntity<ApiResponse<PaymentResponse>> cancelPayment(Long paymentId) {
+        PaymentResponse response = paymentService.cancel(currentUser.memberId(), paymentId);
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    @Override
     public ResponseEntity<ApiResponse<PaymentResponse>> getPayment(Long paymentId) {
         return ResponseEntity.ok(
                 ApiResponse.ok(paymentService.get(currentUser.memberId(), paymentId)));

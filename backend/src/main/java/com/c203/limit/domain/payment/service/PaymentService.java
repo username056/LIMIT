@@ -37,6 +37,7 @@ public class PaymentService {
     private static final int IDEMPOTENCY_RECOVERY_ATTEMPTS = 5;
     private static final long RETRY_BACKOFF_MILLIS = 50L;
     private static final String CONFIRM_IDEMPOTENCY_PREFIX = "payment-confirm-";
+    private static final String CANCEL_REASON = "구매자가 결제 전 예약을 취소함";
 
     private final PaymentRepository paymentRepository;
     private final MemberRepository memberRepository;
@@ -181,6 +182,41 @@ public class PaymentService {
                 payment.getId(),
                 payment.getAttemptNo(),
                 payment.getProviderOrderId());
+        return PaymentResponse.from(payment);
+    }
+
+    /**
+     * 결제창 진입 전(REQUESTED) 단계에서 구매자가 명시적으로 취소한다. Toss 결제창에서 취소하거나
+     * 브라우저를 닫아도 30분 예약 유예가 끝나야 스케줄러가 매물을 풀어주는데, 이 API는 그 대기 없이
+     * 즉시 예약을 해제한다 — 스케줄러는 이 호출이 유실됐을 때의 최종 안전망으로 계속 남는다.
+     *
+     * <p>이미 CANCELLED·EXPIRED인 결제는 사용자가 취소 버튼을 여러 번 누르거나 재접속해도 오류 없이
+     * 같은 결과를 그대로 반환한다(멱등). APPROVED·FAILED는 이 API로 되돌릴 수 없는 진행된 결제라
+     * 거부한다 — 승인된 결제는 환불 흐름으로 유도해야 한다.
+     */
+    @Transactional
+    public PaymentResponse cancel(Long buyerId, Long paymentId) {
+        Payment payment = paymentRepository
+                .findById(paymentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_NOT_FOUND));
+        if (!payment.getBuyer().getId().equals(buyerId)) {
+            throw new BusinessException(ErrorCode.PAYMENT_ACCESS_DENIED);
+        }
+        if (payment.getStatus() == PaymentStatus.CANCELLED || payment.getStatus() == PaymentStatus.EXPIRED) {
+            return PaymentResponse.from(payment);
+        }
+        if (payment.getStatus() != PaymentStatus.REQUESTED) {
+            throw new BusinessException(ErrorCode.PAYMENT_NOT_CANCELLABLE);
+        }
+
+        payment.cancel(CANCEL_REASON);
+        listingService.cancelReservation(payment.getListingId(), buyerId, CANCEL_REASON);
+
+        log.info(
+                "payment cancelled: paymentId={}, listingId={}, buyerId={}",
+                payment.getId(),
+                payment.getListingId(),
+                buyerId);
         return PaymentResponse.from(payment);
     }
 
