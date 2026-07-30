@@ -41,13 +41,23 @@
 
 OCR이 인식하는 필드는 `MODEL_NAME`/`CPU`/`RAM`/`GPU`/`STORAGE_CAPACITY`/`OS_VERSION` 6종이다(`OcrFieldType`).
 스크린샷 파서([SystemInfoScreenshotParser.java](../../backend/src/main/java/com/c203/limit/domain/inspection/parser/SystemInfoScreenshotParser.java))는
-상단 카드 4개(저장소/그래픽카드/설치된RAM/프로세서)에서 CPU/RAM/GPU/저장용량을 1차로 뽑고, 화면에 "장치
-사양" 표(장치 이름 → 프로세서 → 설치된 RAM → 장치 ID → 제품 ID → 시스템 종류 → 펜 및 터치, 항상 이
-순서인 Windows 표준 패널)가 펼쳐져 있으면 그 표의 프로세서/설치된 RAM 값(클럭 속도·사용 가능 용량까지
-포함해 더 상세함)으로 카드 값을 덮어쓴다. 이 표 라벨 7개를 순서대로 다 못 찾으면(표를 안 펼친 화면 등)
-조용히 카드 값을 그대로 둔다. **이 표 파싱은 아직 실제 Naver Clova 응답으로 검증되지 않았다** — 라이브
-자격증명이 있는 환경에서 `SystemInfoScreenshotLiveManualTests`/`NaverClovaOcrClientLiveIntegrationTests`로
-실제 좌표를 확인해 `SystemInfoScreenshotParserTests`의 픽스처를 교체하기 전까지는 신뢰도를 낮게 봐야 한다.
+상단 카드 4개(저장소/그래픽카드/설치된RAM/프로세서)에서 CPU/RAM/GPU/저장용량을 1차로 뽑는다. 카드 라벨은
+4개 중 일부만 찾아도(다른 Windows 버전이라 카드 구성이 다르거나 라벨 하나가 오인식된 경우) 찾은 것만
+반영한다.
+
+그 다음 화면 전체 토큰을 세로 위치(행)로 묶고, 각 행 안에서 가장 큰 가로 간격을 기준으로 왼쪽(라벨 후보)과
+오른쪽(값 후보)으로 나누는 범용 스캔을 한 번 더 돈다. 그 라벨 후보가 아는 라벨(`LABEL_HINTS`)과 같고 값
+후보가 그 필드다운 모양(`VALUE_VALIDATORS`: 숫자+GB 패턴, Intel/AMD 등 CPU/GPU 제조사명 포함, "Windows
++숫자" 등)일 때만 채택해 카드 값을 덮어쓴다 — "장치 사양" 표의 프로세서/설치된 RAM(클럭 속도·사용 가능
+용량까지 포함해 카드보다 상세함), "Windows 사양" 표의 에디션+버전을 합친 OS_VERSION이 이 경로로 나온다.
+표에 라벨이 몇 개 있는지·순서가 어떤지는 보지 않고 각 행을 독립적으로 판단하므로, 장치 ID·제품 ID·시스템
+종류·펜 및 터치처럼 모르는 라벨의 행이 섞여 있거나 일부 행이 없어도(다른 Windows 버전 등) 나머지 필드는
+정상적으로 찾는다.
+
+이 로직은 **실제 Naver Clova 라이브 호출 좌표로 검증됐다** — `SystemInfoScreenshotParserTests`의 픽스처가
+`system_info_screenshot.png` 실촬영 이미지를 `SystemInfoScreenshotLiveManualTests`로 호출한 원본 좌표
+그대로다.
+
 DxDiag는 `CPU`/`RAM`(`memory`)/`GPU`/`GPU_MEMORY`/`DRIVER_VERSION`/`SOUND_DEVICE`를, 배터리 리포트는
 `DESIGN_CAPACITY`/`FULL_CHARGE_CAPACITY`/`CYCLE_COUNT`/`BATTERY_MANUFACTURER`/`CAPACITY_RATIO`를 추출한다.
 이 필드 이름들은 `DiagnosisFieldName` enum으로 통일되어 있어, OCR과 DxDiag가 겹치는 필드(`CPU`/`RAM`/`GPU`

@@ -22,6 +22,7 @@ import {
   getProductChecklist,
   getProductDraftProgress,
   getProductImages,
+  deleteEvidence,
   deleteProductImage,
   transitionProductStatus,
   updateProduct,
@@ -217,6 +218,7 @@ function allDiagnosisFieldNamesFor(item) {
 }
 
 const mediaPreview = ref(null)
+const mediaDeleteInFlight = ref(false)
 const listingImages = ref([])
 const listingImageBusy = ref(false)
 const listingImageProgress = ref(0)
@@ -926,12 +928,24 @@ function openMediaPreview(item, index) {
   mediaPreview.value = { checklistItemId: item.checklistItemId, itemName: item.name, index }
 }
 
-function removePreviewedMedia() {
+async function removePreviewedMedia() {
   const target = mediaPreview.value
-  if (!target) return
+  if (!target || !currentProductId.value || mediaDeleteInFlight.value) return
   const media = mediaOf(target.checklistItemId)
-  const [removed] = media.splice(target.index, 1)
-  if (removed) URL.revokeObjectURL(removed.previewUrl)
+  const item = media[target.index]
+  if (!item) return
+  mediaDeleteInFlight.value = true
+  try {
+    await deleteEvidence(currentProductId.value, target.checklistItemId, item.key)
+  } catch (error) {
+    errorMessage.value = error.message || '첨부 파일을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+    return
+  } finally {
+    mediaDeleteInFlight.value = false
+  }
+  media.splice(target.index, 1)
+  if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
+  delete diagnosisState[target.checklistItemId]
   mediaPreview.value = null
 }
 
@@ -1548,19 +1562,24 @@ onMounted(async () => {
               </h2>
 
               <div class="relative mt-4 flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg border border-border bg-bg">
-                <template v-if="activeItemLatestMedia">
+                <template v-if="activeItemLatestMedia && activeItemLatestMedia.evidenceType === 'VIDEO'">
                   <video
-                    v-if="activeItemLatestMedia.evidenceType === 'VIDEO'"
                     :src="activeItemLatestMedia.previewUrl"
                     class="h-full w-full object-cover"
                     controls
                   />
+                </template>
+                <template v-else-if="activeItemLatestMedia && activeItemLatestMedia.evidenceType === 'PHOTO'">
                   <img
-                    v-else
                     :src="activeItemLatestMedia.previewUrl"
                     :alt="activeCaptureItem.name"
                     class="h-full w-full object-cover"
                   >
+                </template>
+                <template v-else-if="activeItemLatestMedia">
+                  <p class="px-6 text-center text-sm text-text-sub">
+                    {{ activeItemLatestMedia.name }} 파일이 첨부되었습니다.
+                  </p>
                 </template>
                 <template v-else>
                   <span class="absolute left-3 top-3 h-6 w-6 border-l-2 border-t-2 border-primary/40" />
@@ -1626,11 +1645,17 @@ onMounted(async () => {
                         muted
                       />
                       <img
-                        v-else
+                        v-else-if="media.evidenceType === 'PHOTO'"
                         :src="media.previewUrl"
                         alt=""
                         class="h-full w-full object-cover"
                       >
+                      <span
+                        v-else
+                        class="flex h-full w-full items-center justify-center bg-bg text-[10px] font-medium text-text-sub"
+                      >
+                        파일
+                      </span>
                     </button>
                   </li>
                 </ul>
@@ -1995,11 +2020,17 @@ onMounted(async () => {
               controls
             />
             <img
-              v-else
+              v-else-if="previewedMedia.evidenceType === 'PHOTO'"
               :src="previewedMedia.previewUrl"
               :alt="`${mediaPreview.itemName} 첨부 파일`"
               class="h-full w-full object-contain"
             >
+            <p
+              v-else
+              class="px-6 text-center text-sm text-text-sub"
+            >
+              미리보기를 지원하지 않는 파일입니다.
+            </p>
           </div>
           <p class="mt-2 truncate text-xs text-text-sub">
             {{ previewedMedia.name }}
@@ -2010,13 +2041,15 @@ onMounted(async () => {
               type="button"
               variant="outline"
               class="flex-1"
+              :disabled="mediaDeleteInFlight"
               @click="removePreviewedMedia"
             >
-              삭제
+              {{ mediaDeleteInFlight ? '삭제 중...' : '삭제' }}
             </BaseButton>
             <BaseButton
               type="button"
               class="flex-1"
+              :disabled="mediaDeleteInFlight"
               @click="mediaPreview = null"
             >
               확인

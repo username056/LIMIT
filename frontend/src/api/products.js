@@ -85,6 +85,10 @@ export function getEvidenceHistory(productId, checklistItemId) {
   return apiClient.get(`/products/${productId}/checklist-items/${checklistItemId}/evidence`)
 }
 
+export function deleteEvidence(productId, checklistItemId, evidenceId) {
+  return apiClient.delete(`/products/${productId}/checklist-items/${checklistItemId}/evidence/${evidenceId}`)
+}
+
 export function uploadToPresignedUrl(presignedUrl, file, requiredHeaders = {}, onProgress = () => {}) {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest()

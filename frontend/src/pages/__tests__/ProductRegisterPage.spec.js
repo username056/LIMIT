@@ -7,6 +7,7 @@ import {
   createEvidenceUploadUrl,
   createProductImageUploadUrl,
   createProduct,
+  deleteEvidence,
   deleteProductImage,
   generateChecklist,
   getChecklistTemplate,
@@ -56,6 +57,7 @@ vi.mock('../../api/products', () => ({
   getProductDraftProgress: vi.fn(),
   getEvidenceHistory: vi.fn(),
   getProductImages: vi.fn(),
+  deleteEvidence: vi.fn(),
   deleteProductImage: vi.fn(),
   transitionProductStatus: vi.fn(),
   updateProduct: vi.fn(),
@@ -570,7 +572,11 @@ describe('ProductRegisterPage', () => {
     await wrapper.find('button[aria-label*="첨부 파일 확인"]').trigger('click')
     expect(wrapper.text()).toContain('1 / 1번째 첨부 파일')
 
+    deleteEvidence.mockResolvedValue({})
     await buttonByText(wrapper, '삭제').trigger('click')
+    await flushPromises()
+
+    expect(deleteEvidence).toHaveBeenCalledWith(1001, 7001, 1)
     expect(wrapper.findAll('button[aria-label*="첨부 파일 확인"]')).toHaveLength(0)
   })
 
