@@ -53,6 +53,16 @@ public class UpdateProductRequest {
     @Size(max = 100)
     private String tradeRegion;
 
+    @Schema(
+            description = "직접 입력 제조사. '기타 (직접 입력)' 모델로 등록한 매물에서만 의미가 있다.",
+            example = "Samsung")
+    @Size(max = 50)
+    private String customManufacturer;
+
+    @Schema(description = "직접 입력 모델명", example = "Galaxy Book4 Pro")
+    @Size(max = 100)
+    private String customModelName;
+
     @JsonSetter("name")
     public void setName(String name) {
         this.name = name;
@@ -84,5 +94,15 @@ public class UpdateProductRequest {
     @JsonSetter("tradeRegion")
     public void setTradeRegion(String tradeRegion) {
         this.tradeRegion = tradeRegion;
+    }
+
+    @JsonSetter("customManufacturer")
+    public void setCustomManufacturer(String customManufacturer) {
+        this.customManufacturer = customManufacturer;
+    }
+
+    @JsonSetter("customModelName")
+    public void setCustomModelName(String customModelName) {
+        this.customModelName = customModelName;
     }
 }
