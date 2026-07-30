@@ -372,7 +372,7 @@ public class LaptopChecklistPolicy {
                     parserType,
                     required,
                     order,
-                    resolvedFeature,
+                                resolvedFeature == null ? null : resolvedFeature.name(),
                     null,
                     null,
                     null);

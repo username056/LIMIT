@@ -8,4 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface ChecklistTemplateRepository extends JpaRepository<ChecklistTemplate, Long> {
     Optional<ChecklistTemplate> findFirstByCategoryIdAndStatusOrderByVersionDesc(
             Long categoryId, ChecklistTemplateStatus status);
+
+    Optional<ChecklistTemplate> findFirstByCategoryIdAndStatusOrderByVersionAsc(
+            Long categoryId, ChecklistTemplateStatus status);
 }

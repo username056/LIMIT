@@ -43,3 +43,27 @@ export function createAdminAccount(payload) {
 export function updateAdminAccount(adminId, payload) {
   return apiClient.patch(`/admin/accounts/${adminId}`, payload)
 }
+
+export function getChecklistResearches(status = 'PENDING_REVIEW') {
+  return apiClient.get(`/admin/checklist-researches?status=${encodeURIComponent(status)}`)
+}
+
+export function approveChecklistResearch(researchId, payload) {
+  return apiClient.post(`/admin/checklist-researches/${researchId}/approval`, payload)
+}
+
+export function rejectChecklistResearch(researchId, payload) {
+  return apiClient.post(`/admin/checklist-researches/${researchId}/rejection`, payload)
+}
+
+export function getDeviceModelRequests(status = 'PENDING') {
+  return apiClient.get(`/admin/device-model-requests?status=${encodeURIComponent(status)}`)
+}
+
+export function approveDeviceModelRequest(requestId, payload) {
+  return apiClient.post(`/admin/device-model-requests/${requestId}/approval`, payload)
+}
+
+export function rejectDeviceModelRequest(requestId, payload) {
+  return apiClient.post(`/admin/device-model-requests/${requestId}/rejection`, payload)
+}

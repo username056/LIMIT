@@ -65,7 +65,7 @@ limit:
       api-key: ${OPENAI_API_KEY:}
       endpoint: ${OPENAI_RESPONSES_ENDPOINT:https://api.openai.com/v1/responses}
       model: ${OPENAI_CHECKLIST_MODEL:gpt-5.6-luna}
-      allowed-domains: ${AI_CHECKLIST_ALLOWED_DOMAINS:samsung.com,lg.com,microsoft.com,lenovo.com,dell.com,hp.com,asus.com,acer.com,msi.com}
+      allowed-domains: ${AI_CHECKLIST_ALLOWED_DOMAINS:samsung.com,apple.com,google.com,lg.com,microsoft.com,lenovo.com,dell.com,hp.com,asus.com,acer.com,msi.com}
       connect-timeout: ${AI_CHECKLIST_CONNECT_TIMEOUT:5s}
       read-timeout: ${AI_CHECKLIST_READ_TIMEOUT:30s}
   auth:

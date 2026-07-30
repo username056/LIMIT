@@ -1,5 +1,6 @@
 package com.c203.limit.domain.inspection.checklist;
 
+import com.c203.limit.domain.inspection.enums.DeviceType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
@@ -10,9 +11,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
@@ -31,6 +32,7 @@ public class OpenAiChecklistSupplementClient implements ChecklistSupplementClien
 
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
+    private final DeviceChecklistFeatureCatalog featureCatalog;
     private final String endpoint;
     private final String apiKey;
     private final String model;
@@ -39,15 +41,18 @@ public class OpenAiChecklistSupplementClient implements ChecklistSupplementClien
     public OpenAiChecklistSupplementClient(
             @Qualifier("checklistAiRestClientBuilder") RestClient.Builder restClientBuilder,
             ObjectMapper objectMapper,
+            DeviceChecklistFeatureCatalog featureCatalog,
             @Value("${limit.ai.checklist.endpoint:https://api.openai.com/v1/responses}")
                     String endpoint,
             @Value("${limit.ai.checklist.api-key:}") String apiKey,
             @Value("${limit.ai.checklist.model:gpt-5.6-luna}") String model,
-            @Value("${limit.ai.checklist.allowed-domains:samsung.com,lg.com,microsoft.com,"
-                            + "lenovo.com,dell.com,hp.com,asus.com,acer.com,msi.com}")
+            @Value("${limit.ai.checklist.allowed-domains:samsung.com,apple.com,google.com,"
+                            + "lg.com,microsoft.com,lenovo.com,dell.com,hp.com,asus.com,"
+                            + "acer.com,msi.com}")
                     String allowedDomains) {
         this.restClient = restClientBuilder.build();
         this.objectMapper = objectMapper;
+        this.featureCatalog = featureCatalog;
         this.endpoint = endpoint;
         this.apiKey = apiKey;
         this.model = model;
@@ -73,7 +78,7 @@ public class OpenAiChecklistSupplementClient implements ChecklistSupplementClien
                     .body(requestBody(context))
                     .retrieve()
                     .body(String.class);
-            return parse(response);
+            return parse(response, context.deviceType());
         } catch (RestClientException | IllegalArgumentException exception) {
             log.warn("AI checklist supplement unavailable: {}", exception.getClass().getSimpleName());
             return ChecklistSupplementResult.unavailable();
@@ -81,6 +86,10 @@ public class OpenAiChecklistSupplementClient implements ChecklistSupplementClien
     }
 
     ChecklistSupplementResult parse(String responseBody) {
+        return parse(responseBody, DeviceType.LAPTOP);
+    }
+
+    ChecklistSupplementResult parse(String responseBody, DeviceType deviceType) {
         if (responseBody == null || responseBody.isBlank()) {
             return ChecklistSupplementResult.unavailable();
         }
@@ -93,8 +102,10 @@ public class OpenAiChecklistSupplementClient implements ChecklistSupplementClien
             JsonNode result = objectMapper.readTree(outputText);
             List<ChecklistSuggestion> suggestions = new ArrayList<>();
             for (JsonNode node : result.path("suggestions")) {
-                LaptopFeatureCode featureCode =
-                        LaptopFeatureCode.valueOf(node.path("featureCode").asText());
+                DeviceChecklistFeatureCatalog.FeatureDefinition definition =
+                        featureCatalog
+                                .find(deviceType, node.path("featureCode").asText())
+                                .orElseThrow();
                 ChecklistEvidenceStatus status =
                         ChecklistEvidenceStatus.valueOf(node.path("evidenceStatus").asText());
                 String sourceUrl = node.path("sourceUrl").asText();
@@ -102,12 +113,12 @@ public class OpenAiChecklistSupplementClient implements ChecklistSupplementClien
                     String reason = koreanOrFallback(
                             node.path("reason").asText(),
                             "제조사 공식 자료에서 %s 지원이 확인되어 실제 기기의 동작 여부를 확인해야 합니다."
-                                    .formatted(featureCode.displayNameKo()));
+                                    .formatted(definition.displayName()));
                     String checkGuide = koreanOrFallback(
-                            node.path("checkGuide").asText(),
-                            featureCode.defaultCheckGuideKo());
+                            node.path("checkGuide").asText(), definition.checkGuide());
                     suggestions.add(new ChecklistSuggestion(
-                            featureCode,
+                            definition.code(),
+                            definition.displayName(),
                             status,
                             reason,
                             checkGuide,
@@ -147,58 +158,60 @@ public class OpenAiChecklistSupplementClient implements ChecklistSupplementClien
                                 "type",
                                 "json_schema",
                                 "name",
-                                "laptop_checklist_supplement",
+                                "device_checklist_supplement",
                                 "strict",
                                 true,
                                 "schema",
-                                responseSchema())));
+                                responseSchema(context.deviceType()))));
         return body;
     }
 
     private String prompt(ChecklistGenerationContext context) {
-        String featureCodes = Arrays.stream(LaptopFeatureCode.values())
-                .map(Enum::name)
-                .collect(Collectors.joining(", "));
-        String confirmed = context.confirmedFeatures().stream()
-                .map(Enum::name)
-                .collect(Collectors.joining(", "));
+        String featureCodes = featureCatalog.definitionsFor(context.deviceType()).stream()
+                .map(definition -> "%s (%s): %s"
+                        .formatted(
+                                definition.code(),
+                                definition.displayName(),
+                                definition.checkGuide()))
+                .collect(Collectors.joining("\n"));
+        String confirmed = String.join(", ", context.confirmedFeatures());
         return """
-                You supplement a verified laptop inspection checklist.
+                You supplement a verified inspection checklist for an electronic device.
                 Use only official manufacturer product/support pages returned by web search.
                 Never infer from shopping sites, blogs, communities, or model-family assumptions.
                 Return at most five supported special features not already confirmed.
                 VERIFIED means the exact model is explicitly supported by an official source.
                 LIKELY means an official source supports the model family but exact variant is unclear.
                 UNKNOWN means evidence is insufficient. CONFLICTED means official sources disagree.
-                Only use these approved feature codes: %s
-                PORTS means built-in USB, HDMI, DisplayPort, or audio ports. Use RJ45_PORT and
-                MICROSD_SLOT separately when those exact built-in slots are documented.
-                CAMERA means the laptop's built-in webcam only. A connected smartphone camera,
-                accessory camera, or ecosystem software feature is not CAMERA.
-                CONVERTIBLE_HINGE means a documented 360-degree convertible hinge. Ordinary laptop
-                hinges are already covered by the required base checklist and must not be suggested.
+                Only use the approved feature codes for this device type listed below.
+                Treat a feature as supported only when the source describes this exact model or
+                explicitly identifies its model family.
                 Write reason and checkGuide in natural Korean.
-                reason must explain why this exact laptop feature was selected from the official source.
+                reason must explain why this exact device feature was selected from the official source.
                 checkGuide must tell a seller what physical function to test and how to verify it.
                 Put an official feature outside that library into reviewCandidates as a short Korean
                 user-facing feature name, never as an internal enum-style code.
 
+                Device type: %s
                 Manufacturer: %s
                 Model name: %s
                 Model code: %s
                 OS: %s
                 Already confirmed: %s
+                Approved feature codes:
+                %s
                 """
                 .formatted(
-                        featureCodes,
+                        context.deviceType(),
                         context.manufacturer(),
                         context.modelName(),
                         context.modelCode() == null ? "unknown" : context.modelCode(),
                         context.osFamily(),
-                        confirmed.isBlank() ? "none" : confirmed);
+                        confirmed.isBlank() ? "none" : confirmed,
+                        featureCodes);
     }
 
-    private Map<String, Object> responseSchema() {
+    private Map<String, Object> responseSchema(DeviceType deviceType) {
         Map<String, Object> suggestion = new LinkedHashMap<>();
         suggestion.put("type", "object");
         suggestion.put("additionalProperties", false);
@@ -210,8 +223,8 @@ public class OpenAiChecklistSupplementClient implements ChecklistSupplementClien
                                 "type",
                                 "string",
                                 "enum",
-                                Arrays.stream(LaptopFeatureCode.values())
-                                        .map(Enum::name)
+                                featureCatalog.definitionsFor(deviceType).stream()
+                                        .map(DeviceChecklistFeatureCatalog.FeatureDefinition::code)
                                         .toList()),
                         "evidenceStatus",
                         Map.of(
@@ -250,7 +263,7 @@ public class OpenAiChecklistSupplementClient implements ChecklistSupplementClien
                                 "type",
                                 "array",
                                 "maxItems",
-                                LaptopChecklistPolicy.MAX_ADDITIONAL_ITEMS,
+                                DeviceChecklistFeatureCatalog.MAX_ADDITIONAL_ITEMS,
                                 "items",
                                 suggestion),
                         "reviewCandidates",
@@ -258,7 +271,7 @@ public class OpenAiChecklistSupplementClient implements ChecklistSupplementClien
                                 "type",
                                 "array",
                                 "maxItems",
-                                LaptopChecklistPolicy.MAX_ADDITIONAL_ITEMS,
+                                DeviceChecklistFeatureCatalog.MAX_ADDITIONAL_ITEMS,
                                 "items",
                                 Map.of("type", "string"))));
         schema.put("required", List.of("suggestions", "reviewCandidates"));
