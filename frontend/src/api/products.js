@@ -61,6 +61,10 @@ export function getDeviceModels(params = {}) {
   return apiClient.get(`/device-models${query(params)}`)
 }
 
+export function createDeviceModel(payload) {
+  return apiClient.post('/device-models', payload)
+}
+
 export function getDeviceModel(modelId) {
   return apiClient.get(`/device-models/${modelId}`)
 }

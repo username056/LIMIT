@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  createDeviceModel,
   createProduct,
   deleteProduct,
   generateChecklist,
@@ -53,5 +54,27 @@ describe('products api', () => {
       [`${API_BASE_URL}/products/1001/status-transitions`, 'POST'],
       [`${API_BASE_URL}/products/1001`, 'DELETE'],
     ])
+  })
+
+  it('직접 입력한 기기 모델을 등록한다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(ok({ deviceModelId: 202 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const payload = {
+      categoryId: 10,
+      manufacturer: 'LG',
+      modelName: 'gram 16',
+      modelCode: '16Z90S',
+      osFamily: 'WINDOWS',
+    }
+
+    await createDeviceModel(payload)
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE_URL}/device-models`,
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    )
   })
 })

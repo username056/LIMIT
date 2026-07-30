@@ -11,6 +11,7 @@ import {
   createEvidenceUploadUrl,
   createProductImageUploadUrl,
   createProduct,
+  createDeviceModel,
   generateChecklist,
   getChecklistTemplate,
   getDeviceCategories,
@@ -89,6 +90,11 @@ const route = useRoute()
 const router = useRouter()
 const categories = ref([])
 const models = ref([])
+const modelKeyword = ref('')
+const isLoadingModels = ref(false)
+const modelLoadError = ref('')
+const isCustomModelMode = ref(false)
+const isCreatingCustomModel = ref(false)
 const isSaving = ref(false)
 const errorMessage = ref('')
 const notice = ref('')
@@ -102,6 +108,12 @@ const activeStep = ref(1)
 const form = reactive({
   categoryId: '', deviceModelId: '', name: '', description: '', price: '',
   color: '', storageGb: '',
+})
+const customModel = reactive({
+  manufacturer: '',
+  modelName: '',
+  modelCode: '',
+  osFamily: 'WINDOWS',
 })
 
 
@@ -228,6 +240,34 @@ const handoverGuide = ref(null)
 const isLoadingHandoverGuide = ref(false)
 
 const currentProductId = computed(() => editingId.value || draftProductId.value)
+const selectedCategory = computed(
+  () => categories.value.find(
+    (item) => String(item.categoryId) === String(form.categoryId),
+  ) || null,
+)
+const supportsCustomModel = computed(() => selectedCategory.value?.code === 'LAPTOP')
+const modelGroups = computed(() => {
+  const keyword = modelKeyword.value.trim().toLowerCase()
+  const grouped = new Map()
+  models.value
+    .filter((item) => {
+      if (!keyword) return true
+      return `${item.manufacturerName || ''} ${item.modelName || ''} ${item.modelCode || ''}`
+        .toLowerCase()
+        .includes(keyword)
+    })
+    .forEach((item) => {
+      const manufacturer = item.manufacturerName || '기타'
+      if (!grouped.has(manufacturer)) grouped.set(manufacturer, [])
+      grouped.get(manufacturer).push(item)
+    })
+  return [...grouped.entries()]
+    .sort(([left], [right]) => left.localeCompare(right, 'ko'))
+    .map(([manufacturer, items]) => ({
+      manufacturer,
+      items: [...items].sort((left, right) => left.modelName.localeCompare(right.modelName, 'ko')),
+    }))
+})
 const selectedModel = computed(
   () => models.value.find((item) => String(item.deviceModelId) === String(form.deviceModelId)) || null,
 )
@@ -363,6 +403,15 @@ function resetForm() {
     color: '', storageGb: '',
   })
   models.value = []
+  modelKeyword.value = ''
+  modelLoadError.value = ''
+  isCustomModelMode.value = false
+  Object.assign(customModel, {
+    manufacturer: '',
+    modelName: '',
+    modelCode: '',
+    osFamily: 'WINDOWS',
+  })
   templateItems.value = []
   checklistGeneration.value = null
   confirmedFeatures.value = []
@@ -381,9 +430,57 @@ async function loadModels() {
   templateItems.value = []
   checklistGeneration.value = null
   confirmedFeatures.value = []
-  models.value = form.categoryId
-    ? await getDeviceModels({ categoryId: form.categoryId, page: 0, size: 100 })
-    : []
+  models.value = []
+  modelKeyword.value = ''
+  modelLoadError.value = ''
+  isCustomModelMode.value = false
+  if (!form.categoryId) return
+  isLoadingModels.value = true
+  try {
+    models.value = await getDeviceModels({ categoryId: form.categoryId, page: 0, size: 100 })
+  } catch (error) {
+    modelLoadError.value = error.message || '기기 모델 목록을 불러오지 못했습니다.'
+  } finally {
+    isLoadingModels.value = false
+  }
+}
+
+function openCustomModelInput() {
+  if (!supportsCustomModel.value || editingId.value) return
+  form.deviceModelId = ''
+  templateItems.value = []
+  checklistGeneration.value = null
+  confirmedFeatures.value = []
+  customModel.osFamily = 'WINDOWS'
+  isCustomModelMode.value = true
+}
+
+async function registerCustomModel() {
+  errorMessage.value = ''
+  if (!customModel.manufacturer.trim() || !customModel.modelName.trim()) {
+    errorMessage.value = '제조사와 모델명을 입력해 주세요.'
+    return
+  }
+  isCreatingCustomModel.value = true
+  try {
+    const created = await createDeviceModel({
+      categoryId: Number(form.categoryId),
+      manufacturer: customModel.manufacturer.trim(),
+      modelName: customModel.modelName.trim(),
+      modelCode: customModel.modelCode.trim() || null,
+      osFamily: customModel.osFamily,
+    })
+    if (!models.value.some((item) => item.deviceModelId === created.deviceModelId)) {
+      models.value.push(created)
+    }
+    form.deviceModelId = created.deviceModelId
+    isCustomModelMode.value = false
+    await loadTemplatePreview()
+  } catch (error) {
+    errorMessage.value = error.message || '직접 입력한 모델을 등록하지 못했습니다.'
+  } finally {
+    isCreatingCustomModel.value = false
+  }
 }
 
 async function loadTemplatePreview() {
@@ -965,19 +1062,146 @@ onMounted(async () => {
               <label class="text-sm font-semibold text-text-main">기기 모델<span class="ml-0.5 text-red-500">*</span>
                 <select
                   v-model="form.deviceModelId"
-                  :disabled="Boolean(editingId) || !form.categoryId"
+                  :disabled="Boolean(editingId) || !form.categoryId || isLoadingModels || isCustomModelMode"
                   required
                   class="mt-2 w-full rounded-md border border-border bg-bg px-3 py-3 font-normal outline-none focus:border-primary disabled:opacity-60"
                   @change="loadTemplatePreview"
                 >
-                  <option value="">기기 모델 선택</option><option
-                    v-for="item in models"
-                    :key="item.deviceModelId"
-                    :value="item.deviceModelId"
-                  >{{ item.manufacturerName }} {{ item.modelName }}</option>
+                  <option value="">
+                    {{ isLoadingModels ? '모델 목록 불러오는 중…' : '기기 모델 선택' }}
+                  </option>
+                  <optgroup
+                    v-for="group in modelGroups"
+                    :key="group.manufacturer"
+                    :label="group.manufacturer"
+                  >
+                    <option
+                      v-for="item in group.items"
+                      :key="item.deviceModelId"
+                      :value="item.deviceModelId"
+                    >
+                      {{ item.modelName }}{{ item.modelCode ? ` (${item.modelCode})` : '' }}
+                    </option>
+                  </optgroup>
                 </select>
               </label>
             </div>
+
+            <div
+              v-if="form.categoryId"
+              class="mt-4 rounded-lg border border-border bg-bg p-4"
+            >
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <label class="min-w-0 flex-1 text-sm font-semibold text-text-main">
+                  모델 검색
+                  <input
+                    v-model.trim="modelKeyword"
+                    type="search"
+                    :disabled="isLoadingModels || isCustomModelMode"
+                    placeholder="제조사, 모델명 또는 모델 코드"
+                    class="mt-2 w-full rounded-md border border-border bg-surface px-3 py-2.5 font-normal outline-none focus:border-primary disabled:opacity-60"
+                  >
+                </label>
+                <button
+                  v-if="supportsCustomModel && !editingId"
+                  type="button"
+                  class="rounded-md border border-primary px-4 py-2.5 text-sm font-bold text-primary"
+                  @click="isCustomModelMode ? (isCustomModelMode = false) : openCustomModelInput()"
+                >
+                  {{ isCustomModelMode ? '목록에서 선택' : '모델 직접 입력' }}
+                </button>
+              </div>
+              <p
+                v-if="modelLoadError"
+                role="alert"
+                class="mt-3 text-sm text-red-600"
+              >
+                {{ modelLoadError }}
+              </p>
+              <p
+                v-else-if="!isLoadingModels && !isCustomModelMode && modelGroups.length === 0"
+                class="mt-3 text-sm text-text-sub"
+              >
+                조건에 맞는 모델이 없습니다.
+              </p>
+              <p
+                v-if="!supportsCustomModel"
+                class="mt-3 text-xs text-text-sub"
+              >
+                목록에 없는 휴대폰·태블릿 모델은 체크리스트 담당자의 게시 템플릿이 준비된 뒤 추가됩니다.
+              </p>
+            </div>
+
+            <section
+              v-if="isCustomModelMode"
+              class="mt-4 rounded-lg border border-primary/30 bg-accent/50 p-4"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <h3 class="text-sm font-bold text-text-main">
+                    노트북 모델 직접 입력
+                  </h3>
+                  <p class="mt-1 text-xs leading-5 text-text-sub">
+                    목록에 없는 Windows·Linux 노트북만 등록할 수 있습니다.
+                  </p>
+                </div>
+                <BaseBadge variant="gray">
+                  직접 입력
+                </BaseBadge>
+              </div>
+              <div class="mt-4 grid gap-4 sm:grid-cols-2">
+                <label class="text-sm font-semibold text-text-main">
+                  제조사<span class="ml-0.5 text-red-500">*</span>
+                  <input
+                    v-model.trim="customModel.manufacturer"
+                    maxlength="50"
+                    placeholder="예: Samsung"
+                    class="mt-2 w-full rounded-md border border-border bg-surface px-3 py-2.5 font-normal outline-none focus:border-primary"
+                  >
+                </label>
+                <label class="text-sm font-semibold text-text-main">
+                  모델명<span class="ml-0.5 text-red-500">*</span>
+                  <input
+                    v-model.trim="customModel.modelName"
+                    maxlength="100"
+                    placeholder="예: Galaxy Book5 Pro"
+                    class="mt-2 w-full rounded-md border border-border bg-surface px-3 py-2.5 font-normal outline-none focus:border-primary"
+                  >
+                </label>
+                <label class="text-sm font-semibold text-text-main">
+                  모델 코드
+                  <input
+                    v-model.trim="customModel.modelCode"
+                    maxlength="50"
+                    placeholder="예: NT960XHA-KC51G"
+                    class="mt-2 w-full rounded-md border border-border bg-surface px-3 py-2.5 font-normal outline-none focus:border-primary"
+                  >
+                </label>
+                <label class="text-sm font-semibold text-text-main">
+                  운영체제<span class="ml-0.5 text-red-500">*</span>
+                  <select
+                    v-model="customModel.osFamily"
+                    class="mt-2 w-full rounded-md border border-border bg-surface px-3 py-2.5 font-normal outline-none focus:border-primary"
+                  >
+                    <option value="WINDOWS">
+                      Windows
+                    </option>
+                    <option value="LINUX">
+                      Linux
+                    </option>
+                  </select>
+                </label>
+              </div>
+              <div class="mt-4 flex justify-end">
+                <BaseButton
+                  type="button"
+                  :disabled="isCreatingCustomModel"
+                  @click="registerCustomModel"
+                >
+                  {{ isCreatingCustomModel ? '모델 등록 중…' : '이 모델 사용하기' }}
+                </BaseButton>
+              </div>
+            </section>
 
             <p
               v-if="isGeneratingChecklist"

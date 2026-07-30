@@ -5,6 +5,7 @@ import {
   completeEvidence,
   completeProductImage,
   createEvidenceUploadUrl,
+  createDeviceModel,
   createProductImageUploadUrl,
   createProduct,
   deleteProductImage,
@@ -34,7 +35,8 @@ vi.mock('../../api/products', () => ({
   completeEvidence: vi.fn(),
   completeReinspectionRequest: vi.fn(),
   completeProductImage: vi.fn(),
-  createEvidenceUploadUrl: vi.fn(),
+    createEvidenceUploadUrl: vi.fn(),
+    createDeviceModel: vi.fn(),
   createProductImageUploadUrl: vi.fn(),
   createProduct: vi.fn(),
   generateChecklist: vi.fn(),
@@ -137,6 +139,16 @@ describe('ProductRegisterPage', () => {
       manufacturerName: 'Samsung',
       modelName: 'Galaxy Book',
     }])
+    createDeviceModel.mockResolvedValue({
+      deviceModelId: 202,
+      manufacturerId: 2,
+      manufacturerName: 'LG',
+      categoryId: 10,
+      modelCode: '16Z90S',
+      modelName: 'gram 16',
+      defaultOs: 'WINDOWS',
+      active: true,
+    })
     createProduct.mockResolvedValue({ productId: 1001 })
     getChecklistTemplate.mockResolvedValue({ items: templateItems })
     generateChecklist.mockResolvedValue({
@@ -181,6 +193,65 @@ describe('ProductRegisterPage', () => {
     })
     expect(getProductChecklist).toHaveBeenCalledWith(1001)
     expect(wrapper.text()).toContain('검수용 기기 촬영')
+  })
+
+  it('모델 목록을 제조사별로 그룹화하고 검색한다', async () => {
+    getDeviceModels.mockResolvedValue([
+      {
+        deviceModelId: 101,
+        manufacturerName: 'Samsung',
+        modelName: 'Galaxy Book',
+        modelCode: 'NT750',
+      },
+      {
+        deviceModelId: 102,
+        manufacturerName: 'LG',
+        modelName: 'gram 16',
+        modelCode: '16Z90S',
+      },
+    ])
+
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await wrapper.findAll('select')[0].setValue('10')
+    await flushPromises()
+
+    expect(wrapper.findAll('optgroup').map((group) => group.attributes('label'))).toEqual([
+      'LG',
+      'Samsung',
+    ])
+
+    await wrapper.find('input[placeholder="제조사, 모델명 또는 모델 코드"]').setValue('gram')
+    expect(wrapper.findAll('optgroup')).toHaveLength(1)
+    expect(wrapper.find('optgroup').attributes('label')).toBe('LG')
+  })
+
+  it('목록에 없는 노트북 모델을 직접 등록해 체크리스트를 생성한다', async () => {
+    getDeviceCategories.mockResolvedValue([{ categoryId: 10, code: 'LAPTOP', name: '노트북' }])
+
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await wrapper.findAll('select')[0].setValue('10')
+    await flushPromises()
+
+    await buttonByText(wrapper, '모델 직접 입력').trigger('click')
+    await wrapper.find('input[placeholder="예: Samsung"]').setValue('LG')
+    await wrapper.find('input[placeholder="예: Galaxy Book5 Pro"]').setValue('gram 16')
+    await wrapper.find('input[placeholder="예: NT960XHA-KC51G"]').setValue('16Z90S')
+    await buttonByText(wrapper, '이 모델 사용하기').trigger('click')
+    await flushPromises()
+
+    expect(createDeviceModel).toHaveBeenCalledWith({
+      categoryId: 10,
+      manufacturer: 'LG',
+      modelName: 'gram 16',
+      modelCode: '16Z90S',
+      osFamily: 'WINDOWS',
+    })
+    expect(generateChecklist).toHaveBeenCalledWith({
+      deviceModelId: 202,
+      confirmedFeatures: [],
+    })
   })
 
   it('Windows 모델은 자동 생성 체크리스트와 AI 확인 후보를 보여주고 선택한 기능을 함께 보낸다', async () => {
