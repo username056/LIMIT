@@ -3,12 +3,17 @@
 ## 구현 범위
 
 - 결제 요청 생성 `POST /api/v1/payments`
+- 결제 승인(confirm) `POST /api/v1/payments/{paymentId}/confirm`
+- 결제 전 예약 취소 `POST /api/v1/payments/{paymentId}/cancel`
 - 결제 상세 조회 `GET /api/v1/payments/{paymentId}`
 - 예약 유예 시간이 지난 미결제 건 자동 만료 스케줄러
 
-PG 웹훅 승인/거절 처리, 결제 재시도, 환불, 정산은 담당 범위에서 제외했다. 이번 작업은
+PG 웹훅 승인/거절 처리, 타임아웃 후 자동 조회·복구, 결제 실패 재시도 API, 이상거래 테이블·관리자
+화면, IP 화이트리스트, 다중 PG 추상화는 이번 범위에서 제외했다. 실결제가 불가능한 Toss 테스트
+키 단계에서 상품 선택 → 결제 요청 → Toss 결제창 → 승인 → `Payment.APPROVED`/`Listing.PAID`
+전환까지의 수직 흐름을 먼저 완성하는 것을 목표로 한다. 이번 작업은
 `V20260728__add_reservation_deadline_and_payment_event_id_columns.sql` 등 선행 스키마 PR에서
-이미 추가된 `payment`, `listing` 컬럼 위에 최소한의 생성·조회 유스케이스만 올린다.
+이미 추가된 `payment`, `listing` 컬럼 위에 최소한의 생성·승인·조회 유스케이스만 올린다.
 
 ## 동작
 
@@ -19,6 +24,26 @@ PG 웹훅 승인/거절 처리, 결제 재시도, 환불, 정산은 담당 범�
 
 결제 금액은 클라이언트 입력을 신뢰하지 않고 항상 `Listing.price`에서 가져온다.
 
+`Payment`는 Toss 결제창에 전달할 `providerOrderId`를 발급한다(`PAY-{paymentId}-{attemptNo}`).
+`paymentId`는 `IDENTITY` 채번이라 최초 insert 시점엔 값이 없어, 저장(`save`) 직후 같은
+트랜잭션 안에서 `Payment.assignProviderOrderId()`를 호출해 채운다. 컬럼은 이 때문에 nullable로
+두었다 — 커밋 전 짧은 순간 DB 값이 NULL인 행이 존재하지만 트랜잭션 격리로 다른 트랜잭션에는
+보이지 않고, 실패 시 트랜잭션 전체가 롤백돼 NULL이 커밋되는 경우는 없다. UNIQUE 제약은 MySQL이
+NULL 다중 값을 허용하므로 이 일시 상태와 충돌하지 않는다.
+
+`PaymentResponse.providerOrderId`로 노출되며 `attemptNo`가 1일 때의 최초 발급값이다. 같은
+결제창 세션을 유지하는 동안은 이 값을 그대로 재사용하고, 새 결제창을 열 때만
+`PaymentService.retryAttempt()`가 `attemptNo`를 올리고 새 providerOrderId를 발급한다. 이때 매물
+예약(`Listing.reservedUntil`)이 이미 만료됐으면 `PAYMENT_RETRY_NOT_ALLOWED`(`PAY007`, 409)로
+거부해 만료된 매물에 새 providerOrderId가 계속 발급되는 것을 막는다 — 이 확인은
+`ListingService.isReservationActive(listingId, buyerId)`를 통해서만 하고 `Payment`가 `Listing`
+엔티티를 직접 참조하지 않는다. `retryAttempt()`는 이번 PR에서 API로는 아직 열지 않았다 — Toss
+confirm/웹훅 연동(후속 PR)에서 실제 재시도 진입점이 정해지면 그때 컨트롤러에 연결한다.
+
+Toss confirm 요청에 쓸 멱등키는 이 `idempotencyKey`(결제 생성 요청 중복 방지용)와 별개로,
+confirm 연동 시 `payment-confirm-{paymentId}-{attemptNo}` 형태로 결정적으로 생성한다(별도 컬럼
+불필요). 재시도로 새 시도가 열리면 새 값이 나오므로 이전 승인 결과가 실수로 재사용되지 않는다.
+
 `idempotencyKey`는 클라이언트가 생성해 전달하며, 같은 구매자가 같은 키로 같은 매물·결제수단을
 재요청하면 새로 예약을 시도하지 않고 기존 결제 요청을 그대로 반환한다
 (`PaymentRepository.findByBuyerIdAndIdempotencyKey`로 구매자 범위까지 확인). 다른 구매자가 같은
@@ -26,6 +51,16 @@ PG 웹훅 승인/거절 처리, 결제 재시도, 환불, 정산은 담당 범�
 `IDEMPOTENCY_KEY_CONFLICT`(`PAY004`, 409)를 반환한다. 이 유니크 제약 위반은 재시도해도 해소되지
 않는 영구적 충돌일 수 있어(다른 구매자가 이미 그 키를 점유), 감지 즉시 재조회로 복구를 시도하고
 내 것이 아니면 남은 재시도를 소진하지 않고 바로 `IDEMPOTENCY_KEY_CONFLICT`로 응답한다.
+
+`POST /api/v1/payments/{paymentId}/cancel`은 Toss 결제창 진입 전(`REQUESTED`) 단계에서 구매자가
+명시적으로 취소할 때 쓴다. 결제창을 취소하거나 브라우저를 닫아도 자동 만료 스케줄러가 예약
+유예(`reservation-ttl-minutes`, 기본 30분)를 다 채워야 매물을 풀어주므로, 이 API가 그 대기 없이
+`Payment.CANCELLED` 전환과 `Listing.cancelReservation()`(`RESERVED -> ON_SALE`)을 한 트랜잭션으로
+묶어 즉시 처리한다 — 스케줄러는 이 호출이 유실됐을 때의 최종 안전망으로 계속 남는다. 이미
+`CANCELLED`·`EXPIRED`인 결제는 같은 결과를 그대로 반환하고(멱등), `APPROVED`·`FAILED`처럼 이미
+진행된 결제는 `PAYMENT_NOT_CANCELLABLE`(`PAY015`, 409)로 거부해 환불 흐름으로 유도한다.
+프론트엔드는 `PurchaseFailPage`가 마운트될 때 `paymentId`가 있으면 이 API를 호출하고, 실패해도
+화면에는 영향을 주지 않는다(스케줄러가 안전망이므로).
 
 동일 매물에 대한 서로 다른 구매자의 동시 요청은 `Listing`의 낙관적 락(`payment_version` 아님,
 `Listing.version`) 경합으로 이어질 수 있어, 실패한 트랜잭션을 버리고 새 트랜잭션으로 최대 3회까지
@@ -37,6 +72,24 @@ PG 웹훅 승인/거절 처리, 결제 재시도, 환불, 정산은 담당 범�
 `GET /api/v1/payments/{paymentId}`는 결제를 요청한 본인만 조회할 수 있다
 (`PAYMENT_ACCESS_DENIED`).
 
+`POST /api/v1/payments/{paymentId}/confirm`은 Toss 결제창에서 승인된 결제(`paymentKey`, `orderId`,
+`amount`)를 서버가 최종 확정한다. 클라이언트가 보낸 `orderId`·`amount`는 신뢰하지 않고 저장된
+`Payment.providerOrderId`, `requestedAmount`와 대조하며 다르면 각각 `PAYMENT_ORDER_ID_MISMATCH`
+(`PAY008`, 400), `PAYMENT_AMOUNT_MISMATCH`(`PAY009`, 400)로 거부한다. 결제 상태가 `REQUESTED`가
+아니면 Toss API를 호출하지 않고 바로 `PAYMENT_NOT_CONFIRMABLE`(`PAY010`, 409)로 거부한다(중복
+승인·재시도 중 상태가 바뀐 요청 방지). Toss confirm 호출에는 시도(`attemptNo`)별로 고정된
+`payment-confirm-{paymentId}-{attemptNo}` 멱등키를 사용해 같은 시도를 여러 번 승인 요청해도 Toss가
+같은 결과를 반환하도록 한다.
+
+Toss 응답이 실패면 `TossPaymentClientException.isRetryable()`로 갈린다 — 5xx나 일부 일시적 코드는
+`Payment` 상태를 건드리지 않고 `PAYMENT_CONFIRM_RETRYABLE`(`PAY011`, 503)만 반환해 클라이언트가
+같은 멱등키로 다시 confirm을 호출하게 한다. 그 외(카드 거절 등)는 `Payment.fail()`로 `FAILED`
+전환 후 Toss 메시지를 그대로 담아 `PAYMENT_CONFIRM_REJECTED`(`PAY012`, 422)를 반환한다. 승인 성공
+시 `Payment.approve()`(`REQUESTED -> APPROVED`)와 `ListingService.markPaid()`(`RESERVED -> PAID`)를
+같은 트랜잭션에서 호출한다 — Toss 승인 후 `markPaid()`가 실패(예: 예약이 이미 다른 경로로
+바뀐 경우)하면 트랜잭션이 롤백되어 우리 DB는 `REQUESTED`로 남지만 Toss 쪽은 이미 승인된 상태로
+남는 불일치가 생길 수 있다. 웹훅·조회 기반 재조정은 아직 없으므로 후속 과제로 남긴다.
+
 ## 도메인 경계
 
 결제 도메인은 매물 상태 전이를 직접 다루지 않고 기존 `ListingService.reserve(listingId, buyerId)`를
@@ -44,7 +97,10 @@ PG 웹훅 승인/거절 처리, 결제 재시도, 환불, 정산은 담당 범�
 별도로 추가해 예약 전에 먼저 조회한다. `LISTING_NOT_FOUND`, `LISTING_NOT_ON_SALE` 오류는
 `ListingService`가 이미 정의한 것을 그대로 사용하고, 결제 도메인은 `PAYMENT_NOT_FOUND`,
 `PAYMENT_ACCESS_DENIED`, `SELF_PURCHASE_NOT_ALLOWED`, `IDEMPOTENCY_KEY_CONFLICT`,
-`PAYMENT_REQUEST_CONFLICT`, `PAYMENT_NOT_EXPIRABLE`(`PAY001~006`)만 새로 추가했다.
+`PAYMENT_REQUEST_CONFLICT`, `PAYMENT_NOT_EXPIRABLE`, `PAYMENT_RETRY_NOT_ALLOWED`,
+`PAYMENT_ORDER_ID_MISMATCH`, `PAYMENT_AMOUNT_MISMATCH`, `PAYMENT_NOT_CONFIRMABLE`,
+`PAYMENT_CONFIRM_RETRYABLE`, `PAYMENT_CONFIRM_REJECTED`(`PAY001~012`)만 새로 추가했다. confirm은
+성공 시에만 `ListingService.markPaid(listingId)`로 매물 상태 전이를 위임한다.
 
 예약 만료 스케줄러도 같은 원칙을 따른다 — product 도메인의 `Listing`/`ListingRepository`를
 직접 참조하지 않고, payment 도메인 안의 `ExpiredReservationCandidateReader`가 listing 테이블을
@@ -88,8 +144,14 @@ PG 웹훅 승인/거절 처리, 결제 재시도, 환불, 정산은 담당 범�
   분산 락은 후속 과제.
 - `(status, reserved_until)` 복합 인덱스가 아직 없다. 데이터가 늘면 스케줄러 조회가 매물 테이블을
   풀스캔할 수 있어 운영 전 인덱스 마이그레이션이 필요하다.
-- PG 연동, 웹훅 승인(`Payment.approve`), 결제 실패·재시도(`Payment.retry`)는 이 PR에서 다루지
-  않았다.
+- PG 웹훅 승인/거절 처리는 이번 범위에 없다. confirm은 클라이언트가 successUrl로 돌아와 명시적으로
+  호출해야만 승인되므로, 결제창을 닫거나 브라우저가 successUrl 진입 전에 종료되면 Toss는 승인됐지만
+  우리 시스템은 `REQUESTED`로 남는 상태가 생길 수 있다. 웹훅 또는 주기적 조회 복구는 후속 과제.
+- confirm 성공 경로에서 `Payment.approve()` 이후 `ListingService.markPaid()`가 실패하면 트랜잭션이
+  롤백돼 Toss 승인과 우리 DB 상태가 어긋날 수 있다(위 "동작" 절 참고). 결제 취소·재조정 로직은
+  아직 없다.
+- `PaymentService.retryAttempt()`(재시도 게이트)는 이번에도 API로 열지 않았다 — 결제창을 다시 열 때
+  같은 `providerOrderId`를 재사용할지, 새 시도를 발급할지는 프론트 재시도 흐름이 정해지면 연결한다.
 
 ## Swagger 그룹
 

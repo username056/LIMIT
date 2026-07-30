@@ -37,6 +37,7 @@ class ReinspectionChatNotificationServiceTests {
                 ReinspectionNotificationEvent.Type.REQUESTED,
                 10L,
                 "request-key",
+                100L,
                 20L,
                 30L,
                 40L,

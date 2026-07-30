@@ -78,6 +78,38 @@ run_backend_scripts() {
   bash -n scripts/smoke-test.sh
   grep -Fq 'ports: ["127.0.0.1:8081:8080"]' infra/compose.prod.yml
   grep -Fq 'ports: ["127.0.0.1:8082:8080"]' infra/compose.prod.yml
+  grep -Fq -- '- /var/log/nginx:/var/log/nginx:ro' infra/compose.prod.yml
+  grep -Fq 'local.file_match "nginx_access"' infra/monitoring/alloy/config.alloy
+  grep -Fq 'loki.source.file "nginx_access"' infra/monitoring/alloy/config.alloy
+  grep -Fq 'regex         = "limit-(local|prod)"' infra/monitoring/alloy/config.alloy
+  grep -Fq 'tail_from_end = true' infra/monitoring/alloy/config.alloy
+  grep -Fq 'log_format limit_observability' infra/nginx/limit.conf
+  grep -Fq 'path=$uri' infra/nginx/limit.conf
+  chat_ws_block=$(awk '
+    /^[[:space:]]*location = \/ws[[:space:]]*\{/ {
+      in_block = 1
+    }
+    in_block {
+      print
+      line = $0
+      depth += gsub(/\{/, "{", line)
+      line = $0
+      depth -= gsub(/\}/, "}", line)
+      if (depth == 0) {
+        exit
+      }
+    }
+  ' infra/nginx/limit.conf)
+  test -n "$chat_ws_block"
+  printf '%s\n' "$chat_ws_block" | grep -Fq 'proxy_pass http://limit_backend;'
+  printf '%s\n' "$chat_ws_block" | grep -Fq 'proxy_http_version 1.1;'
+  printf '%s\n' "$chat_ws_block" | grep -Fq 'proxy_set_header Upgrade $http_upgrade;'
+  printf '%s\n' "$chat_ws_block" | grep -Fq 'proxy_set_header Connection $limit_connection_upgrade;'
+  if sed -n '/^log_format limit_observability/,/;$/p' infra/nginx/limit.conf \
+      | grep -Eq '\$(request_uri|args|remote_addr|http_referer)'; then
+    echo "Nginx observability log format must not include query strings or personal data" >&2
+    exit 1
+  fi
   grep -Fq '"${compose[@]}" logs --tail "${DEPLOY_FAILURE_LOG_LINES:-200}" "$target_service"' scripts/deploy-blue-green.sh
   grep -Fq 'nginx_target="/etc/nginx/conf.d/limit.conf"' scripts/deploy-monitoring.sh
   if grep -Fq '/actuator/prometheus' infra/nginx/limit.conf; then

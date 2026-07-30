@@ -95,6 +95,55 @@ class PaymentSecurityControllerTests {
     }
 
     @Test
+    void confirmPaymentWithoutTokenIsUnauthorized() throws Exception {
+        mockMvc.perform(
+                        post("/api/v1/payments/{paymentId}/confirm", 500L)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        """
+                                        {"paymentKey": "payment-key-1", "orderId": "PAY-500-1", "amount": 650000}
+                                        """))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void cancelPaymentWithoutTokenIsUnauthorized() throws Exception {
+        mockMvc.perform(post("/api/v1/payments/{paymentId}/cancel", 500L))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void cancelPaymentReturnsConflictWithCommonEnvelopeWhenNotCancellable() throws Exception {
+        when(paymentService.cancel(BUYER_ID, 500L))
+                .thenThrow(new BusinessException(ErrorCode.PAYMENT_NOT_CANCELLABLE));
+
+        mockMvc.perform(
+                        post("/api/v1/payments/{paymentId}/cancel", 500L)
+                                .header("Authorization", memberBearer(BUYER_ID)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("PAY015"));
+    }
+
+    @Test
+    void confirmPaymentReturnsUnprocessableEntityWithCommonEnvelopeWhenTossRejects() throws Exception {
+        when(paymentService.confirm(org.mockito.ArgumentMatchers.eq(BUYER_ID), org.mockito.ArgumentMatchers.eq(500L), any()))
+                .thenThrow(new BusinessException(ErrorCode.PAYMENT_CONFIRM_REJECTED, "카드 승인이 거절되었습니다."));
+
+        mockMvc.perform(
+                        post("/api/v1/payments/{paymentId}/confirm", 500L)
+                                .header("Authorization", memberBearer(BUYER_ID))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        """
+                                        {"paymentKey": "payment-key-1", "orderId": "PAY-500-1", "amount": 650000}
+                                        """))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.error.code").value("PAY012"))
+                .andExpect(jsonPath("$.error.message").value("카드 승인이 거절되었습니다."))
+                .andExpect(jsonPath("$.traceId").exists());
+    }
+
+    @Test
     void getPaymentWithoutTokenIsUnauthorized() throws Exception {
         mockMvc.perform(get("/api/v1/payments/{paymentId}", 500L))
                 .andExpect(status().isUnauthorized());
@@ -168,10 +217,12 @@ class PaymentSecurityControllerTests {
                                 new com.c203.limit.domain.payment.dto.response.PaymentResponse(
                                         500L,
                                         100L,
+                                        "PAY-test-order-1",
                                         "REQUESTED",
                                         PaymentMethod.CARD.name(),
                                         1,
                                         java.math.BigDecimal.valueOf(650_000),
+                                        null,
                                         null,
                                         java.time.OffsetDateTime.now(),
                                         null));

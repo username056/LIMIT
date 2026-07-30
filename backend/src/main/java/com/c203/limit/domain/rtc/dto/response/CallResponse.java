@@ -12,4 +12,6 @@ public record CallResponse(
         String memo,
         String cancelReason,
         Long rtcSessionId,
-        boolean incoming) {}
+        boolean incoming,
+        String counterpartName,
+        LocalDateTime sessionExpiresAt) {}

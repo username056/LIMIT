@@ -3,9 +3,14 @@ import { onMounted, ref, watch } from 'vue'
 import MyPageLayout from '../layouts/MyPageLayout.vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseBadge from '../components/BaseBadge.vue'
-import BaseTable from '../components/BaseTable.vue'
+import ProductCard from '../components/ProductCard.vue'
 import { deleteProduct, getMyProducts, transitionProductStatus } from '../api/products'
-import { productStatusLabel } from '../utils/productStatus'
+import {
+  canSellerMarkSold,
+  canSellerReopen,
+  isProductEditable,
+  productStatusLabel,
+} from '../utils/productStatus'
 
 // 이 화면은 내가 등록한 상품을 확인하고 관리하는 곳입니다.
 // 등록·수정 위자드는 ProductRegisterPage로 분리되어 있습니다.
@@ -59,6 +64,35 @@ async function publish(product) {
   }
 }
 
+// 서비스 결제를 거치지 않은 직거래를 판매자가 직접 닫는 경로입니다.
+async function markSold(product) {
+  const confirmed = window.confirm(
+    `‘${product.name}’을 판매 완료로 바꿀까요?\n\n`
+    + '구매자에게 더 이상 노출되지 않습니다. 거래가 깨지면 다시 판매 중으로 되돌릴 수 있습니다.',
+  )
+  if (!confirmed) return
+  errorMessage.value = ''
+  try {
+    await transitionProductStatus(product.productId, 'SOLD', '판매자 직거래 판매 완료')
+    notice.value = '판매 완료로 처리했습니다.'
+    await loadProducts(pageMeta.value.page)
+  } catch (error) {
+    errorMessage.value = error.message || '판매 완료로 처리하지 못했습니다.'
+  }
+}
+
+// 직거래 약속이 깨졌을 때 상품을 새로 등록하지 않고 원래 글로 돌아가는 경로입니다.
+async function reopen(product) {
+  errorMessage.value = ''
+  try {
+    await transitionProductStatus(product.productId, 'ON_SALE', '거래 파기로 판매 재개')
+    notice.value = '다시 판매 중으로 바꿨습니다.'
+    await loadProducts(pageMeta.value.page)
+  } catch (error) {
+    errorMessage.value = error.message || '판매 중으로 되돌리지 못했습니다.'
+  }
+}
+
 watch(statusFilter, () => loadProducts(0))
 onMounted(() => loadProducts(0))
 </script>
@@ -109,6 +143,8 @@ onMounted(() => loadProducts(0))
           판매 중
         </option><option value="HIDDEN">
           숨김
+        </option><option value="SOLD">
+          판매 완료
         </option>
       </select>
     </div>
@@ -118,61 +154,88 @@ onMounted(() => loadProducts(0))
     >
       상품을 불러오는 중입니다.
     </p>
-    <BaseTable
-      v-else
-      :columns="['상품', '상태', '체크리스트', '관리']"
+    <!--
+      상품 목록과 같은 카드를 씁니다. 판매자도 자기 대표 이미지가 구매자에게 어떻게 보이는지
+      같은 모양으로 확인할 수 있어야 합니다. 관리 버튼은 카드 하단 슬롯에 둡니다.
+    -->
+    <div
+      v-else-if="products.length"
+      class="grid gap-5 sm:grid-cols-2 xl:grid-cols-3"
     >
-      <tr
+      <ProductCard
         v-for="product in products"
         :key="product.productId"
+        :product="product"
+        :title-to="{ name: 'product-detail', params: { productId: product.productId } }"
       >
-        <td class="px-4 py-3">
-          <RouterLink
-            :to="{ name: 'product-detail', params: { productId: product.productId } }"
-            class="font-semibold text-text-main hover:text-primary hover:underline"
+        <template #image-overlay>
+          <BaseBadge
+            :variant="product.status === 'ON_SALE' ? 'primary' : 'gray'"
+            class="absolute left-3 top-3"
           >
-            {{ product.name }}
-          </RouterLink><p class="text-xs text-text-sub">
-            #{{ product.productId }}
-          </p>
-        </td>
-        <td class="px-4 py-3">
-          <BaseBadge :variant="product.status === 'ON_SALE' ? 'primary' : 'gray'">
             {{ productStatusLabel(product.status) }}
           </BaseBadge>
-        </td>
-        <td class="px-4 py-3 text-sm text-text-sub">
-          {{ product.completedItemCount }} / {{ product.requiredItemCount }}
-        </td>
-        <td class="space-x-3 px-4 py-3 text-sm">
-          <RouterLink
-            class="text-primary"
-            :to="{ name: 'seller-product-edit', params: { productId: product.productId } }"
-          >
-            수정
-          </RouterLink><button
-            v-if="product.status === 'DRAFT'"
-            class="text-primary"
-            @click="publish(product)"
-          >
-            판매 시작
-          </button><button
-            class="text-red-600"
-            @click="remove(product)"
-          >
-            삭제
-          </button>
-        </td>
-      </tr>
-      <tr v-if="!products.length">
-        <td
-          colspan="4"
-          class="px-4 py-12 text-center text-sm text-text-sub"
-        >
-          등록한 상품이 없습니다.
-        </td>
-      </tr>
-    </BaseTable>
+        </template>
+        <template #footer>
+          <p class="truncate text-xs text-text-sub">
+            #{{ product.productId }} · 검증 {{ product.completedItemCount }}/{{ product.requiredItemCount }}
+          </p>
+          <div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+            <RouterLink
+              v-if="isProductEditable(product.status)"
+              class="font-semibold text-primary"
+              :to="{ name: 'seller-product-edit', params: { productId: product.productId } }"
+            >
+              수정
+            </RouterLink>
+            <span
+              v-else
+              class="text-text-sub"
+              title="거래가 시작된 상품은 수정할 수 없습니다."
+            >
+              수정 불가
+            </span>
+            <button
+              v-if="product.status === 'DRAFT'"
+              type="button"
+              class="font-semibold text-primary"
+              @click="publish(product)"
+            >
+              판매 시작
+            </button>
+            <button
+              v-if="canSellerMarkSold(product.status)"
+              type="button"
+              class="font-semibold text-primary"
+              @click="markSold(product)"
+            >
+              판매 완료 처리
+            </button>
+            <button
+              v-if="canSellerReopen(product.status)"
+              type="button"
+              class="font-semibold text-primary"
+              @click="reopen(product)"
+            >
+              다시 판매하기
+            </button>
+            <button
+              type="button"
+              class="ml-auto font-semibold text-red-600"
+              @click="remove(product)"
+            >
+              삭제
+            </button>
+          </div>
+        </template>
+      </ProductCard>
+    </div>
+    <p
+      v-else
+      class="rounded-lg border border-dashed border-border bg-surface px-6 py-16 text-center text-sm text-text-sub"
+    >
+      등록한 상품이 없습니다.
+    </p>
     <nav
       v-if="!isLoading && pageMeta.totalPages > 1"
       class="mt-6 flex items-center justify-center gap-4"

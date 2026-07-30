@@ -24,6 +24,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -91,12 +92,49 @@ public class DiagnosisAggregationService {
         FieldSource ocr = collectOcrValues(itemId).get(fieldName);
         FieldSource fileParse = collectFileParseValues(itemId).get(fieldName);
         FieldSource primary = fileParse != null ? fileParse : ocr;
+        if (primary == null) {
+            primary = fallbackEditTarget(itemId);
+        }
 
         return new DiagnosisFieldValue(
                 ocr == null ? null : ocr.value(),
                 fileParse == null ? null : fileParse.value(),
                 primary == null ? null : primary.evidenceId(),
                 primary == null ? null : primary.sourceType());
+    }
+
+    /**
+     * 필드가 한 번도 자동 추출되지 못했더라도, 그 필드를 만들어낼 수 있는 유형의 증거 자체는 이미
+     * 올라와 있으면 그 증거를 교정 대상으로 잡아 판매자가 값을 직접 채워 넣을 수 있게 한다. 어떤 증거도
+     * 없으면(아직 아무것도 안 올렸으면) null을 돌려줘 여전히 수정 불가로 남긴다.
+     */
+    private FieldSource fallbackEditTarget(Long itemId) {
+        ListingChecklistItem item = listingChecklistItemRepository.findById(itemId).orElse(null);
+        if (item == null) {
+            return null;
+        }
+        if (item.getEvidenceType() == EvidenceType.PHOTO) {
+            return latestEvidenceId(itemId, EvidenceType.PHOTO)
+                    .map(evidenceId -> new FieldSource(null, evidenceId, DiagnosisSourceType.OCR))
+                    .orElse(null);
+        }
+        if (item.getEvidenceType() == EvidenceType.DIAGNOSTIC_FILE) {
+            DiagnosisSourceType sourceType =
+                    "BATTERY_REPORT".equals(item.getParserType())
+                            ? DiagnosisSourceType.BATTERY_REPORT
+                            : DiagnosisSourceType.DXDIAG;
+            return latestEvidenceId(itemId, EvidenceType.DIAGNOSTIC_FILE)
+                    .map(evidenceId -> new FieldSource(null, evidenceId, sourceType))
+                    .orElse(null);
+        }
+        return null;
+    }
+
+    private Optional<Long> latestEvidenceId(Long itemId, EvidenceType evidenceType) {
+        return evidenceRepository.findAllByListingChecklistItem_Id(itemId).stream()
+                .filter(evidence -> evidence.getEvidenceType() == evidenceType)
+                .max(Comparator.comparing(Evidence::getUploadedAt))
+                .map(Evidence::getId);
     }
 
     private void verifyOwnership(ListingChecklistItem item, Long sellerId) {

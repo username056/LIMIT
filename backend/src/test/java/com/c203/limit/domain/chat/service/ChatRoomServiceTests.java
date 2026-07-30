@@ -36,6 +36,7 @@ import com.c203.limit.domain.chat.repository.ChatRoomContextReader.ChatRoomConte
 import com.c203.limit.domain.chat.repository.ChatRoomParticipantRepository;
 import com.c203.limit.domain.chat.repository.ChatMessageProjection;
 import com.c203.limit.domain.chat.repository.ChatMessageRepository;
+import com.c203.limit.domain.chat.repository.ChatOutboxEventRepository;
 import com.c203.limit.domain.chat.repository.ChatMediaRepository;
 import com.c203.limit.domain.chat.repository.ChatMessageMediaRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomSummaryProjection;
@@ -44,6 +45,7 @@ import com.c203.limit.domain.chat.repository.ListingChatReader.ListingChatInfo;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import com.c203.limit.global.response.CursorResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.c203.limit.domain.chat.dto.response.ChatRoomSummaryResponse;
 import com.c203.limit.domain.chat.domain.MessageStatus;
 import com.c203.limit.domain.chat.domain.MessageType;
@@ -62,13 +64,15 @@ class ChatRoomServiceTests {
     @Mock ChatMessageMediaRepository chatMessageMediaRepository;
     @Mock ChatRoomContextReader contextReader;
     @Mock ChatRoomCreator creator;
+    @Mock ChatOutboxEventRepository outboxEventRepository;
     ChatRoomService service;
 
     @BeforeEach
     void setUp() {
         service = new ChatRoomService(
                 listingReader, chatRoomRepository, participantRepository, chatMessageRepository,
-                chatMediaRepository, chatMessageMediaRepository, contextReader, creator);
+                chatMediaRepository, chatMessageMediaRepository, contextReader, creator,
+                outboxEventRepository, new ObjectMapper());
     }
 
     @Test
@@ -128,6 +132,23 @@ class ChatRoomServiceTests {
         Long roomId = service.getOrCreateChatRoom(LISTING_ID, BUYER_ID, SELLER_ID);
 
         assertThat(roomId).isEqualTo(100L);
+    }
+
+    @Test
+    void reusesLatestRoomWithSameCounterpartForReinspection() {
+        ChatRoom room = room(100L);
+        when(listingReader.findById(LISTING_ID))
+                .thenReturn(Optional.of(new ListingChatInfo(LISTING_ID, SELLER_ID, "PAID")));
+        when(chatRoomRepository.findByListingIdAndBuyerIdAndSellerId(
+                        LISTING_ID, BUYER_ID, SELLER_ID))
+                .thenReturn(Optional.empty());
+        when(chatRoomRepository.findFirstByBuyerIdAndSellerIdOrderByIdDesc(BUYER_ID, SELLER_ID))
+                .thenReturn(Optional.of(room));
+
+        Long roomId = service.getOrCreateChatRoom(LISTING_ID, BUYER_ID, SELLER_ID);
+
+        assertThat(roomId).isEqualTo(100L);
+        verifyNoInteractions(creator);
     }
 
     @Test

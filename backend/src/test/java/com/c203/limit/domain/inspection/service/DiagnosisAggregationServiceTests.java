@@ -12,6 +12,8 @@ import com.c203.limit.domain.inspection.entity.DxdiagResult;
 import com.c203.limit.domain.inspection.entity.Evidence;
 import com.c203.limit.domain.inspection.entity.ListingChecklistItem;
 import com.c203.limit.domain.inspection.entity.OcrResult;
+import com.c203.limit.domain.inspection.enums.DiagnosisFieldName;
+import com.c203.limit.domain.inspection.enums.DiagnosisSourceType;
 import com.c203.limit.domain.inspection.enums.EvidenceType;
 import com.c203.limit.domain.inspection.enums.OcrFieldType;
 import com.c203.limit.domain.inspection.enums.ParseStatus;
@@ -288,6 +290,70 @@ class DiagnosisAggregationServiceTests {
 
         assertThat(response.getItemId()).isEqualTo(ITEM_ID);
         assertThat(response.getFields()).isEmpty();
+    }
+
+    @Test
+    void fieldValueOffersOcrEvidenceAsEditTargetWhenFieldWasNeverDetected() {
+        when(listingChecklistItemRepository.findById(ITEM_ID)).thenReturn(Optional.of(listingChecklistItem));
+        when(listingChecklistItem.getEvidenceType()).thenReturn(EvidenceType.PHOTO);
+        when(evidenceRepository.findAllByListingChecklistItem_Id(ITEM_ID))
+                .thenReturn(List.of(photoEvidence()));
+        when(ocrResultRepository.findAllByEvidenceIdIn(anyList())).thenReturn(List.of());
+
+        DiagnosisAggregationService.DiagnosisFieldValue value =
+                service.getFieldValue(ITEM_ID, DiagnosisFieldName.MODEL_NAME);
+
+        assertThat(value.ocrValue()).isNull();
+        assertThat(value.fileParseValue()).isNull();
+        assertThat(value.sourceEvidenceId()).isEqualTo(PHOTO_EVIDENCE_ID);
+        assertThat(value.sourceType()).isEqualTo(DiagnosisSourceType.OCR);
+    }
+
+    @Test
+    void fieldValueOffersDxdiagEvidenceAsEditTargetEvenWhenParsingRowIsMissing() {
+        when(listingChecklistItemRepository.findById(ITEM_ID)).thenReturn(Optional.of(listingChecklistItem));
+        when(listingChecklistItem.getEvidenceType()).thenReturn(EvidenceType.DIAGNOSTIC_FILE);
+        when(listingChecklistItem.getParserType()).thenReturn("DXDIAG");
+        when(evidenceRepository.findAllByListingChecklistItem_Id(ITEM_ID))
+                .thenReturn(List.of(diagnosticFileEvidence()));
+        when(dxdiagResultRepository.findAllByEvidenceIdIn(anyList())).thenReturn(List.of());
+        when(batteryReportResultRepository.findAllByEvidenceIdIn(anyList())).thenReturn(List.of());
+
+        DiagnosisAggregationService.DiagnosisFieldValue value =
+                service.getFieldValue(ITEM_ID, DiagnosisFieldName.SOUND_DEVICE);
+
+        assertThat(value.sourceEvidenceId()).isEqualTo(DIAGNOSTIC_FILE_EVIDENCE_ID);
+        assertThat(value.sourceType()).isEqualTo(DiagnosisSourceType.DXDIAG);
+    }
+
+    @Test
+    void fieldValueOffersBatteryReportEvidenceAsEditTargetEvenWhenParsingRowIsMissing() {
+        when(listingChecklistItemRepository.findById(ITEM_ID)).thenReturn(Optional.of(listingChecklistItem));
+        when(listingChecklistItem.getEvidenceType()).thenReturn(EvidenceType.DIAGNOSTIC_FILE);
+        when(listingChecklistItem.getParserType()).thenReturn("BATTERY_REPORT");
+        when(evidenceRepository.findAllByListingChecklistItem_Id(ITEM_ID))
+                .thenReturn(List.of(diagnosticFileEvidence()));
+        when(dxdiagResultRepository.findAllByEvidenceIdIn(anyList())).thenReturn(List.of());
+        when(batteryReportResultRepository.findAllByEvidenceIdIn(anyList())).thenReturn(List.of());
+
+        DiagnosisAggregationService.DiagnosisFieldValue value =
+                service.getFieldValue(ITEM_ID, DiagnosisFieldName.CYCLE_COUNT);
+
+        assertThat(value.sourceEvidenceId()).isEqualTo(DIAGNOSTIC_FILE_EVIDENCE_ID);
+        assertThat(value.sourceType()).isEqualTo(DiagnosisSourceType.BATTERY_REPORT);
+    }
+
+    @Test
+    void fieldValueHasNoEditTargetWhenNoEvidenceUploadedAtAll() {
+        when(listingChecklistItemRepository.findById(ITEM_ID)).thenReturn(Optional.of(listingChecklistItem));
+        when(listingChecklistItem.getEvidenceType()).thenReturn(EvidenceType.PHOTO);
+        when(evidenceRepository.findAllByListingChecklistItem_Id(ITEM_ID)).thenReturn(List.of());
+
+        DiagnosisAggregationService.DiagnosisFieldValue value =
+                service.getFieldValue(ITEM_ID, DiagnosisFieldName.MODEL_NAME);
+
+        assertThat(value.sourceEvidenceId()).isNull();
+        assertThat(value.sourceType()).isNull();
     }
 
     @Test

@@ -13,6 +13,8 @@ import {
   respondRtcCall,
   signalingSocketUrl,
 } from '../api/rtc'
+// 재촬영 요청을 되살릴 때 함께 풉니다.
+// import { createReinspectionRequest } from '../api/products'
 import { useAuthSession } from '../auth/session'
 
 const route = useRoute()
@@ -321,6 +323,57 @@ function goToChat() {
   router.push({ name: 'chat', params: { roomId: call.value.chatRoomId } })
 }
 
+// 통화 중 재촬영 요청은 잠시 내려 두었습니다. 이미 얼굴을 보고 이야기하는 중이라 채팅으로
+// 말하는 편이 빠르고, 같은 화면에 요청 폼까지 두면 체크리스트를 읽기 어려워집니다.
+// 되살릴 때는 아래 주석과 템플릿의 대응 블록을 함께 풀고, api/products의
+// createReinspectionRequest import를 다시 추가하세요.
+//
+// const recaptureItemIds = ref([])
+// const recaptureReason = ref('')
+// const recaptureError = ref('')
+// const recaptureNotice = ref('')
+// const isSubmittingRecapture = ref(false)
+// const canRequestRecapture = computed(
+//   () => !isSeller.value && Boolean(rtcSession.value?.listingId),
+// )
+//
+// function toggleRecaptureItem(checklistItemId) {
+//   const index = recaptureItemIds.value.indexOf(checklistItemId)
+//   if (index === -1) recaptureItemIds.value.push(checklistItemId)
+//   else recaptureItemIds.value.splice(index, 1)
+// }
+//
+// async function submitRecaptureRequest() {
+//   recaptureError.value = ''
+//   recaptureNotice.value = ''
+//   if (!recaptureItemIds.value.length) {
+//     recaptureError.value = '재촬영을 요청할 항목을 하나 이상 선택해 주세요.'
+//     return
+//   }
+//   const reason = recaptureReason.value.trim()
+//   if (!reason) {
+//     recaptureError.value = '어떤 부분을 다시 보고 싶은지 적어 주세요.'
+//     return
+//   }
+//   isSubmittingRecapture.value = true
+//   try {
+//     await createReinspectionRequest(rtcSession.value.listingId, {
+//       reason,
+//       items: recaptureItemIds.value.map((checklistItemId) => ({
+//         checklistItemId,
+//         requestContent: reason,
+//       })),
+//     })
+//     recaptureNotice.value = '재촬영 요청을 보냈습니다. 판매자가 새 자료를 올리면 알려드립니다.'
+//     recaptureItemIds.value = []
+//     recaptureReason.value = ''
+//   } catch (error) {
+//     recaptureError.value = error.message || '재촬영 요청을 보내지 못했습니다.'
+//   } finally {
+//     isSubmittingRecapture.value = false
+//   }
+// }
+
 function showError(error) {
   errorMessage.value = error.message || '통화 연결 중 오류가 발생했습니다.'
 }
@@ -488,6 +541,9 @@ onBeforeUnmount(() => {
             <h2 class="text-lg font-bold text-text-main">
               상품 검증 체크리스트
             </h2>
+            <p class="mt-1 text-sm text-text-sub">
+              판매글에 등록된 검증 항목과 같은 목록입니다. 더 보고 싶은 부분은 아래 채팅으로 말씀하세요.
+            </p>
             <ul class="mt-4 space-y-3">
               <li
                 v-for="item in rtcSession.checklistItems"
@@ -510,6 +566,50 @@ onBeforeUnmount(() => {
                 등록된 체크리스트가 없습니다.
               </li>
             </ul>
+
+            <!--
+              재촬영 요청은 잠시 내려 두었습니다(채팅으로 말하는 편이 빠릅니다).
+              되살릴 때는 script의 recapture 주석과 이 블록을 함께 풀고, 위 목록의 항목을
+              체크박스로 되돌리세요(항목마다 toggleRecaptureItem 연결).
+
+            <div
+              v-if="canRequestRecapture && rtcSession.checklistItems.length"
+              class="mt-4 border-t border-border pt-4"
+            >
+              <label class="block text-sm font-semibold text-text-main">
+                재촬영 요청 내용
+                <textarea
+                  v-model="recaptureReason"
+                  rows="3"
+                  maxlength="500"
+                  placeholder="예) 화면 하단 왼쪽이 잘 안 보여서 조금 더 가까이 보여 주실 수 있을까요?"
+                  class="mt-2 w-full rounded-md border border-border px-3 py-2.5 text-sm font-normal outline-none focus:border-primary"
+                />
+              </label>
+              <p
+                v-if="recaptureError"
+                role="alert"
+                class="mt-2 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700"
+              >
+                {{ recaptureError }}
+              </p>
+              <p
+                v-if="recaptureNotice"
+                role="status"
+                class="mt-2 rounded-md bg-accent px-3 py-2 text-xs text-primary-dark"
+              >
+                {{ recaptureNotice }}
+              </p>
+              <button
+                type="button"
+                class="mt-3 w-full rounded-lg border border-primary px-4 py-2.5 text-sm font-bold text-primary disabled:opacity-60"
+                :disabled="isSubmittingRecapture"
+                @click="submitRecaptureRequest"
+              >
+                재촬영 요청 보내기
+              </button>
+            </div>
+            -->
           </section>
 
           <section class="flex h-[330px] flex-col overflow-hidden rounded-xl border border-border bg-white sm:h-[350px]">

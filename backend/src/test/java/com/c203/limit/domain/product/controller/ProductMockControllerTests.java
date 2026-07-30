@@ -192,6 +192,13 @@ class ProductMockControllerTests {
     @MockitoBean
     com.c203.limit.domain.seller.repository.SellerRepository sellerRepository;
 
+    @MockitoBean
+    com.c203.limit.domain.inspection.service.ModelChecklistResearchService
+            modelChecklistResearchService;
+
+    @MockitoBean
+    com.c203.limit.domain.product.service.DeviceModelRequestService deviceModelRequestService;
+
     @Autowired
     MockMvc mockMvc;
 
@@ -201,6 +208,7 @@ class ProductMockControllerTests {
     @Test
     void returnsPublicProductListMock() throws Exception {
         when(productApplicationService.findPublic(
+                        null,
                         null,
                         null,
                         null,
@@ -231,6 +239,7 @@ class ProductMockControllerTests {
                         BigDecimal.valueOf(900000),
                         "서울",
                         "COMPLETED",
+                        55L,
                         1,
                         10,
                         "price,asc"))
@@ -245,6 +254,7 @@ class ProductMockControllerTests {
                         .param("maxPrice", "900000")
                         .param("tradeRegion", "서울")
                         .param("verificationStatus", "COMPLETED")
+                        .param("sellerId", "55")
                         .param("page", "1")
                         .param("size", "10")
                         .param("sort", "price,asc"))
@@ -259,6 +269,7 @@ class ProductMockControllerTests {
                 BigDecimal.valueOf(900000),
                 "서울",
                 "COMPLETED",
+                55L,
                 1,
                 10,
                 "price,asc");

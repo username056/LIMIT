@@ -4,6 +4,7 @@ import RtcCallPage from '../RtcCallPage.vue'
 import { getChatMessages, getChatRooms } from '../../api/chat'
 import { createChatSocket } from '../../api/chatSocket'
 import { getRtcCall, getRtcSession } from '../../api/rtc'
+import { createReinspectionRequest } from '../../api/products'
 import { clearAuthSession, setAuthSession } from '../../auth/session'
 
 vi.mock('vue-router', () => ({
@@ -28,6 +29,10 @@ vi.mock('../../api/rtc', () => ({
   markRtcConnected: vi.fn(),
   respondRtcCall: vi.fn(),
   signalingSocketUrl: vi.fn(),
+}))
+
+vi.mock('../../api/products', () => ({
+  createReinspectionRequest: vi.fn(),
 }))
 
 const layoutStub = { template: '<main><slot /></main>' }
@@ -115,6 +120,53 @@ describe('RtcCallPage', () => {
     await flushPromises()
 
     expect(wrapper.get('[data-testid="counterpart-nickname"]').text()).toBe('판매자닉네임')
+
+    wrapper.unmount()
+  })
+
+  // 재촬영 요청은 잠시 내려 두었습니다. 채팅으로 말하는 편이 빠릅니다.
+  it('통화 화면에 재촬영 요청 UI를 두지 않는다', async () => {
+    setAuthSession({ member: { memberId: 2, nickname: '구매자' } })
+    getRtcSession.mockResolvedValue({
+      sessionId: 30,
+      listingId: 777,
+      sellerId: 1,
+      buyerId: 2,
+      status: 'ENDED',
+      checklistItems: [{
+        checklistItemId: 100,
+        name: '제품 외관 전체 확인',
+        captureGuide: '모서리와 흠집을 확인해 주세요.',
+        confirmed: false,
+        note: null,
+      }],
+    })
+    getChatRooms.mockResolvedValue({
+      content: [{ roomId: 10, counterpartId: 1, counterpartNickname: '판매자닉네임' }],
+    })
+
+    const wrapper = mount(RtcCallPage, {
+      global: { stubs: { DefaultLayout: layoutStub } },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('재촬영 요청 보내기')
+    expect(wrapper.find('input[type="checkbox"]').exists()).toBe(false)
+    expect(createReinspectionRequest).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  // 체크리스트는 판매글에 스냅샷된 항목(listing_checklist_item)을 그대로 읽습니다.
+  it('판매글에 등록된 체크리스트 항목을 그대로 보여준다', async () => {
+    const wrapper = mount(RtcCallPage, {
+      global: { stubs: { DefaultLayout: layoutStub } },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('제품 외관 전체 확인')
+    expect(wrapper.text()).toContain('모서리와 흠집을 확인해 주세요.')
+    expect(wrapper.text()).toContain('판매글에 등록된 검증 항목과 같은 목록입니다')
 
     wrapper.unmount()
   })

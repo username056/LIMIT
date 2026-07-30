@@ -147,6 +147,65 @@ class DiagnosisValueConfirmationServiceTests {
     }
 
     @Test
+    void createsNewOcrResultRowWhenFieldWasNeverDetected() {
+        stubItemAndOwnership();
+        when(diagnosisAggregationService.getFieldValue(ITEM_ID, DiagnosisFieldName.MODEL_NAME))
+                .thenReturn(
+                        new DiagnosisAggregationService.DiagnosisFieldValue(
+                                null, null, EVIDENCE_ID, DiagnosisSourceType.OCR));
+        when(ocrResultRepository.findByEvidenceIdAndFieldType(EVIDENCE_ID, OcrFieldType.MODEL_NAME))
+                .thenReturn(Optional.empty());
+
+        DiagnosisValueUpdateRequest request = new DiagnosisValueUpdateRequest("MODEL_NAME", "Galaxy Book4 Pro");
+        DiagnosisValueUpdateResponse response = service.confirm(ITEM_ID, SELLER_ID, request);
+
+        assertThat(response.getOriginalValue()).isNull();
+        assertThat(response.getConfirmedValue()).isEqualTo("Galaxy Book4 Pro");
+        org.mockito.ArgumentCaptor<OcrResult> captor = org.mockito.ArgumentCaptor.forClass(OcrResult.class);
+        org.mockito.Mockito.verify(ocrResultRepository).save(captor.capture());
+        assertThat(captor.getValue().getParsedValue()).isEqualTo("Galaxy Book4 Pro");
+        assertThat(captor.getValue().getEvidenceId()).isEqualTo(EVIDENCE_ID);
+    }
+
+    @Test
+    void createsNewDxdiagResultRowWhenParsingRowIsMissing() {
+        stubItemAndOwnership();
+        when(diagnosisAggregationService.getFieldValue(ITEM_ID, DiagnosisFieldName.SOUND_DEVICE))
+                .thenReturn(
+                        new DiagnosisAggregationService.DiagnosisFieldValue(
+                                null, null, EVIDENCE_ID, DiagnosisSourceType.DXDIAG));
+        when(dxdiagResultRepository.findByEvidenceId(EVIDENCE_ID)).thenReturn(Optional.empty());
+
+        DiagnosisValueUpdateRequest request = new DiagnosisValueUpdateRequest("SOUND_DEVICE", "Realtek Audio");
+        service.confirm(ITEM_ID, SELLER_ID, request);
+
+        org.mockito.ArgumentCaptor<DxdiagResult> captor = org.mockito.ArgumentCaptor.forClass(DxdiagResult.class);
+        org.mockito.Mockito.verify(dxdiagResultRepository).save(captor.capture());
+        assertThat(captor.getValue().getSoundDevice()).isEqualTo("Realtek Audio");
+        assertThat(captor.getValue().getEvidenceId()).isEqualTo(EVIDENCE_ID);
+    }
+
+    @Test
+    void createsNewBatteryReportResultRowWhenParsingRowIsMissing() {
+        stubItemAndOwnership();
+        when(diagnosisAggregationService.getFieldValue(ITEM_ID, DiagnosisFieldName.BATTERY_MANUFACTURER))
+                .thenReturn(
+                        new DiagnosisAggregationService.DiagnosisFieldValue(
+                                null, null, EVIDENCE_ID, DiagnosisSourceType.BATTERY_REPORT));
+        when(batteryReportResultRepository.findByEvidenceId(EVIDENCE_ID)).thenReturn(Optional.empty());
+
+        DiagnosisValueUpdateRequest request =
+                new DiagnosisValueUpdateRequest("BATTERY_MANUFACTURER", "LG Chem");
+        service.confirm(ITEM_ID, SELLER_ID, request);
+
+        org.mockito.ArgumentCaptor<BatteryReportResult> captor =
+                org.mockito.ArgumentCaptor.forClass(BatteryReportResult.class);
+        org.mockito.Mockito.verify(batteryReportResultRepository).save(captor.capture());
+        assertThat(captor.getValue().getBatteryManufacturer()).isEqualTo("LG Chem");
+        assertThat(captor.getValue().getEvidenceId()).isEqualTo(EVIDENCE_ID);
+    }
+
+    @Test
     void throwsFieldNotEditableWhenNoAutoExtractedSourceExists() {
         stubItemAndOwnership();
         when(diagnosisAggregationService.getFieldValue(ITEM_ID, DiagnosisFieldName.GPU))

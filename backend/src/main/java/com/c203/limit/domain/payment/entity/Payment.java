@@ -51,6 +51,11 @@ public class Payment extends BaseTimeEntity {
     @Builder.Default
     private Integer attemptNo = 1;
 
+    // paymentId는 IDENTITY 채번이라 insert 시점엔 아직 없다. 저장 직후 assignProviderOrderId()로
+    // id 기반 값을 채우기 전까지는 null이며, 같은 트랜잭션 커밋 전에는 다른 트랜잭션에 노출되지 않는다.
+    @Column(name = "provider_order_id", unique = true, length = 64)
+    private String providerOrderId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "pg_provider", nullable = false, length = 20)
     @Builder.Default
@@ -107,7 +112,25 @@ public class Payment extends BaseTimeEntity {
                 .build();
     }
 
+    /**
+     * 저장으로 id가 채번된 직후 호출해 providerOrderId를 발급한다. id 없이 호출하면(저장 전) 잘못된
+     * 사용이므로 예외를 던진다.
+     */
+    public void assignProviderOrderId() {
+        if (this.id == null) {
+            throw new IllegalStateException("Payment must be persisted before assigning a provider order id");
+        }
+        this.providerOrderId = buildProviderOrderId();
+    }
+
+    private String buildProviderOrderId() {
+        return "PAY-" + this.id + "-" + this.attemptNo;
+    }
+
     public void approve(BigDecimal approvedAmount, String providerTransactionId) {
+        if (this.status != PaymentStatus.REQUESTED) {
+            throw new BusinessException(ErrorCode.PAYMENT_NOT_CONFIRMABLE);
+        }
         this.status = PaymentStatus.APPROVED;
         this.approvedAmount = approvedAmount;
         this.providerTransactionId = providerTransactionId;
@@ -115,8 +138,23 @@ public class Payment extends BaseTimeEntity {
     }
 
     public void fail(String failedReason) {
+        if (this.status != PaymentStatus.REQUESTED) {
+            throw new BusinessException(ErrorCode.PAYMENT_NOT_CONFIRMABLE);
+        }
         this.status = PaymentStatus.FAILED;
         this.failedReason = failedReason;
+    }
+
+    /**
+     * 결제창 진입 전(REQUESTED) 단계에서 구매자가 명시적으로 취소할 때 호출한다. 이미 진행된 결제는
+     * 취소 대상이 아니므로 REQUESTED 상태에서만 허용한다 — 승인된 결제는 환불 흐름으로 유도한다.
+     */
+    public void cancel(String reason) {
+        if (this.status != PaymentStatus.REQUESTED) {
+            throw new BusinessException(ErrorCode.PAYMENT_NOT_CANCELLABLE);
+        }
+        this.status = PaymentStatus.CANCELLED;
+        this.failedReason = reason;
     }
 
     /**
@@ -139,6 +177,7 @@ public class Payment extends BaseTimeEntity {
         this.attemptNo += 1;
         this.status = PaymentStatus.REQUESTED;
         this.requestedAt = LocalDateTime.now();
+        this.providerOrderId = buildProviderOrderId();
     }
 
     public void requestRefund() {

@@ -12,11 +12,12 @@ import {
   getProduct,
   getProductChecklist,
   getProductImages,
+  transitionProductStatus,
 } from '../api/products'
-import { createChatRoom, requestRtcCall } from '../api/rtc'
 import { createOrGetChatRoom } from '../api/chat'
+import { getSellerProfile } from '../api/seller'
 import { getAccessToken, getSessionMember } from '../auth/session'
-import { isSoldOut, productStatusLabel } from '../utils/productStatus'
+import { canSellerMarkSold, canSellerReopen, isSoldOut } from '../utils/productStatus'
 
 const route = useRoute()
 const router = useRouter()
@@ -24,11 +25,12 @@ const product = ref(null)
 const isLoading = ref(true)
 const isFavorite = ref(false)
 const isUpdatingFavorite = ref(false)
-const isRequestingCall = ref(false)
 const isOpeningChat = ref(false)
 const errorMessage = ref('')
 const productImages = ref([])
 const activeImageUrl = ref('')
+// 구매자에게 공개되는 판매자 정보입니다(닉네임·개인/사업자·판매 중 수).
+const sellerProfile = ref(null)
 // 소유자 전용 조회로 불러온 경우(비공개 상품)와, 판매 중인 내 상품을 공개 조회로 본 경우를 함께 다룹니다.
 const loadedViaOwnerApi = ref(false)
 const isOwner = computed(() => {
@@ -59,9 +61,37 @@ const evidenceByChecklistItem = ref({})
 const buyerChecklistItems = computed(
   () => checklistItems.value.filter((item) => item.visibleToBuyer !== false),
 )
-const publicEvidence = computed(() => checklistItems.value.flatMap(
-  (item) => evidenceByChecklistItem.value[item.checklistItemId] || [],
-))
+
+// 판매글에 스냅샷된 체크리스트를 그대로 보여줍니다. 항목 순서·이름·필수 여부는 판매자가 등록할 때
+// 본 것과 동일한 목록(getProductChecklist)이고, 증빙만 항목별로 묶어 붙입니다.
+const buyerChecklist = computed(() => buyerChecklistItems.value.map((item) => ({
+  ...item,
+  required: item.required ?? item.isRequired ?? false,
+  completed: item.status === 'COMPLETED',
+  evidence: evidenceByChecklistItem.value[item.checklistItemId] || [],
+})))
+
+const EVIDENCE_TYPE_LABELS = {
+  PHOTO: '사진',
+  VIDEO: '영상',
+  DIAGNOSTIC_FILE: '진단파일',
+  SELLER_CONFIRMATION: '판매자 확인',
+}
+
+function evidenceTypeLabel(type) {
+  return EVIDENCE_TYPE_LABELS[type] || type || '자료'
+}
+
+// 증빙 원본을 크게 보는 팝업입니다. 목록 안 썸네일은 56px이라 영상 재생에는 너무 작습니다.
+const mediaViewer = ref(null)
+
+function openMediaViewer(item, evidence) {
+  mediaViewer.value = { itemName: item.name, evidence }
+}
+
+// 설명은 기본 4줄로 접어 두고, 길면 펼쳐 봅니다. 체크리스트가 먼저 눈에 들어오게 하려는 의도입니다.
+const isDescriptionExpanded = ref(false)
+const isDescriptionLong = computed(() => (product.value?.description || '').length > 180)
 const isRecaptureModalOpen = ref(false)
 const checkedItemIds = ref([])
 const recaptureReason = ref('')
@@ -137,21 +167,48 @@ async function toggleFavorite() {
   }
 }
 
-async function requestCall() {
-  if (!await requireLogin()) return
-  isRequestingCall.value = true
+// 직거래로 팔린 매물을 판매자가 직접 닫습니다. 구매자 화면에는 이 버튼이 보이지 않습니다.
+const isMarkingSold = ref(false)
+const canMarkSold = computed(
+  () => isOwner.value && canSellerMarkSold(product.value?.status),
+)
+
+async function markSold() {
+  const confirmed = window.confirm(
+    '판매 완료로 바꿀까요?\n\n'
+    + '구매자에게 더 이상 노출되지 않습니다. 거래가 깨지면 다시 판매 중으로 되돌릴 수 있습니다.',
+  )
+  if (!confirmed) return
+  isMarkingSold.value = true
   errorMessage.value = ''
   try {
-    const room = await createChatRoom(product.value.productId)
-    await requestRtcCall(room.roomId, { memo: `${product.value.name} 상태 실시간 확인 요청` })
-    await router.push({ name: 'calls' })
+    await transitionProductStatus(product.value.productId, 'SOLD', '판매자 직거래 판매 완료')
+    await loadProduct(product.value.productId)
   } catch (error) {
-    errorMessage.value = error.message || '영상 확인 요청을 보내지 못했습니다.'
+    errorMessage.value = error.message || '판매 완료로 처리하지 못했습니다.'
   } finally {
-    isRequestingCall.value = false
+    isMarkingSold.value = false
   }
 }
 
+// 직거래 약속이 깨졌을 때 원래 판매글로 돌아갑니다.
+const canReopen = computed(() => isOwner.value && canSellerReopen(product.value?.status))
+
+async function reopen() {
+  isMarkingSold.value = true
+  errorMessage.value = ''
+  try {
+    await transitionProductStatus(product.value.productId, 'ON_SALE', '거래 파기로 판매 재개')
+    await loadProduct(product.value.productId)
+  } catch (error) {
+    errorMessage.value = error.message || '판매 중으로 되돌리지 못했습니다.'
+  } finally {
+    isMarkingSold.value = false
+  }
+}
+
+// 1:1 영상 확인은 상세 화면의 세 번째 버튼으로 두지 않습니다. 구매·문의 두 갈래만 남기고,
+// 영상 요청은 '판매자에게 문의하기'로 연결되는 채팅방 안에서 하도록 동선을 모았습니다.
 async function openChat() {
   if (!await requireLogin()) return
   isOpeningChat.value = true
@@ -195,6 +252,14 @@ onMounted(async () => {
     } catch {
       productImages.value = []
       activeImageUrl.value = product.value.thumbnailUrl || ''
+    }
+    // 판매자 프로필은 곁들이는 정보입니다. 실패해도 상품 화면 자체는 그대로 보여 줍니다.
+    if (product.value?.sellerId) {
+      try {
+        sellerProfile.value = await getSellerProfile(product.value.sellerId)
+      } catch {
+        sellerProfile.value = null
+      }
     }
     if (getAccessToken()) {
       const favoriteStatus = await getFavoriteStatus(route.params.productId)
@@ -314,9 +379,7 @@ onMounted(async () => {
                 <span class="text-6xl">▣</span>
                 <span class="mt-3 text-sm">등록된 상품 이미지가 없습니다.</span>
               </div>
-              <span class="absolute left-4 top-4 border-l-2 border-primary bg-surface/95 px-2.5 py-1 text-xs font-bold text-primary">
-                {{ productStatusLabel(product.status) }}
-              </span>
+              <!-- 상태 배지는 이미지 위에 두지 않습니다. 사진을 가리고, 구매 버튼이 이미 상태를 말해 줍니다. -->
               <div
                 v-if="isSoldOut(product.status)"
                 class="absolute inset-0 flex items-center justify-center bg-black/55"
@@ -375,7 +438,44 @@ onMounted(async () => {
               {{ formatPrice(product.price) }}원
             </p>
 
-            <dl class="mt-8 grid grid-cols-2 gap-x-6 gap-y-5 border-y border-border py-5 text-sm">
+            <!--
+              가격 바로 아래에 판매자를 둡니다. 누구에게 사는지가 기기 옵션보다 먼저 읽혀야 합니다.
+              누르면 그 판매자의 판매 목록으로 갑니다.
+              판매 중 개수는 여기서 보여주지 않습니다 — 이 화면의 관심은 '이 상품'이고, 판매자의
+              재고 규모는 프로필 페이지에서 볼 내용입니다.
+              정산 계좌 같은 값은 공개 프로필에 담기지 않습니다.
+            -->
+            <RouterLink
+              v-if="sellerProfile"
+              :to="{ name: 'seller-profile', params: { sellerId: sellerProfile.sellerId } }"
+              class="mt-6 flex items-center gap-3 rounded-lg border border-border bg-surface p-3 transition hover:border-primary/50 hover:shadow-card"
+            >
+              <span
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-gradient text-sm font-bold text-white"
+                aria-hidden="true"
+              >{{ (sellerProfile.nickname || '판').trim().charAt(0) }}</span>
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-sm font-semibold text-text-main">
+                  {{ sellerProfile.nickname }}
+                </span>
+                <!-- 판매자 등록 행이 없는 회원이면 sellerType이 비어 옵니다. -->
+                <span
+                  v-if="sellerProfile.sellerType"
+                  class="mt-0.5 block text-xs text-text-sub"
+                >
+                  {{ sellerProfile.sellerType === 'BUSINESS' ? '사업자 판매자' : '개인 판매자' }}
+                </span>
+              </span>
+              <span class="shrink-0 text-xs font-semibold text-primary">판매자 상품 보기 →</span>
+            </RouterLink>
+            <p
+              v-else
+              class="mt-6 text-sm text-text-sub"
+            >
+              판매자 정보를 불러오지 못했습니다.
+            </p>
+
+            <dl class="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-border pt-5 text-sm">
               <div>
                 <dt class="text-xs text-text-sub">
                   색상
@@ -392,25 +492,39 @@ onMounted(async () => {
                   {{ product.device?.storageGb ? `${product.device.storageGb}GB` : '미입력' }}
                 </dd>
               </div>
-              <div>
-                <dt class="text-xs text-text-sub">
-                  상품 번호
-                </dt>
-                <dd class="mt-1 font-semibold text-text-main">
-                  #{{ product.productId }}
-                </dd>
-              </div>
             </dl>
 
             <!-- 내 상품에서는 구매·문의처럼 자기 자신을 향하는 행동 대신 수정 동선만 보여줍니다. -->
             <div class="mt-5 space-y-3">
-              <BaseButton
-                v-if="isOwner"
-                block
-                :to="{ name: 'seller-product-edit', params: { productId: product.productId } }"
-              >
-                수정하기
-              </BaseButton>
+              <template v-if="isOwner">
+                <BaseButton
+                  block
+                  :to="{ name: 'seller-product-edit', params: { productId: product.productId } }"
+                >
+                  수정하기
+                </BaseButton>
+                <!-- 서비스 결제를 거치지 않은 직거래를 정리하는 버튼입니다. -->
+                <BaseButton
+                  v-if="canMarkSold"
+                  block
+                  variant="outline"
+                  :disabled="isMarkingSold"
+                  @click="markSold"
+                >
+                  {{ isMarkingSold ? '처리 중…' : '판매 완료 처리하기' }}
+                </BaseButton>
+                <!-- 직거래가 깨졌을 때 상품을 새로 등록하지 않고 이 글로 돌아옵니다. -->
+                <BaseButton
+                  v-if="canReopen"
+                  block
+                  variant="outline"
+                  :disabled="isMarkingSold"
+                  @click="reopen"
+                >
+                  {{ isMarkingSold ? '처리 중…' : '다시 판매하기' }}
+                </BaseButton>
+              </template>
+              <!-- 구매하기와 문의하기 두 개만 둡니다. 영상 확인은 채팅방 안에서 요청합니다. -->
               <template v-else>
                 <BaseButton
                   block
@@ -421,7 +535,6 @@ onMounted(async () => {
                 </BaseButton>
                 <BaseButton
                   block
-                  class="px-3 py-2 text-sm"
                   variant="outline"
                   :disabled="isOpeningChat"
                   @click="openChat"
@@ -430,15 +543,6 @@ onMounted(async () => {
                 </BaseButton>
               </template>
             </div>
-            <BaseButton
-              v-if="!isOwner"
-              class="mt-2 px-3 py-2 text-sm"
-              variant="ghost"
-              :disabled="isRequestingCall"
-              @click="requestCall"
-            >
-              {{ isRequestingCall ? '요청 중…' : '1:1 영상으로 상태 추가 확인' }}
-            </BaseButton>
 
             <p
               v-if="errorMessage"
@@ -450,87 +554,213 @@ onMounted(async () => {
           </section>
         </div>
 
-        <div class="mt-16 grid gap-10 lg:grid-cols-[1fr_360px]">
-          <section class="border-t border-border pt-6 sm:pt-8">
-            <h2 class="text-lg font-bold text-text-main">
-              상품 설명
-            </h2>
-            <p class="mt-4 whitespace-pre-wrap text-sm leading-7 text-text-sub">
-              {{ product.description || '판매자가 등록한 상세 설명이 없습니다.' }}
-            </p>
-          </section>
-
-          <section class="border-l-2 border-primary bg-bg px-5 py-4">
-            <div class="flex items-start justify-between">
+        <!--
+          검증 체크리스트를 넓은 쪽에 두고 상품 설명을 좁게 접어 둡니다. 이 서비스에서 구매 판단의
+          근거는 판매자가 쓴 설명글보다 항목별 검증 자료라서, 그 쪽이 먼저 읽히게 배치했습니다.
+        -->
+        <div class="mt-16 grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-10">
+          <section class="rounded-lg border border-border bg-surface p-5 sm:p-6">
+            <div class="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p class="text-xs font-semibold text-primary">
                   검증 체크리스트
                 </p>
-                <h2 class="mt-1 font-bold text-text-main">
-                  상태 자료 확인
+                <h2 class="mt-1 text-lg font-bold text-text-main">
+                  판매글에 등록된 검증 항목
                 </h2>
+                <p class="mt-1 text-xs text-text-sub">
+                  판매자가 등록할 때 사용한 항목과 동일한 목록입니다.
+                </p>
               </div>
-              <strong class="text-2xl text-primary">{{ checklistRate }}%</strong>
+              <div class="text-right">
+                <strong class="text-3xl text-primary">{{ checklistRate }}%</strong>
+                <p class="mt-1 text-xs text-text-sub">
+                  필수 {{ checklist.completed || 0 }} / {{ checklist.required || 0 }}개 확인
+                </p>
+              </div>
             </div>
-            <div class="mt-5 h-2 overflow-hidden rounded-pill bg-slate-100">
+            <div class="mt-4 h-2 overflow-hidden rounded-pill bg-slate-100">
               <div
                 class="h-full rounded-pill bg-primary-gradient"
                 :style="{ width: `${checklistRate}%` }"
               />
             </div>
-            <p class="mt-3 text-sm text-text-sub">
-              필수 항목 <strong class="text-text-main">{{ checklist.completed || 0 }}</strong> /
-              {{ checklist.required || 0 }}개 확인
-            </p>
             <p
               v-if="checklist.recaptureRequested"
               class="mt-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700"
             >
               추가 확인이 필요한 항목이 {{ checklist.recaptureRequested }}개 있습니다.
             </p>
-            <p class="mt-4 text-xs leading-5 text-text-sub">
-              원본 상태 자료는 상품과 연결된 체크리스트 기준으로 관리됩니다.
-            </p>
+
+            <!--
+              항목을 빠뜨리지 않고 전부 보여주되 화면이 끝없이 길어지지 않게, 5개 높이만 열어 두고
+              나머지는 스크롤로 봅니다. 행 높이(5rem)와 간격(0.5rem)을 고정해야 5개에서 잘립니다.
+            -->
             <ul
-              v-if="publicEvidence.length"
-              class="mt-4 grid grid-cols-3 gap-2"
-              aria-label="구매자 공개 검수 증빙"
+              v-if="buyerChecklist.length"
+              class="mt-4 max-h-[27.5rem] space-y-2 overflow-y-auto pr-1"
+              aria-label="검증 체크리스트 항목"
             >
               <li
-                v-for="evidence in publicEvidence"
-                :key="evidence.evidenceId"
-                class="overflow-hidden rounded-md border border-border bg-white"
+                v-for="item in buyerChecklist"
+                :key="item.checklistItemId"
+                class="flex h-20 items-center gap-3 rounded-md border border-border bg-bg px-3"
               >
-                <video
-                  v-if="evidence.evidenceType === 'VIDEO'"
-                  :src="evidence.mediaUrl"
-                  controls
-                  preload="metadata"
-                  class="aspect-square w-full object-cover"
-                />
-                <img
-                  v-else-if="evidence.evidenceType === 'PHOTO'"
-                  :src="evidence.mediaUrl"
-                  alt="판매자가 공개한 검수 증빙"
-                  class="aspect-square w-full object-cover"
+                <span
+                  class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+                  :class="item.completed ? 'bg-primary text-white' : 'bg-slate-200 text-text-sub'"
+                  :aria-label="item.completed ? '확인 완료' : '미확인'"
                 >
-                <a
+                  {{ item.completed ? '✓' : '·' }}
+                </span>
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-sm font-semibold text-text-main">
+                    {{ item.name }}<span
+                      v-if="item.required"
+                      class="ml-0.5 text-red-500"
+                    >*</span>
+                  </p>
+                  <p class="mt-0.5 text-xs text-text-sub">
+                    {{ evidenceTypeLabel(item.evidenceType) }}
+                    · {{ item.completed ? '판매자 확인 완료' : '자료 준비 중' }}
+                  </p>
+                </div>
+                <ul
+                  v-if="item.evidence.length"
+                  class="flex shrink-0 items-center gap-1.5"
+                >
+                  <li
+                    v-for="evidence in item.evidence.slice(0, 3)"
+                    :key="evidence.evidenceId"
+                  >
+                    <button
+                      type="button"
+                      class="relative block h-14 w-14 overflow-hidden rounded-md border border-border bg-white"
+                      :aria-label="`${item.name} 검증 자료 크게 보기`"
+                      @click="openMediaViewer(item, evidence)"
+                    >
+                      <img
+                        v-if="evidence.evidenceType === 'PHOTO'"
+                        :src="evidence.mediaUrl"
+                        alt=""
+                        class="h-full w-full object-cover"
+                      >
+                      <video
+                        v-else-if="evidence.evidenceType === 'VIDEO'"
+                        :src="evidence.mediaUrl"
+                        preload="metadata"
+                        muted
+                        class="h-full w-full object-cover"
+                      />
+                      <span
+                        v-else
+                        class="flex h-full w-full items-center justify-center text-[10px] font-semibold text-primary"
+                      >파일</span>
+                      <span
+                        v-if="evidence.evidenceType === 'VIDEO'"
+                        class="absolute inset-0 flex items-center justify-center bg-black/35 text-sm text-white"
+                      >▶</span>
+                    </button>
+                  </li>
+                  <li
+                    v-if="item.evidence.length > 3"
+                    class="text-xs font-semibold text-text-sub"
+                  >
+                    +{{ item.evidence.length - 3 }}
+                  </li>
+                </ul>
+                <span
                   v-else
-                  :href="evidence.mediaUrl"
-                  class="block px-2 py-5 text-center text-xs font-medium text-primary"
-                >
-                  검수 파일 보기
-                </a>
+                  class="shrink-0 text-xs text-text-sub"
+                >자료 없음</span>
               </li>
             </ul>
-            <BaseButton
-              class="mt-4 px-3 py-2 text-sm"
-              variant="outline"
-              @click="openRecaptureModal"
+            <p
+              v-else
+              class="mt-4 rounded-md bg-bg px-4 py-8 text-center text-sm text-text-sub"
             >
-              재촬영 요청
-            </BaseButton>
+              공개된 검증 항목이 없습니다.
+            </p>
+
+            <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <p class="text-xs text-text-sub">
+                자료가 부족하면 판매자에게 다시 찍어 달라고 요청할 수 있습니다.
+              </p>
+              <BaseButton
+                v-if="!isOwner"
+                class="px-3 py-2 text-sm"
+                variant="outline"
+                @click="openRecaptureModal"
+              >
+                재촬영 요청
+              </BaseButton>
+            </div>
           </section>
+
+          <section class="lg:border-l lg:border-border lg:pl-8">
+            <h2 class="font-bold text-text-main">
+              상품 설명
+            </h2>
+            <p
+              class="mt-3 whitespace-pre-wrap text-sm leading-6 text-text-sub"
+              :class="isDescriptionExpanded ? '' : 'line-clamp-4'"
+            >
+              {{ product.description || '판매자가 등록한 상세 설명이 없습니다.' }}
+            </p>
+            <button
+              v-if="isDescriptionLong"
+              type="button"
+              class="mt-2 text-xs font-semibold text-primary hover:underline"
+              @click="isDescriptionExpanded = !isDescriptionExpanded"
+            >
+              {{ isDescriptionExpanded ? '접기' : '더 보기' }}
+            </button>
+          </section>
+        </div>
+
+        <!-- 증빙 원본 팝업. 목록 썸네일이 작아서 영상은 여기서 재생합니다. -->
+        <div
+          v-if="mediaViewer"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
+          @click.self="mediaViewer = null"
+        >
+          <div class="w-full max-w-2xl overflow-hidden rounded-lg bg-surface">
+            <div class="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
+              <p class="truncate text-sm font-bold text-text-main">
+                {{ mediaViewer.itemName }}
+              </p>
+              <button
+                type="button"
+                class="rounded-md px-2 py-1 text-sm text-text-sub hover:bg-bg"
+                aria-label="검증 자료 닫기"
+                @click="mediaViewer = null"
+              >
+                닫기
+              </button>
+            </div>
+            <div class="flex max-h-[70vh] items-center justify-center bg-black">
+              <video
+                v-if="mediaViewer.evidence.evidenceType === 'VIDEO'"
+                :src="mediaViewer.evidence.mediaUrl"
+                controls
+                autoplay
+                class="max-h-[70vh] w-full"
+              />
+              <img
+                v-else-if="mediaViewer.evidence.evidenceType === 'PHOTO'"
+                :src="mediaViewer.evidence.mediaUrl"
+                :alt="`${mediaViewer.itemName} 검증 자료`"
+                class="max-h-[70vh] w-full object-contain"
+              >
+              <a
+                v-else
+                :href="mediaViewer.evidence.mediaUrl"
+                class="block px-4 py-16 text-sm font-semibold text-white underline"
+              >
+                검수 파일 내려받기
+              </a>
+            </div>
+          </div>
         </div>
 
         <div

@@ -15,6 +15,9 @@ public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
     Optional<ChatRoom> findByListingIdAndBuyerIdAndSellerId(
             Long listingId, Long buyerId, Long sellerId);
 
+    Optional<ChatRoom> findFirstByBuyerIdAndSellerIdOrderByIdDesc(
+            Long buyerId, Long sellerId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT room FROM ChatRoom room WHERE room.id = :roomId")
     Optional<ChatRoom> findLockedById(@Param("roomId") Long roomId);

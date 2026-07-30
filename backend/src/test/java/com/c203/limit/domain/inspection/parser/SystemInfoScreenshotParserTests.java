@@ -205,7 +205,55 @@ class SystemInfoScreenshotParserTests {
                 .isEqualTo("Intel(R) Core(TM) i9-9900K CPU 3.60GHz 3.60");
         assertThat(fieldValue(results, OcrFieldType.RAM)).isEqualTo("8.00GB");
         assertThat(fieldValue(results, OcrFieldType.OS_VERSION))
-                .isEqualTo("64비트 운영 체제, x64 기반 프로세서");
+                .isEqualTo("Windows 10 Pro 21H2 64비트 운영 체제, x64 기반 프로세서");
+    }
+
+    /**
+     * msinfo32(시스템 정보) "시스템 요약" 화면의 라벨:값 표 일부. 설정 앱과 달리 에디션은 "OS 이름", 버전은
+     * 커널 빌드 형식("10.0.26200 빌드 26200")으로 나온다.
+     */
+    private static List<OcrToken> msinfo32Tokens() {
+        List<OcrToken> tokens = new ArrayList<>();
+        tokens.add(t("OS", 0.99, 10, 10, 25, 20));
+        tokens.add(t("이름", 0.99, 25, 10, 45, 20));
+        tokens.add(t("Microsoft", 0.99, 100, 10, 160, 20));
+        tokens.add(t("Windows", 0.99, 160, 10, 210, 20));
+        tokens.add(t("11", 0.99, 210, 10, 220, 20));
+        tokens.add(t("Enterprise", 0.99, 220, 10, 280, 20));
+        tokens.add(t("버전", 0.99, 10, 30, 35, 40));
+        tokens.add(t("10.0.26200", 0.99, 100, 30, 160, 40));
+        tokens.add(t("빌드", 0.99, 160, 30, 180, 40));
+        tokens.add(t("26200", 0.99, 180, 30, 210, 40));
+        tokens.add(t("시스템", 0.99, 10, 50, 35, 60));
+        tokens.add(t("종류", 0.99, 35, 50, 55, 60));
+        tokens.add(t("x64", 0.99, 100, 50, 115, 60));
+        tokens.add(t("기반", 0.99, 115, 50, 135, 60));
+        tokens.add(t("PC", 0.99, 135, 50, 150, 60));
+        return tokens;
+    }
+
+    @Test
+    void composesOsVersionFromMsinfo32LayoutWithDifferentLabelsAndVersionFormat() {
+        List<OcrFieldExtraction> results =
+                parser.parse(msinfo32Tokens(), OcrFieldExpectations.SCREENSHOT_FIELD_TYPES);
+
+        assertThat(fieldValue(results, OcrFieldType.OS_VERSION))
+                .isEqualTo("Microsoft Windows 11 Enterprise 10.0.26200 빌드 26200 x64 기반 PC");
+    }
+
+    @Test
+    void composesOsVersionSkippingMiddlePartWhenVersionRowIsNotRecognized() {
+        // "버전" 행만 통째로 인식 안 된 경우를 흉내낸다 — 에디션과 시스템 종류 사이에 빈 자리나 이중 공백
+        // 없이 바로 이어 붙어야 한다.
+        List<OcrToken> tokens =
+                windows10Tokens().stream()
+                        .filter(token -> !"버전".equals(token.text()) && !"21H2".equals(token.text()))
+                        .toList();
+
+        List<OcrFieldExtraction> results = parser.parse(tokens, OcrFieldExpectations.SCREENSHOT_FIELD_TYPES);
+
+        assertThat(fieldValue(results, OcrFieldType.OS_VERSION))
+                .isEqualTo("Windows 10 Pro 64비트 운영 체제, x64 기반 프로세서");
     }
 
     @Test
@@ -237,7 +285,7 @@ class SystemInfoScreenshotParserTests {
         assertThat(fieldValue(results, OcrFieldType.STORAGE_CAPACITY)).isEqualTo("954 GB");
         assertThat(fieldValue(results, OcrFieldType.GPU)).isEqualTo("6 GB");
         assertThat(fieldValue(results, OcrFieldType.OS_VERSION))
-                .isEqualTo("64비트 운영 체제, x64 기반 프로세서");
+                .isEqualTo("Windows 11 Enterprise 25H2 64비트 운영 체제, x64 기반 프로세서");
         assertThat(fieldValue(results, OcrFieldType.MODEL_NAME)).isEqualTo("DESKTOP-UB20P0O 960XFH");
     }
 

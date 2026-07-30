@@ -4,7 +4,7 @@ import com.c203.limit.domain.inspection.checklist.GeneratedChecklist;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 
-@Schema(name = "ChecklistGenerationResponse", description = "노트북 체크리스트 생성 결과")
+@Schema(name = "ChecklistGenerationResponse", description = "기기 모델 체크리스트 생성 결과")
 public record ChecklistGenerationResponse(
         Long deviceModelId,
         String manufacturer,
@@ -14,7 +14,9 @@ public record ChecklistGenerationResponse(
         boolean aiApplied,
         List<GeneratedChecklistItemResponse> items,
         List<ChecklistSuggestionResponse> aiSuggestions,
-        List<String> reviewCandidates) {
+        List<String> reviewCandidates,
+        Long researchId,
+        String researchStatus) {
 
     public static ChecklistGenerationResponse from(GeneratedChecklist checklist) {
         return new ChecklistGenerationResponse(
@@ -30,6 +32,8 @@ public record ChecklistGenerationResponse(
                 checklist.aiSuggestions().stream()
                         .map(ChecklistSuggestionResponse::from)
                         .toList(),
-                checklist.reviewCandidates());
+                checklist.reviewCandidates(),
+                checklist.researchId(),
+                checklist.researchStatus());
     }
 }

@@ -50,6 +50,10 @@ public class SystemInfoScreenshotParser {
     private static final Pattern GPU_NAME_PATTERN =
             Pattern.compile("(?i).*(intel|nvidia|amd|radeon|geforce|iris).*");
     private static final Pattern OS_VERSION_PATTERN = Pattern.compile("(?i).*(비트|x86|x64|프로세서).*");
+    private static final Pattern OS_EDITION_PATTERN = Pattern.compile("(?i).*windows\\s*\\d+.*");
+    // 설정 앱은 "25H2" 같은 짧은 기능 업데이트 버전을, msinfo32는 "10.0.26200 빌드 26200" 같은 커널 빌드
+    // 버전을 "버전" 라벨에 담는다 — 둘 다 받아들이되 완전히 무관한 값은 걸러내도록 넉넉히 잡는다.
+    private static final int OS_VERSION_TOKEN_MAX_LENGTH = 40;
     private static final Pattern HOSTNAME_PATTERN = Pattern.compile("^[A-Z0-9-]{6,20}$");
     private static final Pattern CODE_PATTERN = Pattern.compile("^[A-Z0-9]{4,10}$");
 
@@ -347,8 +351,10 @@ public class SystemInfoScreenshotParser {
 
     /**
      * 찾아낸 라벨:값 행들 중 라벨이 아는 필드 후보와 같고 값이 그 필드다운 모양일 때만 채택한다.
-     * OS_VERSION은 "장치 사양" 표의 "시스템 종류" 행 값(예: "64비트 운영 체제, x64 기반 프로세서")을 그대로
-     * 채택한다 — "Windows 사양" 표의 에디션/버전(예: "Windows 11 Enterprise 25H2")은 쓰지 않는다.
+     * OS_VERSION은 "Windows 사양" 표의 에디션·버전과 "장치 사양" 표의 "시스템 종류" 행 값을 순서대로 이어 붙인
+     * 하나의 값(예: "Windows 11 Enterprise 25H2 64비트 운영 체제, x64 기반 프로세서")으로 만든다. 세 조각 중
+     * 일부만 인식돼도(다른 Windows 버전이라 표 구성이 다르거나 한 조각이 오인식된 경우) 인식된 조각만 순서대로
+     * 이어 붙이고, 하나도 인식되지 않으면 OS_VERSION 자체를 만들지 않는다.
      */
     private void assignFieldsFromRows(
             List<LabelValueRow> rows,
@@ -367,10 +373,36 @@ public class SystemInfoScreenshotParser {
         }
 
         if (expected.contains(OcrFieldType.OS_VERSION)) {
-            findRowValue(rows, Set.of("시스템종류"))
-                    .filter(value -> VALUE_VALIDATORS.get(OcrFieldType.OS_VERSION).test(value))
+            composeOsVersion(rows)
                     .ifPresent(value -> upsertField(results, OcrFieldType.OS_VERSION, value, confidence));
         }
+    }
+
+    /**
+     * "Windows 사양" 표의 에디션("Windows 11 Enterprise")·버전("25H2")과 "장치 사양" 표의 시스템 종류
+     * ("64비트 운영 체제, x64 기반 프로세서")를 이 순서대로 찾아, 인식된 조각만 공백으로 이어 붙인다. 중간에
+     * 인식 안 된 조각이 있어도 건너뛸 뿐 빈 자리나 이중 공백을 남기지 않는다.
+     *
+     * <p>msinfo32(시스템 정보) 화면은 같은 정보를 다른 라벨로 보여준다 — 에디션은 "OS 이름"(예: "Microsoft
+     * Windows 11 Enterprise"), 시스템 종류는 "시스템 종류"(예: "x64 기반 PC")로 나온다. "버전" 라벨은 같지만
+     * 값이 "10.0.26200 빌드 26200"처럼 커널 빌드 형식이라 길이 제한만 다르게 잡는다. 두 화면 중 어느 쪽에서
+     * 캡처했는지는 몰라도 되고, 그 화면에 있는 라벨만 찾아서 채택한다.
+     */
+    private Optional<String> composeOsVersion(List<LabelValueRow> rows) {
+        List<String> parts = new ArrayList<>();
+        findRowValue(rows, Set.of("에디션", "OS이름"))
+                .map(String::trim)
+                .filter(value -> !value.isBlank() && OS_EDITION_PATTERN.matcher(value).matches())
+                .ifPresent(parts::add);
+        findRowValue(rows, Set.of("버전"))
+                .map(String::trim)
+                .filter(value -> !value.isBlank() && value.length() <= OS_VERSION_TOKEN_MAX_LENGTH)
+                .ifPresent(parts::add);
+        findRowValue(rows, Set.of("시스템종류"))
+                .map(String::trim)
+                .filter(value -> !value.isBlank() && VALUE_VALIDATORS.get(OcrFieldType.OS_VERSION).test(value))
+                .ifPresent(parts::add);
+        return parts.isEmpty() ? Optional.empty() : Optional.of(String.join(" ", parts));
     }
 
     private Optional<String> findRowValue(List<LabelValueRow> rows, Set<String> labelHints) {

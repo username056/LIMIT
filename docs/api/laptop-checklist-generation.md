@@ -16,7 +16,7 @@
 
 - 힌지: 모든 노트북에서 유격, 소음, 파손, 들뜸과 화면 고정력을 영상으로 확인한다.
 
-- Windows: `battery-report.html`과 `DxDiag.txt` 등록 항목에 더해, 설정 > 시스템 > 정보 화면을 캡처해 OCR로 자동 인식하는 별도 항목(`LAP-SCR-013`)을 추가한다. 이 항목은 `evidenceType=PHOTO`, `automationType=OCR`이며 DxDiag/배터리 리포트 파싱 결과와 별개로 취합·상충 확인된다.
+- Windows: `battery-report.html`과 `DxDiag.txt` 등록 항목에 더해, 설정 > 시스템 > 정보 화면을 캡처해 OCR로 자동 인식하는 별도 항목(`LAP-SCR-013`)을 추가한다. 이 항목은 `evidenceType=PHOTO`, `automationType=OCR`이며 DxDiag/배터리 리포트 파싱 결과와 별개로 취합·상충 확인된다. 화면 한 장이면 충분해 `maxCount=1`로 제한한다(다른 PHOTO 항목의 기본값은 5).
 - Linux: 배터리 상태와 시스템 정보 화면 캡처 항목을 추가한다.
 - 추가 기능: 판매자가 확인한 승인 기능 코드만 체크리스트에 추가하며 최대 5개다.
 - 유선 LAN(RJ45) 포트와 microSD 카드 슬롯은 각각 독립된 승인 기능과 점검 항목으로 취급한다.

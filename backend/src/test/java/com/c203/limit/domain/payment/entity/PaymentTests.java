@@ -8,12 +8,54 @@ import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class PaymentTests {
 
     private Payment requestedPayment() {
         Member buyer = Member.createLocal("buyer@test.com", "encoded", "buyer", null);
         return Payment.request(100L, buyer, "idem-1", BigDecimal.valueOf(650_000), PaymentMethod.CARD);
+    }
+
+    @Test
+    void requestLeavesProviderOrderIdUnassignedUntilPersisted() {
+        Payment payment = requestedPayment();
+
+        assertThat(payment.getProviderOrderId()).isNull();
+        assertThat(payment.getAttemptNo()).isEqualTo(1);
+    }
+
+    @Test
+    void assignProviderOrderIdBuildsIdBasedValueAfterPersist() {
+        Payment payment = requestedPayment();
+        ReflectionTestUtils.setField(payment, "id", 500L);
+
+        payment.assignProviderOrderId();
+
+        assertThat(payment.getProviderOrderId()).isEqualTo("PAY-500-1");
+    }
+
+    @Test
+    void assignProviderOrderIdRejectsUnpersistedPayment() {
+        Payment payment = requestedPayment();
+
+        assertThatThrownBy(payment::assignProviderOrderId).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void retryIncrementsAttemptNoAndIssuesNewProviderOrderId() {
+        Payment payment = requestedPayment();
+        ReflectionTestUtils.setField(payment, "id", 500L);
+        payment.assignProviderOrderId();
+        String firstOrderId = payment.getProviderOrderId();
+        payment.expire("예약 만료");
+
+        payment.retry();
+
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REQUESTED);
+        assertThat(payment.getAttemptNo()).isEqualTo(2);
+        assertThat(payment.getProviderOrderId()).isEqualTo("PAY-500-2");
+        assertThat(payment.getProviderOrderId()).isNotEqualTo(firstOrderId);
     }
 
     @Test

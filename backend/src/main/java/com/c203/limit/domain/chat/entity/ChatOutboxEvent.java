@@ -82,4 +82,12 @@ public class ChatOutboxEvent {
     public Long getId() {
         return id;
     }
+
+    public String getEventType() {
+        return eventType;
+    }
+
+    public String getPayload() {
+        return payload;
+    }
 }

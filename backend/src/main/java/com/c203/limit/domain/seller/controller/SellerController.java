@@ -1,6 +1,7 @@
 package com.c203.limit.domain.seller.controller;
 
 import com.c203.limit.domain.seller.dto.request.CreateSellerRequest;
+import com.c203.limit.domain.seller.dto.response.PublicSellerProfileResponse;
 import com.c203.limit.domain.seller.dto.response.SellerProfileResponse;
 import com.c203.limit.domain.seller.service.SellerService;
 import com.c203.limit.global.response.ApiResponse;
@@ -29,5 +30,10 @@ public class SellerController implements SellerApi {
     @Override
     public ResponseEntity<ApiResponse<SellerProfileResponse>> profile() {
         return ResponseEntity.ok(ApiResponse.ok(sellerService.profile(currentUser.memberId())));
+    }
+
+    @Override
+    public ResponseEntity<ApiResponse<PublicSellerProfileResponse>> publicProfile(Long sellerId) {
+        return ResponseEntity.ok(ApiResponse.ok(sellerService.publicProfile(sellerId)));
     }
 }

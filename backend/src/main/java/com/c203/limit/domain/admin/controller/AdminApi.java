@@ -5,7 +5,11 @@ import com.c203.limit.domain.admin.dto.request.ChangeAdminPasswordRequest;
 import com.c203.limit.domain.admin.dto.request.CreateAdminAccountRequest;
 import com.c203.limit.domain.admin.dto.request.CreateMemberRestrictionRequest;
 import com.c203.limit.domain.admin.dto.request.ReleaseMemberRestrictionRequest;
+import com.c203.limit.domain.admin.dto.request.ReviewChecklistResearchRequest;
+import com.c203.limit.domain.admin.dto.request.ReviewDeviceModelRequest;
 import com.c203.limit.domain.admin.dto.request.UpdateAdminAccountAccessRequest;
+import com.c203.limit.domain.inspection.enums.ModelChecklistResearchStatus;
+import com.c203.limit.domain.product.entity.DeviceModelRequestStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -87,4 +91,48 @@ public interface AdminApi {
     ResponseEntity<?> updateAdminAccount(
             @PathVariable("adminId") Long adminId,
             @Valid @RequestBody UpdateAdminAccountAccessRequest request);
+
+    @Operation(
+            summary = "모델 체크리스트 AI 조사 목록 조회",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @GetMapping("/checklist-researches")
+    ResponseEntity<?> listChecklistResearches(
+            @RequestParam(required = false) ModelChecklistResearchStatus status);
+
+    @Operation(summary = "모델 체크리스트 AI 조사 승인", security = @SecurityRequirement(name = "bearerAuth"))
+    @PostMapping("/checklist-researches/{researchId}/approval")
+    ResponseEntity<?> approveChecklistResearch(
+            @PathVariable("researchId") Long researchId,
+            @Valid @RequestBody ReviewChecklistResearchRequest request);
+
+    @Operation(summary = "모델 체크리스트 AI 조사 반려", security = @SecurityRequirement(name = "bearerAuth"))
+    @PostMapping("/checklist-researches/{researchId}/rejection")
+    ResponseEntity<?> rejectChecklistResearch(
+            @PathVariable("researchId") Long researchId,
+            @Valid @RequestBody ReviewChecklistResearchRequest request);
+
+    @Operation(
+            summary = "실패한 모델 체크리스트 AI 조사 재시도",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @PostMapping("/checklist-researches/{researchId}/retry")
+    ResponseEntity<?> retryChecklistResearch(@PathVariable("researchId") Long researchId);
+
+    @Operation(
+            summary = "직접 입력 기기 모델 요청 목록 조회",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @GetMapping("/device-model-requests")
+    ResponseEntity<?> listDeviceModelRequests(
+            @RequestParam(required = false) DeviceModelRequestStatus status);
+
+    @Operation(summary = "직접 입력 기기 모델 요청 승인", security = @SecurityRequirement(name = "bearerAuth"))
+    @PostMapping("/device-model-requests/{requestId}/approval")
+    ResponseEntity<?> approveDeviceModelRequest(
+            @PathVariable("requestId") Long requestId,
+            @Valid @RequestBody ReviewDeviceModelRequest request);
+
+    @Operation(summary = "직접 입력 기기 모델 요청 반려", security = @SecurityRequirement(name = "bearerAuth"))
+    @PostMapping("/device-model-requests/{requestId}/rejection")
+    ResponseEntity<?> rejectDeviceModelRequest(
+            @PathVariable("requestId") Long requestId,
+            @Valid @RequestBody ReviewDeviceModelRequest request);
 }
