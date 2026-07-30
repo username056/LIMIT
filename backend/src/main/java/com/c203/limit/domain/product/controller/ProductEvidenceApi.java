@@ -17,6 +17,7 @@ import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -122,4 +123,19 @@ public interface ProductEvidenceApi {
             produces = MediaType.APPLICATION_JSON_VALUE)
     ResponseEntity<ApiResponse<List<EvidenceResponse>>> getEvidenceHistory(
             @PathVariable Long productId, @PathVariable Long checklistItemId);
+
+    @Operation(
+            operationId = "evidence04",
+            summary = "증빙 삭제",
+            description = "잘못 등록한 증빙을 삭제하고 체크리스트 완료 상태를 다시 계산합니다.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "204", description = "증빙 삭제 성공")
+    @DeleteMapping(
+            path =
+                    "/api/v1/products/{productId}/checklist-items/{checklistItemId}/evidence/{evidenceId}")
+    ResponseEntity<Void> deleteEvidence(
+            @PathVariable Long productId,
+            @PathVariable Long checklistItemId,
+            @PathVariable Long evidenceId);
 }
