@@ -43,6 +43,8 @@ repositories {
     mavenCentral()
 }
 
+ext['netty.version'] = '4.2.16.Final'
+
 dependencyCheck {
     failBuildOnCVSS = 7.0
     formats = ['HTML', 'JSON']
