@@ -180,7 +180,7 @@ class ChatWebSocketIntegrationTests {
             UUID clientMessageId = UUID.randomUUID();
             ChatMessageResponse message = new ChatMessageResponse(
                     501L, 1L, MEMBER_ID, clientMessageId, "TEXT", "안녕하세요",
-                    "SENT", null, List.of());
+                    "SENT", null, List.of(), null, null);
             when(chatRoomService.sendMessage(eq(ROOM_ID), eq(MEMBER_ID), any()))
                     .thenReturn(new ChatMessageSendResult(message, true));
 

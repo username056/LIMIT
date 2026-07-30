@@ -62,4 +62,18 @@ class RtcSessionTests {
         assertThat(session.getStatus()).isEqualTo(RtcSessionStatus.EXPIRED);
         assertThat(session.getEndedAt()).isNotNull();
     }
+
+    @Test
+    void keepsDisconnectedSessionJoinableForThirtyMinutes() {
+        RtcSession session =
+                RtcSession.waiting(
+                        1L, 2L, 3L, 4L, 5L, LocalDateTime.now().plusHours(2));
+        LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(30);
+
+        session.disconnect(RtcEndReason.COMPLETED, "검수 완료", expiresAt);
+
+        assertThat(session.getStatus()).isEqualTo(RtcSessionStatus.WAITING);
+        assertThat(session.getExpiresAt()).isEqualTo(expiresAt);
+        assertThat(session.isClosed()).isFalse();
+    }
 }

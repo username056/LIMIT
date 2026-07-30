@@ -345,6 +345,12 @@ function evidenceTypeLabel(type) {
   }[type] || type
 }
 
+function isReinspectionItem(item) {
+  return reinspectionRequest.value?.items?.some(
+    (requestedItem) => Number(requestedItem.checklistItemId) === Number(item.checklistItemId),
+  ) || false
+}
+
 function captureAccept(item) {
   if (!item) return ''
   if (item.evidenceType === 'VIDEO') return 'video/*'
@@ -1091,7 +1097,7 @@ onMounted(async () => {
               v-for="item in reinspectionRequest.items"
               :key="item.checklistItemId"
             >
-              {{ item.itemName }} — {{ item.requestContent }}
+              {{ item.itemName }}
             </li>
           </ul>
         </div>
@@ -1667,6 +1673,10 @@ onMounted(async () => {
                             v-if="item.evidenceType === 'VIDEO'"
                             class="rounded-pill bg-accent px-1.5 py-0.5 text-[10px] font-bold text-primary"
                           >영상</span>
+                          <span
+                            v-if="isReinspectionItem(item)"
+                            class="rounded-pill bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-600"
+                          >재검수</span>
                         </p>
                         <p class="mt-1 text-xs text-text-sub">
                           {{ guideFor(item) }}
