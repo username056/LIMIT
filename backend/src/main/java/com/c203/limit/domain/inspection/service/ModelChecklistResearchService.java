@@ -3,6 +3,8 @@ package com.c203.limit.domain.inspection.service;
 import com.c203.limit.domain.admin.dto.response.ChecklistResearchResponse;
 import com.c203.limit.domain.admin.entity.AdminActionLog;
 import com.c203.limit.domain.admin.repository.AdminActionLogRepository;
+import com.c203.limit.domain.inspection.checklist.ChecklistGenerationContext;
+import com.c203.limit.domain.inspection.checklist.ChecklistSupplementClient;
 import com.c203.limit.domain.inspection.checklist.ChecklistSuggestion;
 import com.c203.limit.domain.inspection.checklist.ChecklistSupplementResult;
 import com.c203.limit.domain.inspection.checklist.DeviceChecklistFeatureCatalog;
@@ -31,11 +33,14 @@ import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 public class ModelChecklistResearchService {
@@ -49,7 +54,9 @@ public class ModelChecklistResearchService {
     private final AdminActionLogRepository actionLogRepository;
     private final LaptopChecklistPolicy laptopPolicy;
     private final DeviceChecklistFeatureCatalog featureCatalog;
+    private final ChecklistSupplementClient supplementClient;
     private final ObjectMapper objectMapper;
+    private final TransactionTemplate transactionTemplate;
 
     public ModelChecklistResearchService(
             ModelChecklistResearchRepository researchRepository,
@@ -59,7 +66,9 @@ public class ModelChecklistResearchService {
             AdminActionLogRepository actionLogRepository,
             LaptopChecklistPolicy laptopPolicy,
             DeviceChecklistFeatureCatalog featureCatalog,
-            ObjectMapper objectMapper) {
+            ChecklistSupplementClient supplementClient,
+            ObjectMapper objectMapper,
+            PlatformTransactionManager transactionManager) {
         this.researchRepository = researchRepository;
         this.categoryRepository = categoryRepository;
         this.templateRepository = templateRepository;
@@ -67,7 +76,9 @@ public class ModelChecklistResearchService {
         this.actionLogRepository = actionLogRepository;
         this.laptopPolicy = laptopPolicy;
         this.featureCatalog = featureCatalog;
+        this.supplementClient = supplementClient;
         this.objectMapper = objectMapper;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     @Transactional(readOnly = true)
@@ -138,6 +149,77 @@ public class ModelChecklistResearchService {
                 researchId,
                 note));
         log.info("checklist research rejected: researchId={}", researchId);
+        return response(research);
+    }
+
+    public ChecklistResearchResponse retry(Long researchId, Long adminId) {
+        RetryTarget target = Objects.requireNonNull(
+                transactionTemplate.execute(status -> beginRetry(researchId, adminId)));
+
+        ChecklistSupplementResult supplement;
+        try {
+            supplement = supplementClient.suggest(target.context());
+        } catch (RuntimeException exception) {
+            supplement = ChecklistSupplementResult.requestFailed();
+        }
+
+        ChecklistSupplementResult retryResult = supplement;
+        return Objects.requireNonNull(
+                transactionTemplate.execute(status -> finishRetry(researchId, retryResult)));
+    }
+
+    private RetryTarget beginRetry(Long researchId, Long adminId) {
+        ModelChecklistResearch research = researchRepository
+                .findByIdForUpdate(researchId)
+                .orElseThrow(() ->
+                        new BusinessException(ErrorCode.CHECKLIST_RESEARCH_NOT_FOUND));
+        if (research.getStatus() != ModelChecklistResearchStatus.FAILED) {
+            throw new BusinessException(ErrorCode.CHECKLIST_RESEARCH_STATE_CONFLICT);
+        }
+        Category model = activeModel(research.getCategoryId());
+        research.retry();
+        researchRepository.saveAndFlush(research);
+        actionLogRepository.save(AdminActionLog.of(
+                adminId,
+                "CHECKLIST_RESEARCH_RETRY",
+                "MODEL_CHECKLIST_RESEARCH",
+                researchId,
+                "AI 조사 재시도"));
+        log.info(
+                "checklist research retry started: researchId={}, modelId={}",
+                researchId,
+                model.getId());
+        return new RetryTarget(
+                new ChecklistGenerationContext(
+                        model.getId(),
+                        model.getDeviceType(),
+                        model.getManufacturer(),
+                        model.getName(),
+                        model.getModelCode(),
+                        model.getOsFamily(),
+                        Set.of()));
+    }
+
+    private ChecklistResearchResponse finishRetry(
+            Long researchId, ChecklistSupplementResult supplement) {
+        ModelChecklistResearch research = researchRepository
+                .findByIdForUpdate(researchId)
+                .orElseThrow(() ->
+                        new BusinessException(ErrorCode.CHECKLIST_RESEARCH_NOT_FOUND));
+        if (research.getStatus() != ModelChecklistResearchStatus.PROCESSING) {
+            throw new BusinessException(ErrorCode.CHECKLIST_RESEARCH_STATE_CONFLICT);
+        }
+        if (supplement.available()) {
+            research.complete(writeSupplement(supplement));
+            log.info("checklist research retry completed: researchId={}", researchId);
+        } else {
+            research.fail(writeSupplement(supplement));
+            log.warn(
+                    "checklist research retry failed: researchId={}, failureCode={}",
+                    researchId,
+                    supplement.failureCode());
+        }
+        researchRepository.saveAndFlush(research);
         return response(research);
     }
 
@@ -261,6 +343,8 @@ public class ModelChecklistResearchService {
                         .map(ChecklistSuggestionResponse::from)
                         .toList(),
                 supplement.reviewCandidates(),
+                supplement.failureCode(),
+                supplement.failureMessage(),
                 research.getPublishedTemplateId(),
                 research.getReviewedByAdminId(),
                 research.getReviewNote(),
@@ -276,6 +360,16 @@ public class ModelChecklistResearchService {
             throw new IllegalStateException("failed to read checklist research", exception);
         }
     }
+
+    private String writeSupplement(ChecklistSupplementResult supplement) {
+        try {
+            return objectMapper.writeValueAsString(supplement);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("failed to serialize checklist research", exception);
+        }
+    }
+
+    private record RetryTarget(ChecklistGenerationContext context) {}
 
     private boolean isSafeSource(String sourceUrl) {
         if (sourceUrl == null || sourceUrl.isBlank()) {

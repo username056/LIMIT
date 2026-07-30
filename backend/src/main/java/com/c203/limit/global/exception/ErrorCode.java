@@ -115,7 +115,7 @@ public enum ErrorCode {
             "PRD014", HttpStatus.BAD_REQUEST, "노트북 체크리스트는 Windows와 Linux만 지원합니다."),
     CHECKLIST_RESEARCH_NOT_FOUND("PRD018", HttpStatus.NOT_FOUND, "체크리스트 모델 조사 결과를 찾을 수 없습니다."),
     CHECKLIST_RESEARCH_STATE_CONFLICT(
-            "PRD019", HttpStatus.CONFLICT, "현재 상태에서는 체크리스트 조사 결과를 검토할 수 없습니다."),
+            "PRD019", HttpStatus.CONFLICT, "현재 상태에서는 체크리스트 조사 결과를 처리할 수 없습니다."),
     DEVICE_MODEL_REQUEST_DUPLICATED("PRD020", HttpStatus.CONFLICT, "이미 검토 중인 동일 모델 요청이 있습니다."),
     DEVICE_MODEL_REQUEST_NOT_FOUND("PRD021", HttpStatus.NOT_FOUND, "기기 모델 요청을 찾을 수 없습니다."),
     DEVICE_MODEL_REQUEST_STATE_CONFLICT(

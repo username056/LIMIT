@@ -1278,13 +1278,19 @@ onMounted(async () => {
                     · {{ templateItems.length }}개 항목
                   </p>
                 </div>
-                <BaseBadge :variant="checklistGeneration.aiApplied ? 'primary' : 'gray'">
+                <BaseBadge
+                  :variant="checklistGeneration.researchStatus === 'FAILED'
+                    ? 'danger'
+                    : checklistGeneration.aiApplied ? 'primary' : 'gray'"
+                >
                   {{
                     checklistGeneration.researchStatus === 'PENDING_REVIEW'
                       ? '관리자 검토 대기'
-                      : checklistGeneration.aiApplied
-                        ? 'AI 공식자료 반영'
-                        : '기본 정책 적용'
+                      : checklistGeneration.researchStatus === 'FAILED'
+                        ? 'AI 조사 실패 · 기본 정책 적용'
+                        : checklistGeneration.aiApplied
+                          ? 'AI 공식자료 반영'
+                          : '기본 정책 적용'
                   }}
                 </BaseBadge>
               </div>
@@ -1294,6 +1300,14 @@ onMounted(async () => {
               >
                 이 모델의 공식 자료 조사는 한 번만 수행되며 현재 관리자 검토 대기 중입니다.
                 승인 전까지는 검증된 기본 체크리스트를 사용합니다.
+              </p>
+              <p
+                v-else-if="checklistGeneration.researchStatus === 'FAILED'"
+                class="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs leading-5 text-red-700"
+                role="alert"
+              >
+                공식 자료 AI 조사에 실패해 검증된 기본 체크리스트를 적용했습니다.
+                관리자가 실패 원인을 확인하고 재조사할 수 있으며 상품 등록은 그대로 진행할 수 있습니다.
               </p>
               <p
                 v-else-if="!checklistGeneration.aiApplied"

@@ -284,6 +284,28 @@ describe('ProductRegisterPage', () => {
     }))
   })
 
+  it('AI 조사 실패와 기본 정책 적용을 판매자에게 구분해 표시한다', async () => {
+    generateChecklist.mockResolvedValue({
+      deviceModelId: 101,
+      manufacturer: 'Samsung',
+      modelName: 'Galaxy Book',
+      osFamily: 'WINDOWS',
+      aiApplied: false,
+      researchStatus: 'FAILED',
+      items: templateItems.map((item) => ({ ...item, required: item.isRequired })),
+      aiSuggestions: [],
+      reviewCandidates: [],
+    })
+
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await fillDeviceStep(wrapper)
+
+    expect(wrapper.text()).toContain('AI 조사 실패 · 기본 정책 적용')
+    expect(wrapper.text()).toContain('관리자가 실패 원인을 확인하고 재조사할 수 있으며')
+    expect(wrapper.text()).not.toContain('AI 연결 없이')
+  })
+
   it('0원 상품은 촬영 단계로 진행하지 않는다', async () => {
     const wrapper = mount(ProductRegisterPage, { global: globalOptions })
     await flushPromises()

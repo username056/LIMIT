@@ -56,6 +56,10 @@ export function rejectChecklistResearch(researchId, payload) {
   return apiClient.post(`/admin/checklist-researches/${researchId}/rejection`, payload)
 }
 
+export function retryChecklistResearch(researchId) {
+  return apiClient.post(`/admin/checklist-researches/${researchId}/retry`)
+}
+
 export function getDeviceModelRequests(status = 'PENDING') {
   return apiClient.get(`/admin/device-model-requests?status=${encodeURIComponent(status)}`)
 }
