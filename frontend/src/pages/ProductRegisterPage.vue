@@ -42,9 +42,12 @@ const WIZARD_STEPS = [
 // 체크리스트 항목 하나에 첨부할 수 있는 사진·영상 개수 상한입니다.
 const DEFAULT_MAX_MEDIA_PER_ITEM = 3
 
-// TODO(대표 이미지): 필수 입력으로 두기로 했지만, S3 업로드 구현(feat/s3-media-storage)과
-// 같은 파일에서 충돌하므로 임시 미리보기 UI를 걷어냈습니다. 그 브랜치가 dev에 들어오면
-// listingImages 기반 업로드에 '최소 1장 필수' 규칙을 다시 붙이세요.
+// ListingImageUploadService.MAX_IMAGE_BYTES와 같은 값입니다. 서버가 거절하기 전에 안내하려고 둡니다.
+const MAX_LISTING_IMAGE_BYTES = 15 * 1024 * 1024
+
+// 대표 이미지는 1단계에서 받습니다(pendingThumbnail 참고). 아직 '최소 1장 필수'로는 두지 않았습니다 —
+// 이미 이미지 없이 임시저장된 상품들이 있어서, 필수로 바꾸면 그 상품들이 수정 저장조차 못 하게 됩니다.
+// 필수로 올릴 때는 기존 초안 처리 방침을 먼저 정하고 validateSaleInfo에 규칙을 붙이세요.
 // 화면에서 거래 지역을 받지 않기로 했지만 CreateProductRequest의 tradeRegion에 @NotBlank가 남아 있어
 // 값을 비우면 등록이 400으로 실패합니다. 백엔드에서 해당 제약이 풀리면 이 상수와 payload 항목을 함께 지우세요.
 const DEFAULT_TRADE_REGION = '협의'
@@ -97,6 +100,9 @@ const reinspectionRequestKey = computed(
   () => String(route.query.reinspectionRequestKey || '').trim(),
 )
 const editingId = ref(null)
+// 수정 모드로 열린 상품의 현재 상태입니다. 판매 중인 상품을 고칠 때는 임시저장(초안) 진행도를
+// 서버에 밀어 넣지 않아야 하므로 상태를 들고 있습니다.
+const editingStatus = ref('')
 const draftProductId = ref(null)
 const activeStep = ref(1)
 const form = reactive({
@@ -172,6 +178,19 @@ const listingImages = ref([])
 const listingImageBusy = ref(false)
 const listingImageProgress = ref(0)
 let listingImageInFlight = 0
+
+// 대표 이미지는 고르는 즉시 서버에 올립니다. presigned URL이 productId 기준이라 상품이 없으면
+// 올릴 수 없어서, 상품이 아직 없을 때는 초안을 먼저 만든 뒤 업로드합니다.
+// 초안을 만들 수 없는 상태(카테고리·모델·글제목·가격 미입력)에서만 파일을 임시로 들고 있다가
+// '다음 단계'/'임시저장' 시점에 올립니다. 이때는 새로고침하면 선택이 사라지므로 화면에 그렇게 안내합니다.
+const pendingThumbnail = ref(null)
+const listingThumbnail = computed(
+  () => listingImages.value.find((image) => image.imageType === 'THUMBNAIL') || null,
+)
+const thumbnailPreviewUrl = computed(() => pendingThumbnail.value?.previewUrl
+  || listingThumbnail.value?.previewUrl
+  || listingThumbnail.value?.imageUrl
+  || '')
 const registrationMetrics = reactive({
   checklistMs: null,
   imageCompressionMs: null,
@@ -342,6 +361,8 @@ function setStep(step) {
 
 async function persistDraftProgress() {
   if (!currentProductId.value || reinspectionRequestKey.value) return
+  // 이미 판매 중·숨김인 상품은 초안 진행도를 갖지 않습니다. 서버가 409로 거절하므로 호출하지 않습니다.
+  if (editingStatus.value && editingStatus.value !== 'DRAFT') return
   try {
     await updateProductDraftProgress(currentProductId.value, {
       step: activeStep.value,
@@ -356,7 +377,10 @@ async function persistDraftProgress() {
 
 function resetForm() {
   editingId.value = null
+  editingStatus.value = ''
   draftProductId.value = null
+  if (pendingThumbnail.value) URL.revokeObjectURL(pendingThumbnail.value.previewUrl)
+  pendingThumbnail.value = null
   activeStep.value = 1
   Object.assign(form, {
     categoryId: '', deviceModelId: '', name: '', description: '', price: '',
@@ -415,11 +439,11 @@ async function loadTemplatePreview() {
 // 기기 등록(1단계)이 실제 필수 구간입니다. 여기서 빠진 값이 있으면 다음 단계로 넘기지 않습니다.
 // 반대로 2단계 촬영 체크리스트는 필수가 아니어서 건너뛸 수 있습니다.
 // requireStorage: '다음 단계'는 저장 용량까지 요구하고, 중간 이탈용 '임시저장'은 요구하지 않습니다.
-// TODO(필수 항목): 저장 용량·대표 이미지를 필수로 두기로 했지만, S3 업로드 브랜치와 같은 구간이라
-// 병합 충돌을 줄이려고 검증을 미뤘습니다. 그 브랜치가 dev에 들어오면 여기에 다시 붙이세요.
+// TODO(필수 항목): 저장 용량·대표 이미지는 아직 선택 입력입니다. 필수로 바꾸려면 이미지 없이
+// 임시저장된 기존 상품의 처리 방침을 먼저 정하세요(위 대표 이미지 주석 참고).
 function validateSaleInfo() {
   if (!form.name || form.price === '') {
-    errorMessage.value = '상품명과 가격을 입력해 주세요.'
+    errorMessage.value = '글제목과 가격을 입력해 주세요.'
     return false
   }
   if (!Number.isFinite(Number(form.price)) || Number(form.price) < 1) {
@@ -463,6 +487,8 @@ async function persistSaleInfo() {
     productId = created.productId
     draftProductId.value = productId
   }
+  // 상품이 생긴 다음이라야 대표 이미지 presigned URL을 받을 수 있습니다.
+  await flushPendingThumbnail()
   checklistItems.value = await getProductChecklist(productId)
   activeCaptureItemId.value = mediaChecklistItems.value[0]?.checklistItemId || null
   return productId
@@ -588,9 +614,11 @@ async function finishWizard() {
   try {
     if (reinspectionRequestKey.value) {
       await completeReinspectionRequest(reinspectionRequestKey.value)
-    } else {
+    } else if (!editingStatus.value || editingStatus.value === 'DRAFT') {
       await transitionProductStatus(productId, 'ON_SALE', '등록 완료')
     }
+    // 이미 판매 중·숨김인 상품을 고친 경우에는 상태를 그대로 둡니다. 숨겨 둔 상품이 수정만으로
+    // 다시 공개되면 판매자가 의도하지 않은 노출이 생기기 때문입니다.
   } catch (error) {
     if (reinspectionRequestKey.value) {
       errorMessage.value = error.message || '재검수 완료 처리에 실패했습니다.'
@@ -693,6 +721,12 @@ async function handleListingImage(file, displayOrder = listingImages.value.lengt
   let optimizedFile = file
   try {
     optimizedFile = await measureRegistrationPhase('imageCompressionMs', () => compressImage(file))
+    // 서버 상한과 같은 값을 미리 걸러 냅니다. 그냥 보내면 MEDIA_UPLOAD_INVALID로만 돌아와
+    // 사용자는 무엇이 문제인지 알 수 없습니다.
+    if (optimizedFile.size > MAX_LISTING_IMAGE_BYTES) {
+      errorMessage.value = '대표 이미지는 압축 후에도 15MB를 넘을 수 없습니다. 더 작은 파일을 올려 주세요.'
+      return
+    }
     const upload = await createProductImageUploadUrl(currentProductId.value, {
       filename: optimizedFile.name,
       contentType: optimizedFile.type || 'application/octet-stream',
@@ -720,6 +754,64 @@ async function handleListingImage(file, displayOrder = listingImages.value.lengt
     listingImageBusy.value = listingImageInFlight > 0
     if (!listingImageBusy.value) listingImageProgress.value = 0
   }
+}
+
+// 대표 이미지를 고르면 바로 서버에 저장합니다. 상품이 없으면 초안을 먼저 만들어서
+// 새로고침이나 이탈로 선택이 날아가지 않게 합니다.
+async function onThumbnailInput(event) {
+  const file = (event.target.files || [])[0]
+  event.target.value = ''
+  if (!file) return
+  errorMessage.value = ''
+  notice.value = ''
+
+  if (!currentProductId.value) {
+    // 초안 생성에 필요한 값이 아직 없으면 서버에 올릴 방법이 없습니다. 파일만 들고 있다가
+    // 다음 저장 시점에 올리고, 지금은 아직 저장되지 않았다는 사실을 분명히 알립니다.
+    if (!validateDeviceStep()) {
+      if (pendingThumbnail.value) URL.revokeObjectURL(pendingThumbnail.value.previewUrl)
+      pendingThumbnail.value = { file, previewUrl: URL.createObjectURL(file) }
+      errorMessage.value = `${errorMessage.value} 이 항목을 채우면 대표 이미지가 바로 저장됩니다.`
+      return
+    }
+
+    isSaving.value = true
+    try {
+      pendingThumbnail.value = { file, previewUrl: URL.createObjectURL(file) }
+      // persistSaleInfo가 상품을 만든 뒤 flushPendingThumbnail로 업로드까지 이어집니다.
+      await persistSaleInfo()
+      notice.value = '대표 이미지를 저장했습니다. 이어서 작성하다 나가도 남아 있습니다.'
+    } catch (error) {
+      errorMessage.value = error.message || '대표 이미지를 저장하지 못했습니다.'
+    } finally {
+      isSaving.value = false
+    }
+    return
+  }
+
+  const existing = listingThumbnail.value
+  if (existing) await removeListingImage(existing)
+  await handleListingImage(file, 0)
+  if (!errorMessage.value) notice.value = '대표 이미지를 저장했습니다.'
+}
+
+async function removeThumbnail() {
+  if (pendingThumbnail.value) {
+    URL.revokeObjectURL(pendingThumbnail.value.previewUrl)
+    pendingThumbnail.value = null
+    return
+  }
+  if (listingThumbnail.value) await removeListingImage(listingThumbnail.value)
+}
+
+// 상품이 만들어진 직후 보류 중인 대표 이미지를 올립니다. 업로드가 실패해도 상품 저장 자체는
+// 유지하고 안내만 남깁니다 — 여기서 예외를 던지면 1단계 입력이 통째로 날아가기 때문입니다.
+async function flushPendingThumbnail() {
+  if (!pendingThumbnail.value || !currentProductId.value) return
+  const { file, previewUrl } = pendingThumbnail.value
+  pendingThumbnail.value = null
+  await handleListingImage(file, 0)
+  URL.revokeObjectURL(previewUrl)
 }
 
 async function onListingImageInput(event) {
@@ -804,6 +896,7 @@ async function startEdit(productId) {
     const product = await getMyProduct(productId)
     listingImages.value = await getProductImages(productId)
     editingId.value = productId
+    editingStatus.value = product.status || ''
     draftProductId.value = null
     Object.assign(form, {
       categoryId: product.category?.categoryId || '',
@@ -850,7 +943,11 @@ async function startEdit(productId) {
       (item) => mediaOf(item.checklistItemId).length > 0,
     )
     activeStep.value = draftProgress?.step || (hasEvidence ? 2 : 1)
-    if (hasEvidence) notice.value = '임시저장된 상품 정보와 기존 S3 증빙을 복구했습니다.'
+    if (editingStatus.value && editingStatus.value !== 'DRAFT') {
+      notice.value = '판매 중인 상품을 수정하고 있습니다. 저장하면 구매자에게 보이는 정보가 바로 바뀝니다.'
+    } else if (hasEvidence) {
+      notice.value = '임시저장된 상품 정보와 기존 S3 증빙을 복구했습니다.'
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' })
   } catch (error) {
     errorMessage.value = error.message || '상품 상세를 불러오지 못했습니다.'
@@ -1134,7 +1231,8 @@ onMounted(async () => {
             </p>
 
             <div class="mt-6 grid gap-5 sm:grid-cols-2">
-              <label class="text-sm font-semibold text-text-main">상품명<span class="ml-0.5 text-red-500">*</span><input
+              <!-- 서버 필드명은 name이지만, 판매자가 쓰는 것은 판매글의 제목이라 화면에서는 '글제목'으로 부릅니다. -->
+              <label class="text-sm font-semibold text-text-main">글제목<span class="ml-0.5 text-red-500">*</span><input
                 v-model.trim="form.name"
                 required
                 maxlength="100"
@@ -1206,6 +1304,94 @@ onMounted(async () => {
                 />
               </label>
             </div>
+
+            <!--
+              대표 이미지는 목록·상세의 첫인상이라 기기 정보와 같은 화면에서 받습니다.
+              선택 버튼과 안내 문구는 미리보기 바로 아래에 세로로 둡니다 — 버튼이 사진에서 멀면
+              무엇을 누르라는 건지 눈이 한 번 더 움직여야 합니다.
+            -->
+            <div class="mt-6 rounded-lg border border-border bg-white p-4">
+              <h3 class="text-sm font-bold text-text-main">
+                대표 이미지
+              </h3>
+              <p class="mt-1 text-xs leading-5 text-text-sub">
+                판매글과 전체 상품 페이지 내에서 가장 먼저 보이는 사진입니다.
+              </p>
+              <p class="mt-0.5 text-xs leading-5 text-text-sub">
+                JPG·PNG·WebP, 15MB까지 올릴 수 있습니다. 업로드 시 서버에 저장됩니다.
+              </p>
+
+              <!-- 버튼은 미리보기 상자의 오른쪽 아래에 맞춰 둡니다(items-end). -->
+              <div class="mt-4 flex items-end gap-3">
+                <div class="relative h-28 w-40 shrink-0 overflow-hidden rounded-md border border-border bg-bg">
+                  <img
+                    v-if="thumbnailPreviewUrl"
+                    :src="thumbnailPreviewUrl"
+                    alt="대표 이미지 미리보기"
+                    class="h-full w-full object-cover"
+                  >
+                  <span
+                    v-else
+                    class="flex h-full w-full items-center justify-center text-center text-[11px] leading-4 text-text-sub"
+                  >대표 이미지<br>미등록</span>
+                </div>
+
+                <div class="w-40 shrink-0">
+                  <label
+                    class="block cursor-pointer rounded-md border border-primary px-3 py-2 text-center text-sm font-semibold text-primary"
+                    :class="listingImageBusy ? 'pointer-events-none opacity-60' : ''"
+                  >
+                    {{ listingImageBusy ? '업로드 중…' : (thumbnailPreviewUrl ? '이미지 변경' : '이미지 선택') }}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      class="sr-only"
+                      aria-label="대표 이미지 선택"
+                      :disabled="listingImageBusy"
+                      @change="onThumbnailInput"
+                    >
+                  </label>
+
+                  <button
+                    v-if="thumbnailPreviewUrl"
+                    type="button"
+                    class="mt-1.5 block w-full rounded-md border border-border px-3 py-1.5 text-xs font-semibold text-text-sub hover:bg-bg"
+                    :disabled="listingImageBusy"
+                    @click="removeThumbnail"
+                  >
+                    이미지 삭제
+                  </button>
+                </div>
+              </div>
+
+              <div
+                v-if="listingImageBusy"
+                class="mt-3 h-1.5 max-w-[21rem] overflow-hidden rounded-pill bg-slate-100"
+                role="progressbar"
+                :aria-valuenow="listingImageProgress"
+                aria-valuemin="0"
+                aria-valuemax="100"
+              >
+                <div
+                  class="h-full bg-primary transition-all"
+                  :style="{ width: `${listingImageProgress}%` }"
+                />
+              </div>
+
+              <p
+                v-if="pendingThumbnail"
+                class="mt-2 text-xs leading-5 text-amber-700"
+              >
+                아직 저장되지 않았습니다. 위에 표시된 항목을 채우면 바로 저장되고,
+                그전에 새로고침하면 선택이 사라집니다.
+              </p>
+              <p
+                v-else-if="listingThumbnail"
+                class="mt-2 text-xs leading-5 text-primary"
+              >
+                서버에 저장됨 · 지금 나가도 남아 있습니다.
+              </p>
+            </div>
           </section>
 
           <section
@@ -1219,7 +1405,8 @@ onMounted(async () => {
                     상품 이미지
                   </h2>
                   <p class="mt-1 text-sm text-text-sub">
-                    첫 번째 이미지는 대표 이미지로 등록되며 최대 10개까지 추가할 수 있습니다.
+                    1단계에서 고른 대표 이미지가 맨 앞에 있습니다. 여기서 사진을 최대 10개까지 더하고
+                    '대표'를 눌러 대표 이미지를 바꿀 수 있습니다.
                   </p>
                 </div>
                 <label class="cursor-pointer rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white">
@@ -1616,7 +1803,7 @@ onMounted(async () => {
             <dl class="mt-6 grid grid-cols-2 gap-4 rounded-lg border border-border bg-bg p-6 text-left text-sm">
               <div>
                 <dt class="text-xs text-text-sub">
-                  상품명
+                  글제목
                 </dt><dd class="mt-1 font-semibold text-text-main">
                   {{ form.name }}
                 </dd>
