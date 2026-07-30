@@ -261,20 +261,17 @@ public class PaymentService {
             // Toss 콘솔과 대조할 단서가 로그에도 없어진다 — 자동 복구는 하지 않고, 추적 가능하게만 한다.
             log.error(
                     "toss confirm succeeded but local approval could not be persisted: paymentId={}, "
-                            + "listingId={}, buyerId={}, providerOrderId={}, paymentKey={}, amount={}, "
-                            + "tossStatus={}",
+                            + "listingId={}, buyerId={}, providerOrderId={}, amount={}, tossStatus={}",
                     paymentId,
                     payment.getListingId(),
                     buyerId,
                     payment.getProviderOrderId(),
-                    tossResponse.paymentKey(),
                     tossResponse.totalAmount(),
                     tossResponse.status(),
                     exception);
             throw exception;
         }
-        markListingPaidOrEscalate(
-                listingId, buyerId, paymentId, payment.getProviderOrderId(), tossResponse.paymentKey());
+        markListingPaidOrEscalate(listingId, buyerId, paymentId, payment.getProviderOrderId());
 
         log.info(
                 "payment confirmed: paymentId={}, listingId={}, buyerId={}", paymentId, listingId, buyerId);
@@ -331,19 +328,17 @@ public class PaymentService {
      * 하므로 BusinessException으로 좁히지 않고 RuntimeException 전체를 잡는다.
      */
     private void markListingPaidOrEscalate(
-            Long listingId, Long buyerId, Long paymentId, String providerOrderId, String paymentKey) {
+            Long listingId, Long buyerId, Long paymentId, String providerOrderId) {
         try {
             listingService.markPaid(listingId, buyerId);
         } catch (RuntimeException exception) {
             log.error(
                     "payment approved by PG but listing could not be marked paid, needs manual "
-                            + "reconciliation: paymentId={}, listingId={}, buyerId={}, providerOrderId={}, "
-                            + "paymentKey={}",
+                            + "reconciliation: paymentId={}, listingId={}, buyerId={}, providerOrderId={}",
                     paymentId,
                     listingId,
                     buyerId,
                     providerOrderId,
-                    paymentKey,
                     exception);
             throw new BusinessException(ErrorCode.PAYMENT_CONFIRM_RESERVATION_INVALID);
         }
