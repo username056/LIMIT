@@ -17,11 +17,15 @@ import com.c203.limit.domain.product.repository.DeviceModelRequestRepository;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class DeviceModelRequestService {
+    private static final Logger log = LoggerFactory.getLogger(DeviceModelRequestService.class);
+
     private final CategoryRepository categoryRepository;
     private final DeviceModelRequestRepository requestRepository;
     private final ChecklistTemplateRepository templateRepository;
@@ -66,6 +70,11 @@ public class DeviceModelRequestService {
                 request.modelName(),
                 request.modelCode(),
                 request.osFamily()));
+        log.info(
+                "device model request created: requestId={}, categoryId={}, status={}",
+                created.getId(),
+                category.getId(),
+                created.getStatus());
         return DeviceModelRequestResponse.from(created);
     }
 
@@ -130,6 +139,11 @@ public class DeviceModelRequestService {
                 "DEVICE_MODEL_REQUEST",
                 requestId,
                 note));
+        log.info(
+                "device model request approved: requestId={}, modelId={}, templateId={}",
+                requestId,
+                model.getId(),
+                template.getId());
         return DeviceModelRequestResponse.from(request);
     }
 
@@ -143,6 +157,7 @@ public class DeviceModelRequestService {
                 "DEVICE_MODEL_REQUEST",
                 requestId,
                 note));
+        log.info("device model request rejected: requestId={}", requestId);
         return DeviceModelRequestResponse.from(request);
     }
 

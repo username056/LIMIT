@@ -32,11 +32,16 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ModelChecklistResearchService {
+    private static final Logger log =
+            LoggerFactory.getLogger(ModelChecklistResearchService.class);
+
     private final ModelChecklistResearchRepository researchRepository;
     private final CategoryRepository categoryRepository;
     private final ChecklistTemplateRepository templateRepository;
@@ -113,6 +118,12 @@ public class ModelChecklistResearchService {
                 "MODEL_CHECKLIST_RESEARCH",
                 researchId,
                 note));
+        log.info(
+                "checklist research approved: researchId={}, modelId={}, templateId={}, approvedFeatureCount={}",
+                researchId,
+                model.getId(),
+                template.getId(),
+                approvedCodes.size());
         return response(research);
     }
 
@@ -126,6 +137,7 @@ public class ModelChecklistResearchService {
                 "MODEL_CHECKLIST_RESEARCH",
                 researchId,
                 note));
+        log.info("checklist research rejected: researchId={}", researchId);
         return response(research);
     }
 
