@@ -5,6 +5,7 @@ import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import java.util.Set;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -17,6 +18,15 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "listing")
 public class Listing extends BaseTimeEntity {
+
+    /**
+     * 판매자가 상품 정보(제목·설명·가격·옵션)를 고칠 수 있는 상태.
+     * 초안뿐 아니라 이미 등록을 끝낸 판매 중·숨김 매물도 허용한다 — 가격 오타처럼 등록 후에야
+     * 발견하는 실수를 되돌릴 방법이 필요하기 때문이다. 반면 RESERVED 이후는 구매자가 그 조건을
+     * 보고 결제·검수에 들어간 뒤라 수정을 막는다.
+     */
+    private static final Set<ListingStatus> EDITABLE_STATUSES =
+            Set.of(ListingStatus.DRAFT, ListingStatus.ON_SALE, ListingStatus.HIDDEN);
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -142,7 +152,8 @@ public class Listing extends BaseTimeEntity {
         this.price = price;
     }
 
-    public void updateDraft(
+    /** 판매자가 상품 정보를 고친다. 초안·판매 중·숨김 상태에서만 허용한다. */
+    public void updateBySeller(
             String title,
             String description,
             boolean descriptionSpecified,
@@ -152,7 +163,9 @@ public class Listing extends BaseTimeEntity {
             Integer storageGb,
             boolean storageGbSpecified,
             String tradeRegion) {
-        requireStatus(ListingStatus.DRAFT, ErrorCode.PRODUCT_EDIT_NOT_ALLOWED);
+        if (!EDITABLE_STATUSES.contains(this.status)) {
+            throw new BusinessException(ErrorCode.PRODUCT_EDIT_NOT_ALLOWED);
+        }
         if (title != null) this.title = title;
         if (descriptionSpecified) this.description = description;
         if (price != null) this.price = price;
@@ -186,6 +199,20 @@ public class Listing extends BaseTimeEntity {
             throw new BusinessException(ErrorCode.INVALID_PRODUCT_STATUS_TRANSITION);
         }
         this.status = ListingStatus.HIDDEN;
+    }
+
+    /**
+     * 판매자가 직접 판매 완료로 종료한다. 서비스 결제를 거치지 않는 직거래를 정리하기 위한 출구다.
+     *
+     * <p>판매 중이거나 숨겨 둔 매물에서만 허용한다. RESERVED 이후는 구매자가 이미 결제·검수 절차에
+     * 들어가 있어, 판매자가 임의로 종료하면 진행 중인 주문과 상태가 어긋난다 — 그 경우는 주문 취소나
+     * 환불 흐름으로 처리해야 한다.
+     */
+    public void markSoldBySeller() {
+        if (status != ListingStatus.ON_SALE && status != ListingStatus.HIDDEN) {
+            throw new BusinessException(ErrorCode.INVALID_PRODUCT_STATUS_TRANSITION);
+        }
+        this.status = ListingStatus.SOLD;
     }
 
     /**

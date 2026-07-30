@@ -3,7 +3,17 @@
 ## 구현 범위
 
 - 상품 초안 등록, 부분 수정, 논리 삭제
+  - 수정은 `DRAFT`, `ON_SALE`, `HIDDEN`에서 허용한다. 등록을 끝낸 뒤 발견하는 가격 오타 같은
+    실수를 판매자가 스스로 고칠 수 있어야 하기 때문이다. `RESERVED` 이후는 구매자가 그 조건을
+    보고 결제·검수에 들어간 뒤라 `PRODUCT_EDIT_NOT_ALLOWED`로 거절한다.
 - 필수 체크리스트 완료 검증을 포함한 `DRAFT -> ON_SALE` 전환
+- 판매자가 직접 종료하는 `ON_SALE|HIDDEN -> SOLD` 전환
+  - 서비스 결제를 거치지 않는 직거래를 정리하기 위한 출구다. 결제 흐름
+    (`RESERVED -> PAID -> INSPECTING -> CONFIRMED -> SETTLED`)과는 별개 경로이며,
+    `RESERVED` 이후에는 구매자가 이미 결제·검수에 들어가 있어 거절한다.
+  - `listing.status`는 `VARCHAR(30)`이라 `SOLD` 추가에 마이그레이션이 필요하지 않다.
+  - 공개 목록·상세는 `ON_SALE`만 노출하므로 `SOLD` 매물은 구매자에게 `LISTING_NOT_FOUND`로
+    응답한다. 판매자는 `GET /api/v1/members/me/products/{productId}`로 계속 확인할 수 있다.
 - `ON_SALE` 공개 상품 목록·상세 및 판매자 본인 상품 목록·상세 조회
 - 기기 카테고리·모델·체크리스트 템플릿·판매 준비 가이드 조회
 - 상품 생성 시 게시된 체크리스트 템플릿을 매물 항목으로 스냅샷 저장

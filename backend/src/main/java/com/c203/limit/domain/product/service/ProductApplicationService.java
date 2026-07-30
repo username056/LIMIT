@@ -201,7 +201,7 @@ public class ProductApplicationService {
     @Transactional
     public ProductDetailResponse update(Long sellerId, Long productId, UpdateProductRequest request) {
         Listing listing = owned(productId, sellerId);
-        listing.updateDraft(
+        listing.updateBySeller(
                 request.getName(),
                 request.getDescription(),
                 request.isDescriptionSpecified(),
@@ -211,7 +211,10 @@ public class ProductApplicationService {
                 request.getStorageGb(),
                 request.isStorageGbSpecified(),
                 request.getTradeRegion());
-        log.info("product draft updated: productId={}", productId);
+        log.info(
+                "product updated by seller: productId={}, status={}",
+                productId,
+                listing.getStatus());
         return detail(listing);
     }
 
@@ -333,6 +336,9 @@ public class ProductApplicationService {
             listing.publish();
         } else if (target == ListingStatus.HIDDEN) {
             listing.hide();
+        } else if (target == ListingStatus.SOLD) {
+            // 직거래로 팔린 매물을 판매자가 직접 닫는 경로다. 결제 흐름을 거치지 않는다.
+            listing.markSoldBySeller();
         } else {
             throw new BusinessException(ErrorCode.INVALID_PRODUCT_STATUS_TRANSITION);
         }
