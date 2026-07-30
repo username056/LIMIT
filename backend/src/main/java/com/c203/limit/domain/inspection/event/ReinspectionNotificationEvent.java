@@ -8,6 +8,7 @@ public record ReinspectionNotificationEvent(
         Type type,
         Long reinspectionRequestId,
         String requestKey,
+        Long listingId,
         Long chatRoomId,
         Long actorId,
         Long recipientId,
