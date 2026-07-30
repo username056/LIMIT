@@ -43,10 +43,12 @@ class PaymentControllerTests {
         return new PaymentResponse(
                 PAYMENT_ID,
                 LISTING_ID,
+                "PAY-test-order-1",
                 "REQUESTED",
                 "CARD",
                 1,
                 BigDecimal.valueOf(650_000),
+                null,
                 null,
                 OffsetDateTime.now(),
                 null);
@@ -87,6 +89,29 @@ class PaymentControllerTests {
                                         }
                                         """))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void confirmPaymentReturns200() throws Exception {
+        when(paymentService.confirm(
+                        org.mockito.ArgumentMatchers.eq(BUYER_ID),
+                        org.mockito.ArgumentMatchers.eq(PAYMENT_ID),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(response());
+
+        mockMvc.perform(
+                        post("/api/v1/payments/{paymentId}/confirm", PAYMENT_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        """
+                                        {
+                                          "paymentKey": "payment-key-1",
+                                          "orderId": "PAY-test-order-1",
+                                          "amount": 650000
+                                        }
+                                        """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.paymentId").value(PAYMENT_ID));
     }
 
     @Test

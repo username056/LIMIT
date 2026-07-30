@@ -1,5 +1,6 @@
 package com.c203.limit.domain.payment.controller;
 
+import com.c203.limit.domain.payment.dto.request.ConfirmPaymentRequest;
 import com.c203.limit.domain.payment.dto.request.CreatePaymentRequest;
 import com.c203.limit.domain.payment.dto.response.PaymentResponse;
 import com.c203.limit.domain.payment.service.PaymentService;
@@ -23,6 +24,13 @@ public class PaymentController implements PaymentApi {
     public ResponseEntity<ApiResponse<PaymentResponse>> createPayment(CreatePaymentRequest request) {
         PaymentResponse response = paymentService.request(currentUser.memberId(), request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
+    }
+
+    @Override
+    public ResponseEntity<ApiResponse<PaymentResponse>> confirmPayment(
+            Long paymentId, ConfirmPaymentRequest request) {
+        PaymentResponse response = paymentService.confirm(currentUser.memberId(), paymentId, request);
+        return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
     @Override
