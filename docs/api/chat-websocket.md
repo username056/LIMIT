@@ -46,6 +46,13 @@ WebSocket 재연결 중에도 같은 저장·중복 방지 계약을 사용할 �
 - 최초 저장: `201 Created`
 - 같은 `clientMessageId` 재요청: `200 OK`와 기존 메시지
 
+## 채팅방 나가기
+
+- `DELETE /api/v1/chat-rooms/{roomId}`는 현재 사용자의 채팅 목록에서 방을 제거하고 `204 No Content`를 반환한다.
+- 상대 참여자의 메시지와 방은 유지된다. 같은 매물에서 다시 문의하면 기존 방에 재입장한다.
+- 메시지가 없는 방은 채팅 목록 화면에서 표시하지 않는다.
+- `unreadCount`는 마지막 읽음 위치 이후 상대방이 보낸 메시지만 계산한다.
+
 ## 이미지·영상
 
 1. `POST /api/v1/chat-rooms/{roomId}/media`에 `multipart/form-data`의 `file`을 전송한다.
@@ -53,9 +60,10 @@ WebSocket 재연결 중에도 같은 저장·중복 방지 계약을 사용할 �
 3. 참여자는 `GET /api/v1/chat-media/{mediaId}/content`로 파일을 조회한다.
 
 허용 형식은 JPEG, PNG, WebP, GIF(최대 20MB), MP4, WebM, QuickTime(최대 100MB)다.
-파일 저장 경로는 `LIMIT_CHAT_MEDIA_STORAGE_DIR`로 분리하며, 운영에서는 영속 볼륨 경로를 지정해야 한다.
-Servlet 업로드 제한도 `SPRING_SERVLET_MULTIPART_MAX_FILE_SIZE`,
-`SPRING_SERVLET_MULTIPART_MAX_REQUEST_SIZE`로 위 용량 이상 허용해야 한다.
+파일은 운영의 공통 S3 미디어 버킷에서 `chat/{roomId}/` prefix로 저장한다.
+운영 Nginx의 `client_max_body_size`는 101MB이고, Servlet 업로드 제한은
+`SPRING_SERVLET_MULTIPART_MAX_FILE_SIZE=100MB`,
+`SPRING_SERVLET_MULTIPART_MAX_REQUEST_SIZE=101MB`를 기본값으로 사용한다.
 
 | Method | Destination | Request | ACK |
 | --- | --- | --- | --- |

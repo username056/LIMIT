@@ -15,6 +15,19 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
     Optional<ChatMessage> findByChatRoomIdAndClientMessageId(Long chatRoomId, UUID clientMessageId);
 
     @Query("""
+            SELECT COUNT(message)
+              FROM ChatMessage message
+             WHERE message.chatRoomId = :roomId
+               AND message.senderId <> :memberId
+               AND message.roomSequence > :lastReadSeq
+               AND message.deletedAt IS NULL
+            """)
+    long countUnreadFromCounterpart(
+            @Param("roomId") Long roomId,
+            @Param("memberId") Long memberId,
+            @Param("lastReadSeq") long lastReadSeq);
+
+    @Query("""
             SELECT message.id AS messageId, message.roomSequence AS roomSequence,
                    message.senderId AS senderId, message.clientMessageId AS clientMessageId,
                    message.type AS type, message.content AS content,

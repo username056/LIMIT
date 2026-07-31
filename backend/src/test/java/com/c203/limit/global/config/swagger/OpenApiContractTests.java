@@ -281,6 +281,8 @@ class OpenApiContractTests {
                         .isArray())
                 .andExpect(jsonPath("$.paths['/api/v1/chat-rooms'].get.operationId")
                         .value("chatBe07"))
+                .andExpect(jsonPath("$.paths['/api/v1/chat-rooms/{roomId}'].delete.operationId")
+                        .value("chatBe08"))
                 .andExpect(jsonPath("$.paths['/api/v1/chat-rooms/{roomId}/messages'].get.operationId")
                         .value("chatBe06"))
                 .andExpect(jsonPath("$.paths['/api/v1/chat-rooms'].get.security[0].bearerAuth")

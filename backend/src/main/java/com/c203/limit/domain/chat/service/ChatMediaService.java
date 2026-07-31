@@ -1,18 +1,15 @@
 package com.c203.limit.domain.chat.service;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -22,8 +19,15 @@ import com.c203.limit.domain.chat.dto.response.ChatMediaResponse;
 import com.c203.limit.domain.chat.entity.ChatMedia;
 import com.c203.limit.domain.chat.repository.ChatMediaRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomParticipantRepository;
+import com.c203.limit.domain.product.storage.S3MediaProperties;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
+import software.amazon.awssdk.core.exception.SdkException;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 
 @Service
 public class ChatMediaService {
@@ -37,15 +41,18 @@ public class ChatMediaService {
 
     private final ChatMediaRepository mediaRepository;
     private final ChatRoomParticipantRepository participantRepository;
-    private final Path storageRoot;
+    private final S3Client s3Client;
+    private final S3MediaProperties storageProperties;
 
     public ChatMediaService(
             ChatMediaRepository mediaRepository,
             ChatRoomParticipantRepository participantRepository,
-            @Value("${limit.chat.media-storage-dir:./build/chat-media}") String storageDirectory) {
+            S3Client mediaS3Client,
+            S3MediaProperties storageProperties) {
         this.mediaRepository = mediaRepository;
         this.participantRepository = participantRepository;
-        this.storageRoot = Path.of(storageDirectory).toAbsolutePath().normalize();
+        this.s3Client = mediaS3Client;
+        this.storageProperties = storageProperties;
     }
 
     @Transactional
@@ -54,16 +61,20 @@ public class ChatMediaService {
         MediaType type = validate(file);
         String originalFilename = sanitizeFilename(file.getOriginalFilename());
         String extension = extension(originalFilename);
-        String objectKey = UUID.randomUUID() + extension;
-        Path target = storageRoot.resolve(objectKey).normalize();
-        if (!target.startsWith(storageRoot)) {
-            throw new BusinessException(ErrorCode.CHAT_MEDIA_INVALID);
-        }
+        String objectKey = "chat/" + roomId + "/" + UUID.randomUUID() + extension;
         try {
-            Files.createDirectories(storageRoot);
-            Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
+            try (var input = file.getInputStream()) {
+                s3Client.putObject(
+                        PutObjectRequest.builder()
+                                .bucket(storageProperties.bucket())
+                                .key(objectKey)
+                                .contentType(file.getContentType())
+                                .build(),
+                        RequestBody.fromInputStream(input, file.getSize()));
+            }
             ChatMedia media = mediaRepository.save(ChatMedia.verified(
-                    UUID.randomUUID(), roomId, memberId, type, objectKey, originalFilename,
+                    UUID.randomUUID(), roomId, memberId, type, storageProperties.bucket(),
+                    objectKey, originalFilename,
                     file.getContentType(), file.getSize()));
             log.info(
                     "chat media stored: mediaId={}, type={}, sizeBytes={}",
@@ -71,7 +82,7 @@ public class ChatMediaService {
                     media.getType(),
                     media.getFileSizeBytes());
             return ChatMediaResponse.from(media);
-        } catch (IOException exception) {
+        } catch (IOException | S3Exception exception) {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "채팅 파일을 저장하지 못했습니다.");
         }
     }
@@ -82,12 +93,13 @@ public class ChatMediaService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.CHAT_MEDIA_NOT_FOUND));
         requireParticipant(media.getChatRoomId(), memberId);
         try {
-            Path target = storageRoot.resolve(media.getObjectKey()).normalize();
-            if (!target.startsWith(storageRoot) || !Files.isRegularFile(target)) {
-                throw new BusinessException(ErrorCode.CHAT_MEDIA_NOT_FOUND);
-            }
-            return new MediaDownload(new UrlResource(target.toUri()), media.getMimeType(), media.getOriginalFilename());
-        } catch (IOException exception) {
+            var input = s3Client.getObject(GetObjectRequest.builder()
+                    .bucket(media.getBucketName())
+                    .key(media.getObjectKey())
+                    .build());
+            return new MediaDownload(
+                    new InputStreamResource(input), media.getMimeType(), media.getOriginalFilename());
+        } catch (SdkException exception) {
             throw new BusinessException(ErrorCode.CHAT_MEDIA_NOT_FOUND);
         }
     }
