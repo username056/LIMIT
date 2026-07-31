@@ -45,7 +45,7 @@ public class CallAppointmentChatNotificationService {
         var room = chatRoomRepository.findLockedById(event.chatRoomId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.CHAT_ROOM_ACCESS_DENIED));
         long sequence = room.nextMessageSequence();
-        String content = "검증 약속이 변경됐어요!"
+        String content = "검증 약속이 등록·변경됐어요!"
                 + "\n검증 일정: " + event.scheduledAt().format(SCHEDULE_FORMAT)
                 + (event.memo() == null || event.memo().isBlank()
                         ? ""

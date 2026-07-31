@@ -75,13 +75,17 @@ public class ChatRoomService {
         this.objectMapper = objectMapper;
     }
 
+    @Transactional
     public ChatRoomCreateResult createOrGet(Long listingId, Long buyerId) {
         ListingChatInfo listing = listingReader.findById(listingId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.LISTING_NOT_FOUND));
 
         return chatRoomRepository.findByListingIdAndBuyerIdAndSellerId(
                         listingId, buyerId, listing.sellerId())
-                .map(room -> ChatRoomCreateResult.existing(ChatRoomResponse.from(room)))
+                .map(room -> {
+                    rejoin(room.getId(), buyerId);
+                    return ChatRoomCreateResult.existing(ChatRoomResponse.from(room));
+                })
                 .orElseGet(() -> create(listing, buyerId));
     }
 
@@ -174,6 +178,13 @@ public class ChatRoomService {
         long readSeq = Math.min(request.lastReadSeq(), room.nextMessageSequence() - 1);
         participant.readUpTo(readSeq);
         return participant.getLastReadSeq();
+    }
+
+    @Transactional
+    public void leaveRoom(Long roomId, Long memberId) {
+        ChatRoomParticipant participant = participant(roomId, memberId);
+        participant.leave();
+        log.info("chat room left: roomId={}, memberId={}", roomId, memberId);
     }
 
     private void validateMessageCursor(Long beforeSeq, Long afterSeq, int size) {
@@ -278,7 +289,8 @@ public class ChatRoomService {
     private ChatRoomSummaryResponse toSummary(
             ChatRoomSummaryProjection row, Long memberId, ChatRoomContext context) {
         Long counterpartId = memberId.equals(row.getBuyerId()) ? row.getSellerId() : row.getBuyerId();
-        long unreadCount = Math.max(0L, row.getLastMessageSeq() - row.getLastReadSeq());
+        long unreadCount = chatMessageRepository.countUnreadFromCounterpart(
+                row.getRoomId(), memberId, row.getLastReadSeq());
         return new ChatRoomSummaryResponse(
                 row.getRoomId(), row.getListingId(), counterpartId,
                 context == null ? null : context.counterpartNickname(),
@@ -300,6 +312,13 @@ public class ChatRoomService {
                     .orElseThrow(() -> exception);
             return ChatRoomCreateResult.existing(ChatRoomResponse.from(room));
         }
+    }
+
+    private void rejoin(Long roomId, Long memberId) {
+        participantRepository.findByChatRoomIdAndUserId(roomId, memberId)
+                .filter(participant -> !participantRepository
+                        .existsByChatRoomIdAndUserIdAndLeftAtIsNull(roomId, memberId))
+                .ifPresent(ChatRoomParticipant::rejoin);
     }
 
     private Long createForReinspection(Long listingId, Long buyerId, Long sellerId) {

@@ -1,12 +1,13 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseCard from '../components/BaseCard.vue'
 import ChatThread from '../components/ChatThread.vue'
-import { getChatRooms } from '../api/chat'
+import { getChatRooms, leaveChatRoom } from '../api/chat'
 
 const route = useRoute()
+const router = useRouter()
 const rooms = ref([])
 const isLoading = ref(true)
 const errorMessage = ref('')
@@ -16,11 +17,24 @@ async function loadRooms() {
   errorMessage.value = ''
   try {
     const result = await getChatRooms({ size: 20 })
-    rooms.value = result?.content || []
+    rooms.value = (result?.content || []).filter(
+      (room) => room.lastMessageId || String(room.roomId) === String(route.params.roomId),
+    )
   } catch (error) {
     errorMessage.value = error.message || '채팅 목록을 불러오지 못했습니다.'
   } finally {
     isLoading.value = false
+  }
+}
+
+async function removeRoom(roomId) {
+  if (!window.confirm('이 채팅방을 목록에서 삭제할까요?')) return
+  try {
+    await leaveChatRoom(roomId)
+    rooms.value = rooms.value.filter((room) => Number(room.roomId) !== Number(roomId))
+    if (String(selectedRoomId.value) === String(roomId)) await router.push({ name: 'chat' })
+  } catch (error) {
+    errorMessage.value = error.message || '채팅방을 삭제하지 못했습니다.'
   }
 }
 
@@ -90,12 +104,22 @@ function formatTime(isoString) {
                     {{ room.counterpartNickname || `회원 #${room.counterpartId}` }}
                   </span>
                 </div>
-                <span
-                  v-if="room.unreadCount"
-                  class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-white"
-                >
-                  {{ room.unreadCount }}
-                </span>
+                <div class="flex shrink-0 items-center gap-2">
+                  <span
+                    v-if="room.unreadCount"
+                    class="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-white"
+                  >
+                    {{ room.unreadCount }}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="채팅방 삭제"
+                    class="rounded px-1 text-sm text-text-sub hover:bg-red-50 hover:text-red-600"
+                    @click.prevent.stop="removeRoom(room.roomId)"
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
               <p class="mt-1 truncate text-xs font-semibold text-text-sub">
                 {{ room.listingTitle || `상품 #${room.listingId}` }}

@@ -108,6 +108,14 @@ public class RtcCallService {
                 appointment.getId(),
                 roomId);
         publishAppointmentChanged(roomId);
+        eventPublisher.publishEvent(
+                new CallAppointmentUpdatedNotificationEvent(
+                        UUID.randomUUID(),
+                        appointment.getId(),
+                        roomId,
+                        memberId,
+                        appointment.getScheduledAt(),
+                        appointment.getMemo()));
         return callResponse(appointment, null, memberId);
     }
 

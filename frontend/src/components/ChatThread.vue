@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { getChatMediaBlob, getChatMessages, uploadChatMedia } from '../api/chat'
 import { createChatSocket } from '../api/chatSocket'
 import { getMyReinspectionRequests, getProduct, getProductChecklist } from '../api/products'
@@ -37,6 +37,7 @@ const pendingAppointmentId = ref(null)
 const appointmentAnchorSequence = ref(0)
 const anchoredAppointmentId = ref(null)
 const fileInput = ref(null)
+const messageList = ref(null)
 let chatSocket = null
 let nextPendingMessageId = -1
 let connectionVersion = 0
@@ -45,6 +46,12 @@ const mediaObjectUrls = new Set()
 const LAST_TIMELINE_ORDER = 2147483647
 const now = ref(Date.now())
 const countdownTimer = setInterval(() => { now.value = Date.now() }, 1000)
+
+async function scrollToLatest() {
+  await nextTick()
+  const element = messageList.value
+  if (element) element.scrollTop = element.scrollHeight
+}
 
 async function attachMediaUrls(message) {
   if (!message.media?.length) return message
@@ -152,6 +159,7 @@ async function loadMessages(roomId) {
       (result?.content || []).slice().reverse().map(attachMediaUrls),
     )
     messages.value = await restoreReinspectionCards(loadedMessages)
+    await scrollToLatest()
     markRead()
   } catch (error) {
     messagesError.value = error.message || '메시지를 불러오지 못했습니다.'
@@ -165,11 +173,13 @@ async function upsertMessage(message) {
   const indexByClientId = messages.value.findIndex((item) => item.clientMessageId === message.clientMessageId)
   if (indexByClientId >= 0) {
     messages.value[indexByClientId] = { ...messages.value[indexByClientId], ...hydrated, isPending: false }
+    await scrollToLatest()
     return
   }
   if (!messages.value.some((item) => item.messageId === message.messageId)) {
     messages.value.push(hydrated)
     messages.value.sort((first, second) => Number(first.roomSequence || Infinity) - Number(second.roomSequence || Infinity))
+    await scrollToLatest()
   }
 }
 
@@ -195,7 +205,8 @@ function appointmentNotificationDetails(content) {
 
 function isAppointmentNotification(message) {
   return message.type === 'SYSTEM'
-    && message.content?.startsWith('검증 약속이 변경됐어요!')
+    && (message.content?.startsWith('검증 약속이 변경됐어요!')
+      || message.content?.startsWith('검증 약속이 등록·변경됐어요!'))
 }
 
 function appointmentTimelineOrder() {
@@ -331,7 +342,9 @@ async function loadAppointments(roomId) {
     const appointmentId = appointments.value[0]?.callId ?? null
     if (appointmentId !== anchoredAppointmentId.value) {
       anchoredAppointmentId.value = appointmentId
-      appointmentAnchorSequence.value = latestSequence()
+      appointmentAnchorSequence.value = messages.value
+        .filter(isAppointmentNotification)
+        .reduce((max, message) => Math.max(max, Number(message.roomSequence || 0)), 0)
     }
   } catch (error) {
     callMessage.value = error.message || '통화 약속을 불러오지 못했습니다.'
@@ -453,6 +466,7 @@ function sendMessage() {
     isPending: true,
     media: [],
   })
+  scrollToLatest()
   chatSocket?.sendMessage({ clientMessageId, type: 'TEXT', content: text, mediaIds: [] })
   messageInput.value = ''
 }
@@ -480,6 +494,7 @@ async function selectMedia(event) {
       media: [media],
     })
     messages.value.push(optimistic)
+    scrollToLatest()
     chatSocket?.sendMessage({ clientMessageId, type, content: file.name, mediaIds: [media.mediaId] })
   } catch (error) {
     messagesError.value = error.message || '파일을 전송하지 못했습니다.'
@@ -649,7 +664,10 @@ onBeforeUnmount(() => {
       </ul>
     </div>
 
-    <div class="flex-1 space-y-3 overflow-y-auto px-5 py-5">
+    <div
+      ref="messageList"
+      class="flex-1 space-y-3 overflow-y-auto px-5 py-5"
+    >
       <p
         v-if="isLoadingMessages"
         class="py-10 text-center text-sm text-text-sub"
@@ -745,7 +763,7 @@ onBeforeUnmount(() => {
                       </li>
                     </ul>
                     <RouterLink
-                      v-if="message.reinspection.requestKey && message.notificationType === 'REINSPECTION_REQUESTED'"
+                      v-if="isSeller && message.reinspection.requestKey && message.notificationType === 'REINSPECTION_REQUESTED'"
                       :to="{
                         name: 'seller-product-edit',
                         params: { productId: message.reinspection.listingId || room.listingId },

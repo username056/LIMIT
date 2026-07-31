@@ -195,6 +195,8 @@ class ChatRoomServiceTests {
         ChatRoomSummaryProjection second = summary(90L, BUYER_ID, SELLER_ID, 4L, 4L);
         when(chatRoomRepository.findSummariesByMemberId(
                 eq(BUYER_ID), isNull(), any(Pageable.class))).thenReturn(List.of(first, second));
+        when(chatMessageRepository.countUnreadFromCounterpart(100L, BUYER_ID, 3L))
+                .thenReturn(5L);
         when(contextReader.findAll(List.of(100L), BUYER_ID)).thenReturn(
                 java.util.Map.of(100L, new ChatRoomContext(100L, "판매자", "상품", "https://cdn/image.jpg")));
 
@@ -323,6 +325,19 @@ class ChatRoomServiceTests {
 
         assertThat(lastReadSeq).isEqualTo(5L);
         assertThat(participant.getLastReadSeq()).isEqualTo(5L);
+    }
+
+    @Test
+    void leavesRoomForCurrentParticipant() {
+        ChatRoomParticipant participant = participant(100L, BUYER_ID);
+        when(participantRepository.findByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID))
+                .thenReturn(Optional.of(participant));
+
+        service.leaveRoom(100L, BUYER_ID);
+
+        verify(participantRepository)
+                .findByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID);
+        assertThat(participant.getLeftAt()).isNotNull();
     }
 
     private ChatRoomSummaryProjection summary(
