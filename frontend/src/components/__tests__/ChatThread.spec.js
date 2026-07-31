@@ -112,10 +112,12 @@ describe('ChatThread', () => {
     await wrapper.get('button[aria-label="phone.png 확대 보기"]').trigger('click')
     expect(wrapper.get('[role="dialog"]').attributes('aria-label')).toBe('채팅 이미지 확대 보기')
     expect(wrapper.get('[role="dialog"] img').attributes('src')).toBe('blob:chat-image')
+    expect(document.body.style.overflow).toBe('hidden')
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await wrapper.vm.$nextTick()
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    expect(document.body.style.overflow).toBe('')
   })
 
   it('새로고침 후 일반 시스템 메시지로 조회된 재검수 알림을 카드로 복원한다', async () => {
