@@ -138,6 +138,12 @@ limit:
         email: ${BASE_INIT_ADMIN_EMAIL:}
         password: ${BASE_INIT_ADMIN_PASSWORD:}
         name: ${BASE_INIT_ADMIN_NAME:}
+    demo-data:
+      enabled: ${DEMO_DATA_ENABLED:false}
+      user-count: ${DEMO_DATA_USER_COUNT:5}
+      products-per-user: ${DEMO_DATA_PRODUCTS_PER_USER:4}
+      password: ${DEMO_DATA_PASSWORD:}
+      email-domain: ${DEMO_DATA_EMAIL_DOMAIN:limit.local}
   security:
     jwt:
       secret: ${JWT_SECRET:local-only-change-this-jwt-secret-32bytes}
