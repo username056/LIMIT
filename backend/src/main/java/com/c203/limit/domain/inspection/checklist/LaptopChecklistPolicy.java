@@ -76,14 +76,14 @@ public class LaptopChecklistPolicy {
                         "LAP-KBD-005",
                         "키보드",
                         "키 입력과 키캡 상태를 확인합니다.",
-                        "키 테스트 화면에서 전체 키를 한 번씩 입력하는 과정을 촬영하세요.",
-                        EvidenceType.VIDEO),
+                        "웹 기반 점검에서 전체 키 입력이 정상 인식되는지 확인하세요.",
+                        EvidenceType.SELLER_CONFIRMATION),
                 required(
                         "LAP-PAD-006",
                         "터치패드",
                         "포인터 이동, 클릭, 스크롤 동작을 확인합니다.",
-                        "포인터 이동과 좌우 클릭, 두 손가락 스크롤을 차례로 촬영하세요.",
-                        EvidenceType.VIDEO),
+                        "웹 기반 점검에서 포인터 이동, 클릭, 스크롤이 정상 동작하는지 확인하세요.",
+                        EvidenceType.SELLER_CONFIRMATION),
                 required(
                         "LAP-CHG-007",
                         "충전 상태",
@@ -176,24 +176,24 @@ public class LaptopChecklistPolicy {
                         "LAP-FTR-CAM",
                         "카메라",
                         "내장 카메라 동작을 확인합니다.",
-                        "카메라 앱에서 영상이 정상 출력되는 화면을 촬영하세요.",
-                        EvidenceType.PHOTO));
+                        "웹 기반 점검에서 카메라 화면이 정상 출력되는지 확인하세요.",
+                        EvidenceType.SELLER_CONFIRMATION));
         items.put(
                 LaptopFeatureCode.MICROPHONE,
                 feature(
                         "LAP-FTR-MIC",
                         "마이크",
                         "내장 마이크 입력을 확인합니다.",
-                        "녹음 앱에서 음성 입력 게이지와 재생 상태를 촬영하세요.",
-                        EvidenceType.VIDEO));
+                        "웹 기반 점검에서 마이크 입력 레벨이 정상 감지되는지 확인하세요.",
+                        EvidenceType.SELLER_CONFIRMATION));
         items.put(
                 LaptopFeatureCode.SPEAKERS,
                 feature(
                         "LAP-FTR-SPK",
                         "스피커",
                         "좌우 스피커 출력과 잡음을 확인합니다.",
-                        "좌우 채널 테스트 음원을 재생하는 과정을 촬영하세요.",
-                        EvidenceType.VIDEO));
+                        "웹 기반 점검에서 테스트 음원이 정상적으로 들리는지 확인하세요.",
+                        EvidenceType.SELLER_CONFIRMATION));
         items.put(
                 LaptopFeatureCode.WIFI,
                 feature(
@@ -216,8 +216,8 @@ public class LaptopChecklistPolicy {
                         "LAP-FTR-TOUCH",
                         "터치스크린",
                         "화면 전체의 터치 입력을 확인합니다.",
-                        "화면 가장자리까지 선을 그어 터치 누락이 없는지 촬영하세요.",
-                        EvidenceType.VIDEO));
+                        "웹 기반 점검에서 화면 터치 입력이 정상 인식되는지 확인하세요.",
+                        EvidenceType.SELLER_CONFIRMATION));
         items.put(
                 LaptopFeatureCode.CONVERTIBLE_HINGE,
                 feature(
@@ -232,8 +232,8 @@ public class LaptopChecklistPolicy {
                         "LAP-FTR-PEN",
                         "스타일러스",
                         "펜 입력과 필압 인식을 확인합니다.",
-                        "펜으로 선과 글자를 입력하는 과정을 촬영하세요.",
-                        EvidenceType.VIDEO));
+                        "웹 기반 점검에서 펜 입력과 필압이 정상 인식되는지 확인하세요.",
+                        EvidenceType.SELLER_CONFIRMATION));
         items.put(
                 LaptopFeatureCode.FINGERPRINT,
                 feature(
@@ -280,8 +280,8 @@ public class LaptopChecklistPolicy {
                         "LAP-FTR-NUM",
                         "숫자 키패드",
                         "숫자 키패드 입력을 확인합니다.",
-                        "Num Lock을 켜고 숫자와 연산 키를 입력하는 과정을 촬영하세요.",
-                        EvidenceType.VIDEO));
+                        "웹 기반 점검에서 숫자 키패드 입력이 정상 인식되는지 확인하세요.",
+                        EvidenceType.SELLER_CONFIRMATION));
         items.put(
                 LaptopFeatureCode.THUNDERBOLT,
                 feature(

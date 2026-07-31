@@ -2,6 +2,7 @@ package com.c203.limit.domain.inspection.entity;
 
 import com.c203.limit.domain.inspection.enums.AutomationType;
 import com.c203.limit.domain.inspection.enums.ChecklistItemCompletionStatus;
+import com.c203.limit.domain.inspection.enums.DeviceCheckResult;
 import com.c203.limit.domain.inspection.enums.EvidenceType;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -80,6 +81,10 @@ public class ListingChecklistItem {
     @Column(name = "completion_status", nullable = false, length = 30)
     private ChecklistItemCompletionStatus completionStatus;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "device_check_result", length = 20)
+    private DeviceCheckResult deviceCheckResult;
+
     @Column(name = "display_order", nullable = false)
     private int displayOrder;
 
@@ -117,5 +122,20 @@ public class ListingChecklistItem {
 
     public void markPending() {
         this.completionStatus = ChecklistItemCompletionStatus.PENDING;
+        this.deviceCheckResult = null;
+    }
+
+    /**
+     * 웹 실동작 점검 결과를 반영한다. SUCCESS만 COMPLETED로 인정하고, FAILED·SKIPPED는 "시도는
+     * 했으나 정상이 아님"을 표현하기 위해 SUBMITTED에 머무른다 — 이전에 SUCCESS였더라도 재점검에서
+     * FAILED가 오면 COMPLETED 상태와 결과가 함께 되돌아간다.
+     */
+    public void applyDeviceCheckResult(DeviceCheckResult result) {
+        this.deviceCheckResult = result;
+        if (result == DeviceCheckResult.SUCCESS) {
+            markCompleted();
+        } else {
+            markSubmitted();
+        }
     }
 }
