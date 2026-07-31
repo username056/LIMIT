@@ -27,14 +27,16 @@ const route = useRoute()
 const router = useRouter()
 const productId = route.params.productId
 
+const RESULT = { SUCCESS: 'SUCCESS', FAILED: 'FAILED' }
+
 const loading = ref(true)
 const loadError = ref('')
 const saveError = ref('')
 const saving = ref(false)
 const items = ref([])
 const stepIndex = ref(0)
-const passedItemIds = ref(new Set())
-const existingConfirmedIds = ref(new Set())
+const itemResults = ref(new Map())
+const existingResults = ref(new Map())
 const draftStep = ref(1)
 const finished = ref(false)
 const videoEl = ref(null)
@@ -61,7 +63,9 @@ async function load() {
       getProductDraftProgress(productId),
     ])
     items.value = toCheckableItems(checklist)
-    existingConfirmedIds.value = new Set(progress.confirmedChecklistItemIds || [])
+    existingResults.value = new Map(
+      Object.entries(progress.results || {}).map(([itemId, result]) => [Number(itemId), result]),
+    )
     draftStep.value = progress.step
     if (items.value.length === 0) finished.value = true
   } catch {
@@ -72,9 +76,8 @@ async function load() {
 }
 load()
 
-function markPassed(itemId, passed) {
-  if (passed) passedItemIds.value.add(itemId)
-  else passedItemIds.value.delete(itemId)
+function markResult(itemId, passed) {
+  itemResults.value.set(itemId, passed ? RESULT.SUCCESS : RESULT.FAILED)
 }
 
 async function runCurrent() {
@@ -84,10 +87,10 @@ async function runCurrent() {
 
   if (item.checkKind === CHECK_KIND.CAMERA) {
     const passed = await camera.start(videoEl.value)
-    markPassed(item.checklistItemId, passed)
+    markResult(item.checklistItemId, passed)
   } else if (item.checkKind === CHECK_KIND.MIC) {
     const passed = await mic.start()
-    markPassed(item.checklistItemId, passed)
+    markResult(item.checklistItemId, passed)
   } else if (item.checkKind === CHECK_KIND.SPEAKER) {
     speaker.playTone()
   } else if (item.checkKind === CHECK_KIND.KEYBOARD) {
@@ -110,20 +113,18 @@ async function runCurrent() {
 
 function confirmSpeakerHeard(heard) {
   speaker.confirmHeard(heard)
-  markPassed(currentItem.value.checklistItemId, heard)
+  markResult(currentItem.value.checklistItemId, heard)
 }
 
 function finishKeyboard() {
   const result = keyboard.finish()
   keyboardMissing.value = result.missingCodes
-  // 죽은 키가 있어도 점검을 시도했다는 사실 자체는 완료로 인정한다 — 상세(어떤 키가 안 눌렸는지)는
-  // 서버에 저장할 곳이 없어 이 화면에서만 보여준다.
-  markPassed(currentItem.value.checklistItemId, true)
+  markResult(currentItem.value.checklistItemId, result.missingCodes.length === 0)
 }
 
 function finishPointer() {
   const passed = pointer.finish()
-  markPassed(currentItem.value.checklistItemId, passed)
+  markResult(currentItem.value.checklistItemId, passed)
 }
 
 function retryCurrent() {
@@ -144,13 +145,17 @@ async function save() {
   saving.value = true
   saveError.value = ''
   try {
-    const merged = new Set(existingConfirmedIds.value)
-    items.value.forEach((item) => {
-      if (passedItemIds.value.has(item.checklistItemId)) merged.add(item.checklistItemId)
-    })
+    // 이번 세션에서 다시 점검한 항목은 이전 결과를 덮어쓴다 — 예전에 성공했던 항목이라도
+    // 재점검에서 실패하면 그 실패가 최종값이 되도록, existingResults 위에 itemResults를 얹는다.
+    const merged = new Map(existingResults.value)
+    itemResults.value.forEach((result, itemId) => merged.set(itemId, result))
+    const results = [...merged.entries()].map(([checklistItemId, result]) => ({
+      checklistItemId,
+      result,
+    }))
     await updateProductDraftProgress(productId, {
       step: draftStep.value,
-      confirmedChecklistItemIds: [...merged],
+      results,
     })
     router.push({ name: 'seller-product-edit', params: { productId } })
   } catch {
