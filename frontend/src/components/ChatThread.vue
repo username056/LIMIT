@@ -612,12 +612,6 @@ onBeforeUnmount(() => {
         <p class="text-sm font-bold text-text-main">
           {{ room.counterpartNickname || `회원 #${room.counterpartId}` }}
         </p>
-        <span
-          class="rounded-full px-2 py-0.5 text-[11px] font-semibold"
-          :class="socketStatus === 'connected' ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'"
-        >
-          {{ socketStatus === 'connected' ? '실시간 연결됨' : '연결 확인 중' }}
-        </span>
       </div>
     </div>
 

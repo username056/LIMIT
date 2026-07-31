@@ -33,7 +33,15 @@ function parsePayload(body) {
   }
 }
 
-export function createChatSocket({ roomId, onOpen, onEvent, onAck, onError, onClose }) {
+function createSocket({
+  roomIds,
+  onOpen,
+  onEvent,
+  onAck,
+  onError,
+  onClose,
+  subscribeToAcks = false,
+}) {
   const accessToken = getAccessToken()
   const socket = new WebSocket(socketUrl())
   let connected = false
@@ -57,8 +65,16 @@ export function createChatSocket({ roomId, onOpen, onEvent, onAck, onError, onCl
       const frame = parseFrame(chunk)
       if (frame.command === 'CONNECTED') {
         connected = true
-        sendFrame('SUBSCRIBE', { id: 'room-events', destination: `/sub/chat-rooms/${roomId}`, ack: 'auto' })
-        sendFrame('SUBSCRIBE', { id: 'chat-acks', destination: '/user/queue/chat-acks', ack: 'auto' })
+        roomIds.forEach((roomId) => {
+          sendFrame('SUBSCRIBE', {
+            id: roomIds.length === 1 ? 'room-events' : `room-events-${roomId}`,
+            destination: `/sub/chat-rooms/${roomId}`,
+            ack: 'auto',
+          })
+        })
+        if (subscribeToAcks) {
+          sendFrame('SUBSCRIBE', { id: 'chat-acks', destination: '/user/queue/chat-acks', ack: 'auto' })
+        }
         sendFrame('SUBSCRIBE', { id: 'chat-errors', destination: '/user/queue/errors', ack: 'auto' })
         onOpen?.()
         return
@@ -86,14 +102,16 @@ export function createChatSocket({ roomId, onOpen, onEvent, onAck, onError, onCl
       return connected
     },
     sendMessage(payload) {
-      if (!connected) return
+      const roomId = roomIds[0]
+      if (!connected || roomId == null) return
       sendFrame('SEND', {
         destination: `/pub/chat-rooms/${roomId}/messages`,
         'content-type': 'application/json',
       }, JSON.stringify(payload))
     },
     markRead(lastReadSeq) {
-      if (!connected) return
+      const roomId = roomIds[0]
+      if (!connected || roomId == null) return
       sendFrame('SEND', {
         destination: `/pub/chat-rooms/${roomId}/read`,
         'content-type': 'application/json',
@@ -101,6 +119,36 @@ export function createChatSocket({ roomId, onOpen, onEvent, onAck, onError, onCl
     },
     close() {
       if (socket.readyState === WebSocket.OPEN) sendFrame('DISCONNECT')
+      socket.close()
+    },
+  }
+}
+
+export function createChatSocket({ roomId, onOpen, onEvent, onAck, onError, onClose }) {
+  return createSocket({
+    roomIds: [roomId],
+    onOpen,
+    onEvent,
+    onAck,
+    onError,
+    onClose,
+    subscribeToAcks: true,
+  })
+}
+
+export function createChatListSocket({ roomIds, onOpen, onEvent, onError, onClose }) {
+  const socket = createSocket({
+    roomIds: [...new Set(roomIds.map(Number).filter(Number.isFinite))],
+    onOpen,
+    onEvent,
+    onError,
+    onClose,
+  })
+  return {
+    get connected() {
+      return socket.connected
+    },
+    close() {
       socket.close()
     },
   }
