@@ -87,22 +87,22 @@ public class SellerService {
     }
 
     /**
-     * 구매자에게 보여 줄 판매자 프로필. 정산 계좌와 사업자 상호는 담지 않는다 — 거래 상대를 가늠하는
-     * 데 필요하지 않고, 본인만 볼 값이다.
+     * 구매자에게 보여 줄 판매자 프로필. 정산 계좌와 사업자 상호는 담지 않는다 — 거래 상대를 가늠하는 데 필요하지 않고, 본인만 볼 값이다.
      *
-     * <p>기준은 회원이다. {@code listing.seller_id}는 FK 없는 회원 ID여서, 판매자 등록 행이 없는
-     * 회원의 상품도 존재할 수 있다(등록 경로가 여러 개이고 판매자 등록은 취소될 수 있다). 상품이
-     * 보이는데 "누구에게 사는지"를 못 보여주면 안 되므로, seller 행이 없으면 개인·사업자 구분과
-     * 등록 시각만 비우고 닉네임과 판매 중 개수는 그대로 돌려준다.
+     * <p>기준은 회원이다. {@code listing.seller_id}는 FK 없는 회원 ID여서, 판매자 등록 행이 없는 회원의 상품도 존재할 수 있다(등록 경로가
+     * 여러 개이고 판매자 등록은 취소될 수 있다). 상품이 보이는데 "누구에게 사는지"를 못 보여주면 안 되므로, seller 행이 없으면 개인·사업자 구분과 등록 시각만
+     * 비우고 닉네임과 판매 중 개수는 그대로 돌려준다.
      */
     @Transactional(readOnly = true)
     public PublicSellerProfileResponse publicProfile(Long sellerMemberId) {
-        Member member = memberRepository
-                .findById(sellerMemberId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
+        Member member =
+                memberRepository
+                        .findById(sellerMemberId)
+                        .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
         Seller seller = sellerRepository.findByMemberId(sellerMemberId).orElse(null);
-        long onSaleCount = listingRepository.countBySellerIdAndStatusAndDeletedAtIsNull(
-                sellerMemberId, ListingStatus.ON_SALE);
+        long onSaleCount =
+                listingRepository.countBySellerIdAndStatusAndDeletedAtIsNull(
+                        sellerMemberId, ListingStatus.ON_SALE);
         return new PublicSellerProfileResponse(
                 sellerMemberId,
                 member.getNickname(),
