@@ -109,4 +109,40 @@ class LaptopChecklistPolicyTests {
                 .extracting(GeneratedChecklistItem::name)
                 .isEqualTo("microSD 카드 슬롯");
     }
+
+    @Test
+    void marksBaseDeviceActionCheckItemsAsSellerConfirmation() {
+        var items = policy.generate(OsFamily.WINDOWS, Set.of());
+
+        assertThat(items)
+                .filteredOn(item -> item.itemCode().equals("LAP-KBD-005")
+                        || item.itemCode().equals("LAP-PAD-006"))
+                .hasSize(2)
+                .allSatisfy(item -> assertThat(item.evidenceType()).isEqualTo(EvidenceType.SELLER_CONFIRMATION));
+    }
+
+    @Test
+    void marksFeatureDeviceActionCheckItemsAsSellerConfirmation() {
+        var items = policy.generate(
+                OsFamily.WINDOWS,
+                Set.of(
+                        LaptopFeatureCode.CAMERA,
+                        LaptopFeatureCode.MICROPHONE,
+                        LaptopFeatureCode.SPEAKERS,
+                        LaptopFeatureCode.TOUCHSCREEN,
+                        LaptopFeatureCode.STYLUS));
+
+        assertThat(items)
+                .filteredOn(item -> Set.of("LAP-FTR-CAM", "LAP-FTR-MIC", "LAP-FTR-SPK", "LAP-FTR-TOUCH", "LAP-FTR-PEN")
+                        .contains(item.itemCode()))
+                .hasSize(5)
+                .allSatisfy(item -> assertThat(item.evidenceType()).isEqualTo(EvidenceType.SELLER_CONFIRMATION));
+
+        var numpadItems = policy.generate(OsFamily.WINDOWS, Set.of(LaptopFeatureCode.NUMPAD));
+        assertThat(numpadItems)
+                .filteredOn(item -> item.itemCode().equals("LAP-FTR-NUM"))
+                .singleElement()
+                .extracting(GeneratedChecklistItem::evidenceType)
+                .isEqualTo(EvidenceType.SELLER_CONFIRMATION);
+    }
 }
