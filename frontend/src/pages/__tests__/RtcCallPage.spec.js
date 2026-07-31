@@ -36,10 +36,12 @@ vi.mock('../../api/products', () => ({
 }))
 
 const layoutStub = { template: '<main><slot /></main>' }
+let chatSocketOptions
 
 describe('RtcCallPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    chatSocketOptions = null
     setAuthSession({ member: { memberId: 1, nickname: '판매자' } })
     getRtcCall.mockResolvedValue({
       callId: 20,
@@ -77,7 +79,9 @@ describe('RtcCallPage', () => {
     getChatRooms.mockResolvedValue({
       content: [{ roomId: 10, counterpartId: 2, counterpartNickname: '구매자닉네임' }],
     })
-    createChatSocket.mockImplementation(({ onOpen }) => {
+    createChatSocket.mockImplementation((options) => {
+      chatSocketOptions = options
+      const { onOpen } = options
       queueMicrotask(onOpen)
       return {
         close: vi.fn(),
@@ -120,6 +124,65 @@ describe('RtcCallPage', () => {
     await flushPromises()
 
     expect(wrapper.get('[data-testid="counterpart-nickname"]').text()).toBe('판매자닉네임')
+
+    wrapper.unmount()
+  })
+
+  it('실시간 채팅에서는 약속 시스템 알림을 숨기고 사용자 메시지만 표시한다', async () => {
+    getChatMessages.mockResolvedValue({
+      content: [
+        {
+          messageId: 2,
+          roomSequence: 2,
+          senderId: 1,
+          type: 'SYSTEM',
+          content: '판매자 님이 실시간 검증 약속을 설정했습니다.',
+          sentAt: '2026-07-29T10:01:00',
+        },
+        {
+          messageId: 1,
+          roomSequence: 1,
+          senderId: 2,
+          type: 'TEXT',
+          content: '제품 모서리를 보여 주세요.',
+          sentAt: '2026-07-29T10:00:00',
+        },
+      ],
+    })
+    const wrapper = mount(RtcCallPage, {
+      global: { stubs: { DefaultLayout: layoutStub } },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('제품 모서리를 보여 주세요.')
+    expect(wrapper.text()).not.toContain('실시간 검증 약속을 설정했습니다.')
+
+    await chatSocketOptions.onEvent({
+      type: 'MESSAGE',
+      message: {
+        messageId: 3,
+        roomSequence: 3,
+        senderId: 1,
+        type: 'SYSTEM',
+        content: '판매자 님이 실시간 검증 약속을 변경했습니다.',
+        sentAt: '2026-07-29T10:02:00',
+      },
+    })
+    await chatSocketOptions.onEvent({
+      type: 'MESSAGE',
+      message: {
+        messageId: 4,
+        roomSequence: 4,
+        senderId: 2,
+        type: 'TEXT',
+        content: '이번에는 뒷면을 보여 주세요.',
+        sentAt: '2026-07-29T10:03:00',
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('실시간 검증 약속을 변경했습니다.')
+    expect(wrapper.text()).toContain('이번에는 뒷면을 보여 주세요.')
 
     wrapper.unmount()
   })

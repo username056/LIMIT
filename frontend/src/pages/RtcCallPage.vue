@@ -46,6 +46,7 @@ let pendingSignals = []
 const MAX_PENDING_SIGNALS = 50
 
 const myMemberId = computed(() => authSession.value?.member?.memberId ?? null)
+const visibleMessages = computed(() => messages.value.filter((message) => message.type !== 'SYSTEM'))
 const isSeller = computed(() => Number(rtcSession.value?.sellerId) === Number(myMemberId.value))
 const counterpartId = computed(() => (
   isSeller.value ? rtcSession.value?.buyerId : rtcSession.value?.sellerId
@@ -621,13 +622,13 @@ onBeforeUnmount(() => {
                 {{ chatError }}
               </p>
               <p
-                v-else-if="!messages.length"
+                v-else-if="!visibleMessages.length"
                 class="py-8 text-center text-sm text-text-sub"
               >
                 채팅으로 확인할 내용을 요청해 보세요.
               </p>
               <div
-                v-for="message in messages"
+                v-for="message in visibleMessages"
                 :key="message.messageId"
                 class="flex"
                 :class="Number(message.senderId) === Number(myMemberId) ? 'justify-end' : 'justify-start'"
