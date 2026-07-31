@@ -187,6 +187,36 @@ describe('RtcCallPage', () => {
     wrapper.unmount()
   })
 
+  it('실시간 사용자 메시지를 받으면 채팅 목록을 최신 메시지로 스크롤한다', async () => {
+    const wrapper = mount(RtcCallPage, {
+      global: { stubs: { DefaultLayout: layoutStub } },
+    })
+    await flushPromises()
+    const messageContainer = wrapper.get('[data-testid="rtc-chat-messages"]').element
+    Object.defineProperty(messageContainer, 'scrollHeight', {
+      configurable: true,
+      value: 480,
+    })
+    messageContainer.scrollTop = 0
+
+    await chatSocketOptions.onEvent({
+      type: 'MESSAGE',
+      message: {
+        messageId: 5,
+        roomSequence: 5,
+        senderId: 2,
+        type: 'TEXT',
+        content: '키보드 부분을 가까이 보여 주세요.',
+        sentAt: '2026-07-29T10:04:00',
+      },
+    })
+    await flushPromises()
+
+    expect(messageContainer.scrollTop).toBe(480)
+
+    wrapper.unmount()
+  })
+
   // 재촬영 요청은 잠시 내려 두었습니다. 채팅으로 말하는 편이 빠릅니다.
   it('통화 화면에 재촬영 요청 UI를 두지 않는다', async () => {
     setAuthSession({ member: { memberId: 2, nickname: '구매자' } })

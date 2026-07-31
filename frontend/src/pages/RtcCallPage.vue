@@ -27,6 +27,7 @@ const status = ref('loading')
 const errorMessage = ref('')
 const requestMessage = ref('')
 const messages = ref([])
+const chatMessagesContainer = ref(null)
 const chatRoom = ref(null)
 const messageInput = ref('')
 const chatStatus = ref('connecting')
@@ -219,12 +220,20 @@ function latestSequence() {
   )
 }
 
+async function scrollChatToLatest() {
+  await nextTick()
+  const container = chatMessagesContainer.value
+  if (!container) return
+  container.scrollTop = container.scrollHeight
+}
+
 async function upsertMessage(message) {
   const clientIndex = messages.value.findIndex(
     (item) => item.clientMessageId === message.clientMessageId,
   )
   if (clientIndex >= 0) {
     messages.value[clientIndex] = { ...messages.value[clientIndex], ...message, isPending: false }
+    if (message.type !== 'SYSTEM') await scrollChatToLatest()
     return
   }
   if (!messages.value.some((item) => item.messageId === message.messageId)) {
@@ -232,6 +241,7 @@ async function upsertMessage(message) {
     messages.value.sort(
       (first, second) => Number(first.roomSequence || Infinity) - Number(second.roomSequence || Infinity),
     )
+    if (message.type !== 'SYSTEM') await scrollChatToLatest()
   }
 }
 
@@ -245,6 +255,7 @@ async function loadMessages() {
     chatRoom.value = (roomResult?.content || []).find(
       (room) => Number(room.roomId) === Number(call.value.chatRoomId),
     ) || null
+    await scrollChatToLatest()
   } catch (error) {
     chatError.value = error.message || '채팅 내역을 불러오지 못했습니다.'
   }
@@ -301,6 +312,7 @@ async function sendMessage() {
     isPending: true,
   }
   messages.value.push(optimisticMessage)
+  await scrollChatToLatest()
   try {
     if (!chatSocket || typeof chatSocket.sendMessage !== 'function') {
       throw new Error('채팅 연결이 없습니다.')
@@ -613,7 +625,11 @@ onBeforeUnmount(() => {
                 실시간 1:1 채팅
               </h2>
             </div>
-            <div class="flex-1 space-y-3 overflow-y-auto px-5 py-4">
+            <div
+              ref="chatMessagesContainer"
+              data-testid="rtc-chat-messages"
+              class="flex-1 space-y-3 overflow-y-auto px-5 py-4"
+            >
               <p
                 v-if="chatError"
                 role="alert"
