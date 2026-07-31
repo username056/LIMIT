@@ -427,23 +427,25 @@ watch(() => [route.query.q, route.query.categoryId], async ([keyword, categoryId
             >
               <!--
                 상세로 들어가지 않고 목록에서 바로 담을 수 있게 합니다.
+                모양은 상품 상세의 좋아요 버튼과 같게 맞춥니다 — 같은 동작이 화면마다 달라 보이면
+                누를 수 있는 것인지 매번 다시 판단해야 합니다.
                 카드 전체가 링크라 버블링을 막아야 하트만 눌립니다.
               -->
-              <template #image-overlay>
+              <template #body-action>
                 <button
                   v-if="isSignedIn"
                   type="button"
-                  class="favorite-button absolute right-2.5 top-2.5 flex h-7 w-7 items-center justify-center rounded-full bg-primary-gradient text-base leading-none shadow-card transition hover:brightness-110 disabled:opacity-60"
+                  class="favorite-button flex h-9 w-9 shrink-0 items-center justify-center rounded-md border text-lg leading-none transition disabled:opacity-60"
                   :class="favoriteIds.has(product.productId)
-                    ? 'favorite-button--on text-red-500'
-                    : 'text-white'"
+                    ? 'favorite-button--on border-primary bg-accent text-primary'
+                    : 'border-border bg-surface text-text-sub hover:border-primary'"
                   :aria-label="favoriteIds.has(product.productId)
                     ? `${product.name} 좋아요 해제`
                     : `${product.name} 좋아요`"
                   :disabled="pendingFavoriteIds.has(product.productId)"
                   @click.prevent.stop="toggleFavorite(product)"
                 >
-                  ♥
+                  {{ favoriteIds.has(product.productId) ? '♥' : '♡' }}
                 </button>
               </template>
             </ProductCard>

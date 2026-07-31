@@ -30,16 +30,14 @@ function formatViewCount(viewCount) {
   <component
     :is="to ? 'RouterLink' : 'div'"
     :to="to || undefined"
-    class="group block overflow-hidden rounded-lg border border-border bg-surface shadow-card transition"
-    :class="to ? 'hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-elevated' : ''"
+    class="card-lift group block overflow-hidden rounded-lg border border-border bg-surface shadow-card"
   >
     <div class="relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-slate-50">
       <img
         v-if="product.thumbnailUrl"
         :src="product.thumbnailUrl"
         :alt="product.name"
-        class="h-full w-full object-cover transition duration-300"
-        :class="to ? 'group-hover:scale-[1.03]' : ''"
+        class="card-zoom-img h-full w-full object-cover"
       >
       <div
         v-else
@@ -73,32 +71,40 @@ function formatViewCount(viewCount) {
           {{ product.name }}
         </template>
       </h2>
-      <!--
-        검증 개수는 이 서비스의 핵심 정보라 가격과 같은 줄 오른쪽에 둡니다.
-        필수 항목이 없는 상품(옛 데이터)에서는 표시하지 않습니다.
-      -->
       <div class="mt-3 flex items-center justify-between gap-3">
         <p class="text-lg font-bold text-text-main">
           {{ formatPrice(product.price) }}원
         </p>
-        <span
-          v-if="product.requiredItemCount"
-          class="shrink-0 rounded-pill bg-accent px-2.5 py-1 text-xs font-bold text-primary"
-        >
-          {{ product.completedItemCount ?? 0 }}/{{ product.requiredItemCount }}
-        </span>
+        <!-- 가격 줄 오른쪽. 목록에서 바로 담는 좋아요 버튼이 들어가는 자리입니다. -->
+        <slot name="body-action" />
       </div>
       <div class="mt-3 border-t border-border pt-3 text-xs text-text-sub">
-        <slot name="footer">
-          <div class="flex items-center justify-between gap-3">
+        <div class="flex items-center justify-between gap-3">
+          <!--
+            왼쪽에는 상품을 고를 때 보는 수치를 모읍니다.
+            검증 개수는 이 서비스의 핵심 정보라 카드에 남기고, 필수 항목이 없는 상품(옛 데이터)
+            에서는 표시하지 않습니다.
+          -->
+          <div class="flex shrink-0 items-center gap-2">
+            <span
+              v-if="product.requiredItemCount"
+              class="rounded-pill bg-accent px-2.5 py-1 text-xs font-bold text-primary"
+            >
+              {{ product.completedItemCount ?? 0 }}/{{ product.requiredItemCount }}
+            </span>
             <span
               v-if="hasViewCount(product.viewCount)"
-              class="shrink-0"
               :aria-label="`조회수 ${formatViewCount(product.viewCount)}회`"
             >조회 {{ formatViewCount(product.viewCount) }}</span>
-            <span class="shrink-0 font-semibold text-primary">상세 보기 →</span>
           </div>
-        </slot>
+          <div class="min-w-0 flex-1">
+            <slot name="footer">
+              <div class="flex items-center justify-end">
+                <span class="shrink-0 font-semibold text-primary">상세 보기 →</span>
+              </div>
+            </slot>
+          </div>
+        </div>
       </div>
     </div>
   </component>
