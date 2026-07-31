@@ -6,11 +6,14 @@ import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.net.URI;
 import java.util.Base64;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -21,6 +24,7 @@ import org.springframework.web.client.RestClientException;
 @Component
 public class NaverClovaOcrClient {
 
+    private static final Logger log = LoggerFactory.getLogger(NaverClovaOcrClient.class);
     private static final String SECRET_HEADER = "X-OCR-SECRET";
     private static final String INFER_SUCCESS = "SUCCESS";
 
@@ -85,11 +89,13 @@ public class NaverClovaOcrClient {
     public byte[] fetchImage(String imageUrl) {
         byte[] bytes;
         try {
-            bytes = restClient.get().uri(imageUrl).retrieve().body(byte[].class);
+            bytes = restClient.get().uri(URI.create(imageUrl)).retrieve().body(byte[].class);
         } catch (RestClientException exception) {
+            log.warn("evidence image fetch failed: imageUrl={}", imageUrl, exception);
             throw new BusinessException(ErrorCode.OCR_IMAGE_FETCH_FAILED);
         }
         if (bytes == null || bytes.length == 0) {
+            log.warn("evidence image fetch returned empty body: imageUrl={}", imageUrl);
             throw new BusinessException(ErrorCode.OCR_IMAGE_FETCH_FAILED);
         }
         return bytes;

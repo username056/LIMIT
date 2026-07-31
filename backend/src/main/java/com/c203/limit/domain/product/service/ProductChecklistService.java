@@ -89,6 +89,8 @@ public class ProductChecklistService {
                 item.getName(),
                 item.getCaptureGuide(),
                 item.getEvidenceType().name(),
+                item.getAutomationType().name(),
+                item.getParserType(),
                 item.isRequired(),
                 item.getCompletionStatus().name(),
                 latestEvidenceId,

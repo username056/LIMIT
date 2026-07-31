@@ -24,6 +24,12 @@ public class ProductChecklistItemResponse {
     @Schema(example = "VIDEO")
     private final String evidenceType;
 
+    @Schema(example = "OCR", description = "자동 구조화 방식(NONE|FILE_PARSE|OCR). 업로드 완료 후 어떤 검수 파싱 API를 호출해야 하는지 판단하는 데 사용합니다.")
+    private final String automationType;
+
+    @Schema(example = "DXDIAG", description = "automationType이 FILE_PARSE일 때 파서 종류(DXDIAG|BATTERY_REPORT). 그 외에는 null입니다.")
+    private final String parserType;
+
     @Schema(example = "true")
     private final boolean isRequired;
 

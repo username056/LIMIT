@@ -58,6 +58,7 @@ public class EvidenceUploadCompletionService {
         validate(session, sellerId, productId, checklistItemId, completedAt);
 
         ListingChecklistItem item = session.getChecklistItem();
+        String mediaUrl = publicOrPresignedUrl(session);
         Evidence evidence = Evidence.upload(
                 productId,
                 item,
@@ -65,7 +66,7 @@ public class EvidenceUploadCompletionService {
                 session.getFinalObjectKey(),
                 session.getExpectedMimeType(),
                 capturedAt == null ? null : capturedAt.toLocalDateTime());
-        evidence.markReady(null);
+        evidence.markReady(mediaUrl);
         Evidence saved = evidenceRepository.save(evidence);
         session.complete(completedAt);
 
@@ -78,7 +79,6 @@ public class EvidenceUploadCompletionService {
             item.markSubmitted();
         }
 
-        String mediaUrl = publicOrPresignedUrl(session);
         int attemptNo = history.stream()
                 .sorted(Comparator.comparing(Evidence::getUploadedAt).thenComparing(Evidence::getId))
                 .toList()
