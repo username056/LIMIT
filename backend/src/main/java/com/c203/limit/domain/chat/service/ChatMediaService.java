@@ -63,13 +63,15 @@ public class ChatMediaService {
         String extension = extension(originalFilename);
         String objectKey = "chat/" + roomId + "/" + UUID.randomUUID() + extension;
         try {
-            s3Client.putObject(
-                    PutObjectRequest.builder()
-                            .bucket(storageProperties.bucket())
-                            .key(objectKey)
-                            .contentType(file.getContentType())
-                            .build(),
-                    RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
+            try (var input = file.getInputStream()) {
+                s3Client.putObject(
+                        PutObjectRequest.builder()
+                                .bucket(storageProperties.bucket())
+                                .key(objectKey)
+                                .contentType(file.getContentType())
+                                .build(),
+                        RequestBody.fromInputStream(input, file.getSize()));
+            }
             ChatMedia media = mediaRepository.save(ChatMedia.verified(
                     UUID.randomUUID(), roomId, memberId, type, storageProperties.bucket(),
                     objectKey, originalFilename,
