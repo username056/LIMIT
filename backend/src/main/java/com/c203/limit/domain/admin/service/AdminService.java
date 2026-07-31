@@ -195,6 +195,24 @@ public class AdminService {
                                 () -> new BusinessException(ErrorCode.ADMIN_ACTION_LOG_NOT_FOUND)));
     }
 
+    @Transactional
+    public Map<String, Object> updateLog(Long adminId, Long actionLogId, String reason) {
+        AdminActionLog actionLog =
+                actionLogs
+                        .findById(actionLogId)
+                        .orElseThrow(
+                                () -> new BusinessException(ErrorCode.ADMIN_ACTION_LOG_NOT_FOUND));
+        String beforeReason = actionLog.getReason();
+        actionLog.updateReason(reason);
+        actionLogs.save(
+                AdminActionLog.revision(adminId, actionLogId, beforeReason, actionLog.getReason()));
+        log.info(
+                "admin action log reason updated: actionLogId={}, updatedByAdminId={}",
+                actionLogId,
+                adminId);
+        return actionLogMap(actionLog);
+    }
+
     private Member getMember(Long memberId) {
         return members.findById(memberId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));

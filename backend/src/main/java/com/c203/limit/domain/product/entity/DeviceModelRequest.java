@@ -89,6 +89,21 @@ public class DeviceModelRequest {
         this.updatedAt = LocalDateTime.now();
     }
 
+    public void updateDetails(
+            Long parentCategoryId,
+            String manufacturer,
+            String modelName,
+            String modelCode,
+            OsFamily osFamily) {
+        requirePending();
+        this.parentCategoryId = parentCategoryId;
+        this.manufacturer = manufacturer.trim();
+        this.modelName = modelName.trim();
+        this.modelCode = trimToNull(modelCode);
+        this.osFamily = osFamily;
+        this.updatedAt = LocalDateTime.now();
+    }
+
     public void reject(Long adminId, String note) {
         requirePending();
         this.status = DeviceModelRequestStatus.REJECTED;

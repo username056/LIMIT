@@ -17,11 +17,17 @@
 | `PATCH` | `/api/v1/admin/member-restrictions/{restrictionId}` | 관리자 | 이용 제한 해제 |
 | `GET` | `/api/v1/admin/action-logs` | 관리자 | 작업 로그 목록 |
 | `GET` | `/api/v1/admin/action-logs/{actionLogId}` | 관리자 | 작업 로그 상세 |
+| `PATCH` | `/api/v1/admin/action-logs/{actionLogId}` | 관리자 | 작업 로그 사유 수정 |
 | `GET` | `/api/v1/admin/accounts` | `SUPER_ADMIN` | 관리자 계정 목록 |
 | `POST` | `/api/v1/admin/accounts` | `SUPER_ADMIN` | 관리자 계정 생성 |
 | `PATCH` | `/api/v1/admin/accounts/{adminId}` | `SUPER_ADMIN` | 관리자 권한·상태 변경 |
 
 마지막 활성 `SUPER_ADMIN`을 강등하거나 정지하는 요청은 거절한다.
+
+작업 로그 상세에서는 작업 종류, 대상, 변경 전후 데이터, 접속 IP와 사유를 조회한다.
+감사 무결성을 위해 작업 종류·대상·발생 시각은 변경할 수 없으며 `PATCH`는 최대 500자의
+`reason`만 수정한다. 사유를 수정하면 `ADMIN_ACTION_LOG_UPDATE` 작업 로그에 수정 전후
+사유가 별도로 기록된다.
 
 ## Swagger 인증
 

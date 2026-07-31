@@ -52,6 +52,41 @@ public class AdminActionLog {
         return l;
     }
 
+    public static AdminActionLog revision(
+            Long adminId, Long actionLogId, String beforeReason, String afterReason) {
+        AdminActionLog log =
+                of(
+                        adminId,
+                        "ADMIN_ACTION_LOG_UPDATE",
+                        "ADMIN_ACTION_LOG",
+                        actionLogId,
+                        "관리자 작업 로그 사유 수정");
+        log.beforeData = reasonData(beforeReason);
+        log.afterData = reasonData(afterReason);
+        return log;
+    }
+
+    public void updateReason(String reason) {
+        this.reason = trimToNull(reason);
+    }
+
+    private static String reasonData(String reason) {
+        if (reason == null) {
+            return "{\"reason\":null}";
+        }
+        String escaped =
+                reason.replace("\\", "\\\\")
+                        .replace("\"", "\\\"")
+                        .replace("\r", "\\r")
+                        .replace("\n", "\\n")
+                        .replace("\t", "\\t");
+        return "{\"reason\":\"" + escaped + "\"}";
+    }
+
+    private static String trimToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
     public Long getId() {
         return id;
     }

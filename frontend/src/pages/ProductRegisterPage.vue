@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseButton from '../components/BaseButton.vue'
@@ -46,6 +46,13 @@ const WIZARD_STEPS = [
   { number: 2, label: '촬영 및 파일 업로드' },
   { number: 3, label: '개인정보 관리' },
   { number: 4, label: '등록완료' },
+]
+
+const CHECKLIST_LOADING_STAGES = [
+  '등록된 모델과 기본 체크리스트를 확인하는 중',
+  '공식 제조사 자료에서 모델 기능을 조사하는 중',
+  '조사 결과와 검증 항목을 정리하는 중',
+  '판매용 체크리스트 연결을 마무리하는 중',
 ]
 
 // 체크리스트 항목 하나에 첨부할 수 있는 사진·영상 개수 상한입니다.
@@ -188,6 +195,10 @@ const templateItems = ref([])
 const checklistGeneration = ref(null)
 const confirmedFeatures = ref([])
 const isGeneratingChecklist = ref(false)
+const checklistLoadingProgress = ref(0)
+const checklistLoadingStageIndex = ref(0)
+const checklistLoadingDotCount = ref(1)
+let checklistLoadingTimer = null
 const checklistItems = ref([])
 const activeCaptureItemId = ref(null)
 // captureState[checklistItemId] = { media: [...], busy: '' | 'optimizing' | 'uploading', progress: 0..100 }
@@ -313,6 +324,10 @@ const currentProductId = computed(() => editingId.value || draftProductId.value)
 const selectedModel = computed(
   () => models.value.find((item) => String(item.deviceModelId) === String(form.deviceModelId)) || null,
 )
+const checklistLoadingStage = computed(
+  () => CHECKLIST_LOADING_STAGES[checklistLoadingStageIndex.value],
+)
+const checklistLoadingDots = computed(() => '.'.repeat(checklistLoadingDotCount.value))
 const modelGroups = computed(() => {
   const keyword = modelKeyword.value.trim().toLowerCase()
   const groups = new Map()
@@ -431,6 +446,25 @@ async function measureRegistrationPhase(name, task) {
   }
 }
 
+function stopChecklistLoading() {
+  if (checklistLoadingTimer) window.clearInterval(checklistLoadingTimer)
+  checklistLoadingTimer = null
+}
+
+function startChecklistLoading() {
+  stopChecklistLoading()
+  checklistLoadingProgress.value = 8
+  checklistLoadingStageIndex.value = 0
+  checklistLoadingDotCount.value = 1
+  checklistLoadingTimer = window.setInterval(() => {
+    checklistLoadingDotCount.value = (checklistLoadingDotCount.value % 3) + 1
+    checklistLoadingProgress.value = Math.min(92, checklistLoadingProgress.value + 3)
+    if (checklistLoadingProgress.value >= 78) checklistLoadingStageIndex.value = 3
+    else if (checklistLoadingProgress.value >= 55) checklistLoadingStageIndex.value = 2
+    else if (checklistLoadingProgress.value >= 28) checklistLoadingStageIndex.value = 1
+  }, 450)
+}
+
 // 단계가 바뀌면 위자드 상단(단계 표시줄)부터 보이도록 항상 스크롤을 올립니다.
 function setStep(step) {
   activeStep.value = step
@@ -485,6 +519,7 @@ function resetForm() {
   handoverGuide.value = null
   isCustomStorage.value = false
   priceRejection.value = ''
+  stopChecklistLoading()
   clearCaptureState()
   Object.keys(confirmState).forEach((key) => delete confirmState[key])
 }
@@ -517,6 +552,49 @@ async function loadModels() {
   }
 }
 
+async function searchModels() {
+  if (!form.categoryId) return
+  const requestId = ++modelRequestId
+  isLoadingModels.value = true
+  modelLoadError.value = ''
+  try {
+    const response = await getDeviceModels({
+      categoryId: form.categoryId,
+      keyword: modelKeyword.value.trim() || undefined,
+      page: 0,
+      size: 100,
+    })
+    if (requestId !== modelRequestId) return
+    models.value = Array.isArray(response) ? response : []
+  } catch {
+    if (requestId !== modelRequestId) return
+    modelLoadError.value = '모델 검색에 실패했습니다. 잠시 후 다시 시도해 주세요.'
+  } finally {
+    if (requestId === modelRequestId) isLoadingModels.value = false
+  }
+}
+
+function onCustomCategoryChange() {
+  modelRequestId += 1
+  form.deviceModelId = ''
+  models.value = []
+  modelKeyword.value = ''
+  modelLoadError.value = ''
+  isLoadingModels.value = false
+  templateItems.value = []
+  checklistGeneration.value = null
+  confirmedFeatures.value = []
+  modelRequestResult.value = null
+}
+
+function onCategoryChange() {
+  if (isCustomModelInput.value) {
+    onCustomCategoryChange()
+    return
+  }
+  loadModels()
+}
+
 function toggleCustomModelInput() {
   isCustomModelInput.value = !isCustomModelInput.value
   modelRequestResult.value = null
@@ -524,6 +602,8 @@ function toggleCustomModelInput() {
     form.deviceModelId = ''
     checklistGeneration.value = null
     templateItems.value = []
+  } else {
+    loadModels()
   }
 }
 
@@ -555,6 +635,7 @@ async function loadTemplatePreview() {
   confirmedFeatures.value = []
   if (!form.deviceModelId) return
   isGeneratingChecklist.value = true
+  startChecklistLoading()
   errorMessage.value = ''
   try {
     if (supportsGeneratedChecklist.value) {
@@ -571,6 +652,8 @@ async function loadTemplatePreview() {
   } catch (error) {
     errorMessage.value = error.message || '체크리스트를 불러오지 못했습니다.'
   } finally {
+    checklistLoadingProgress.value = 100
+    stopChecklistLoading()
     isGeneratingChecklist.value = false
   }
 }
@@ -1206,6 +1289,11 @@ async function startEdit(productId) {
   }
 }
 
+onBeforeUnmount(() => {
+  stopChecklistLoading()
+  modelRequestId += 1
+})
+
 onMounted(async () => {
   try {
     categories.value = await getDeviceCategories({ activeOnly: true })
@@ -1302,7 +1390,7 @@ onMounted(async () => {
                   :disabled="Boolean(editingId)"
                   required
                   class="mt-2 w-full rounded-md border border-border bg-bg px-3 py-3 font-normal outline-none focus:border-primary"
-                  @change="loadModels"
+                  @change="onCategoryChange"
                 >
                   <option value="">카테고리 선택</option><option
                     v-for="item in categories"
@@ -1312,14 +1400,25 @@ onMounted(async () => {
                 </select>
               </label>
               <label class="text-sm font-semibold text-text-main">기기 모델<span class="ml-0.5 text-red-500">*</span>
-                <input
-                  v-model="modelKeyword"
-                  type="search"
-                  placeholder="제조사 또는 모델명 검색"
-                  aria-label="기기 모델 검색"
-                  :disabled="Boolean(editingId) || !form.categoryId || isLoadingModels"
-                  class="mt-2 w-full rounded-md border border-border bg-bg px-3 py-2.5 font-normal outline-none focus:border-primary disabled:opacity-60"
-                >
+                <div class="mt-2 flex gap-2">
+                  <input
+                    v-model="modelKeyword"
+                    type="search"
+                    placeholder="제조사·모델명·모델 코드 검색"
+                    aria-label="기기 모델 검색"
+                    :disabled="Boolean(editingId) || !form.categoryId"
+                    class="min-w-0 flex-1 rounded-md border border-border bg-bg px-3 py-2.5 font-normal outline-none focus:border-primary disabled:opacity-60"
+                    @keydown.enter.prevent="searchModels"
+                  >
+                  <BaseButton
+                    type="button"
+                    variant="secondary"
+                    :disabled="Boolean(editingId) || !form.categoryId || isLoadingModels"
+                    @click="searchModels"
+                  >
+                    {{ isLoadingModels ? '검색 중…' : '검색' }}
+                  </BaseButton>
+                </div>
                 <select
                   v-model="form.deviceModelId"
                   :disabled="Boolean(editingId) || !form.categoryId || isLoadingModels"
@@ -1352,6 +1451,12 @@ onMounted(async () => {
                   v-else-if="form.categoryId && !isLoadingModels && modelGroups.length === 0 && modelKeyword"
                   class="mt-2 block text-xs font-normal text-text-muted"
                 >검색 결과가 없습니다.</span>
+                <span
+                  v-else-if="form.categoryId"
+                  class="mt-2 block text-xs font-normal text-text-muted"
+                >
+                  관리자 승인 모델은 이 목록에 즉시 추가됩니다. 제조사·모델명·모델 코드로 검색할 수 있습니다.
+                </span>
               </label>
             </div>
 
@@ -1372,6 +1477,27 @@ onMounted(async () => {
                 class="mt-3 rounded-lg border border-border bg-bg p-4"
               >
                 <div class="grid gap-3 sm:grid-cols-2">
+                  <label class="text-sm font-semibold text-text-main sm:col-span-2">
+                    카테고리<span class="ml-0.5 text-red-500">*</span>
+                    <select
+                      v-model="form.categoryId"
+                      aria-label="신규 모델 카테고리"
+                      required
+                      class="mt-2 w-full rounded-md border border-border bg-white px-3 py-2.5 font-normal"
+                      @change="onCustomCategoryChange"
+                    >
+                      <option value="">
+                        카테고리 선택
+                      </option>
+                      <option
+                        v-for="item in categories"
+                        :key="item.categoryId"
+                        :value="item.categoryId"
+                      >
+                        {{ item.name }}
+                      </option>
+                    </select>
+                  </label>
                   <label class="text-sm font-semibold text-text-main">
                     제조사
                     <input
@@ -1407,6 +1533,7 @@ onMounted(async () => {
                       <option value="ANDROID">Android</option>
                       <option value="IOS">iOS</option>
                       <option value="WINDOWS">Windows</option>
+                      <option value="MACOS">macOS</option>
                       <option value="LINUX">Linux</option>
                     </select>
                   </label>
@@ -1428,13 +1555,36 @@ onMounted(async () => {
               </div>
             </div>
 
-            <p
+            <div
               v-if="isGeneratingChecklist"
               role="status"
-              class="mt-5 rounded-lg border border-border bg-bg px-4 py-5 text-center text-sm text-text-sub"
+              aria-live="polite"
+              class="mt-5 rounded-lg border border-border bg-bg px-4 py-5"
             >
-              선택한 모델의 체크리스트와 공식 기능 자료를 확인하고 있습니다…
-            </p>
+              <p class="text-center text-sm font-semibold text-text-main">
+                {{ checklistLoadingStage }}<span
+                  aria-hidden="true"
+                  class="inline-block w-5 text-left"
+                >{{ checklistLoadingDots }}</span>
+                <span class="sr-only">진행 중</span>
+              </p>
+              <div
+                class="mt-4 h-2 overflow-hidden rounded-full bg-border"
+                role="progressbar"
+                aria-label="AI 체크리스트 조사 진행률"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                :aria-valuenow="checklistLoadingProgress"
+              >
+                <div
+                  class="h-full rounded-full bg-primary transition-[width] duration-500 ease-out"
+                  :style="{ width: `${checklistLoadingProgress}%` }"
+                />
+              </div>
+              <p class="mt-2 text-center text-xs text-text-sub">
+                {{ checklistLoadingProgress }}% · 조사 중에도 이 페이지는 정상적으로 동작하고 있습니다.
+              </p>
+            </div>
 
             <div
               v-else-if="checklistGeneration"

@@ -93,10 +93,18 @@ ACTIVE 판매자만 호출할 수 있다.
 관리자는 다음 API로 요청을 처리한다.
 
 - `GET /api/v1/admin/device-model-requests?status=PENDING`
+- `PATCH /api/v1/admin/device-model-requests/{requestId}`
 - `POST /api/v1/admin/device-model-requests/{requestId}/approval`
 - `POST /api/v1/admin/device-model-requests/{requestId}/rejection`
 
+관리자는 `PENDING` 요청의 카테고리, 제조사, 모델명, 모델 코드와 OS를 수정해 판매자의
+잘못된 선택이나 오타를 정정한 뒤 승인할 수 있다. 변경할 카테고리는 활성 최상위 기기
+카테고리여야 하며 수정은 관리자 작업 로그에 기록된다.
+
 승인하면 카테고리에 모델을 추가하고 같은 기기 분류의 기존 `PUBLISHED` 템플릿을 초기 버전으로 복제한다. 이후 판매자가 새 모델을 처음 선택할 때 모델별 AI 조사가 한 번 수행된다.
+승인된 모델은 판매하기 화면의 해당 카테고리 모델 목록에 활성 상태로 노출된다. 모델 목록
+검색은 제조사, 모델명과 모델 코드를 대상으로 하며, 목록 첫 페이지 밖의 모델도 검색어로
+서버에서 다시 조회할 수 있다.
 
 ### 상품 등록과 스냅샷
 

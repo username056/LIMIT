@@ -1,12 +1,14 @@
 package com.c203.limit.domain.product.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.c203.limit.domain.admin.repository.AdminActionLogRepository;
+import com.c203.limit.domain.admin.dto.request.UpdateDeviceModelRequest;
 import com.c203.limit.domain.inspection.entity.ChecklistTemplate;
 import com.c203.limit.domain.inspection.entity.ChecklistTemplateItem;
 import com.c203.limit.domain.inspection.enums.AutomationType;
@@ -20,12 +22,89 @@ import com.c203.limit.domain.product.entity.DeviceModelRequest;
 import com.c203.limit.domain.product.entity.OsFamily;
 import com.c203.limit.domain.product.repository.CategoryRepository;
 import com.c203.limit.domain.product.repository.DeviceModelRequestRepository;
+import com.c203.limit.global.exception.BusinessException;
+import com.c203.limit.global.exception.ErrorCode;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class DeviceModelRequestServiceTests {
+    @Test
+    void adminCannotMovePendingRequestToUnknownCategory() {
+        CategoryRepository categories = mock(CategoryRepository.class);
+        DeviceModelRequestRepository requests = mock(DeviceModelRequestRepository.class);
+        ChecklistTemplateRepository templates = mock(ChecklistTemplateRepository.class);
+        ChecklistTemplateItemRepository templateItems =
+                mock(ChecklistTemplateItemRepository.class);
+        AdminActionLogRepository logs = mock(AdminActionLogRepository.class);
+        DeviceModelRequestService service =
+                new DeviceModelRequestService(
+                        categories, requests, templates, templateItems, logs);
+        DeviceModelRequest request =
+                DeviceModelRequest.create(
+                        7L, 1L, "Samsung", "Galaxy S25", "SM-S931N", OsFamily.ANDROID);
+        ReflectionTestUtils.setField(request, "id", 501L);
+        when(requests.findByIdForUpdate(501L)).thenReturn(Optional.of(request));
+        when(categories.findById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(
+                        () ->
+                                service.update(
+                                        501L,
+                                        9L,
+                                        new UpdateDeviceModelRequest(
+                                                999L,
+                                                "Samsung",
+                                                "Galaxy S25",
+                                                "SM-S931N",
+                                                OsFamily.ANDROID)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+    }
+
+    @Test
+    void adminCanCorrectPendingRequestBeforeApproval() {
+        CategoryRepository categories = mock(CategoryRepository.class);
+        DeviceModelRequestRepository requests = mock(DeviceModelRequestRepository.class);
+        ChecklistTemplateRepository templates = mock(ChecklistTemplateRepository.class);
+        ChecklistTemplateItemRepository templateItems =
+                mock(ChecklistTemplateItemRepository.class);
+        AdminActionLogRepository logs = mock(AdminActionLogRepository.class);
+        DeviceModelRequestService service =
+                new DeviceModelRequestService(
+                        categories, requests, templates, templateItems, logs);
+        DeviceModelRequest request =
+                DeviceModelRequest.create(
+                        7L, 1L, "Samsnug", "Galxy S25", "SM-S931", OsFamily.ANDROID);
+        ReflectionTestUtils.setField(request, "id", 501L);
+        Category correctedParent =
+                Category.createTopLevel("노트북", DeviceType.LAPTOP, 2);
+        ReflectionTestUtils.setField(correctedParent, "id", 2L);
+        when(requests.findByIdForUpdate(501L)).thenReturn(Optional.of(request));
+        when(categories.findById(2L)).thenReturn(Optional.of(correctedParent));
+
+        var result =
+                service.update(
+                        501L,
+                        9L,
+                        new UpdateDeviceModelRequest(
+                                2L,
+                                "Samsung",
+                                "Galaxy S25",
+                                "SM-S931N",
+                                OsFamily.ANDROID));
+
+        assertThat(result.categoryId()).isEqualTo(2L);
+        assertThat(result.manufacturer()).isEqualTo("Samsung");
+        assertThat(result.modelName()).isEqualTo("Galaxy S25");
+        assertThat(result.modelCode()).isEqualTo("SM-S931N");
+        verify(logs).save(any());
+    }
+
     @Test
     void approvalCreatesCatalogModelAndPublishedTemplate() {
         CategoryRepository categories = mock(CategoryRepository.class);
