@@ -3,6 +3,7 @@ package com.c203.limit.domain.chat.event;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.c203.limit.domain.call.event.CallAppointmentNotificationAction;
 import com.c203.limit.domain.call.event.CallAppointmentUpdatedNotificationEvent;
 import com.c203.limit.domain.chat.dto.response.ChatEventResponse;
 import com.c203.limit.domain.chat.dto.response.ChatMessageResponse;
@@ -26,6 +27,8 @@ class CallAppointmentUpdatedNotificationEventListenerTests {
                 10L,
                 20L,
                 1L,
+                "리밋",
+                CallAppointmentNotificationAction.UPDATED,
                 LocalDateTime.of(2026, 8, 1, 15, 30),
                 "저녁 시간으로 변경");
         var message = new ChatMessageResponse(

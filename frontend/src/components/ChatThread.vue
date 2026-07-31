@@ -221,14 +221,21 @@ function isMessageOnMySide(message) {
   return Number(message.senderId) === Number(myMemberId.value)
 }
 
-function appointmentNotificationDetails(content) {
-  return String(content || '').split('\n').slice(1)
+function isAppointmentNotification(message) {
+  const content = String(message.content || '')
+  return message.type === 'SYSTEM'
+    && (/^.+ 님이 실시간 검증 약속을 (설정|변경|취소)했습니다\.$/.test(content)
+      || content.startsWith('검증 약속이 변경됐어요!')
+      || content.startsWith('검증 약속이 등록·변경됐어요!'))
 }
 
-function isAppointmentNotification(message) {
-  return message.type === 'SYSTEM'
-    && (message.content?.startsWith('검증 약속이 변경됐어요!')
-      || message.content?.startsWith('검증 약속이 등록·변경됐어요!'))
+function appointmentNotificationText(message) {
+  const content = String(message.content || '')
+  if (content.startsWith('검증 약속이 변경됐어요!')
+    || content.startsWith('검증 약속이 등록·변경됐어요!')) {
+    return '실시간 검증 약속이 변경되었습니다.'
+  }
+  return content
 }
 
 function appointmentTimelineOrder() {
@@ -731,13 +738,17 @@ onBeforeUnmount(() => {
           :data-message-sequence="message.roomSequence"
           :data-testid="message.isPending ? 'pending-message' : undefined"
           class="flex flex-col"
-          :class="isMessageOnMySide(message) ? 'items-end' : 'items-start'"
+          :class="isAppointmentNotification(message)
+            ? 'w-full items-center'
+            : isMessageOnMySide(message) ? 'items-end' : 'items-start'"
           :style="{ order: messageTimelineOrder(message.roomSequence) }"
         >
           <div
             class="max-w-[75%] rounded-lg px-4 py-2.5 text-sm leading-6"
             :class="message.type === 'SYSTEM' && (message.reinspection || isAppointmentNotification(message))
-              ? 'bg-transparent p-0 text-text-main'
+              ? isAppointmentNotification(message)
+                ? 'w-full max-w-none bg-transparent p-0 text-text-main'
+                : 'bg-transparent p-0 text-text-main'
               : message.senderId === myMemberId
                 ? 'bg-primary-deep text-white'
                 : 'bg-bg text-text-main'"
@@ -822,23 +833,14 @@ onBeforeUnmount(() => {
               v-else-if="isAppointmentNotification(message)"
             >
               <div
-                data-testid="appointment-notification-card"
-                class="min-w-[280px] rounded-xl border border-primary/25 p-4 text-text-main shadow-sm sm:min-w-[360px]"
+                data-testid="appointment-notification-divider"
+                class="flex w-full items-center gap-3 py-1 text-xs font-medium text-text-sub"
               >
-                <p class="mb-2 text-xs font-bold text-primary">
-                  약속 알림
+                <span class="h-px flex-1 bg-border" />
+                <p class="max-w-[72%] text-center leading-5">
+                  {{ appointmentNotificationText(message) }}
                 </p>
-                <p class="font-bold text-text-main">
-                  검증 약속이 변경됐어요!
-                </p>
-                <ul class="mt-3 space-y-1 border-t border-border pt-3 text-sm text-text-sub">
-                  <li
-                    v-for="detail in appointmentNotificationDetails(message.content)"
-                    :key="detail"
-                  >
-                    {{ detail }}
-                  </li>
-                </ul>
+                <span class="h-px flex-1 bg-border" />
               </div>
             </template>
             <template v-else-if="message.type === 'SYSTEM'">
@@ -879,7 +881,10 @@ onBeforeUnmount(() => {
               <span v-else>{{ message.content || '미디어 파일' }}</span>
             </template>
           </div>
-          <span class="mt-1 text-[11px] text-text-sub">
+          <span
+            v-if="!isAppointmentNotification(message)"
+            class="mt-1 text-[11px] text-text-sub"
+          >
             {{ formatTime(message.sentAt) }}
             <template v-if="message.isPending"> · 전송 중</template>
             <template

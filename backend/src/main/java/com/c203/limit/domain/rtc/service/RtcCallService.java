@@ -3,6 +3,7 @@ package com.c203.limit.domain.rtc.service;
 import com.c203.limit.domain.call.domain.AppointmentStatus;
 import com.c203.limit.domain.call.entity.CallAppointment;
 import com.c203.limit.domain.call.event.CallAppointmentChangedEvent;
+import com.c203.limit.domain.call.event.CallAppointmentNotificationAction;
 import com.c203.limit.domain.call.event.CallAppointmentUpdatedNotificationEvent;
 import com.c203.limit.domain.call.repository.CallAppointmentRepository;
 import com.c203.limit.domain.chat.entity.ChatRoom;
@@ -113,6 +114,8 @@ public class RtcCallService {
                         appointment.getId(),
                         roomId,
                         memberId,
+                        memberNickname(memberId),
+                        CallAppointmentNotificationAction.CREATED,
                         appointment.getScheduledAt(),
                         appointment.getMemo()));
         return callResponse(appointment, null, memberId);
@@ -234,6 +237,8 @@ public class RtcCallService {
                         appointment.getId(),
                         appointment.getChatRoomId(),
                         memberId,
+                        memberNickname(memberId),
+                        CallAppointmentNotificationAction.UPDATED,
                         appointment.getScheduledAt(),
                         appointment.getMemo()));
         return callResponse(appointment, null, memberId);
@@ -249,6 +254,16 @@ public class RtcCallService {
         }
         log.info("RTC inspection call canceled: callId={}", callId);
         publishAppointmentChanged(appointment.getChatRoomId());
+        eventPublisher.publishEvent(
+                new CallAppointmentUpdatedNotificationEvent(
+                        UUID.randomUUID(),
+                        appointment.getId(),
+                        appointment.getChatRoomId(),
+                        memberId,
+                        memberNickname(memberId),
+                        CallAppointmentNotificationAction.CANCELED,
+                        appointment.getScheduledAt(),
+                        appointment.getMemo()));
         return callResponse(appointment, null, memberId);
     }
 
@@ -411,6 +426,13 @@ public class RtcCallService {
                         .map(member -> member.getNickname())
                         .orElse(null),
                 session == null ? null : session.getExpiresAt());
+    }
+
+    private String memberNickname(Long memberId) {
+        return memberRepository
+                .findById(memberId)
+                .map(member -> member.getNickname())
+                .orElse("사용자");
     }
 
     private RtcSessionResponse sessionResponse(RtcSession session) {
