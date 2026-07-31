@@ -91,6 +91,15 @@ describe('ChatThread', () => {
     })
   })
 
+  it('채팅 헤더에 연결 상태 문구를 표시하지 않는다', async () => {
+    const wrapper = mountThread()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('상대방')
+    expect(wrapper.text()).not.toContain('실시간 연결됨')
+    expect(wrapper.text()).not.toContain('연결 확인 중')
+  })
+
   it('opens an image preview and closes it with Escape', async () => {
     getChatMediaBlob.mockResolvedValue(new Blob(['image'], { type: 'image/png' }))
     getChatMessages.mockResolvedValue({
