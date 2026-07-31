@@ -460,7 +460,7 @@ class ProductApplicationServiceTests {
         when(firstCount.getRequiredCount()).thenReturn(2L);
         when(firstCount.getCompletedRequiredCount()).thenReturn(2L);
         when(checklistItemRepository.countRequiredByListingIds(
-                        eq(List.of(1001L, 1002L)), eq(ChecklistItemCompletionStatus.COMPLETED)))
+                        eq(List.of(1001L, 1002L)), eq(ChecklistItemCompletionStatus.COMPLETED), eq(EvidenceType.SELLER_CONFIRMATION)))
                 .thenReturn(List.of(firstCount));
         ListingThumbnailProjection thumbnail = mock(ListingThumbnailProjection.class);
         when(thumbnail.getListingId()).thenReturn(1001L);
@@ -470,14 +470,14 @@ class ProductApplicationServiceTests {
                 .thenReturn(List.of(thumbnail));
 
         var result = service.findPublic(
-                null, null, null, null, null, null, null, null, null, 0, 20, "price,asc");
+                null, null, null, null, null, null, null, null, null, null, null, 0, 20, "price,asc");
 
         assertThat(result.content()).hasSize(2);
         assertThat(result.content().get(0).getVerificationStatus()).isEqualTo("COMPLETED");
         assertThat(result.content().get(0).getThumbnailUrl())
                 .isEqualTo("https://cdn.example.com/1001.jpg");
         verify(checklistItemRepository).countRequiredByListingIds(
-                List.of(1001L, 1002L), ChecklistItemCompletionStatus.COMPLETED);
+                List.of(1001L, 1002L), ChecklistItemCompletionStatus.COMPLETED, EvidenceType.SELLER_CONFIRMATION);
         verify(imageRepository).findFirstByListingIdsAndImageType(
                 List.of(1001L, 1002L),
                 com.c203.limit.domain.product.entity.ListingImageType.THUMBNAIL);
@@ -490,7 +490,7 @@ class ProductApplicationServiceTests {
     @Test
     void rejectsUnsupportedVerificationStatusAndSort() {
         assertThatThrownBy(() -> service.findPublic(
-                        null, null, null, null, null, null, null, "UNKNOWN", null, 0, 20,
+                        null, null, null, null, null, null, null, "UNKNOWN", null, null, null, 0, 20,
                         "createdAt,desc"))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
@@ -498,7 +498,7 @@ class ProductApplicationServiceTests {
                                 .isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
 
         assertThatThrownBy(() -> service.findPublic(
-                        null, null, null, null, null, null, null, null, null, 0, 20,
+                        null, null, null, null, null, null, null, null, null, null, null, 0, 20,
                         "sellerId,asc"))
                 .isInstanceOfSatisfying(
                         BusinessException.class,

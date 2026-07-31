@@ -42,6 +42,11 @@ public class MyProductSummaryResponse {
     @Schema(example = "18")
     private final Integer requiredItemCount;
 
+    // 판매 시작에 촬영 자료를 전부 요구하지는 않는다. 기기 정보와 개인정보 정리 확인만 끝나면
+    // 올릴 수 있다. 촬영은 나중에 채워도 되지만 개인정보 정리는 기기를 넘긴 뒤 되돌릴 수 없다.
+    @Schema(description = "판매 시작 전 끝내야 하는 개인정보 정리 확인이 남아 있는지", example = "false")
+    private final boolean pendingPrivacyConfirmation;
+
     @Schema(example = "2026-07-22T11:00:00+09:00")
     private final OffsetDateTime updatedAt;
 }

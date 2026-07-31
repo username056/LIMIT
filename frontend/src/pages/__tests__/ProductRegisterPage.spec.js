@@ -14,7 +14,9 @@ import {
   getDeviceCategories,
   getDeviceModels,
   getProductChecklist,
+  getProductDraftProgress,
   getEvidenceHistory,
+  getMyProduct,
   getProductImages,
   requestDeviceModel,
   transitionProductStatus,
@@ -28,10 +30,15 @@ import {
   parseDxdiag,
 } from '../../api/inspection'
 
-const { routerPushMock } = vi.hoisted(() => ({ routerPushMock: vi.fn() }))
+// 수정 모드는 /seller/products/:productId/edit 로 들어옵니다. 테스트마다 params를 바꿀 수 있게
+// 참조를 공유합니다(기본은 등록 모드).
+const { routerPushMock, routeParams } = vi.hoisted(() => ({
+  routerPushMock: vi.fn(),
+  routeParams: {},
+}))
 
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: {}, query: {} }),
+  useRoute: () => ({ params: routeParams, query: {} }),
   useRouter: () => ({ push: routerPushMock, replace: vi.fn() }),
 }))
 
@@ -125,6 +132,7 @@ const templateItems = [
 describe('ProductRegisterPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    delete routeParams.productId
     // clearAllMocks는 호출 기록만 지우고 구현은 남기므로, 테스트마다 기본 동작을 다시 세웁니다.
     getEvidenceHistory.mockResolvedValue([])
     transitionProductStatus.mockResolvedValue({})
@@ -834,96 +842,6 @@ describe('ProductRegisterPage', () => {
     expect(transitionProductStatus).not.toHaveBeenCalled()
     expect(routerPushMock).toHaveBeenCalledWith({ name: 'seller-products' })
   })
-
-  // 대표 이미지는 고르는 순간 서버에 올라가야 합니다. 그러지 않으면 이탈 시 선택이 사라집니다.
-  it('1단계 필수값이 채워져 있으면 대표 이미지를 고르는 즉시 초안을 만들고 업로드한다', async () => {
-    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
-    await flushPromises()
-    await fillDeviceStep(wrapper)
-
-    const file = new File(['thumb'], 'thumb.jpg', { type: 'image/jpeg' })
-    await attachFile(wrapper.find('input[aria-label="대표 이미지 선택"]'), file)
-    await flushPromises()
-
-    // '다음 단계'를 누르지 않았는데도 상품이 만들어지고 업로드까지 끝나 있어야 합니다.
-    expect(createProduct).toHaveBeenCalledTimes(1)
-    expect(createProductImageUploadUrl).toHaveBeenCalledWith(1001, {
-      filename: 'thumb.jpg',
-      contentType: 'image/jpeg',
-      fileSize: file.size,
-    })
-    expect(completeProductImage).toHaveBeenCalledWith(1001, {
-      uploadId: 'image-upload-1',
-      imageType: 'THUMBNAIL',
-      displayOrder: 0,
-    })
-    expect(wrapper.text()).toContain('서버에 저장되었습니다.')
-    expect(wrapper.text()).toContain('대표 이미지를 저장했습니다.')
-  })
-
-  // 업로드 실패는 예외를 던지지 않고 errorMessage만 세웁니다. 그래서 성공 안내를 걸러내지 않으면
-  // 실패 메시지와 '저장했습니다'가 같이 떠서, 문제가 있는데 없는 것처럼 보입니다.
-  it('업로드가 실패하면 저장했다고 알리지 않는다', async () => {
-    createProductImageUploadUrl.mockRejectedValue(new Error('미디어 저장소 설정을 확인해 주세요.'))
-
-    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
-    await flushPromises()
-    await fillDeviceStep(wrapper)
-
-    await attachFile(
-      wrapper.find('input[aria-label="대표 이미지 선택"]'),
-      new File(['thumb'], 'thumb.jpg', { type: 'image/jpeg' }),
-    )
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('상품 이미지를 업로드하지 못했습니다')
-    expect(wrapper.text()).not.toContain('대표 이미지를 저장했습니다.')
-  })
-
-  it('webp 대표 이미지는 원본 형식 그대로 업로드한다', async () => {
-    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
-    await flushPromises()
-    await fillDeviceStep(wrapper)
-
-    const file = new File(['thumb'], 'thumb.webp', { type: 'image/webp' })
-    await attachFile(wrapper.find('input[aria-label="대표 이미지 선택"]'), file)
-    await flushPromises()
-
-    expect(createProductImageUploadUrl).toHaveBeenCalledWith(1001, {
-      filename: 'thumb.webp',
-      contentType: 'image/webp',
-      fileSize: file.size,
-    })
-  })
-
-  it('필수값이 비어 있으면 대표 이미지를 붙들고 있으면서 아직 저장되지 않았다고 알린다', async () => {
-    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
-    await flushPromises()
-
-    await attachFile(
-      wrapper.find('input[aria-label="대표 이미지 선택"]'),
-      new File(['thumb'], 'thumb.jpg', { type: 'image/jpeg' }),
-    )
-    await flushPromises()
-
-    expect(createProduct).not.toHaveBeenCalled()
-    expect(createProductImageUploadUrl).not.toHaveBeenCalled()
-    expect(wrapper.find('img[alt="대표 이미지 미리보기"]').attributes('src')).toBe('blob:preview')
-    expect(wrapper.text()).toContain('아직 저장되지 않았습니다')
-    expect(wrapper.text()).toContain('대표 이미지가 바로 저장됩니다')
-
-    // 값을 채우고 다음 단계로 넘어가면 그때 함께 올라갑니다.
-    await fillDeviceStep(wrapper)
-    await buttonByText(wrapper, '다음 단계').trigger('click')
-    await flushPromises()
-
-    expect(completeProductImage).toHaveBeenCalledWith(1001, {
-      uploadId: 'image-upload-1',
-      imageType: 'THUMBNAIL',
-      displayOrder: 0,
-    })
-  })
-
   describe('모델 목록 탐색', () => {
     it('모델을 제조사·모델명으로 검색하고 제조사 안에서 정렬한다', async () => {
       getDeviceModels.mockResolvedValue([
@@ -1084,18 +1002,47 @@ describe('ProductRegisterPage', () => {
     })
   })
 
-  it('압축 후에도 15MB를 넘는 대표 이미지는 업로드하지 않고 안내한다', async () => {
-    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
-    await flushPromises()
-    await fillDeviceStep(wrapper)
+  // 수정은 고치러 들어오는 흐름이라 기기 정보부터 보이고, 무엇이든 고칠 수 있어야 합니다.
+  describe('상품 수정', () => {
+    beforeEach(() => {
+      routeParams.productId = '1001'
+      getMyProduct.mockResolvedValue({
+        productId: 1001,
+        status: 'DRAFT',
+        name: '수정할 상품',
+        description: '설명',
+        price: 850000,
+        category: { categoryId: 10 },
+        device: { deviceModelId: 101, color: '블랙', storageGb: 256 },
+      })
+      getProductDraftProgress.mockResolvedValue({ step: 3, confirmedChecklistItemIds: [] })
+    })
 
-    const huge = new File(['x'], 'huge.jpg', { type: 'image/jpeg' })
-    Object.defineProperty(huge, 'size', { value: 16 * 1024 * 1024 })
-    await attachFile(wrapper.find('input[aria-label="대표 이미지 선택"]'), huge)
-    await flushPromises()
+    it('진행 단계가 남아 있어도 1단계부터 연다', async () => {
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
 
-    expect(createProductImageUploadUrl).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('15MB를 넘을 수 없습니다')
+      expect(wrapper.text()).toContain('판매할 기기를 등록해 주세요.')
+    })
+
+    it('기존 정보를 채워서 보여준다', async () => {
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+
+      expect(wrapper.find('input[placeholder="예: 갤럭시 S24 256GB 자급제"]').element.value)
+        .toBe('수정할 상품')
+      expect(wrapper.findAll('select')[0].element.value).toBe('10')
+    })
+
+    // 카테고리·기기 모델도 고칠 수 있어야 합니다. 예전에는 수정 모드에서 잠겨 있었습니다.
+    it('카테고리와 기기 모델을 잠그지 않는다', async () => {
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+
+      const selects = wrapper.findAll('select')
+      expect(selects[0].attributes('disabled')).toBeUndefined()
+      expect(selects[1].attributes('disabled')).toBeUndefined()
+    })
   })
 
   // 2단계 촬영/업로드 선택 —
@@ -1221,6 +1168,44 @@ describe('ProductRegisterPage', () => {
       expect(buttonByText(wrapper, '아니오 (다시 촬영)')).toBeDefined()
       // 묻는 동안에는 아직 올리지 않습니다.
       expect(createEvidenceUploadUrl).not.toHaveBeenCalled()
+    })
+
+    // 찍은 사진을 v-if로 갈아 끼우면 video가 DOM에서 빠져 스트림 연결이 끊깁니다.
+    // 그러면 다시 찍을 때 '카메라 화면이 아직 준비되지 않았습니다'가 나고 화면이 빕니다.
+    it('사진을 찍어도 카메라 video는 계속 붙어 있다', async () => {
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await goToCaptureStep(wrapper)
+
+      await buttonByText(wrapper, '촬영하기').trigger('click')
+      await flushPromises()
+      const videoBefore = wrapper.find('video').element
+
+      await buttonByText(wrapper, '사진 찍기').trigger('click')
+      await flushPromises()
+
+      // 확인 중에도 video가 살아 있어야 다시 찍기가 바로 됩니다.
+      expect(wrapper.find('video').exists()).toBe(true)
+      expect(wrapper.find('video').element).toBe(videoBefore)
+      expect(wrapper.find('img[alt="방금 촬영한 사진"]').exists()).toBe(true)
+    })
+
+    it('저장한 뒤에도 같은 video가 유지되어 곧바로 다시 찍을 수 있다', async () => {
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await goToCaptureStep(wrapper)
+
+      await buttonByText(wrapper, '촬영하기').trigger('click')
+      await flushPromises()
+      const videoBefore = wrapper.find('video').element
+
+      await buttonByText(wrapper, '사진 찍기').trigger('click')
+      await flushPromises()
+      await buttonByText(wrapper, '예 (저장)').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.find('video').element).toBe(videoBefore)
+      expect(wrapper.text()).not.toContain('카메라 화면이 아직 준비되지 않았습니다')
     })
 
     it('아니오를 누르면 올리지 않고 카메라를 켜 둔 채 다시 찍게 한다', async () => {

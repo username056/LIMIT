@@ -610,12 +610,46 @@ function onCustomCategoryChange() {
   modelRequestResult.value = null
 }
 
+// 카테고리·기기 모델을 바꾸면 체크리스트가 그 모델 기준으로 새로 만들어집니다. 이미 올린
+// 촬영 자료는 사라진 항목에 묶여 있어 함께 없어지므로, 되돌릴 수 없는 변경임을 먼저 알립니다.
+function hasCapturedEvidence() {
+  return mediaChecklistItems.value.some((item) => mediaOf(item.checklistItemId).length > 0)
+}
+
+function confirmDeviceChange() {
+  if (!hasCapturedEvidence()) return true
+  return window.confirm(
+    '카테고리·기기 모델을 수정하게 되면 새로운 체크리스트가 만들어져 기존의 정보들이 사라지게 됩니다.'
+    + '\n\n정말 다시 수정하시겠습니까?',
+  )
+}
+
+// 되돌릴 값을 미리 들고 있어야 '아니오'를 눌렀을 때 선택을 되돌릴 수 있습니다.
+// select는 change가 나기 전에 v-model이 이미 바뀌어 있기 때문입니다.
+let lastCategoryId = ''
+let lastDeviceModelId = ''
+
+watch(() => form.categoryId, (value, previous) => { lastCategoryId = previous ?? value }, { flush: 'sync' })
+watch(() => form.deviceModelId, (value, previous) => { lastDeviceModelId = previous ?? value }, { flush: 'sync' })
+
 function onCategoryChange() {
+  if (!confirmDeviceChange()) {
+    form.categoryId = lastCategoryId
+    return
+  }
   if (isCustomModelInput.value) {
     onCustomCategoryChange()
     return
   }
   loadModels()
+}
+
+function onDeviceModelChange() {
+  if (!confirmDeviceChange()) {
+    form.deviceModelId = lastDeviceModelId
+    return
+  }
+  loadTemplatePreview()
 }
 
 function toggleCustomModelInput() {
@@ -1164,6 +1198,15 @@ async function onListingImageInput(event) {
   ))
 }
 
+// 올린 사진 중 첫 장이 목록·상세에 보이는 대표 이미지입니다. 업로드 때는 서버가 첫 장을
+// THUMBNAIL로 저장하지만, 그 사진을 지우면 대표가 없는 상태가 되므로 여기서 다시 세웁니다.
+async function ensureThumbnail() {
+  const images = listingImages.value
+  if (!images.length) return
+  if (images.some((image) => image.imageType === 'THUMBNAIL')) return
+  await saveListingImageOrder(images.map((image) => image.imageId), images[0].imageId)
+}
+
 async function removeListingImage(image) {
   if (!currentProductId.value || !image?.imageId) return
   listingImageBusy.value = true
@@ -1171,6 +1214,9 @@ async function removeListingImage(image) {
     await deleteProductImage(currentProductId.value, image.imageId)
     if (image.previewUrl) URL.revokeObjectURL(image.previewUrl)
     listingImages.value = await getProductImages(currentProductId.value)
+    // 대표로 쓰이던 사진을 지우면 목록·상세의 썸네일이 통째로 비어 버립니다.
+    // 남은 사진의 첫 장을 대표로 올려 항상 하나는 대표가 되게 합니다.
+    await ensureThumbnail()
   } catch {
     errorMessage.value = '상품 이미지를 삭제하지 못했습니다.'
   } finally {
@@ -1407,7 +1453,9 @@ async function startEdit(productId) {
     const hasEvidence = mediaChecklistItems.value.some(
       (item) => mediaOf(item.checklistItemId).length > 0,
     )
-    activeStep.value = draftProgress?.step || (hasEvidence ? 2 : 1)
+    // 수정은 항상 1단계부터 엽니다. 이어서 쓰는 게 아니라 고치러 들어온 것이라, 기기 정보부터
+    // 훑어보고 필요한 단계로 옮겨 가는 편이 자연스럽습니다.
+    activeStep.value = 1
     if (editingStatus.value && editingStatus.value !== 'DRAFT') {
       notice.value = '판매 중인 상품을 수정하고 있습니다.'
     } else if (hasEvidence) {
@@ -1520,7 +1568,6 @@ onMounted(async () => {
               <label class="text-sm font-semibold text-text-main">카테고리<span class="ml-0.5 text-red-500">*</span>
                 <select
                   v-model="form.categoryId"
-                  :disabled="Boolean(editingId)"
                   required
                   class="mt-2 w-full rounded-md border border-border bg-bg px-3 py-3 font-normal outline-none focus:border-primary"
                   @change="onCategoryChange"
@@ -1539,14 +1586,14 @@ onMounted(async () => {
                     type="search"
                     placeholder="제조사·모델명·모델 코드 검색"
                     aria-label="기기 모델 검색"
-                    :disabled="Boolean(editingId) || !form.categoryId"
+                    :disabled="!form.categoryId"
                     class="min-w-0 flex-1 rounded-md border border-border bg-bg px-3 py-2.5 font-normal outline-none focus:border-primary disabled:opacity-60"
                     @keydown.enter.prevent="searchModels"
                   >
                   <BaseButton
                     type="button"
                     variant="secondary"
-                    :disabled="Boolean(editingId) || !form.categoryId || isLoadingModels"
+                    :disabled="!form.categoryId || isLoadingModels"
                     @click="searchModels"
                   >
                     {{ isLoadingModels ? '검색 중…' : '검색' }}
@@ -1554,10 +1601,10 @@ onMounted(async () => {
                 </div>
                 <select
                   v-model="form.deviceModelId"
-                  :disabled="Boolean(editingId) || !form.categoryId || isLoadingModels"
+                  :disabled="!form.categoryId || isLoadingModels"
                   required
                   class="mt-2 w-full rounded-md border border-border bg-bg px-3 py-3 font-normal outline-none focus:border-primary disabled:opacity-60"
-                  @change="loadTemplatePreview"
+                  @change="onDeviceModelChange"
                 >
                   <option value="">
                     {{ isLoadingModels ? '모델 목록 불러오는 중…' : '기기 모델 선택' }}
@@ -1889,91 +1936,6 @@ onMounted(async () => {
                 />
               </label>
             </div>
-
-            <!--
-              대표 이미지는 목록·상세의 첫인상이라 기기 정보와 같은 화면에서 받습니다.
-              선택 버튼과 안내 문구는 미리보기 바로 아래에 세로로 둡니다 — 버튼이 사진에서 멀면
-              무엇을 누르라는 건지 눈이 한 번 더 움직여야 합니다.
-            -->
-            <div class="mt-6 rounded-lg border border-border bg-white p-4">
-              <h3 class="text-sm font-bold text-text-main">
-                대표 이미지
-              </h3>
-              <p class="mt-0.5 text-xs leading-5 text-text-sub">
-                JPG·PNG 파일만을 지원하며 이미지 용량은 15MB까지 가능해요.
-              </p>
-
-              <!-- 버튼은 미리보기 상자의 오른쪽 아래에 맞춰 둡니다(items-end). -->
-              <div class="mt-4 flex items-end gap-3">
-                <div class="relative h-28 w-40 shrink-0 overflow-hidden rounded-md border border-border bg-bg">
-                  <img
-                    v-if="thumbnailPreviewUrl"
-                    :src="thumbnailPreviewUrl"
-                    alt="대표 이미지 미리보기"
-                    class="h-full w-full object-cover"
-                  >
-                  <span
-                    v-else
-                    class="flex h-full w-full items-center justify-center text-center text-[11px] leading-4 text-text-sub"
-                  >대표 이미지<br>미등록</span>
-                </div>
-
-                <div class="w-40 shrink-0">
-                  <label
-                    class="block cursor-pointer rounded-md border border-primary px-3 py-2 text-center text-sm font-semibold text-primary"
-                    :class="listingImageBusy ? 'pointer-events-none opacity-60' : ''"
-                  >
-                    {{ listingImageBusy ? '업로드 중…' : (thumbnailPreviewUrl ? '이미지 변경' : '이미지 선택') }}
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      class="sr-only"
-                      aria-label="대표 이미지 선택"
-                      :disabled="listingImageBusy"
-                      @change="onThumbnailInput"
-                    >
-                  </label>
-
-                  <button
-                    v-if="thumbnailPreviewUrl"
-                    type="button"
-                    class="mt-1.5 block w-full rounded-md border border-border px-3 py-1.5 text-xs font-semibold text-text-sub hover:bg-bg"
-                    :disabled="listingImageBusy"
-                    @click="removeThumbnail"
-                  >
-                    이미지 삭제
-                  </button>
-                </div>
-              </div>
-
-              <div
-                v-if="listingImageBusy"
-                class="mt-3 h-1.5 max-w-[21rem] overflow-hidden rounded-pill bg-slate-100"
-                role="progressbar"
-                :aria-valuenow="listingImageProgress"
-                aria-valuemin="0"
-                aria-valuemax="100"
-              >
-                <div
-                  class="h-full bg-primary transition-all"
-                  :style="{ width: `${listingImageProgress}%` }"
-                />
-              </div>
-
-              <p
-                v-if="pendingThumbnail"
-                class="mt-2 text-xs leading-5 text-amber-700"
-              >
-                아직 저장되지 않았습니다. 위에 표시된 항목을 채우면 바로 저장되고,
-                그전에 새로고침하면 선택이 사라집니다.
-              </p>
-              <p
-                v-else-if="listingThumbnail"
-                class="mt-2 text-xs leading-5 text-primary"
-              >
-                서버에 저장되었습니다.
-              </p>
-            </div>
           </section>
 
           <section
@@ -2176,25 +2138,28 @@ onMounted(async () => {
               </h2>
 
               <div class="relative mt-4 flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg border border-border bg-bg">
-                <!-- 방금 찍은 사진을 먼저 보여 주고, 쓸지 다시 찍을지 고르게 합니다. -->
-                <img
-                  v-if="pendingShot"
-                  :src="pendingShot.previewUrl"
-                  alt="방금 촬영한 사진"
-                  class="h-full w-full object-cover"
-                >
                 <!--
                   촬영 중에는 이 박스가 그대로 카메라 화면이 됩니다. 따로 창을 띄우지 않고
                   한 화면에서 찍도록 두는 편이 흐름이 짧습니다.
+
+                  방금 찍은 사진은 이 video를 '덮어서' 보여 줍니다. v-if로 갈아 끼우면 video가
+                  DOM에서 빠지면서 카메라 스트림 연결이 끊기고, 다시 찍을 때 화면이 비어 버립니다.
                 -->
-                <video
-                  v-else-if="isCapturing"
-                  ref="cameraVideo"
-                  class="h-full w-full object-cover"
-                  autoplay
-                  playsinline
-                  muted
-                />
+                <template v-if="isCapturing">
+                  <video
+                    ref="cameraVideo"
+                    class="h-full w-full object-cover"
+                    autoplay
+                    playsinline
+                    muted
+                  />
+                  <img
+                    v-if="pendingShot"
+                    :src="pendingShot.previewUrl"
+                    alt="방금 촬영한 사진"
+                    class="absolute inset-0 h-full w-full object-cover"
+                  >
+                </template>
                 <template v-else-if="activeItemLatestMedia && activeItemLatestMedia.evidenceType === 'VIDEO'">
                   <video
                     :src="activeItemLatestMedia.previewUrl"
@@ -2332,11 +2297,16 @@ onMounted(async () => {
                     S3 업로드 {{ progressOf(activeCaptureItem.checklistItemId) }}%
                   </span>
                 </label>
+              </div>
 
-                <!-- 첨부한 파일은 버튼 옆 썸네일로 보여주고, 누르면 확인 모달을 엽니다. -->
+              <!--
+                첨부한 파일은 버튼 아래에 모아 보여 줍니다. 버튼 옆에 두면 촬영 중에는 카메라
+                화면에 가려 저장이 됐는지 확인할 수 없습니다. 누르면 확인 모달을 엽니다.
+              -->
+              <div class="mt-3">
                 <ul
                   v-if="activeItemMedia.length"
-                  class="flex shrink-0 items-center gap-2"
+                  class="flex flex-wrap items-center gap-2"
                 >
                   <li
                     v-for="(media, index) in activeItemMedia"
@@ -2369,6 +2339,12 @@ onMounted(async () => {
                     </button>
                   </li>
                 </ul>
+                <!-- 아직 없을 때도 자리를 남겨 둡니다. 어디에 쌓이는지 미리 보이게 하려는 것입니다. -->
+                <div
+                  v-else
+                  class="h-12 w-12 rounded-md border border-dashed border-border bg-bg"
+                  aria-hidden="true"
+                />
               </div>
 
               <div
