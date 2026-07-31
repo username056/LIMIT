@@ -4,7 +4,7 @@
 //   성공: { data, meta }
 //   실패: { error: { code, message, fieldErrors }, traceId }
 
-import { getAccessToken } from '../auth/session'
+import { getAccessToken, restoreAuthSession } from '../auth/session'
 import { captureApiException } from '../monitoring/sentry'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
@@ -19,8 +19,20 @@ export class ApiError extends Error {
   }
 }
 
+// 동시에 여러 요청이 401을 받아도 refresh는 한 번만 진행되도록 진행 중인 Promise를 공유한다.
+let refreshPromise = null
+
+function refreshAccessToken() {
+  if (!refreshPromise) {
+    refreshPromise = restoreAuthSession().finally(() => {
+      refreshPromise = null
+    })
+  }
+  return refreshPromise
+}
+
 async function request(path, options = {}) {
-  const { unwrapResponse = true, responseType = 'json', ...fetchOptions } = options
+  const { unwrapResponse = true, responseType = 'json', _isRetry = false, ...fetchOptions } = options
   const accessToken = getAccessToken()
   const method = fetchOptions.method || 'GET'
   let res
@@ -38,6 +50,15 @@ async function request(path, options = {}) {
   } catch (error) {
     captureApiException(error, { method, path })
     throw error
+  }
+
+  // accessToken 만료로 인한 401은 refresh 후 한 번만 재시도한다.
+  // /auth/ 경로(로그인 등)는 세션이 없는 상태에서의 정상적인 인증 실패이므로 대상에서 제외한다.
+  if (res.status === 401 && accessToken && !_isRetry && !path.startsWith('/auth/')) {
+    const refreshed = await refreshAccessToken()
+    if (refreshed) {
+      return request(path, { ...options, _isRetry: true })
+    }
   }
 
   const body = responseType === 'blob'
