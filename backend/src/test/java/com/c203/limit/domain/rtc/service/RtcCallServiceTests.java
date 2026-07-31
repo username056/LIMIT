@@ -3,10 +3,13 @@ package com.c203.limit.domain.rtc.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.c203.limit.domain.call.domain.AppointmentStatus;
 import com.c203.limit.domain.call.entity.CallAppointment;
+import com.c203.limit.domain.call.event.CallAppointmentNotificationAction;
+import com.c203.limit.domain.call.event.CallAppointmentUpdatedNotificationEvent;
 import com.c203.limit.domain.call.repository.CallAppointmentRepository;
 import com.c203.limit.domain.chat.entity.ChatRoom;
 import com.c203.limit.domain.chat.repository.ChatRoomRepository;
@@ -35,6 +38,7 @@ class RtcCallServiceTests {
     private RtcSessionRepository sessionRepository;
     private ChatRoomRepository chatRoomRepository;
     private MemberRepository memberRepository;
+    private ApplicationEventPublisher eventPublisher;
     private RtcCallService service;
 
     @BeforeEach
@@ -43,6 +47,7 @@ class RtcCallServiceTests {
         sessionRepository = mock(RtcSessionRepository.class);
         chatRoomRepository = mock(ChatRoomRepository.class);
         memberRepository = mock(MemberRepository.class);
+        eventPublisher = mock(ApplicationEventPublisher.class);
         service =
                 new RtcCallService(
                         appointmentRepository,
@@ -51,7 +56,7 @@ class RtcCallServiceTests {
                         chatRoomRepository,
                         mock(ListingChecklistItemRepository.class),
                         new RtcJoinTokenStore(),
-                        mock(ApplicationEventPublisher.class),
+                        eventPublisher,
                         memberRepository,
                         "stun:example.test:3478",
                         "",
@@ -311,6 +316,15 @@ class RtcCallServiceTests {
 
         assertThat(response.status()).isEqualTo(AppointmentStatus.CANCELED.name());
         assertThat(response.cancelReason()).isEqualTo("일정 취소");
+        verify(eventPublisher)
+                .publishEvent(
+                        org.mockito.ArgumentMatchers.<Object>argThat(
+                                event ->
+                                        event instanceof CallAppointmentUpdatedNotificationEvent
+                                                notification
+                                                && notification.action()
+                                                        == CallAppointmentNotificationAction
+                                                                .CANCELED));
     }
 
     @Test
