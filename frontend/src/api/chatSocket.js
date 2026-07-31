@@ -137,11 +137,19 @@ export function createChatSocket({ roomId, onOpen, onEvent, onAck, onError, onCl
 }
 
 export function createChatListSocket({ roomIds, onOpen, onEvent, onError, onClose }) {
-  return createSocket({
+  const socket = createSocket({
     roomIds: [...new Set(roomIds.map(Number).filter(Number.isFinite))],
     onOpen,
     onEvent,
     onError,
     onClose,
   })
+  return {
+    get connected() {
+      return socket.connected
+    },
+    close() {
+      socket.close()
+    },
+  }
 }

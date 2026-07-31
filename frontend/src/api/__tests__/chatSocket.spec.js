@@ -58,7 +58,7 @@ describe('chatSocket', () => {
     vi.stubGlobal('WebSocket', MockWebSocket)
     const onEvent = vi.fn()
 
-    createChatListSocket({ roomIds: [7, 8, 7], onEvent })
+    const listSocket = createChatListSocket({ roomIds: [7, 8, 7], onEvent })
     const socket = MockWebSocket.instances[0]
     socket.onopen()
     socket.onmessage({ data: 'CONNECTED\n\n\0' })
@@ -66,6 +66,8 @@ describe('chatSocket', () => {
     expect(socket.sent).toContain('SUBSCRIBE\nid:room-events-7\ndestination:/sub/chat-rooms/7\nack:auto\n\n\0')
     expect(socket.sent).toContain('SUBSCRIBE\nid:room-events-8\ndestination:/sub/chat-rooms/8\nack:auto\n\n\0')
     expect(socket.sent.some((frame) => frame.includes('/user/queue/chat-acks'))).toBe(false)
+    expect(listSocket).not.toHaveProperty('sendMessage')
+    expect(listSocket).not.toHaveProperty('markRead')
 
     socket.onmessage({
       data: 'MESSAGE\ndestination:/sub/chat-rooms/8\n\n{"type":"MESSAGE","roomId":8}\0',
