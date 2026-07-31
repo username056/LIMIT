@@ -3,6 +3,7 @@ package com.c203.limit.domain.product.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.c203.limit.domain.inspection.enums.ChecklistItemCompletionStatus;
+import com.c203.limit.domain.inspection.enums.EvidenceType;
 import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
 import com.c203.limit.domain.product.entity.Wishlist;
 import com.c203.limit.testsupport.AbstractMySqlIntegrationTest;
@@ -130,7 +131,8 @@ class WishlistRepositoryIntegrationTests extends AbstractMySqlIntegrationTest {
     void loadsChecklistCountsAndThumbnailInBatch() {
         var counts = checklistItemRepository.countRequiredByListingIds(
                 List.of(ACTIVE_LISTING_ID, DELETED_LISTING_ID),
-                ChecklistItemCompletionStatus.COMPLETED);
+                ChecklistItemCompletionStatus.COMPLETED,
+                EvidenceType.SELLER_CONFIRMATION);
         var thumbnails = listingImageRepository.findFirstByListingIdsAndImageType(
                 List.of(ACTIVE_LISTING_ID, DELETED_LISTING_ID),
                 com.c203.limit.domain.product.entity.ListingImageType.THUMBNAIL);
