@@ -12,5 +12,6 @@ public interface CallAppointmentRepository extends JpaRepository<CallAppointment
             "SELECT a FROM CallAppointment a WHERE a.proposerId = :memberId OR a.respondentId = :memberId ORDER BY a.id DESC")
     List<CallAppointment> findMine(@Param("memberId") Long memberId);
 
-    boolean existsByChatRoomIdAndStatusIn(Long chatRoomId, List<AppointmentStatus> statuses);
+    List<CallAppointment> findByChatRoomIdAndStatusIn(
+            Long chatRoomId, List<AppointmentStatus> statuses);
 }
