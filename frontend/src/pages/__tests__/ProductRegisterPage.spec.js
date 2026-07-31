@@ -209,6 +209,45 @@ describe('ProductRegisterPage', () => {
     expect(wrapper.text()).toContain('검수용 기기 촬영')
   })
 
+  it('AI 체크리스트 조사 중 진행률과 움직이는 점을 표시한다', async () => {
+    let resolveChecklist
+    generateChecklist.mockReturnValue(new Promise((resolve) => {
+      resolveChecklist = resolve
+    }))
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await wrapper.findAll('select')[0].setValue('10')
+    await flushPromises()
+
+    vi.useFakeTimers()
+    try {
+      await wrapper.findAll('select')[1].setValue('101')
+      await wrapper.vm.$nextTick()
+
+      const progress = wrapper.get('[role="progressbar"][aria-label="AI 체크리스트 조사 진행률"]')
+      expect(progress.attributes('aria-valuenow')).toBe('8')
+      const initialStatus = wrapper.get('[role="status"]').text()
+      expect(initialStatus).toContain('등록된 모델과 기본 체크리스트를 확인하는 중.')
+
+      vi.advanceTimersByTime(450)
+      await wrapper.vm.$nextTick()
+      expect(wrapper.get('[role="status"]').text()).not.toBe(initialStatus)
+
+      resolveChecklist({
+        deviceModelId: 101,
+        manufacturer: 'Samsung',
+        modelName: 'Galaxy Book',
+        osFamily: 'WINDOWS',
+        aiApplied: false,
+        items: templateItems,
+      })
+      await flushPromises()
+      expect(wrapper.find('[role="status"]').exists()).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('Windows 모델은 승인된 자동 생성 체크리스트만 보여주고 판매자 기능 선택은 받지 않는다', async () => {
     getDeviceModels.mockResolvedValue([{
       deviceModelId: 101,
@@ -898,6 +937,31 @@ describe('ProductRegisterPage', () => {
       expect(wrapper.find('input[aria-label="기기 모델 검색"]').attributes('disabled')).toBeUndefined()
     })
 
+    it('승인된 모델을 모델 코드로 서버 검색해 목록에서 찾는다', async () => {
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await wrapper.findAll('select')[0].setValue('10')
+      await flushPromises()
+      getDeviceModels.mockResolvedValue([{
+        deviceModelId: 201,
+        manufacturerName: 'Samsung',
+        modelName: 'Galaxy S25',
+        modelCode: 'SM-S931N',
+      }])
+
+      await wrapper.find('input[aria-label="기기 모델 검색"]').setValue('SM-S931N')
+      await buttonByText(wrapper, '검색').trigger('click')
+      await flushPromises()
+
+      expect(getDeviceModels).toHaveBeenLastCalledWith({
+        categoryId: 10,
+        keyword: 'SM-S931N',
+        page: 0,
+        size: 100,
+      })
+      expect(wrapper.findAll('select')[1].text()).toContain('Galaxy S25 (SM-S931N)')
+    })
+
     it('카테고리를 빠르게 바꿔도 이전 모델 응답이 현재 목록을 덮어쓰지 않는다', async () => {
       let resolveFirst
       let resolveSecond
@@ -973,9 +1037,9 @@ describe('ProductRegisterPage', () => {
     it('직접 입력한 모델은 상품을 만들지 않고 관리자 검토 요청으로 등록한다', async () => {
       const wrapper = mount(ProductRegisterPage, { global: globalOptions })
       await flushPromises()
-      await wrapper.findAll('select')[0].setValue('10')
       await buttonByText(wrapper, '찾는 모델이 없나요? 직접 입력').trigger('click')
 
+      await wrapper.find('select[aria-label="신규 모델 카테고리"]').setValue('10')
       await wrapper.find('input[placeholder="예: Samsung"]').setValue('LG')
       await wrapper.find('input[placeholder="예: Galaxy S25"]').setValue('gram Pro 17')
       await wrapper.findAll('input[maxlength="50"]')

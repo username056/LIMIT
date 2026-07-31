@@ -8,6 +8,8 @@ import com.c203.limit.domain.admin.dto.request.ReleaseMemberRestrictionRequest;
 import com.c203.limit.domain.admin.dto.request.ReviewChecklistResearchRequest;
 import com.c203.limit.domain.admin.dto.request.ReviewDeviceModelRequest;
 import com.c203.limit.domain.admin.dto.request.UpdateAdminAccountAccessRequest;
+import com.c203.limit.domain.admin.dto.request.UpdateAdminActionLogRequest;
+import com.c203.limit.domain.admin.dto.request.UpdateDeviceModelRequest;
 import com.c203.limit.domain.admin.service.AdminAccountManagementService;
 import com.c203.limit.domain.admin.service.AdminService;
 import com.c203.limit.domain.auth.service.AuthCookieService;
@@ -94,6 +96,15 @@ public class AdminController implements AdminApi {
     }
 
     @Override
+    public ResponseEntity<?> updateActionLog(
+            Long actionLogId, UpdateAdminActionLogRequest request) {
+        return ResponseEntity.ok(
+                ApiResponse.ok(
+                        adminService.updateLog(
+                                currentUser.adminId(), actionLogId, request.reason())));
+    }
+
+    @Override
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<?> listAdminAccounts(Integer page, Integer size) {
         return ResponseEntity.ok(ApiResponse.ok(adminAccountManagementService.list(page, size)));
@@ -154,6 +165,15 @@ public class AdminController implements AdminApi {
     @Override
     public ResponseEntity<?> listDeviceModelRequests(DeviceModelRequestStatus status) {
         return ResponseEntity.ok(ApiResponse.ok(deviceModelRequestService.list(status)));
+    }
+
+    @Override
+    public ResponseEntity<?> updateDeviceModelRequest(
+            Long requestId, UpdateDeviceModelRequest request) {
+        return ResponseEntity.ok(
+                ApiResponse.ok(
+                        deviceModelRequestService.update(
+                                requestId, currentUser.adminId(), request)));
     }
 
     @Override

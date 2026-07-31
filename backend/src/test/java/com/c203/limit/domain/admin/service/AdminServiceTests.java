@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.c203.limit.domain.admin.dto.request.ChangeAdminPasswordRequest;
 import com.c203.limit.domain.admin.entity.AdminAccount;
+import com.c203.limit.domain.admin.entity.AdminActionLog;
 import com.c203.limit.domain.admin.repository.AdminAccountRepository;
 import com.c203.limit.domain.admin.repository.AdminActionLogRepository;
 import com.c203.limit.domain.admin.repository.MemberRestrictionRepository;
@@ -103,6 +104,19 @@ class AdminServiceTests {
                         exception ->
                                 assertThat(exception.getErrorCode())
                                         .isEqualTo(ErrorCode.ADMIN_SAME_AS_OLD_PASSWORD));
+    }
+
+    @Test
+    void updatesActionLogReasonAndKeepsRevisionLog() {
+        AdminActionLog actionLog =
+                AdminActionLog.of(3L, "MEMBER_RESTRICT", "MEMBER", 20L, "기존 사유");
+        ReflectionTestUtils.setField(actionLog, "id", 7L);
+        when(logs.findById(7L)).thenReturn(Optional.of(actionLog));
+
+        var result = service.updateLog(1L, 7L, " 정정된 사유 ");
+
+        assertThat(result.get("reason")).isEqualTo("정정된 사유");
+        verify(logs).save(any(AdminActionLog.class));
     }
 
     private AdminAccount admin(String password) {

@@ -20,6 +20,23 @@ const socialLoading = ref('')
 const errorMessage = ref('')
 const successMessage = ref(route.query.passwordChanged ? '비밀번호가 변경되었습니다. 다시 로그인해 주세요.' : '')
 
+const LOGIN_FAILURE_MESSAGES = Object.freeze({
+  AUTH001: '이메일 또는 비밀번호가 올바르지 않습니다.',
+  AUTH009: '이메일 인증이 필요합니다. 가입할 때 받은 인증 메일을 확인해 주세요.',
+  MEM004: '현재 이용할 수 없는 계정입니다. 고객센터에 문의해 주세요.',
+  CMN007: '로그인 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+})
+
+function resolveLoginFailureMessage(error) {
+  if (LOGIN_FAILURE_MESSAGES[error?.code]) {
+    return LOGIN_FAILURE_MESSAGES[error.code]
+  }
+  if (!error?.status) {
+    return '서버에 연결하지 못했습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.'
+  }
+  return error?.message || '로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.'
+}
+
 function safeRedirectPath() {
   const redirect = route.query.redirect
   return typeof redirect === 'string' && redirect.startsWith('/') && !redirect.startsWith('//')
@@ -29,14 +46,19 @@ function safeRedirectPath() {
 
 async function submitEmailLogin() {
   if (isLoading.value) return
-  isLoading.value = true
   errorMessage.value = ''
+  const normalizedEmail = email.value.trim()
+  if (!normalizedEmail || !password.value) {
+    errorMessage.value = '이메일과 비밀번호를 모두 입력해 주세요.'
+    return
+  }
+  isLoading.value = true
   try {
-    const result = await loginWithEmail(email.value, password.value)
+    const result = await loginWithEmail(normalizedEmail, password.value)
     setAuthSession(result)
     await router.push(safeRedirectPath())
   } catch (error) {
-    errorMessage.value = error.message || '로그인에 실패했습니다.'
+    errorMessage.value = resolveLoginFailureMessage(error)
   } finally {
     isLoading.value = false
   }
@@ -82,12 +104,16 @@ const providers = [
               label="이메일"
               type="email"
               placeholder="name@example.com"
+              autocomplete="email"
+              required
             />
             <BaseInput
               v-model="password"
               label="비밀번호"
               type="password"
               placeholder="비밀번호를 입력해 주세요"
+              autocomplete="current-password"
+              required
             />
           </div>
           <div class="mt-3 text-right">
@@ -107,6 +133,20 @@ const providers = [
             {{ isLoading ? '로그인 중...' : '로그인' }}
           </BaseButton>
         </form>
+
+        <div
+          v-if="errorMessage"
+          class="mt-5 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700"
+          role="alert"
+          aria-live="assertive"
+        >
+          <p class="font-semibold">
+            로그인할 수 없습니다.
+          </p>
+          <p class="mt-1">
+            {{ errorMessage }}
+          </p>
+        </div>
 
         <p class="mt-5 text-center text-sm text-text-sub">
           아직 회원이 아닌가요?
@@ -134,14 +174,6 @@ const providers = [
             @click="socialLogin(provider.id)"
           />
         </div>
-
-        <p
-          v-if="errorMessage"
-          class="mt-5 rounded-md bg-red-50 px-4 py-3 text-sm text-red-600"
-          role="alert"
-        >
-          {{ errorMessage }}
-        </p>
       </BaseCard>
     </AuthShell>
   </DefaultLayout>
