@@ -48,7 +48,11 @@ public class CallAppointmentChatNotificationService {
                     case UPDATED -> "변경했습니다.";
                     case CANCELED -> "취소했습니다.";
                 };
-        String content = event.actorNickname() + " 님이 실시간 검증 약속을 " + action;
+        String actorNickname =
+                event.actorNickname() == null || event.actorNickname().isBlank()
+                        ? "사용자"
+                        : event.actorNickname().trim();
+        String content = actorNickname + " 님이 실시간 검증 약속을 " + action;
         ChatMessage message = chatMessageRepository.save(ChatMessage.sendSystem(
                 event.chatRoomId(),
                 sequence,

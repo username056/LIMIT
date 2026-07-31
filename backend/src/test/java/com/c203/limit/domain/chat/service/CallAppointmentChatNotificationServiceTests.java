@@ -24,7 +24,9 @@ class CallAppointmentChatNotificationServiceTests {
     @ParameterizedTest
     @MethodSource("appointmentNotifications")
     void savesAppointmentActionAsNicknameDividerMessage(
-            CallAppointmentNotificationAction action, String expectedContent) {
+            CallAppointmentNotificationAction action,
+            String actorNickname,
+            String expectedContent) {
         ChatRoomRepository roomRepository = mock(ChatRoomRepository.class);
         ChatMessageRepository messageRepository = mock(ChatMessageRepository.class);
         CallAppointmentChatNotificationService service =
@@ -37,7 +39,7 @@ class CallAppointmentChatNotificationServiceTests {
                         1L,
                         10L,
                         20L,
-                        "민수",
+                        actorNickname,
                         action,
                         LocalDateTime.of(2026, 8, 1, 15, 30),
                         null);
@@ -58,12 +60,23 @@ class CallAppointmentChatNotificationServiceTests {
         return Stream.of(
                 Arguments.of(
                         CallAppointmentNotificationAction.CREATED,
+                        "민수",
                         "민수 님이 실시간 검증 약속을 설정했습니다."),
                 Arguments.of(
                         CallAppointmentNotificationAction.UPDATED,
+                        "민수",
                         "민수 님이 실시간 검증 약속을 변경했습니다."),
                 Arguments.of(
                         CallAppointmentNotificationAction.CANCELED,
-                        "민수 님이 실시간 검증 약속을 취소했습니다."));
+                        "민수",
+                        "민수 님이 실시간 검증 약속을 취소했습니다."),
+                Arguments.of(
+                        CallAppointmentNotificationAction.CREATED,
+                        "  ",
+                        "사용자 님이 실시간 검증 약속을 설정했습니다."),
+                Arguments.of(
+                        CallAppointmentNotificationAction.UPDATED,
+                        null,
+                        "사용자 님이 실시간 검증 약속을 변경했습니다."));
     }
 }
