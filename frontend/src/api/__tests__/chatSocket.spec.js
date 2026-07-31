@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setAuthSession } from '../../auth/session'
-import { createChatSocket } from '../chatSocket'
+import { createChatListSocket, createChatSocket } from '../chatSocket'
 
 class MockWebSocket {
   static OPEN = 1
@@ -52,6 +52,27 @@ describe('chatSocket', () => {
     expect(socket.sent).toContain('SUBSCRIBE\nid:room-events\ndestination:/sub/chat-rooms/7\nack:auto\n\n\0')
     expect(socket.sent).toContain('SUBSCRIBE\nid:chat-acks\ndestination:/user/queue/chat-acks\nack:auto\n\n\0')
     expect(socket.sent).toContain('SUBSCRIBE\nid:chat-errors\ndestination:/user/queue/errors\nack:auto\n\n\0')
+  })
+
+  it('subscribes to all chat rooms with one connection for realtime list updates', () => {
+    vi.stubGlobal('WebSocket', MockWebSocket)
+    const onEvent = vi.fn()
+
+    const listSocket = createChatListSocket({ roomIds: [7, 8, 7], onEvent })
+    const socket = MockWebSocket.instances[0]
+    socket.onopen()
+    socket.onmessage({ data: 'CONNECTED\n\n\0' })
+
+    expect(socket.sent).toContain('SUBSCRIBE\nid:room-events-7\ndestination:/sub/chat-rooms/7\nack:auto\n\n\0')
+    expect(socket.sent).toContain('SUBSCRIBE\nid:room-events-8\ndestination:/sub/chat-rooms/8\nack:auto\n\n\0')
+    expect(socket.sent.some((frame) => frame.includes('/user/queue/chat-acks'))).toBe(false)
+    expect(listSocket).not.toHaveProperty('sendMessage')
+    expect(listSocket).not.toHaveProperty('markRead')
+
+    socket.onmessage({
+      data: 'MESSAGE\ndestination:/sub/chat-rooms/8\n\n{"type":"MESSAGE","roomId":8}\0',
+    })
+    expect(onEvent).toHaveBeenCalledWith({ type: 'MESSAGE', roomId: 8 })
   })
 
   it('routes STOMP messages and sends chat commands after connection', () => {

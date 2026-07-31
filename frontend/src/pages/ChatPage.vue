@@ -1,29 +1,70 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseCard from '../components/BaseCard.vue'
 import ChatThread from '../components/ChatThread.vue'
 import { getChatRooms, leaveChatRoom } from '../api/chat'
+import { createChatListSocket } from '../api/chatSocket'
 
 const route = useRoute()
 const router = useRouter()
 const rooms = ref([])
 const isLoading = ref(true)
 const errorMessage = ref('')
+let listSocket = null
+let listSocketRoomKey = ''
+let reconnectTimer = null
+let refreshTimer = null
+let isUnmounted = false
 
-async function loadRooms() {
-  isLoading.value = true
+function scheduleRoomsRefresh() {
+  clearTimeout(refreshTimer)
+  refreshTimer = setTimeout(() => loadRooms(false), 0)
+}
+
+function connectListSocket() {
+  const roomIds = rooms.value.map((room) => Number(room.roomId)).filter(Number.isFinite)
+  const roomKey = [...roomIds].sort((first, second) => first - second).join(',')
+  if (roomKey === listSocketRoomKey) return
+
+  listSocketRoomKey = roomKey
+  const previousSocket = listSocket
+  listSocket = null
+  previousSocket?.close()
+  clearTimeout(reconnectTimer)
+  if (!roomIds.length) {
+    listSocket = null
+    return
+  }
+
+  const nextSocket = createChatListSocket({
+    roomIds,
+    onEvent: scheduleRoomsRefresh,
+    onClose: () => {
+      if (isUnmounted || listSocket !== nextSocket) return
+      reconnectTimer = setTimeout(() => {
+        listSocketRoomKey = ''
+        connectListSocket()
+      }, 1500)
+    },
+  })
+  listSocket = nextSocket
+}
+
+async function loadRooms(showLoading = true) {
+  if (showLoading) isLoading.value = true
   errorMessage.value = ''
   try {
     const result = await getChatRooms({ size: 20 })
     rooms.value = (result?.content || []).filter(
       (room) => room.lastMessageId || String(room.roomId) === String(route.params.roomId),
     )
+    connectListSocket()
   } catch (error) {
     errorMessage.value = error.message || '채팅 목록을 불러오지 못했습니다.'
   } finally {
-    isLoading.value = false
+    if (showLoading) isLoading.value = false
   }
 }
 
@@ -39,6 +80,14 @@ async function removeRoom(roomId) {
 }
 
 onMounted(loadRooms)
+onBeforeUnmount(() => {
+  isUnmounted = true
+  clearTimeout(refreshTimer)
+  clearTimeout(reconnectTimer)
+  const currentSocket = listSocket
+  listSocket = null
+  currentSocket?.close()
+})
 
 const selectedRoomId = computed(() => route.params.roomId || null)
 const selectedRoom = computed(
@@ -107,6 +156,7 @@ function formatTime(isoString) {
                 <div class="flex shrink-0 items-center gap-2">
                   <span
                     v-if="room.unreadCount"
+                    :aria-label="`읽지 않은 메시지 ${room.unreadCount}개`"
                     class="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] font-bold text-white"
                   >
                     {{ room.unreadCount }}
@@ -143,7 +193,7 @@ function formatTime(isoString) {
         <ChatThread
           v-if="selectedRoom"
           :room="selectedRoom"
-          @room-updated="loadRooms"
+          @room-updated="scheduleRoomsRefresh"
         />
         <BaseCard
           v-else
