@@ -113,6 +113,33 @@ class RtcCallServiceTests {
     }
 
     @Test
+    void rejectsNewAppointmentWhenAcceptedSessionHasNoExpiration() {
+        CallAppointment previous =
+                appointment(
+                        1L,
+                        AppointmentStatus.ACCEPTED,
+                        LocalDateTime.now().minusMinutes(5));
+        RtcSession activeSession =
+                RtcSession.waiting(
+                        1L, 10L, 100L, 20L, 30L, LocalDateTime.now().plusMinutes(25));
+        ReflectionTestUtils.setField(activeSession, "expiresAt", null);
+        stubRequest(previous, activeSession, null);
+
+        assertThatThrownBy(
+                        () ->
+                                service.request(
+                                        10L,
+                                        20L,
+                                        new CreateCallRequest(
+                                                LocalDateTime.now().plusMinutes(10), null)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.RTC_ACTIVE_APPOINTMENT_EXISTS));
+    }
+
+    @Test
     void allowsNewAppointmentAfterProposedAppointmentWindowExpired() {
         CallAppointment previous =
                 appointment(

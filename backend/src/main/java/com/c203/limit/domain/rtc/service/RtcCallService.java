@@ -147,8 +147,8 @@ public class RtcCallService {
                             RtcSession session = sessions.get(appointment.getId());
                             return session == null
                                     || (!session.isClosed()
-                                            && session.getExpiresAt() != null
-                                            && session.getExpiresAt().isAfter(now));
+                                            && (session.getExpiresAt() == null
+                                                    || session.getExpiresAt().isAfter(now)));
                         });
     }
 
