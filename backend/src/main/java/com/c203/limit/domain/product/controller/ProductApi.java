@@ -86,6 +86,8 @@ public interface ProductApi {
             @RequestParam(required = false) BigDecimal maxPrice,
             @RequestParam(required = false) String tradeRegion,
             @RequestParam(required = false) String verificationStatus,
+            @RequestParam(required = false) Integer minVerifiedCount,
+            @RequestParam(required = false) Integer maxVerifiedCount,
             @RequestParam(required = false) Long sellerId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,

@@ -217,6 +217,8 @@ class ProductMockControllerTests {
                         null,
                         null,
                         null,
+                        null,
+                        null,
                         0,
                         20,
                         "createdAt,desc"))
@@ -239,6 +241,8 @@ class ProductMockControllerTests {
                         BigDecimal.valueOf(900000),
                         "서울",
                         "COMPLETED",
+                        4,
+                        9,
                         55L,
                         1,
                         10,
@@ -254,6 +258,8 @@ class ProductMockControllerTests {
                         .param("maxPrice", "900000")
                         .param("tradeRegion", "서울")
                         .param("verificationStatus", "COMPLETED")
+                        .param("minVerifiedCount", "4")
+                        .param("maxVerifiedCount", "9")
                         .param("sellerId", "55")
                         .param("page", "1")
                         .param("size", "10")
@@ -269,6 +275,8 @@ class ProductMockControllerTests {
                 BigDecimal.valueOf(900000),
                 "서울",
                 "COMPLETED",
+                4,
+                9,
                 55L,
                 1,
                 10,

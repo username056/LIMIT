@@ -4,12 +4,54 @@ import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseButton from '../components/BaseButton.vue'
 import { getDeviceCategories, getProducts } from '../api/products'
+import { addFavorite, getMyFavorites, removeFavorite } from '../api/favorites'
+import { getAccessToken } from '../auth/session'
 import { formatPriceDigits, toPriceDigits } from '../utils/priceInput'
 import { useSellerGate } from '../auth/sellerGate'
 import ProductCard from '../components/ProductCard.vue'
 import SellerNoticeModal from '../components/SellerNoticeModal.vue'
 
 const products = ref([])
+
+// 목록에서 바로 담을 수 있게 합니다. 어떤 상품을 이미 담았는지 알아야 하트를 채워 보여줄 수
+// 있는데, 상품마다 조회하면 요청이 카드 수만큼 늘어나므로 내 관심 목록을 한 번만 받아 둡니다.
+const isSignedIn = ref(false)
+const favoriteIds = ref(new Set())
+const pendingFavoriteIds = ref(new Set())
+
+async function loadFavoriteIds() {
+  isSignedIn.value = Boolean(getAccessToken())
+  if (!isSignedIn.value) return
+  try {
+    const response = await getMyFavorites({ page: 0, size: 100 })
+    favoriteIds.value = new Set((response?.data || []).map((item) => item.productId))
+  } catch {
+    // 목록 자체를 못 쓰게 만들 이유는 없습니다. 하트만 빈 상태로 둡니다.
+    favoriteIds.value = new Set()
+  }
+}
+
+async function toggleFavorite(product) {
+  const id = product.productId
+  if (pendingFavoriteIds.value.has(id)) return
+  pendingFavoriteIds.value = new Set(pendingFavoriteIds.value).add(id)
+  const wasFavorite = favoriteIds.value.has(id)
+  try {
+    if (wasFavorite) await removeFavorite(id)
+    else await addFavorite(id)
+    const next = new Set(favoriteIds.value)
+    if (wasFavorite) next.delete(id)
+    else next.add(id)
+    favoriteIds.value = next
+  } catch (error) {
+    errorMessage.value = error.message || '관심 상품을 변경하지 못했습니다.'
+  } finally {
+    const next = new Set(pendingFavoriteIds.value)
+    next.delete(id)
+    pendingFavoriteIds.value = next
+  }
+}
+
 const route = useRoute()
 const router = useRouter()
 const {
@@ -33,11 +75,12 @@ const filters = reactive({
 })
 let latestSearchRequestId = 0
 
+// 각 구간이 실제 완료 개수 범위입니다. max가 없으면 상한 없음(10개 이상).
 const VERIFICATION_COUNT_BUCKETS = [
-  { value: '0-5', label: '0-5개' },
-  { value: '5-7', label: '5-7개' },
-  { value: '7-9', label: '7-9개' },
-  { value: '10+', label: '10개 이상' },
+  { value: '0-5', label: '0-5개', min: 0, max: 5 },
+  { value: '5-7', label: '5-7개', min: 5, max: 7 },
+  { value: '7-9', label: '7-9개', min: 7, max: 9 },
+  { value: '10+', label: '10개 이상', min: 10, max: null },
 ]
 
 function selectAllVerificationBuckets() {
@@ -56,15 +99,21 @@ function toggleVerificationBucket(value) {
   search(0)
 }
 
-// 상품 목록 API가 아직 상품별 검증 개수를 내려주지 않아, 구간 선택을 기존 검증 상태값에 매핑해
-// 동작시킵니다(10개 이상만 선택 → 검증 완료, 나머지 구간만 선택 → 검증 중, 둘 다 섞이거나 전체
-// 선택 → 필터 없음). 백엔드에 개수 필드가 추가되면 실제 구간 필터로 교체하세요.
-function verificationStatusForBuckets(buckets) {
-  if (!buckets.length) return ''
-  const hasHighBucket = buckets.includes('10+')
-  const hasLowBucket = buckets.some((bucket) => bucket !== '10+')
-  if (hasHighBucket && hasLowBucket) return ''
-  return hasHighBucket ? 'COMPLETED' : 'IN_PROGRESS'
+/**
+ * 고른 구간을 서버가 받는 개수 범위로 바꿉니다.
+ *
+ * 서버는 최소·최대를 하나씩만 받으므로, 여러 구간을 고르면 그 전체를 감싸는 범위로 보냅니다
+ * (예: 0-5개와 10개 이상 → 0개 이상). 구간 사이의 빈틈까지 걸러 내지는 않지만, 고른 것보다
+ * 좁게 나오는 일은 없습니다.
+ */
+function verifiedCountRange(buckets) {
+  const selected = VERIFICATION_COUNT_BUCKETS.filter((bucket) => buckets.includes(bucket.value))
+  if (!selected.length) return { minVerifiedCount: undefined, maxVerifiedCount: undefined }
+  const hasOpenEnd = selected.some((bucket) => bucket.max === null)
+  return {
+    minVerifiedCount: Math.min(...selected.map((bucket) => bucket.min)),
+    maxVerifiedCount: hasOpenEnd ? undefined : Math.max(...selected.map((bucket) => bucket.max)),
+  }
 }
 
 const resultCount = computed(() => pageMeta.value.totalElements ?? products.value.length)
@@ -98,7 +147,7 @@ async function search(page = 0) {
     const { verificationCountRanges, ...restFilters } = filters
     const response = await getProducts({
       ...restFilters,
-      verificationStatus: verificationStatusForBuckets(verificationCountRanges),
+      ...verifiedCountRange(verificationCountRanges),
       page,
       size: 18,
     })
@@ -145,7 +194,7 @@ onMounted(async () => {
   } catch {
     categories.value = []
   }
-  await search(0)
+  await Promise.all([search(0), loadFavoriteIds()])
 })
 
 watch(() => [route.query.q, route.query.categoryId], async ([keyword, categoryId]) => {
@@ -368,7 +417,29 @@ watch(() => [route.query.q, route.query.categoryId], async ([keyword, categoryId
               :key="product.productId"
               :product="product"
               :to="{ name: 'product-detail', params: { productId: product.productId } }"
-            />
+            >
+              <!--
+                상세로 들어가지 않고 목록에서 바로 담을 수 있게 합니다.
+                카드 전체가 링크라 버블링을 막아야 하트만 눌립니다.
+              -->
+              <template #image-overlay>
+                <button
+                  v-if="isSignedIn"
+                  type="button"
+                  class="favorite-button absolute right-2.5 top-2.5 flex h-7 w-7 items-center justify-center rounded-full bg-primary-gradient text-base leading-none shadow-card transition hover:brightness-110 disabled:opacity-60"
+                  :class="favoriteIds.has(product.productId)
+                    ? 'favorite-button--on text-red-500'
+                    : 'text-white'"
+                  :aria-label="favoriteIds.has(product.productId)
+                    ? `${product.name} 좋아요 해제`
+                    : `${product.name} 좋아요`"
+                  :disabled="pendingFavoriteIds.has(product.productId)"
+                  @click.prevent.stop="toggleFavorite(product)"
+                >
+                  ♥
+                </button>
+              </template>
+            </ProductCard>
           </div>
 
           <div
@@ -427,3 +498,23 @@ watch(() => [route.query.q, route.query.categoryId], async ([keyword, categoryId
     />
   </DefaultLayout>
 </template>
+
+<style scoped>
+/* 담은 순간을 눈으로 확인할 수 있게 하트가 한 번 톡 튑니다. */
+.favorite-button--on {
+  animation: favorite-pop 320ms ease-out;
+}
+
+@keyframes favorite-pop {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+
+/* 움직임을 줄여 달라고 설정한 사용자에게는 애니메이션을 걸지 않습니다. */
+@media (prefers-reduced-motion: reduce) {
+  .favorite-button--on {
+    animation: none;
+  }
+}
+</style>

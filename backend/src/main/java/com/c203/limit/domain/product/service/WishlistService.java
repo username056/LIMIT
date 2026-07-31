@@ -4,12 +4,18 @@ import com.c203.limit.domain.product.dto.response.FavoriteProductResponse;
 import com.c203.limit.domain.product.dto.response.FavoriteStatusResponse;
 import com.c203.limit.domain.product.entity.Listing;
 import com.c203.limit.domain.product.entity.ListingStatus;
+import com.c203.limit.domain.product.entity.ListingImageType;
 import com.c203.limit.domain.product.entity.Wishlist;
+import com.c203.limit.domain.product.repository.ListingImageRepository;
 import com.c203.limit.domain.product.repository.ListingRepository;
+import com.c203.limit.domain.product.repository.ListingThumbnailProjection;
 import com.c203.limit.domain.product.repository.WishlistRepository;
+import com.c203.limit.domain.product.storage.MediaUrlResolver;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -25,14 +31,20 @@ public class WishlistService {
 
     private final WishlistRepository wishlistRepository;
     private final ListingRepository listingRepository;
+    private final ListingImageRepository imageRepository;
+    private final MediaUrlResolver mediaUrlResolver;
     private final WishlistCreator creator;
 
     public WishlistService(
             WishlistRepository wishlistRepository,
             ListingRepository listingRepository,
+            ListingImageRepository imageRepository,
+            MediaUrlResolver mediaUrlResolver,
             WishlistCreator creator) {
         this.wishlistRepository = wishlistRepository;
         this.listingRepository = listingRepository;
+        this.imageRepository = imageRepository;
+        this.mediaUrlResolver = mediaUrlResolver;
         this.creator = creator;
     }
 
@@ -60,8 +72,12 @@ public class WishlistService {
         validatePage(page, size);
         Page<Wishlist> result = wishlistRepository.findActiveByUserId(
                 memberId, PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")));
-        List<FavoriteProductResponse> content =
-                result.getContent().stream().map(FavoriteProductResponse::from).toList();
+        // 대표 이미지는 별도 테이블이라 목록을 한 번에 조회해 붙인다(항목마다 조회하면 N+1).
+        Map<Long, String> thumbnails = thumbnailsOf(result.getContent());
+        List<FavoriteProductResponse> content = result.getContent().stream()
+                .map(wishlist -> FavoriteProductResponse.from(
+                        wishlist, thumbnails.get(wishlist.getListing().getId())))
+                .toList();
         return new FavoritePage(
                 content,
                 result.getNumber(),
@@ -69,6 +85,22 @@ public class WishlistService {
                 result.getTotalElements(),
                 result.getTotalPages(),
                 result.hasNext());
+    }
+
+    private Map<Long, String> thumbnailsOf(List<Wishlist> wishlists) {
+        List<Long> listingIds = wishlists.stream()
+                .map(wishlist -> wishlist.getListing().getId())
+                .distinct()
+                .toList();
+        if (listingIds.isEmpty()) return Map.of();
+        return imageRepository
+                .findFirstByListingIdsAndImageType(listingIds, ListingImageType.THUMBNAIL)
+                .stream()
+                .collect(Collectors.toMap(
+                        ListingThumbnailProjection::getListingId,
+                        image -> mediaUrlResolver == null
+                                ? image.getCdnUrl()
+                                : mediaUrlResolver.resolve(image.getS3Key(), image.getCdnUrl())));
     }
 
     @Transactional

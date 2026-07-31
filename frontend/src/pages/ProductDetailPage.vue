@@ -612,11 +612,11 @@ onMounted(async () => {
                   판매자가 등록할 때 사용한 항목과 동일한 목록입니다.
                 </p>
               </div>
-              <div class="text-right">
-                <strong class="text-3xl text-primary">{{ checklistRate }}%</strong>
-                <p class="mt-1 text-xs text-text-sub">
-                  필수 {{ checklist.completed || 0 }} / {{ checklist.required || 0 }}개 확인
-                </p>
+              <!-- 목록 카드와 같은 모양으로 둡니다. 같은 값을 화면마다 다르게 읽지 않도록. -->
+              <div class="shrink-0 text-right">
+                <span class="rounded-pill bg-accent px-2.5 py-1 text-xs font-bold text-primary">
+                  {{ checklist.completed || 0 }}/{{ checklist.required || 0 }}
+                </span>
               </div>
             </div>
             <div class="mt-4 h-2 overflow-hidden rounded-pill bg-slate-100">
