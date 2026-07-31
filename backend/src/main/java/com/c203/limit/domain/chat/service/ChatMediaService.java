@@ -27,7 +27,6 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
-import software.amazon.awssdk.services.s3.model.S3Exception;
 
 @Service
 public class ChatMediaService {
@@ -82,7 +81,8 @@ public class ChatMediaService {
                     media.getType(),
                     media.getFileSizeBytes());
             return ChatMediaResponse.from(media);
-        } catch (IOException | S3Exception exception) {
+        } catch (IOException | SdkException exception) {
+            log.error("chat media upload failed: roomId={}", roomId, exception);
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "채팅 파일을 저장하지 못했습니다.");
         }
     }
