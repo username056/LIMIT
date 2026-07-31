@@ -65,9 +65,21 @@ function formatPrice(price) {
           {{ product.name }}
         </template>
       </h2>
-      <p class="mt-3 text-lg font-bold text-text-main">
-        {{ formatPrice(product.price) }}원
-      </p>
+      <!--
+        검증 개수는 이 서비스의 핵심 정보라 가격과 같은 줄 오른쪽에 둡니다.
+        필수 항목이 없는 상품(옛 데이터)에서는 표시하지 않습니다.
+      -->
+      <div class="mt-3 flex items-center justify-between gap-3">
+        <p class="text-lg font-bold text-text-main">
+          {{ formatPrice(product.price) }}원
+        </p>
+        <span
+          v-if="product.requiredItemCount"
+          class="shrink-0 rounded-pill bg-accent px-2.5 py-1 text-xs font-bold text-primary"
+        >
+          {{ product.completedItemCount ?? 0 }}/{{ product.requiredItemCount }}
+        </span>
+      </div>
       <div class="mt-3 border-t border-border pt-3 text-xs text-text-sub">
         <slot name="footer">
           <div class="flex items-center justify-end">

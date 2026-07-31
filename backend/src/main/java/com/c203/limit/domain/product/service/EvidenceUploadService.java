@@ -39,8 +39,18 @@ public class EvidenceUploadService {
             Set.of("image/jpeg", "image/png", "image/webp");
     private static final Set<String> VIDEO_TYPES =
             Set.of("video/mp4", "video/quicktime", "video/webm");
+    // 진단 자료는 파일로 저장되는 형식(txt·xml·html)뿐 아니라 사진으로도 올라온다.
+    // 진단 앱이 결과를 파일로 내보내지 못하면 판매자가 화면을 찍어 올리는 수밖에 없어서,
+    // 사진을 막으면 그 항목을 채울 방법이 사라진다.
     private static final Set<String> DIAGNOSTIC_TYPES = Set.of(
-            "text/plain", "text/xml", "application/xml", "text/html", "application/octet-stream");
+            "text/plain",
+            "text/xml",
+            "application/xml",
+            "text/html",
+            "application/octet-stream",
+            "image/jpeg",
+            "image/png",
+            "image/webp");
 
     private final ListingRepository listingRepository;
     private final ListingChecklistItemRepository checklistItemRepository;

@@ -422,6 +422,31 @@ class ProductApplicationServiceTests {
                                 .isEqualTo(ErrorCode.PRODUCT_EDIT_NOT_ALLOWED));
     }
 
+    // 상품 관리 화면이 대표 이미지와 기기 정보를 비워 둔 채 보여 주던 문제. 값은 DB에 있었지만
+    // 내 상품 목록 응답에만 실려 나가지 않았다.
+    @Test
+    void myProductListCarriesThumbnailAndDeviceInfo() {
+        Listing listing = listing();
+        when(listingRepository.findBySellerIdAndDeletedAtIsNull(eq(55L), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(listing)));
+        ListingThumbnailProjection thumbnail = mock(ListingThumbnailProjection.class);
+        when(thumbnail.getListingId()).thenReturn(1001L);
+        when(thumbnail.getCdnUrl()).thenReturn("https://cdn.example.com/1001.jpg");
+        when(imageRepository.findFirstByListingIdsAndImageType(
+                        eq(List.of(1001L)),
+                        eq(com.c203.limit.domain.product.entity.ListingImageType.THUMBNAIL)))
+                .thenReturn(List.of(thumbnail));
+
+        var result = service.findMine(55L, null, 0, 20, "updatedAt,desc");
+
+        assertThat(result.content()).hasSize(1);
+        var item = result.content().get(0);
+        assertThat(item.getThumbnailUrl()).isEqualTo("https://cdn.example.com/1001.jpg");
+        assertThat(item.getManufacturerName()).isNotBlank();
+        assertThat(item.getModelName()).isNotBlank();
+        assertThat(item.getPrice()).isNotNull();
+    }
+
     @Test
     void loadsChecklistCountsAndThumbnailsOnceForAProductPage() {
         Listing first = listing();
@@ -435,7 +460,7 @@ class ProductApplicationServiceTests {
         when(firstCount.getRequiredCount()).thenReturn(2L);
         when(firstCount.getCompletedRequiredCount()).thenReturn(2L);
         when(checklistItemRepository.countRequiredByListingIds(
-                        eq(List.of(1001L, 1002L)), eq(ChecklistItemCompletionStatus.COMPLETED)))
+                        eq(List.of(1001L, 1002L)), eq(ChecklistItemCompletionStatus.COMPLETED), eq(EvidenceType.SELLER_CONFIRMATION)))
                 .thenReturn(List.of(firstCount));
         ListingThumbnailProjection thumbnail = mock(ListingThumbnailProjection.class);
         when(thumbnail.getListingId()).thenReturn(1001L);
@@ -445,14 +470,14 @@ class ProductApplicationServiceTests {
                 .thenReturn(List.of(thumbnail));
 
         var result = service.findPublic(
-                null, null, null, null, null, null, null, null, null, 0, 20, "price,asc");
+                null, null, null, null, null, null, null, null, null, null, null, 0, 20, "price,asc");
 
         assertThat(result.content()).hasSize(2);
         assertThat(result.content().get(0).getVerificationStatus()).isEqualTo("COMPLETED");
         assertThat(result.content().get(0).getThumbnailUrl())
                 .isEqualTo("https://cdn.example.com/1001.jpg");
         verify(checklistItemRepository).countRequiredByListingIds(
-                List.of(1001L, 1002L), ChecklistItemCompletionStatus.COMPLETED);
+                List.of(1001L, 1002L), ChecklistItemCompletionStatus.COMPLETED, EvidenceType.SELLER_CONFIRMATION);
         verify(imageRepository).findFirstByListingIdsAndImageType(
                 List.of(1001L, 1002L),
                 com.c203.limit.domain.product.entity.ListingImageType.THUMBNAIL);
@@ -465,7 +490,7 @@ class ProductApplicationServiceTests {
     @Test
     void rejectsUnsupportedVerificationStatusAndSort() {
         assertThatThrownBy(() -> service.findPublic(
-                        null, null, null, null, null, null, null, "UNKNOWN", null, 0, 20,
+                        null, null, null, null, null, null, null, "UNKNOWN", null, null, null, 0, 20,
                         "createdAt,desc"))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
@@ -473,7 +498,7 @@ class ProductApplicationServiceTests {
                                 .isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
 
         assertThatThrownBy(() -> service.findPublic(
-                        null, null, null, null, null, null, null, null, null, 0, 20,
+                        null, null, null, null, null, null, null, null, null, null, null, 0, 20,
                         "sellerId,asc"))
                 .isInstanceOfSatisfying(
                         BusinessException.class,

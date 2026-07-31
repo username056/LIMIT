@@ -7,6 +7,7 @@ import com.c203.limit.domain.inspection.checklist.GeneratedChecklist;
 import com.c203.limit.domain.inspection.checklist.GeneratedChecklistItem;
 import com.c203.limit.domain.inspection.enums.ChecklistItemCompletionStatus;
 import com.c203.limit.domain.inspection.enums.ChecklistTemplateStatus;
+import com.c203.limit.domain.inspection.enums.EvidenceType;
 import com.c203.limit.domain.inspection.repository.ChecklistTemplateItemRepository;
 import com.c203.limit.domain.inspection.repository.ChecklistTemplateRepository;
 import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
@@ -255,6 +256,8 @@ public class ProductApplicationService {
             BigDecimal maxPrice,
             String tradeRegion,
             String verificationStatus,
+            Integer minVerifiedCount,
+            Integer maxVerifiedCount,
             Long sellerId,
             int page,
             int size,
@@ -268,7 +271,8 @@ public class ProductApplicationService {
                 .and(seller(sellerId))
                 .and(priceRange(minPrice, maxPrice))
                 .and(tradeRegion(tradeRegion))
-                .and(verificationStatus(verificationStatus));
+                .and(verificationStatus(verificationStatus))
+                .and(verifiedCountBetween(minVerifiedCount, maxVerifiedCount));
         Page<Listing> result = listingRepository.findAll(
                 spec, PageRequest.of(page, size, sort(sort, "createdAt", PUBLIC_SORT_FIELDS)));
         Map<Long, ProductMetrics> metrics = loadMetrics(result.getContent());
@@ -313,13 +317,21 @@ public class ProductApplicationService {
                 .map(
                         listing -> {
                             ProductMetrics itemMetrics = metrics.get(listing.getId());
+                            // 판매자도 목록에서 어떤 기기인지 알아볼 수 있어야 한다. 공개 목록과
+                            // 같은 값을 같은 방식으로 채운다.
+                            Category model = listing.getCategory();
                             return
                                 new MyProductSummaryResponse(
                                         listing.getId(),
                                         listing.getTitle(),
                                         listing.getStatus().name(),
+                                        displayManufacturer(listing, model),
+                                        displayModelName(listing, model),
+                                        BigDecimal.valueOf(listing.getPrice()),
+                                        itemMetrics.thumbnailUrl(),
                                         itemMetrics.completedRequired(),
                                         itemMetrics.required(),
+                                        itemMetrics.hasPendingConfirmation(),
                                         offset(listing.getUpdatedAt()));
                         })
                 .toList();
@@ -442,6 +454,8 @@ public class ProductApplicationService {
                 BigDecimal.valueOf(listing.getPrice()),
                 listing.getStatus().name(),
                 verification,
+                metrics.completedRequired(),
+                metrics.required(),
                 metrics.thumbnailUrl(),
                 listing.getTradeRegion());
     }
@@ -465,7 +479,10 @@ public class ProductApplicationService {
         if (listings.isEmpty()) return Map.of();
         List<Long> listingIds = listings.stream().map(Listing::getId).toList();
         Map<Long, ListingChecklistCountProjection> counts = checklistItemRepository
-                .countRequiredByListingIds(listingIds, ChecklistItemCompletionStatus.COMPLETED)
+                .countRequiredByListingIds(
+                        listingIds,
+                        ChecklistItemCompletionStatus.COMPLETED,
+                        EvidenceType.SELLER_CONFIRMATION)
                 .stream()
                 .collect(Collectors.toMap(ListingChecklistCountProjection::getListingId, Function.identity()));
         Map<Long, String> thumbnails = imageRepository
@@ -481,7 +498,18 @@ public class ProductApplicationService {
             ListingChecklistCountProjection count = counts.get(listingId);
             int required = count == null ? 0 : Math.toIntExact(count.getRequiredCount());
             int completed = count == null ? 0 : Math.toIntExact(count.getCompletedRequiredCount());
-            result.put(listingId, new ProductMetrics(required, completed, thumbnails.get(listingId)));
+            int requiredConfirmation =
+                    count == null ? 0 : Math.toIntExact(count.getRequiredConfirmationCount());
+            int completedConfirmation =
+                    count == null ? 0 : Math.toIntExact(count.getCompletedConfirmationCount());
+            result.put(
+                    listingId,
+                    new ProductMetrics(
+                            required,
+                            completed,
+                            requiredConfirmation,
+                            completedConfirmation,
+                            thumbnails.get(listingId)));
         });
         return result;
     }
@@ -561,6 +589,40 @@ public class ProductApplicationService {
                 : cb.equal(root.get("category").get("manufacturerId"), manufacturerId);
     }
 
+    /**
+     * 완료한 필수 검증 항목 개수로 거른다.
+     *
+     * <p>목록의 '검증 개수' 필터가 쓰는 조건이다. 예전에는 개수 조건이 없어서 프런트가 구간
+     * 선택(1~3개, 4~6개 …)을 COMPLETED/IN_PROGRESS 둘로 뭉개 보냈고, 그래서 고른 구간과 결과가
+     * 맞지 않았다.
+     */
+    private Specification<Listing> verifiedCountBetween(Integer min, Integer max) {
+        if (min == null && max == null) return (root, query, cb) -> cb.conjunction();
+        if (min != null && min < 0) throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        if (min != null && max != null && min > max) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+        return (root, query, cb) -> {
+            var completedQuery = query.subquery(Long.class);
+            var completedItem = completedQuery.from(ListingChecklistItem.class);
+            completedQuery.select(cb.count(completedItem)).where(
+                    cb.equal(completedItem.get("listingId"), root.get("id")),
+                    cb.isTrue(completedItem.get("isRequired")),
+                    cb.equal(
+                            completedItem.get("completionStatus"),
+                            ChecklistItemCompletionStatus.COMPLETED));
+            var predicate = cb.conjunction();
+            if (min != null) {
+                predicate = cb.and(
+                        predicate, cb.greaterThanOrEqualTo(completedQuery, min.longValue()));
+            }
+            if (max != null) {
+                predicate = cb.and(predicate, cb.lessThanOrEqualTo(completedQuery, max.longValue()));
+            }
+            return predicate;
+        };
+    }
+
     private Specification<Listing> verificationStatus(String value) {
         if (value == null || value.isBlank()) return (root, query, cb) -> cb.conjunction();
         String normalized = value.toUpperCase(Locale.ROOT);
@@ -623,7 +685,18 @@ public class ProductApplicationService {
         return Sort.by(direction, parts[0]);
     }
 
-    private record ProductMetrics(int required, int completedRequired, String thumbnailUrl) {}
+    private record ProductMetrics(
+            int required,
+            int completedRequired,
+            int requiredConfirmation,
+            int completedConfirmation,
+            String thumbnailUrl) {
+
+        /** 개인정보 정리 확인이 남아 있는지. 판매 시작 전에 반드시 끝나야 하는 항목이다. */
+        boolean hasPendingConfirmation() {
+            return completedConfirmation < requiredConfirmation;
+        }
+    }
 
     public record ProductPage(
             List<ProductSummaryResponse> content,

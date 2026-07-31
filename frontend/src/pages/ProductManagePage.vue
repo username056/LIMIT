@@ -54,7 +54,34 @@ async function remove(product) {
   }
 }
 
+/**
+ * 판매 시작에 꼭 필요한 것만 확인합니다.
+ *
+ * 촬영 검증은 전부 채우지 않아도 올릴 수 있습니다(나중에 이어서 채우면 됩니다). 반면 기기 정보와
+ * 개인정보 정리 확인은 빠지면 안 됩니다 — 기기 정보가 없으면 구매자가 무엇을 사는지 알 수 없고,
+ * 개인정보는 기기를 넘긴 뒤에 되돌릴 수 없습니다.
+ */
+function missingEssentials(product) {
+  const missing = []
+  if (!product.manufacturerName || !product.modelName) missing.push('카테고리·기기 모델')
+  if (!product.name) missing.push('글제목')
+  if (!(Number(product.price) > 0)) missing.push('가격')
+  if (product.pendingPrivacyConfirmation) missing.push('개인정보 정리 확인')
+  return missing
+}
+
 async function publish(product) {
+  errorMessage.value = ''
+  notice.value = ''
+  const missing = missingEssentials(product)
+  if (missing.length) {
+    window.alert(
+      `필수 사항이 전부 입력되지 않았어요.\n\n${missing.map((item) => `· ${item}`).join('\n')}`,
+    )
+    return
+  }
+  if (!window.confirm(`‘${product.name}’의 판매가 시작됩니다!\n\n구매자에게 상품이 공개됩니다.`)) return
+
   try {
     await transitionProductStatus(product.productId, 'ON_SALE', '판매 등록')
     notice.value = '상품을 판매 중으로 전환했습니다.'

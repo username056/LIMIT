@@ -223,4 +223,73 @@ describe('ProductManagePage', () => {
 
     expect(wrapper.findAll('button').filter((node) => node.text() === '판매 완료 처리')).toHaveLength(0)
   })
+
+  // 임시저장은 필수 항목이 비어도 저장됩니다. 그대로 판매가 시작되면 구매자는 확인할 자료가
+  // 없는 상품을 보게 됩니다.
+  describe('판매 시작', () => {
+    // 판매 시작에 촬영 검증을 전부 요구하지는 않습니다. 기기 정보·글제목·가격과
+    // 개인정보 정리 확인만 끝나면 올릴 수 있습니다.
+    function draft(overrides = {}) {
+      return {
+        data: [{
+          productId: 5005,
+          name: '초안 상품',
+          status: 'DRAFT',
+          manufacturerName: 'Samsung',
+          modelName: 'Galaxy Book',
+          price: 850000,
+          completedItemCount: 1,
+          requiredItemCount: 6,
+          pendingPrivacyConfirmation: false,
+          ...overrides,
+        }],
+        meta: { page: 0, totalPages: 1, hasNext: false },
+      }
+    }
+
+    it('개인정보 정리 확인이 남아 있으면 알리고 판매를 시작하지 않는다', async () => {
+      getMyProducts.mockResolvedValue(draft({ pendingPrivacyConfirmation: true }))
+      window.alert = vi.fn()
+      window.confirm = vi.fn(() => true)
+
+      const wrapper = mount(ProductManagePage, { global: globalOptions })
+      await flushPromises()
+      await wrapper.findAll('button').find((n) => n.text() === '판매 시작').trigger('click')
+      await flushPromises()
+
+      expect(window.alert).toHaveBeenCalledWith(
+        expect.stringContaining('필수 사항이 전부 입력되지 않았어요.'),
+      )
+      expect(transitionProductStatus).not.toHaveBeenCalled()
+    })
+
+    it('촬영 검증이 남아 있어도 필수만 채웠으면 판매를 시작한다', async () => {
+      getMyProducts.mockResolvedValue(draft())
+      window.alert = vi.fn()
+      window.confirm = vi.fn(() => true)
+      transitionProductStatus.mockResolvedValue({})
+
+      const wrapper = mount(ProductManagePage, { global: globalOptions })
+      await flushPromises()
+      await wrapper.findAll('button').find((n) => n.text() === '판매 시작').trigger('click')
+      await flushPromises()
+
+      expect(window.alert).not.toHaveBeenCalled()
+      expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('판매가 시작됩니다!'))
+      expect(transitionProductStatus).toHaveBeenCalledWith(5005, 'ON_SALE', '판매 등록')
+    })
+
+    it('확인 창에서 취소하면 판매를 시작하지 않는다', async () => {
+      getMyProducts.mockResolvedValue(draft())
+      window.alert = vi.fn()
+      window.confirm = vi.fn(() => false)
+
+      const wrapper = mount(ProductManagePage, { global: globalOptions })
+      await flushPromises()
+      await wrapper.findAll('button').find((n) => n.text() === '판매 시작').trigger('click')
+      await flushPromises()
+
+      expect(transitionProductStatus).not.toHaveBeenCalled()
+    })
+  })
 })
