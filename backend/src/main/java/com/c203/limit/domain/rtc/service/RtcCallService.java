@@ -91,8 +91,7 @@ public class RtcCallService {
     @Transactional
     public CallResponse request(Long roomId, Long memberId, CreateCallRequest request) {
         ChatRoom room = room(roomId, memberId);
-        if (appointmentRepository.existsByChatRoomIdAndStatusIn(
-                roomId, List.of(AppointmentStatus.PROPOSED, AppointmentStatus.ACCEPTED))) {
+        if (hasActiveAppointment(roomId, LocalDateTime.now())) {
             throw new BusinessException(ErrorCode.RTC_ACTIVE_APPOINTMENT_EXISTS);
         }
         Long respondent =
@@ -117,6 +116,40 @@ public class RtcCallService {
                         appointment.getScheduledAt(),
                         appointment.getMemo()));
         return callResponse(appointment, null, memberId);
+    }
+
+    private boolean hasActiveAppointment(Long roomId, LocalDateTime now) {
+        List<CallAppointment> candidates =
+                appointmentRepository.findByChatRoomIdAndStatusIn(
+                        roomId, List.of(AppointmentStatus.PROPOSED, AppointmentStatus.ACCEPTED));
+        if (candidates.stream()
+                .anyMatch(
+                        appointment ->
+                                appointment.getStatus() == AppointmentStatus.PROPOSED
+                                        && appointment
+                                                .getScheduledAt()
+                                                .plusMinutes(30)
+                                                .isAfter(now))) {
+            return true;
+        }
+        Map<Long, RtcSession> sessions =
+                sessionRepository
+                        .findByCallAppointmentIdIn(
+                                candidates.stream().map(CallAppointment::getId).toList())
+                        .stream()
+                        .collect(
+                                Collectors.toMap(
+                                        RtcSession::getCallAppointmentId, Function.identity()));
+        return candidates.stream()
+                .filter(appointment -> appointment.getStatus() == AppointmentStatus.ACCEPTED)
+                .anyMatch(
+                        appointment -> {
+                            RtcSession session = sessions.get(appointment.getId());
+                            return session == null
+                                    || (!session.isClosed()
+                                            && session.getExpiresAt() != null
+                                            && session.getExpiresAt().isAfter(now));
+                        });
     }
 
     @Transactional(readOnly = true)
@@ -156,6 +189,9 @@ public class RtcCallService {
                 log.info("RTC inspection call rejected: callId={}", callId);
                 publishAppointmentChanged(appointment.getChatRoomId());
                 return callResponse(appointment, null, memberId);
+            }
+            if (!appointment.getScheduledAt().plusMinutes(30).isAfter(LocalDateTime.now())) {
+                throw new BusinessException(ErrorCode.RTC_SESSION_EXPIRED);
             }
             appointment.accept(memberId);
         } catch (IllegalStateException exception) {
