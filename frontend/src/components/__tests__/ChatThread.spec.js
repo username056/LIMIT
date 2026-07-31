@@ -406,7 +406,11 @@ describe('ChatThread', () => {
     expect(wrapper.get('[data-testid="appointment-card"]').exists()).toBe(true)
   })
 
-  it('약속 변경 메시지를 실시간 알림 카드로 표시한다', async () => {
+  it.each([
+    ['설정', '민수 님이 실시간 검증 약속을 설정했습니다.'],
+    ['변경', '민수 님이 실시간 검증 약속을 변경했습니다.'],
+    ['취소', '민수 님이 실시간 검증 약속을 취소했습니다.'],
+  ])('약속 %s 메시지를 구분선 알림으로 표시한다', async (_, content) => {
     const wrapper = mountThread()
     await flushPromises()
 
@@ -418,18 +422,17 @@ describe('ChatThread', () => {
         senderId: 2,
         clientMessageId: 'appointment-updated-event',
         type: 'SYSTEM',
-        content: '검증 약속이 변경됐어요!\n검증 일정: 2026-08-01 15:30\n메모: 저녁 시간으로 변경',
+        content,
         sentAt: '2026-07-30T10:00:00',
         media: [],
       },
     })
     await flushPromises()
 
-    const card = wrapper.get('[data-testid="appointment-notification-card"]')
-    expect(card.text()).toContain('약속 알림')
-    expect(card.text()).toContain('검증 약속이 변경됐어요!')
-    expect(card.text()).toContain('검증 일정: 2026-08-01 15:30')
-    expect(card.text()).toContain('메모: 저녁 시간으로 변경')
+    const divider = wrapper.get('[data-testid="appointment-notification-divider"]')
+    expect(divider.text()).toContain(content)
+    expect(divider.element.parentElement?.parentElement?.textContent?.trim()).toBe(content)
+    expect(wrapper.find('[data-testid="appointment-notification-card"]').exists()).toBe(false)
   })
 
   it('재검수 실시간 이벤트를 구조화된 알림 카드로 표시한다', async () => {

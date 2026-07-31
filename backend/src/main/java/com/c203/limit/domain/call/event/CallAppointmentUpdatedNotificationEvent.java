@@ -8,5 +8,7 @@ public record CallAppointmentUpdatedNotificationEvent(
         Long appointmentId,
         Long chatRoomId,
         Long actorId,
+        String actorNickname,
+        CallAppointmentNotificationAction action,
         LocalDateTime scheduledAt,
         String memo) {}
