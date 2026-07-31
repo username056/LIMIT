@@ -22,6 +22,7 @@ import com.c203.limit.domain.chat.repository.ChatRoomParticipantRepository;
 import com.c203.limit.domain.product.storage.S3MediaProperties;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
+import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
@@ -96,7 +97,7 @@ public class ChatMediaService {
                     .build());
             return new MediaDownload(
                     new InputStreamResource(input), media.getMimeType(), media.getOriginalFilename());
-        } catch (S3Exception exception) {
+        } catch (SdkException exception) {
             throw new BusinessException(ErrorCode.CHAT_MEDIA_NOT_FOUND);
         }
     }

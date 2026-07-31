@@ -822,6 +822,7 @@ onBeforeUnmount(() => {
                 :src="message.media[0].displayUrl"
                 :alt="message.content || '채팅 이미지'"
                 class="max-h-72 rounded-md object-contain"
+                @load="scrollToLatest"
               >
               <video
                 v-else-if="message.type === 'VIDEO' && message.media?.[0]?.displayUrl"
@@ -829,6 +830,7 @@ onBeforeUnmount(() => {
                 controls
                 preload="metadata"
                 class="max-h-72 rounded-md"
+                @loadedmetadata="scrollToLatest"
               />
               <span v-else>{{ message.content || '미디어 파일' }}</span>
             </template>

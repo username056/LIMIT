@@ -213,6 +213,20 @@ class ChatRoomServiceTests {
     }
 
     @Test
+    void treatsMissingReadSequencesAsUnreadFromBeginning() {
+        ChatRoomSummaryProjection row = summary(100L, BUYER_ID, SELLER_ID, 8L, null);
+        when(chatRoomRepository.findSummariesByMemberId(
+                eq(BUYER_ID), isNull(), any(Pageable.class))).thenReturn(List.of(row));
+        when(chatMessageRepository.countUnreadFromCounterpart(100L, BUYER_ID, 0L))
+                .thenReturn(8L);
+
+        CursorResponse<ChatRoomSummaryResponse> result = service.findRooms(BUYER_ID, null, 1);
+
+        assertThat(result.content().get(0).unreadCount()).isEqualTo(8L);
+        assertThat(result.content().get(0).counterpartLastReadSequence()).isZero();
+    }
+
+    @Test
     void rejectsInvalidChatRoomPageSize() {
         assertThatThrownBy(() -> service.findRooms(BUYER_ID, null, 0))
                 .isInstanceOfSatisfying(BusinessException.class,
@@ -341,7 +355,7 @@ class ChatRoomServiceTests {
     }
 
     private ChatRoomSummaryProjection summary(
-            Long roomId, Long buyerId, Long sellerId, long lastMessageSeq, long lastReadSeq) {
+            Long roomId, Long buyerId, Long sellerId, long lastMessageSeq, Long lastReadSeq) {
         return new ChatRoomSummaryProjection() {
             public Long getRoomId() { return roomId; }
             public Long getListingId() { return LISTING_ID; }
@@ -351,8 +365,8 @@ class ChatRoomServiceTests {
             public Long getLastMessageId() { return 50L; }
             public long getLastMessageSeq() { return lastMessageSeq; }
             public LocalDateTime getLastMessageAt() { return null; }
-            public long getLastReadSeq() { return lastReadSeq; }
-            public long getCounterpartLastReadSeq() { return 2L; }
+            public Long getLastReadSeq() { return lastReadSeq; }
+            public Long getCounterpartLastReadSeq() { return lastReadSeq == null ? null : 2L; }
             public LocalDateTime getCreatedAt() { return LocalDateTime.of(2026, 7, 22, 12, 0); }
         };
     }

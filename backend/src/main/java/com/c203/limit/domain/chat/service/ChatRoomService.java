@@ -289,8 +289,11 @@ public class ChatRoomService {
     private ChatRoomSummaryResponse toSummary(
             ChatRoomSummaryProjection row, Long memberId, ChatRoomContext context) {
         Long counterpartId = memberId.equals(row.getBuyerId()) ? row.getSellerId() : row.getBuyerId();
+        long lastReadSeq = row.getLastReadSeq() == null ? 0L : row.getLastReadSeq();
+        long counterpartLastReadSeq =
+                row.getCounterpartLastReadSeq() == null ? 0L : row.getCounterpartLastReadSeq();
         long unreadCount = chatMessageRepository.countUnreadFromCounterpart(
-                row.getRoomId(), memberId, row.getLastReadSeq());
+                row.getRoomId(), memberId, lastReadSeq);
         return new ChatRoomSummaryResponse(
                 row.getRoomId(), row.getListingId(), counterpartId,
                 context == null ? null : context.counterpartNickname(),
@@ -298,7 +301,7 @@ public class ChatRoomService {
                 context == null ? null : context.listingThumbnailUrl(),
                 row.getStatus().name(),
                 row.getLastMessageId(), row.getLastMessageSeq(), row.getLastMessageAt(),
-                unreadCount, row.getCounterpartLastReadSeq(), row.getCreatedAt());
+                unreadCount, counterpartLastReadSeq, row.getCreatedAt());
     }
 
     private ChatRoomCreateResult create(ListingChatInfo listing, Long buyerId) {
