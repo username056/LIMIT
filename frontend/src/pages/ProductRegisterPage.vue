@@ -792,6 +792,7 @@ async function refreshDiagnosis(item) {
     ...field,
     draftValue: field.confirmedValue ?? field.fileParseValue ?? field.ocrValue ?? '',
     saving: false,
+    justSaved: false,
   }))
   const detectedFieldNames = new Set(detectedFields.map((field) => field.fieldName))
   const placeholderFields = allDiagnosisFieldNamesFor(item)
@@ -804,6 +805,7 @@ async function refreshDiagnosis(item) {
       confirmedValue: null,
       draftValue: '',
       saving: false,
+      justSaved: false,
     }))
   diagnosisState[item.checklistItemId] = {
     status: 'ready',
@@ -856,6 +858,8 @@ async function saveDiagnosisValue(checklistItemId, field) {
   const confirmedValue = field.draftValue?.trim()
   if (!confirmedValue) return
   field.saving = true
+  field.justSaved = false
+  clearTimeout(field.justSavedTimer)
   try {
     const result = await confirmDiagnosisValue(checklistItemId, {
       fieldName: field.fieldName,
@@ -863,6 +867,8 @@ async function saveDiagnosisValue(checklistItemId, field) {
     })
     field.confirmedValue = result.confirmedValue
     field.draftValue = result.confirmedValue
+    field.justSaved = true
+    field.justSavedTimer = setTimeout(() => { field.justSaved = false }, 2500)
   } catch (error) {
     errorMessage.value = error.message || '진단값을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.'
   } finally {
@@ -2037,6 +2043,7 @@ onMounted(async () => {
                         type="text"
                         :aria-label="`${diagnosisFieldLabel(field.fieldName)} 값`"
                         class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
+                        @input="field.justSaved = false"
                       >
                       <BaseButton
                         type="button"
@@ -2049,6 +2056,13 @@ onMounted(async () => {
                         {{ field.saving ? '저장 중…' : '저장' }}
                       </BaseButton>
                     </div>
+                    <p
+                      v-if="field.justSaved"
+                      role="status"
+                      class="mt-1 text-[11px] font-semibold text-primary"
+                    >
+                      ✓ 저장됐습니다.
+                    </p>
                   </li>
                 </ul>
                 <p

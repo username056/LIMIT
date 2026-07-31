@@ -107,6 +107,13 @@ function diagnosisFieldLabel(fieldName) {
   return DIAGNOSIS_FIELD_LABELS[fieldName] || fieldName
 }
 
+// 값이 길어 잘린(...) 항목만 눌러서 원문 전체를 한 줄 툴팁으로 봅니다. 원본 파일로 이동하지 않습니다.
+const activeDiagnosisField = ref(null)
+
+function toggleDiagnosisValueTooltip(fieldName) {
+  activeDiagnosisField.value = activeDiagnosisField.value === fieldName ? null : fieldName
+}
+
 // 증빙 원본을 크게 보는 팝업입니다. 목록 안 썸네일은 56px이라 영상 재생에는 너무 작습니다.
 const mediaViewer = ref(null)
 
@@ -728,28 +735,34 @@ onMounted(async () => {
                 <div
                   v-for="item in diagnosisSummaryItems"
                   :key="item.fieldName"
-                  class="flex items-center justify-between gap-3 rounded-md bg-bg px-3 py-2"
+                  class="relative flex items-center justify-between gap-3 rounded-md bg-bg px-3 py-2"
                 >
                   <dt class="shrink-0 text-xs text-text-sub">
                     {{ diagnosisFieldLabel(item.fieldName) }}
                   </dt>
-                  <dd class="min-w-0 truncate text-right text-sm font-semibold">
-                    <a
-                      v-if="item.status === 'AVAILABLE' && item.originalFileUrl"
-                      :href="item.originalFileUrl"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="text-text-main hover:underline"
+                  <dd class="min-w-0 text-right text-sm font-semibold">
+                    <button
+                      v-if="item.status === 'AVAILABLE'"
+                      type="button"
+                      class="block w-full truncate text-right text-text-main"
+                      @click="toggleDiagnosisValueTooltip(item.fieldName)"
+                      @blur="activeDiagnosisField = null"
                     >
                       {{ item.value }}
-                    </a>
+                    </button>
                     <span
                       v-else
-                      :class="item.status === 'AVAILABLE' ? 'text-text-main' : 'text-text-sub'"
+                      class="block truncate text-text-sub"
                     >
-                      {{ item.status === 'AVAILABLE' ? item.value : '인식 실패' }}
+                      인식 실패
                     </span>
                   </dd>
+                  <div
+                    v-if="activeDiagnosisField === item.fieldName"
+                    class="absolute right-0 top-full z-10 mt-1 whitespace-nowrap rounded-md bg-slate-800 px-3 py-1.5 text-xs font-normal text-white shadow-elevated"
+                  >
+                    {{ item.value }}
+                  </div>
                 </div>
               </dl>
               <p

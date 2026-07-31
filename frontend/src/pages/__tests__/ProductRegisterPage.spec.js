@@ -571,11 +571,16 @@ describe('ProductRegisterPage', () => {
       confirmedValue: 'Intel i7-1165G7 (확인함)',
     })
     expect(wrapper.text()).not.toContain('저장 중…')
+    expect(wrapper.text()).toContain('저장됐습니다')
 
     // CPU 외에 인식되지 않은 필드(RAM 등)도 드롭다운 없이 바로 타이핑할 수 있는 빈 입력으로 보인다.
     const ramInput = wrapper.find('input[aria-label="RAM 값"]')
     expect(ramInput.exists()).toBe(true)
     expect(ramInput.element.value).toBe('')
+
+    // 저장 후 값을 다시 고치기 시작하면, 방금 본 "저장됐습니다"는 이제 그 값 얘기가 아니므로 사라진다.
+    await valueInput.setValue('Intel i7-1165G7 (다시 수정)')
+    expect(wrapper.text()).not.toContain('저장됐습니다')
   })
 
   it('자동 인식이 완전히 실패하면 오류 안내와 함께 필드마다 직접 입력해 저장할 수 있다', async () => {

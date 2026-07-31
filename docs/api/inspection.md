@@ -129,11 +129,18 @@ DxDiag는 `CPU`/`RAM`(`memory`)/`GPU`/`GPU_MEMORY`/`DRIVER_VERSION`/`SOUND_DEVIC
 해당 파싱 API를 호출한 뒤 취합 조회로 결과를 받아 "촬영 또는 파일 업로드" 버튼 아래에 필드별 입력창으로
 보여준다. 자동 인식에 실패했거나 일부 필드만 인식된 경우에도, 그 항목이 다룰 수 있는 필드 전체(예: OCR이면
 `MODEL_NAME`/`CPU`/`RAM`/`GPU`/`OS_VERSION`/`STORAGE_CAPACITY`)를 빈 입력칸으로 함께 보여줘 드롭다운 없이
-바로 타이핑해 저장할 수 있다. 상품 상세 페이지에서 구매자용 최종 요약(`diagnosis-summary`)을 보여주는 연동은
-아직 없다.
+바로 타이핑해 저장할 수 있다. 저장에 성공하면 입력칸 아래에 "저장됐습니다" 표시가 2.5초간 나타났다 사라지고,
+그 값을 다시 고치기 시작하면 바로 사라진다.
+
+`ProductDetailPage.vue`는 상품 상세의 "검증 체크리스트" 카드 안에 "자동 인식된 사양" 소제목으로
+구매자용 최종 요약(`diagnosis-summary`)을 필드별 2열 표로 보여준다. 값이 길어 잘린 항목은 클릭하면(원본
+파일로 이동하지 않고) 전체 값을 한 줄 툴팁으로 보여주고, 다른 값을 클릭하거나 포커스가 빠지면 닫힌다.
+`ProductDiagnosisSummaryService`는 같은 필드를 여러 체크리스트 항목이 각자 취합할 수 있어(OCR 화면 항목과
+DXDIAG 항목처럼), 필드마다 값이 있는 쪽을 우선해 하나만 반환한다(항목별로 중복 나열하지 않음).
 
 ## 검증
 
 - `./gradlew test`, `./gradlew bootJar` 통과
-- `npm run lint`, `npm run test`, `npm run build` 통과 (`ProductRegisterPage.spec.js`)
+- `npm run lint`, `npm run test`, `npm run build` 통과
+  (`ProductRegisterPage.spec.js`, `ProductDetailPage.spec.js`)
 - `docs/api/openapi.json` 최신 반영

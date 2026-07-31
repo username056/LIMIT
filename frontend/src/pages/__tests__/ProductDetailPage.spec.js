@@ -344,7 +344,7 @@ describe('ProductDetailPage', () => {
     expect(rows[0].text()).toContain('공개 항목')
   })
 
-  it('자동 인식된 사양을 필드별로 보여주고 인식 실패 필드는 원문 링크 없이 표시한다', async () => {
+  it('자동 인식된 사양을 필드별로 보여주고, 값을 누르면 전체 값을 툴팁으로 보여준다', async () => {
     getAccessToken.mockReturnValue(null)
     getProductDiagnosisSummary.mockResolvedValue({
       items: [
@@ -376,8 +376,19 @@ describe('ProductDetailPage', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('자동 인식된 사양')
-    const cpuLink = wrapper.get('a[href="https://cdn.example.test/evidence/1.txt"]')
-    expect(cpuLink.text()).toBe('13th Gen Intel(R) Core(TM) i7-13700H')
+    // 원본 파일로 바로 이동하는 링크는 없어야 합니다 — 클릭하면 툴팁으로 전체 값만 보여줍니다.
+    expect(wrapper.find('a[href="https://cdn.example.test/evidence/1.txt"]').exists()).toBe(false)
+
+    const cpuButton = wrapper.findAll('button')
+      .find((button) => button.text() === '13th Gen Intel(R) Core(TM) i7-13700H')
+    expect(cpuButton).toBeTruthy()
+    expect(wrapper.find('.bg-slate-800').exists()).toBe(false)
+
+    await cpuButton.trigger('click')
+    const tooltip = wrapper.find('.bg-slate-800')
+    expect(tooltip.exists()).toBe(true)
+    expect(tooltip.text()).toBe('13th Gen Intel(R) Core(TM) i7-13700H')
+
     expect(wrapper.text()).toContain('GPU 메모리')
     expect(wrapper.text()).toContain('인식 실패')
     expect(wrapper.text()).toContain('자동 추출값은 참고 정보이며 상품의 정상 여부를 보증하지 않습니다.')
