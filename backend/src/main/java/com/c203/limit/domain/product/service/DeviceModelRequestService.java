@@ -2,6 +2,7 @@ package com.c203.limit.domain.product.service;
 
 import com.c203.limit.domain.admin.entity.AdminActionLog;
 import com.c203.limit.domain.admin.repository.AdminActionLogRepository;
+import com.c203.limit.domain.admin.dto.request.UpdateDeviceModelRequest;
 import com.c203.limit.domain.inspection.entity.ChecklistTemplate;
 import com.c203.limit.domain.inspection.entity.ChecklistTemplateItem;
 import com.c203.limit.domain.inspection.enums.ChecklistTemplateStatus;
@@ -85,6 +86,46 @@ public class DeviceModelRequestService {
         return requestRepository.findByStatusOrderByCreatedAtAsc(filter).stream()
                 .map(DeviceModelRequestResponse::from)
                 .toList();
+    }
+
+    @Transactional
+    public DeviceModelRequestResponse update(
+            Long requestId, Long adminId, UpdateDeviceModelRequest update) {
+        DeviceModelRequest request = pendingRequest(requestId);
+        Category category =
+                categoryRepository
+                        .findById(update.categoryId())
+                        .filter(item -> item.getParent() == null && item.isActive())
+                        .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_INPUT_VALUE));
+        String manufacturer = update.manufacturer().trim();
+        String modelName = update.modelName().trim();
+        if (requestRepository
+                .existsByParentCategoryIdAndManufacturerIgnoreCaseAndModelNameIgnoreCaseAndStatusAndIdNot(
+                        category.getId(),
+                        manufacturer,
+                        modelName,
+                        DeviceModelRequestStatus.PENDING,
+                        requestId)) {
+            throw new BusinessException(ErrorCode.DEVICE_MODEL_REQUEST_DUPLICATED);
+        }
+        request.updateDetails(
+                category.getId(),
+                manufacturer,
+                modelName,
+                update.modelCode(),
+                update.osFamily());
+        actionLogRepository.save(
+                AdminActionLog.of(
+                        adminId,
+                        "DEVICE_MODEL_REQUEST_UPDATE",
+                        "DEVICE_MODEL_REQUEST",
+                        requestId,
+                        "신규 기기 모델 요청 정보 수정"));
+        log.info(
+                "device model request updated: requestId={}, updatedByAdminId={}",
+                requestId,
+                adminId);
+        return DeviceModelRequestResponse.from(request);
     }
 
     @Transactional
