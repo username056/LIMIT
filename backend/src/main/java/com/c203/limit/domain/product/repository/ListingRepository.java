@@ -31,6 +31,8 @@ public interface ListingRepository
     /** 판매자 공개 프로필에 보여 줄 판매 중 상품 수. */
     long countBySellerIdAndStatusAndDeletedAtIsNull(Long sellerId, ListingStatus status);
 
+    boolean existsBySellerIdAndTitleAndDeletedAtIsNull(Long sellerId, String title);
+
     @EntityGraph(attributePaths = "category")
     Page<Listing> findBySellerIdAndStatusAndDeletedAtIsNull(
             Long sellerId, ListingStatus status, Pageable pageable);
