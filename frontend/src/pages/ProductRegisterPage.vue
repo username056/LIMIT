@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseButton from '../components/BaseButton.vue'
@@ -39,6 +39,13 @@ import {
   parseDxdiag,
 } from '../api/inspection'
 import { compressImage, compressVideo } from '../utils/mediaOptimize'
+import {
+  cameraErrorMessage,
+  captureFrameToFile,
+  hasCameraDevice,
+  openCameraStream,
+  stopCameraStream,
+} from '../utils/camera'
 import { MAX_PRICE_DIGITS, formatPriceDigits, toPriceDigits } from '../utils/priceInput'
 
 const WIZARD_STEPS = [
@@ -382,6 +389,11 @@ const activeItemStatusLabel = computed(() => {
   if (busy === 'optimizing') return '최적화 중…'
   if (busy === 'uploading') return '업로드 중…'
   if (isActiveItemFull.value) return `최대 ${maxMediaFor(activeCaptureItem.value)}개까지 첨부했습니다`
+  // 촬영을 못 하는 항목(영상이거나 카메라가 없는 기기)에서 '촬영'을 말하면 안 됩니다.
+  // 할 수 없는 일을 안내하면 사용자는 버튼을 찾아 헤매게 됩니다.
+  if (!canShootActiveItem.value) {
+    return activeItemMedia.value.length ? '파일 추가하기' : '파일 업로드'
+  }
   return activeItemMedia.value.length ? '사진·영상 추가하기' : '촬영 또는 파일 업로드'
 })
 const previewedMedia = computed(() => {
@@ -417,10 +429,21 @@ function isReinspectionItem(item) {
   ) || false
 }
 
+// 파일 선택창을 서버가 실제로 받는 형식으로 좁힙니다(EvidenceUploadService의 허용 목록과 같음).
+// */*로 두면 거절될 파일을 고르게 되고, 사용자는 MEDIA_UPLOAD_INVALID만 보고 이유를 알 수 없습니다.
+const DIAGNOSTIC_ACCEPT = [
+  'image/jpeg', 'image/png', 'image/webp',
+  'text/plain', 'text/html', 'text/xml', 'application/xml',
+  '.txt', '.html', '.htm', '.xml',
+].join(',')
+
 function captureAccept(item) {
   if (!item) return ''
   if (item.evidenceType === 'VIDEO') return 'video/*'
   if (item.evidenceType === 'PHOTO') return 'image/*'
+  // 진단 자료는 파일(txt·html·xml)과 사진 모두 받습니다. 진단 앱이 결과를 파일로 내보내지
+  // 못하면 화면을 찍어 올리는 방법밖에 없습니다.
+  if (item.evidenceType === 'DIAGNOSTIC_FILE') return DIAGNOSTIC_ACCEPT
   return '*/*'
 }
 
@@ -975,10 +998,12 @@ async function handleCaptureFile(item, file) {
   // 브라우저에서 먼저 압축한 뒤 업로드합니다. 압축에 실패하면 원본으로 계속 진행합니다.
   let optimizedFile = file
   try {
-    if (item.evidenceType === 'PHOTO') {
-      optimizedFile = await measureRegistrationPhase('imageCompressionMs', () => compressImage(file))
-    } else if (item.evidenceType === 'VIDEO') {
+    if (item.evidenceType === 'VIDEO') {
       optimizedFile = await measureRegistrationPhase('videoCompressionMs', () => compressVideo(file))
+    } else {
+      // 항목 종류가 아니라 파일 종류로 판단합니다. 진단 자료 항목에도 사진이 올라올 수 있고,
+      // compressImage는 이미지가 아닌 파일(txt·html)은 그대로 돌려주므로 안전합니다.
+      optimizedFile = await measureRegistrationPhase('imageCompressionMs', () => compressImage(file))
     }
   } catch {
     optimizedFile = file
@@ -1192,6 +1217,111 @@ async function onCaptureInput(event, item) {
   if (files.length) await Promise.allSettled(files.map((file) => handleCaptureFile(item, file)))
 }
 
+// ── 그 자리에서 사진 찍기 ────────────────────────────────────────────────
+// 사진은 미리보기 박스 안에서 바로 찍습니다. 파일 관리자를 열고 앨범을 뒤지는 것보다
+// 기기를 손에 든 채 찍는 흐름이 짧습니다.
+// 영상은 이 경로를 쓰지 않습니다(녹화는 별개 문제라 파일 업로드만 둡니다).
+const isCameraReady = ref(false)
+const isCapturing = ref(false)
+const isShooting = ref(false)
+const cameraError = ref('')
+const cameraVideo = ref(null)
+// 찍은 직후 바로 올리지 않고 한 번 보여 줍니다. 흔들리거나 잘린 사진을 그대로 올리면
+// 구매자가 판단할 수 없고, 판매자는 올린 뒤에야 알게 됩니다.
+const pendingShot = ref(null)
+let cameraStream = null
+
+// 촬영 버튼은 사진 항목에만 둡니다.
+// 배터리 리포트·시스템 진단 정보 같은 진단 자료는 기기가 내보낸 파일(html·txt·xml)을 그대로
+// 올려야 값을 신뢰할 수 있습니다. 화면을 찍은 사진은 업로드로는 받아 주되, 촬영 버튼을 앞세워
+// 권하지는 않습니다.
+const canShootActiveItem = computed(() => (
+  isCameraReady.value
+  && activeCaptureItem.value?.evidenceType === 'PHOTO'
+  && !isActiveItemBusy.value
+  && !isActiveItemFull.value
+))
+
+async function startCapture() {
+  cameraError.value = ''
+  try {
+    cameraStream = await openCameraStream()
+    isCapturing.value = true
+    // v-if로 그려지는 video라서 DOM에 붙은 뒤에 스트림을 연결합니다.
+    await nextTick()
+    if (cameraVideo.value) {
+      cameraVideo.value.srcObject = cameraStream
+      await cameraVideo.value.play().catch(() => {})
+    }
+  } catch (error) {
+    cameraError.value = cameraErrorMessage(error)
+    stopCapture()
+  }
+}
+
+function stopCapture() {
+  stopCameraStream(cameraStream)
+  cameraStream = null
+  if (cameraVideo.value) cameraVideo.value.srcObject = null
+  if (pendingShot.value) URL.revokeObjectURL(pendingShot.value.previewUrl)
+  pendingShot.value = null
+  isCapturing.value = false
+  isShooting.value = false
+}
+
+async function shootPhoto() {
+  const item = activeCaptureItem.value
+  if (!item || isShooting.value) return
+  isShooting.value = true
+  cameraError.value = ''
+  try {
+    const file = await captureFrameToFile(
+      cameraVideo.value,
+      `checklist-${item.checklistItemId}-${captureFileStamp()}.jpg`,
+    )
+    pendingShot.value = { file, previewUrl: URL.createObjectURL(file) }
+  } catch (error) {
+    cameraError.value = error.message || '사진을 찍지 못했습니다. 다시 시도해 주세요.'
+  } finally {
+    isShooting.value = false
+  }
+}
+
+// 카메라는 켜 둔 채로 방금 찍은 사진만 버립니다. 바로 다시 찍을 수 있어야 합니다.
+function discardShot() {
+  if (pendingShot.value) URL.revokeObjectURL(pendingShot.value.previewUrl)
+  pendingShot.value = null
+}
+
+async function confirmShot() {
+  const item = activeCaptureItem.value
+  const shot = pendingShot.value
+  if (!item || !shot || isShooting.value) return
+  isShooting.value = true
+  cameraError.value = ''
+  try {
+    // 촬영도 파일 선택과 같은 경로를 타서 압축·검증·업로드를 그대로 씁니다.
+    await handleCaptureFile(item, shot.file)
+    discardShot()
+    // 저장한 뒤에도 카메라를 유지합니다. 여러 각도를 잇달아 찍는 흐름을 끊지 않기 위함입니다.
+    // 첨부 상한을 채웠을 때만 자동으로 닫습니다.
+    if (isActiveItemFull.value) stopCapture()
+  } finally {
+    isShooting.value = false
+  }
+}
+
+// 파일명이 겹치지 않게만 하면 되므로 시각을 씁니다.
+function captureFileStamp() {
+  return new Date().toISOString().replace(/[:.]/g, '-')
+}
+
+// 다른 항목을 고르거나 단계를 옮기면 카메라를 놓아 줍니다. 켜 둔 채로 두면 기기의
+// 카메라 표시등이 남고 다른 앱이 카메라를 쓸 수 없습니다.
+watch(activeCaptureItemId, () => stopCapture())
+watch(activeStep, () => stopCapture())
+onBeforeUnmount(() => stopCapture())
+
 function openMediaPreview(item, index) {
   mediaPreview.value = { checklistItemId: item.checklistItemId, itemName: item.name, index }
 }
@@ -1295,6 +1425,9 @@ onBeforeUnmount(() => {
 })
 
 onMounted(async () => {
+  // 카메라가 없는 기기에서 '촬영' 버튼을 보여주면 눌러도 실패만 하므로 미리 확인합니다.
+  isCameraReady.value = await hasCameraDevice()
+
   try {
     categories.value = await getDeviceCategories({ activeOnly: true })
   } catch (error) {
@@ -2043,7 +2176,26 @@ onMounted(async () => {
               </h2>
 
               <div class="relative mt-4 flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg border border-border bg-bg">
-                <template v-if="activeItemLatestMedia && activeItemLatestMedia.evidenceType === 'VIDEO'">
+                <!-- 방금 찍은 사진을 먼저 보여 주고, 쓸지 다시 찍을지 고르게 합니다. -->
+                <img
+                  v-if="pendingShot"
+                  :src="pendingShot.previewUrl"
+                  alt="방금 촬영한 사진"
+                  class="h-full w-full object-cover"
+                >
+                <!--
+                  촬영 중에는 이 박스가 그대로 카메라 화면이 됩니다. 따로 창을 띄우지 않고
+                  한 화면에서 찍도록 두는 편이 흐름이 짧습니다.
+                -->
+                <video
+                  v-else-if="isCapturing"
+                  ref="cameraVideo"
+                  class="h-full w-full object-cover"
+                  autoplay
+                  playsinline
+                  muted
+                />
+                <template v-else-if="activeItemLatestMedia && activeItemLatestMedia.evidenceType === 'VIDEO'">
                   <video
                     :src="activeItemLatestMedia.previewUrl"
                     class="h-full w-full object-cover"
@@ -2073,24 +2225,101 @@ onMounted(async () => {
                 </template>
               </div>
 
-              <div class="mt-4 flex items-center gap-3">
+              <p
+                v-if="cameraError"
+                role="alert"
+                class="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700"
+              >
+                {{ cameraError }}
+              </p>
+
+              <!-- 찍은 사진을 쓸지 먼저 묻습니다. 저장해도 카메라는 켜 둔 채로 이어서 찍습니다. -->
+              <div v-if="pendingShot">
+                <p class="mt-4 text-center text-sm font-semibold text-text-main">
+                  이 사진으로 하시겠습니까?
+                </p>
+                <div class="mt-3 flex items-center gap-3">
+                  <button
+                    type="button"
+                    class="min-w-0 flex-1 rounded-md bg-primary-gradient px-4 py-3 text-sm font-bold text-white shadow-elevated transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                    :disabled="isShooting"
+                    @click="confirmShot"
+                  >
+                    {{ isShooting ? '저장 중…' : '예 (저장)' }}
+                  </button>
+                  <button
+                    type="button"
+                    class="min-w-0 flex-1 rounded-md border border-border px-4 py-3 text-sm font-bold text-text-sub transition hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                    :disabled="isShooting"
+                    @click="discardShot"
+                  >
+                    아니오 (다시 촬영)
+                  </button>
+                </div>
+              </div>
+
+              <!--
+                촬영 중에는 찍기·취소만 남깁니다. 이때 파일 선택까지 같이 두면 화면이 복잡해집니다.
+              -->
+              <div
+                v-else-if="isCapturing"
+                class="mt-4 flex items-center gap-3"
+              >
+                <button
+                  type="button"
+                  class="min-w-0 flex-1 rounded-md bg-primary-gradient px-4 py-3 text-sm font-bold text-white shadow-elevated transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                  :disabled="isShooting"
+                  @click="shootPhoto"
+                >
+                  {{ isShooting ? '처리 중…' : '사진 찍기' }}
+                </button>
+                <button
+                  type="button"
+                  class="shrink-0 rounded-md border border-border px-4 py-3 text-sm font-bold text-text-sub transition hover:border-primary hover:text-primary"
+                  @click="stopCapture"
+                >
+                  촬영 끝내기
+                </button>
+              </div>
+
+              <div
+                v-else
+                class="mt-4 flex items-center gap-3"
+              >
+                <!--
+                  사진 항목이고 카메라가 있으면 '촬영'과 '파일 업로드' 두 개를 둡니다.
+                  영상 항목이나 카메라가 없는 기기에서는 파일 업로드 하나만 남습니다.
+                -->
+                <button
+                  v-if="canShootActiveItem"
+                  type="button"
+                  class="min-w-0 flex-1 rounded-md bg-primary-gradient px-4 py-3 text-sm font-bold text-white shadow-elevated transition hover:brightness-110"
+                  @click="startCapture"
+                >
+                  촬영하기
+                </button>
                 <label class="min-w-0 flex-1">
                   <input
                     type="file"
                     class="hidden"
+                    aria-label="검증 항목 파일 업로드"
                     :accept="captureAccept(activeCaptureItem)"
-                    capture="environment"
                     multiple
                     :disabled="!activeCaptureItem || isActiveItemBusy || isActiveItemFull"
                     @change="onCaptureInput($event, activeCaptureItem)"
                   >
                   <span
-                    class="block rounded-md bg-primary-gradient px-4 py-3 text-center text-sm font-bold text-white shadow-elevated transition hover:brightness-110"
-                    :class="activeCaptureItem && !isActiveItemBusy && !isActiveItemFull
-                      ? 'cursor-pointer'
-                      : 'cursor-not-allowed opacity-60'"
+                    class="block rounded-md px-4 py-3 text-center text-sm font-bold transition"
+                    :class="[
+                      canShootActiveItem
+                        ? 'border border-primary bg-surface text-primary hover:bg-accent'
+                        : 'bg-primary-gradient text-white shadow-elevated hover:brightness-110',
+                      activeCaptureItem && !isActiveItemBusy && !isActiveItemFull
+                        ? 'cursor-pointer'
+                        : 'cursor-not-allowed opacity-60',
+                    ]"
                   >
-                    {{ activeItemStatusLabel }}
+                    {{ canShootActiveItem ? '파일 업로드' : activeItemStatusLabel }}
                   </span>
                   <span
                     v-if="activeCaptureItem && busyOf(activeCaptureItem.checklistItemId) === 'uploading'"

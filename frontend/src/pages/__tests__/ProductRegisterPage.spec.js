@@ -130,6 +130,30 @@ describe('ProductRegisterPage', () => {
     transitionProductStatus.mockResolvedValue({})
     // jsdom에는 scrollTo 구현이 없어 단계 이동 시 예외가 나므로 스텁으로 대체합니다.
     window.scrollTo = vi.fn()
+    // jsdom에는 카메라가 없습니다. 촬영 버튼이 보이는 기본 상태(카메라 있음)로 세웁니다.
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      writable: true,
+      value: {
+        getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }),
+        enumerateDevices: vi.fn().mockResolvedValue([{ kind: 'videoinput' }]),
+      },
+    })
+    // jsdom의 video 요소에는 play가 없습니다.
+    window.HTMLMediaElement.prototype.play = vi.fn().mockResolvedValue(undefined)
+    // jsdom에는 실제 영상·캔버스가 없어 촬영 프레임을 만들 수 없습니다. 화면이 준비된 상태로 둡니다.
+    Object.defineProperty(window.HTMLVideoElement.prototype, 'videoWidth', {
+      configurable: true,
+      get: () => 640,
+    })
+    Object.defineProperty(window.HTMLVideoElement.prototype, 'videoHeight', {
+      configurable: true,
+      get: () => 480,
+    })
+    window.HTMLCanvasElement.prototype.getContext = vi.fn(() => ({ drawImage: vi.fn() }))
+    window.HTMLCanvasElement.prototype.toBlob = vi.fn((callback) => {
+      callback(new Blob(['shot'], { type: 'image/jpeg' }))
+    })
     global.fetch = vi.fn().mockResolvedValue({ ok: true })
     global.URL.createObjectURL = vi.fn(() => 'blob:preview')
     global.URL.revokeObjectURL = vi.fn()
@@ -1072,5 +1096,214 @@ describe('ProductRegisterPage', () => {
 
     expect(createProductImageUploadUrl).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('15MB를 넘을 수 없습니다')
+  })
+
+  // 2단계 촬영/업로드 선택 —
+  // 폰에서는 카메라만 열려 앨범을 못 쓰고, 노트북에서는 촬영을 못 하던 문제를 버튼 분리로 풉니다.
+  describe('촬영과 파일 업로드 선택', () => {
+    it('카메라가 있는 기기의 사진 항목에는 촬영과 파일 업로드를 함께 보여준다', async () => {
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await goToCaptureStep(wrapper)
+
+      expect(buttonByText(wrapper, '촬영하기')).toBeDefined()
+      expect(wrapper.text()).toContain('파일 업로드')
+    })
+
+    // 영상 녹화는 지원하지 않습니다. 촬영 버튼을 보여주면 눌러도 할 수 있는 게 없습니다.
+    // 할 수 없는 일을 안내하면 사용자는 없는 버튼을 찾아 헤맵니다.
+    it('영상 항목의 버튼 문구에는 촬영을 넣지 않는다', async () => {
+      getProductChecklist.mockResolvedValue([
+        {
+          checklistItemId: 7003,
+          itemCode: 'SCR-002',
+          name: '화면 전체 터치',
+          evidenceType: 'VIDEO',
+          isRequired: true,
+          status: 'PENDING',
+        },
+      ])
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await goToCaptureStep(wrapper)
+
+      expect(wrapper.text()).toContain('파일 업로드')
+      expect(wrapper.text()).not.toContain('촬영 또는 파일 업로드')
+    })
+
+    it('영상 항목에는 파일 업로드만 보여준다', async () => {
+      getProductChecklist.mockResolvedValue([
+        {
+          checklistItemId: 7003,
+          itemCode: 'SCR-002',
+          name: '화면 전체 터치',
+          evidenceType: 'VIDEO',
+          isRequired: true,
+          status: 'PENDING',
+        },
+      ])
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await goToCaptureStep(wrapper)
+
+      expect(buttonByText(wrapper, '촬영하기')).toBeUndefined()
+      expect(wrapper.find('input[aria-label="검증 항목 파일 업로드"]').attributes('accept')).toBe('video/*')
+    })
+
+    // 배터리 리포트·시스템 진단 정보는 기기가 내보낸 파일을 그대로 올려야 값을 신뢰할 수 있습니다.
+    // 화면을 찍은 사진은 업로드로 받아 주되 촬영 버튼으로 권하지는 않습니다.
+    it('진단 자료 항목에는 촬영 버튼을 두지 않고 파일 형식만 열어 준다', async () => {
+      getProductChecklist.mockResolvedValue([
+        {
+          checklistItemId: 7004,
+          itemCode: 'BAT-001',
+          name: '배터리 리포트',
+          evidenceType: 'DIAGNOSTIC_FILE',
+          isRequired: true,
+          status: 'PENDING',
+        },
+      ])
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await goToCaptureStep(wrapper)
+
+      expect(buttonByText(wrapper, '촬영하기')).toBeUndefined()
+      const accept = wrapper.find('input[aria-label="검증 항목 파일 업로드"]').attributes('accept')
+      expect(accept).toContain('text/html')
+      expect(accept).toContain('text/plain')
+      // 진단 앱이 파일을 못 내보내면 화면 사진으로도 올릴 수 있어야 합니다.
+      expect(accept).toContain('image/jpeg')
+    })
+
+    it('카메라가 없는 기기에서는 사진 항목에도 파일 업로드만 보여준다', async () => {
+      navigator.mediaDevices.enumerateDevices.mockResolvedValue([{ kind: 'audioinput' }])
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await goToCaptureStep(wrapper)
+
+      expect(buttonByText(wrapper, '촬영하기')).toBeUndefined()
+      expect(wrapper.find('input[aria-label="검증 항목 파일 업로드"]').attributes('accept')).toBe('image/*')
+    })
+
+    it('촬영을 시작하면 미리보기 박스에 카메라 화면을 띄우고 찍기·취소만 남긴다', async () => {
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await goToCaptureStep(wrapper)
+
+      await buttonByText(wrapper, '촬영하기').trigger('click')
+      await flushPromises()
+
+      expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalled()
+      expect(wrapper.find('video').exists()).toBe(true)
+      expect(buttonByText(wrapper, '사진 찍기')).toBeDefined()
+      expect(buttonByText(wrapper, '촬영 끝내기')).toBeDefined()
+      // 촬영 중에는 파일 선택을 함께 두지 않습니다('파일 업로드'는 단계 제목에도 있어 입력으로 확인).
+      expect(wrapper.find('input[aria-label="검증 항목 파일 업로드"]').exists()).toBe(false)
+    })
+
+    // 흔들리거나 잘린 사진을 그대로 올리면 올린 뒤에야 알게 됩니다.
+    it('찍은 사진을 먼저 보여주고 저장 여부를 묻는다', async () => {
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await goToCaptureStep(wrapper)
+
+      await buttonByText(wrapper, '촬영하기').trigger('click')
+      await flushPromises()
+      await buttonByText(wrapper, '사진 찍기').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('이 사진으로 하시겠습니까?')
+      expect(buttonByText(wrapper, '예 (저장)')).toBeDefined()
+      expect(buttonByText(wrapper, '아니오 (다시 촬영)')).toBeDefined()
+      // 묻는 동안에는 아직 올리지 않습니다.
+      expect(createEvidenceUploadUrl).not.toHaveBeenCalled()
+    })
+
+    it('아니오를 누르면 올리지 않고 카메라를 켜 둔 채 다시 찍게 한다', async () => {
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await goToCaptureStep(wrapper)
+
+      await buttonByText(wrapper, '촬영하기').trigger('click')
+      await flushPromises()
+      await buttonByText(wrapper, '사진 찍기').trigger('click')
+      await flushPromises()
+      await buttonByText(wrapper, '아니오 (다시 촬영)').trigger('click')
+      await flushPromises()
+
+      expect(createEvidenceUploadUrl).not.toHaveBeenCalled()
+      expect(wrapper.text()).not.toContain('이 사진으로 하시겠습니까?')
+      // 카메라가 그대로 켜져 있어야 바로 다시 찍을 수 있습니다.
+      expect(wrapper.find('video').exists()).toBe(true)
+      expect(buttonByText(wrapper, '사진 찍기')).toBeDefined()
+    })
+
+    // 여러 각도를 잇달아 찍는 흐름을 저장 한 번으로 끊으면 안 됩니다.
+    it('저장한 뒤에도 카메라를 유지해 계속 찍을 수 있다', async () => {
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await goToCaptureStep(wrapper)
+
+      await buttonByText(wrapper, '촬영하기').trigger('click')
+      await flushPromises()
+      await buttonByText(wrapper, '사진 찍기').trigger('click')
+      await flushPromises()
+      await buttonByText(wrapper, '예 (저장)').trigger('click')
+      await flushPromises()
+
+      expect(createEvidenceUploadUrl).toHaveBeenCalledTimes(1)
+      expect(completeEvidence).toHaveBeenCalledTimes(1)
+      expect(wrapper.find('video').exists()).toBe(true)
+
+      // 두 번째 촬영도 이어서 됩니다.
+      await buttonByText(wrapper, '사진 찍기').trigger('click')
+      await flushPromises()
+      await buttonByText(wrapper, '예 (저장)').trigger('click')
+      await flushPromises()
+
+      expect(createEvidenceUploadUrl).toHaveBeenCalledTimes(2)
+      expect(completeEvidence).toHaveBeenCalledTimes(2)
+    })
+
+    it('촬영 끝내기를 누르면 카메라를 끄고 원래 버튼으로 돌아간다', async () => {
+      const stop = vi.fn()
+      navigator.mediaDevices.getUserMedia.mockResolvedValue({ getTracks: () => [{ stop }] })
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await goToCaptureStep(wrapper)
+
+      await buttonByText(wrapper, '촬영하기').trigger('click')
+      await flushPromises()
+      await buttonByText(wrapper, '촬영 끝내기').trigger('click')
+      await flushPromises()
+
+      // 카메라를 놓아주지 않으면 표시등이 남고 다른 앱이 카메라를 쓸 수 없습니다.
+      expect(stop).toHaveBeenCalled()
+      expect(wrapper.find('video').exists()).toBe(false)
+      expect(buttonByText(wrapper, '촬영하기')).toBeDefined()
+    })
+
+    it('권한을 거부하면 허용 방법을 알려주고 파일 업로드로 되돌린다', async () => {
+      const denied = new Error('denied')
+      denied.name = 'NotAllowedError'
+      navigator.mediaDevices.getUserMedia.mockRejectedValue(denied)
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await goToCaptureStep(wrapper)
+
+      await buttonByText(wrapper, '촬영하기').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('카메라 사용이 차단되어 있습니다')
+      expect(wrapper.find('video').exists()).toBe(false)
+      // 촬영이 막혀도 파일 선택으로는 계속 올릴 수 있어야 합니다.
+      expect(wrapper.find('input[aria-label="검증 항목 파일 업로드"]').attributes('accept')).toBe('image/*')
+    })
   })
 })

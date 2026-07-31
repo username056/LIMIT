@@ -172,6 +172,67 @@ class EvidenceUploadServiceTests {
         return listing;
     }
 
+    // 진단 앱이 결과를 파일로 내보내지 못하면 판매자는 화면을 찍어 올리는 수밖에 없다.
+    // 사진을 막으면 그 항목을 채울 방법이 사라진다.
+    @Test
+    void acceptsPhotoAndTextForDiagnosticItem() throws Exception {
+        for (String contentType : new String[] {"image/jpeg", "text/html", "text/plain"}) {
+            Listing listing = listing(1001L, 55L);
+            ListingChecklistItem item = diagnosticItem(7003L);
+            when(listingRepository.findByIdAndDeletedAtIsNull(1001L))
+                    .thenReturn(Optional.of(listing));
+            when(checklistItemRepository.findByIdAndListingId(7003L, 1001L))
+                    .thenReturn(Optional.of(item));
+            when(storage.presignPut(
+                            org.mockito.ArgumentMatchers.anyString(),
+                            org.mockito.ArgumentMatchers.anyString(),
+                            org.mockito.ArgumentMatchers.eq(contentType),
+                            org.mockito.ArgumentMatchers.anyLong(),
+                            org.mockito.ArgumentMatchers.any(Duration.class)))
+                    .thenReturn(URI.create("https://s3.example.test/presigned").toURL());
+
+            var response = service.createUploadUrl(
+                            55L,
+                            1001L,
+                            7003L,
+                            new CreateEvidenceUploadUrlRequest(
+                                    "diagnosis", contentType, 10_000L, null));
+
+            assertThat(response.getRequiredHeaders()).containsEntry("Content-Type", contentType);
+        }
+    }
+
+    @Test
+    void rejectsVideoForDiagnosticItem() {
+        Listing listing = listing(1001L, 55L);
+        ListingChecklistItem item = diagnosticItem(7003L);
+        when(listingRepository.findByIdAndDeletedAtIsNull(1001L))
+                .thenReturn(Optional.of(listing));
+        when(checklistItemRepository.findByIdAndListingId(7003L, 1001L))
+                .thenReturn(Optional.of(item));
+
+        assertThatThrownBy(() -> service.createUploadUrl(
+                        55L,
+                        1001L,
+                        7003L,
+                        new CreateEvidenceUploadUrlRequest(
+                                "clip.mp4", "video/mp4", 10_000L, null)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.MEDIA_UPLOAD_INVALID));
+        verify(uploadSessionRepository, never()).save(any());
+    }
+
+    private ListingChecklistItem diagnosticItem(Long id) {
+        ListingChecklistItem item = org.mockito.Mockito.mock(ListingChecklistItem.class);
+        when(item.getId()).thenReturn(id);
+        when(item.getEvidenceType()).thenReturn(EvidenceType.DIAGNOSTIC_FILE);
+        when(item.getMaxCount()).thenReturn(3);
+        when(item.getMaxFileSizeMb()).thenReturn(20);
+        return item;
+    }
+
     private ListingChecklistItem videoItem(
             Long id, Integer minDuration, Integer maxDuration, Integer maxFileSizeMb) {
         ListingChecklistItem item = org.mockito.Mockito.mock(ListingChecklistItem.class);

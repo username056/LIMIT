@@ -14,8 +14,10 @@ import com.c203.limit.domain.product.entity.Category;
 import com.c203.limit.domain.product.entity.Listing;
 import com.c203.limit.domain.product.entity.ListingStatus;
 import com.c203.limit.domain.product.entity.Wishlist;
+import com.c203.limit.domain.product.repository.ListingImageRepository;
 import com.c203.limit.domain.product.repository.ListingRepository;
 import com.c203.limit.domain.product.repository.WishlistRepository;
+import com.c203.limit.domain.product.storage.MediaUrlResolver;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.util.List;
@@ -36,12 +38,15 @@ class WishlistServiceTests {
 
     @Mock WishlistRepository wishlistRepository;
     @Mock ListingRepository listingRepository;
+    @Mock ListingImageRepository imageRepository;
+    @Mock MediaUrlResolver mediaUrlResolver;
     @Mock WishlistCreator creator;
     WishlistService service;
 
     @BeforeEach
     void setUp() {
-        service = new WishlistService(wishlistRepository, listingRepository, creator);
+        service = new WishlistService(
+                wishlistRepository, listingRepository, imageRepository, mediaUrlResolver, creator);
     }
 
     @Test

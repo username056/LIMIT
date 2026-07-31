@@ -313,11 +313,18 @@ public class ProductApplicationService {
                 .map(
                         listing -> {
                             ProductMetrics itemMetrics = metrics.get(listing.getId());
+                            // 판매자도 목록에서 어떤 기기인지 알아볼 수 있어야 한다. 공개 목록과
+                            // 같은 값을 같은 방식으로 채운다.
+                            Category model = listing.getCategory();
                             return
                                 new MyProductSummaryResponse(
                                         listing.getId(),
                                         listing.getTitle(),
                                         listing.getStatus().name(),
+                                        displayManufacturer(listing, model),
+                                        displayModelName(listing, model),
+                                        BigDecimal.valueOf(listing.getPrice()),
+                                        itemMetrics.thumbnailUrl(),
                                         itemMetrics.completedRequired(),
                                         itemMetrics.required(),
                                         offset(listing.getUpdatedAt()));
