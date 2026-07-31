@@ -431,6 +431,7 @@ describe('ChatThread', () => {
 
     const divider = wrapper.get('[data-testid="appointment-notification-divider"]')
     expect(divider.text()).toContain(content)
+    expect(divider.element.parentElement?.parentElement?.textContent?.trim()).toBe(content)
     expect(wrapper.find('[data-testid="appointment-notification-card"]').exists()).toBe(false)
   })
 

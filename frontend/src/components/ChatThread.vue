@@ -881,7 +881,10 @@ onBeforeUnmount(() => {
               <span v-else>{{ message.content || '미디어 파일' }}</span>
             </template>
           </div>
-          <span class="mt-1 text-[11px] text-text-sub">
+          <span
+            v-if="!isAppointmentNotification(message)"
+            class="mt-1 text-[11px] text-text-sub"
+          >
             {{ formatTime(message.sentAt) }}
             <template v-if="message.isPending"> · 전송 중</template>
             <template
