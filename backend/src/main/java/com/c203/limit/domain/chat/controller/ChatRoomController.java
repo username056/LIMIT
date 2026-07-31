@@ -37,6 +37,12 @@ public class ChatRoomController implements ChatRoomApi {
     }
 
     @Override
+    public ResponseEntity<Void> leave(Long roomId) {
+        chatRoomService.leaveRoom(roomId, currentUser.memberId());
+        return ResponseEntity.noContent().build();
+    }
+
+    @Override
     public ResponseEntity<ApiResponse<CursorResponse<ChatMessageResponse>>> findMessages(
             Long roomId, Long beforeSeq, Long afterSeq, int size) {
         CursorResponse<ChatMessageResponse> response = chatRoomService.findMessages(

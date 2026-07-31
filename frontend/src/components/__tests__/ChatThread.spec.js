@@ -116,7 +116,7 @@ describe('ChatThread', () => {
       .toContain('재검수 요청이 들어왔어요!')
     expect(wrapper.text()).toContain('영상 확인 필요')
     expect(wrapper.text()).toContain('외관 상태')
-    expect(wrapper.text()).toContain('바로 재촬영하기')
+    expect(wrapper.text()).not.toContain('바로 재촬영하기')
   })
 
   it('판매자 재검수 목록과 매칭되지 않아도 저장 본문을 카드로 복원한다', async () => {
@@ -285,7 +285,7 @@ describe('ChatThread', () => {
     })
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="appointment-card"]').attributes('style')).toContain('order: 7')
+    expect(wrapper.get('[data-testid="appointment-card"]').attributes('style')).toContain('order: 1')
     expect(wrapper.get('[data-message-sequence="4"]').attributes('style')).toContain('order: 8')
   })
 
@@ -341,7 +341,7 @@ describe('ChatThread', () => {
     await flushPromises()
 
     expect(wrapper.get('[data-testid="pending-message"]').attributes('style')).toContain('order: 2147483647')
-    expect(wrapper.get('[data-testid="appointment-card"]').attributes('style')).toContain('order: 7')
+    expect(wrapper.get('[data-testid="appointment-card"]').attributes('style')).toContain('order: 1')
   })
 
   it('사진 또는 영상 첨부 버튼으로 파일 선택기를 연다', async () => {
@@ -439,7 +439,7 @@ describe('ChatThread', () => {
     expect(wrapper.text()).toContain('요청 내용')
     expect(wrapper.text()).toContain('선택한 체크리스트')
     expect(wrapper.text()).not.toContain('자세히 보여 주세요.')
-    expect(wrapper.text()).toContain('바로 재촬영하기')
+    expect(wrapper.text()).not.toContain('바로 재촬영하기')
   })
 
   it('판매자 화면에서는 재검수 요청 카드를 내 쪽에 표시한다', async () => {

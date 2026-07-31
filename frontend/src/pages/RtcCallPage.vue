@@ -432,13 +432,7 @@ onBeforeUnmount(() => {
 
 <template>
   <DefaultLayout>
-    <main class="mx-auto w-full max-w-[1440px] px-6 py-6">
-      <p
-        v-if="requestMessage"
-        class="mb-4 rounded-lg bg-accent p-3 text-sm font-medium text-primary-dark"
-      >
-        실시간 요청: {{ requestMessage }}
-      </p>
+    <main class="mx-auto w-full max-w-[1440px] px-4 py-4 sm:px-6 sm:py-6">
       <p
         v-if="errorMessage && !rtcSession"
         role="alert"
@@ -449,7 +443,7 @@ onBeforeUnmount(() => {
 
       <div
         v-if="rtcSession"
-        class="grid gap-6 xl:grid-cols-[minmax(0,2.15fr)_minmax(340px,1fr)]"
+        class="grid items-start gap-6 xl:grid-cols-[minmax(0,2.15fr)_minmax(320px,1fr)]"
       >
         <section class="min-w-0">
           <div class="mb-5 flex min-h-11 items-center">
@@ -511,7 +505,7 @@ onBeforeUnmount(() => {
           </div>
         </section>
 
-        <aside class="flex min-h-0 flex-col gap-5">
+        <aside class="flex min-w-0 flex-col gap-5">
           <div class="flex min-h-11 flex-wrap items-center justify-end gap-4">
             <div class="flex items-center gap-2 text-sm font-semibold text-text-main">
               <span
@@ -537,14 +531,14 @@ onBeforeUnmount(() => {
               채팅으로 돌아가기
             </button>
           </div>
-          <section class="rounded-xl border border-border bg-white p-5">
+          <section class="min-w-0 rounded-xl border border-border bg-white p-5">
             <h2 class="text-lg font-bold text-text-main">
               상품 검증 체크리스트
             </h2>
             <p class="mt-1 text-sm text-text-sub">
               판매글에 등록된 검증 항목과 같은 목록입니다. 더 보고 싶은 부분은 아래 채팅으로 말씀하세요.
             </p>
-            <ul class="mt-4 space-y-3">
+            <ul class="mt-4 max-h-[320px] space-y-3 overflow-y-auto pr-1">
               <li
                 v-for="item in rtcSession.checklistItems"
                 :key="item.checklistItemId"
