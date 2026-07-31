@@ -51,6 +51,10 @@ export function createOrGetChatRoom(listingId) {
   return apiClient.post(`/listings/${listingId}/chat-rooms`, {})
 }
 
+export function leaveChatRoom(roomId) {
+  return apiClient.delete(`/chat-rooms/${roomId}`)
+}
+
 export function sendChatMessage(roomId, payload) {
   return apiClient.post(`/chat-rooms/${roomId}/messages`, payload)
 }

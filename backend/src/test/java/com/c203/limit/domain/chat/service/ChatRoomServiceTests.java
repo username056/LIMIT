@@ -195,6 +195,8 @@ class ChatRoomServiceTests {
         ChatRoomSummaryProjection second = summary(90L, BUYER_ID, SELLER_ID, 4L, 4L);
         when(chatRoomRepository.findSummariesByMemberId(
                 eq(BUYER_ID), isNull(), any(Pageable.class))).thenReturn(List.of(first, second));
+        when(chatMessageRepository.countUnreadFromCounterpart(100L, BUYER_ID, 3L))
+                .thenReturn(5L);
         when(contextReader.findAll(List.of(100L), BUYER_ID)).thenReturn(
                 java.util.Map.of(100L, new ChatRoomContext(100L, "판매자", "상품", "https://cdn/image.jpg")));
 
@@ -208,6 +210,20 @@ class ChatRoomServiceTests {
         assertThat(result.content().get(0).counterpartLastReadSequence()).isEqualTo(2L);
         assertThat(result.nextCursor()).isEqualTo("100");
         assertThat(result.hasNext()).isTrue();
+    }
+
+    @Test
+    void treatsMissingReadSequencesAsUnreadFromBeginning() {
+        ChatRoomSummaryProjection row = summary(100L, BUYER_ID, SELLER_ID, 8L, null);
+        when(chatRoomRepository.findSummariesByMemberId(
+                eq(BUYER_ID), isNull(), any(Pageable.class))).thenReturn(List.of(row));
+        when(chatMessageRepository.countUnreadFromCounterpart(100L, BUYER_ID, 0L))
+                .thenReturn(8L);
+
+        CursorResponse<ChatRoomSummaryResponse> result = service.findRooms(BUYER_ID, null, 1);
+
+        assertThat(result.content().get(0).unreadCount()).isEqualTo(8L);
+        assertThat(result.content().get(0).counterpartLastReadSequence()).isZero();
     }
 
     @Test
@@ -325,8 +341,21 @@ class ChatRoomServiceTests {
         assertThat(participant.getLastReadSeq()).isEqualTo(5L);
     }
 
+    @Test
+    void leavesRoomForCurrentParticipant() {
+        ChatRoomParticipant participant = participant(100L, BUYER_ID);
+        when(participantRepository.findByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID))
+                .thenReturn(Optional.of(participant));
+
+        service.leaveRoom(100L, BUYER_ID);
+
+        verify(participantRepository)
+                .findByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID);
+        assertThat(participant.getLeftAt()).isNotNull();
+    }
+
     private ChatRoomSummaryProjection summary(
-            Long roomId, Long buyerId, Long sellerId, long lastMessageSeq, long lastReadSeq) {
+            Long roomId, Long buyerId, Long sellerId, long lastMessageSeq, Long lastReadSeq) {
         return new ChatRoomSummaryProjection() {
             public Long getRoomId() { return roomId; }
             public Long getListingId() { return LISTING_ID; }
@@ -336,8 +365,8 @@ class ChatRoomServiceTests {
             public Long getLastMessageId() { return 50L; }
             public long getLastMessageSeq() { return lastMessageSeq; }
             public LocalDateTime getLastMessageAt() { return null; }
-            public long getLastReadSeq() { return lastReadSeq; }
-            public long getCounterpartLastReadSeq() { return 2L; }
+            public Long getLastReadSeq() { return lastReadSeq; }
+            public Long getCounterpartLastReadSeq() { return lastReadSeq == null ? null : 2L; }
             public LocalDateTime getCreatedAt() { return LocalDateTime.of(2026, 7, 22, 12, 0); }
         };
     }

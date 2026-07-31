@@ -1,6 +1,8 @@
 package com.c203.limit.domain.chat.controller;
 
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -116,6 +118,16 @@ class ChatRoomControllerTests {
                 .andExpect(jsonPath("$.data.content[0].roomSequence").value(8L))
                 .andExpect(jsonPath("$.data.content[0].type").value("TEXT"))
                 .andExpect(jsonPath("$.data.hasNext").value(false));
+    }
+
+    @Test
+    void leavesChatRoom() throws Exception {
+        when(currentUser.memberId()).thenReturn(BUYER_ID);
+
+        mockMvc.perform(delete("/api/v1/chat-rooms/{roomId}", ROOM_ID))
+                .andExpect(status().isNoContent());
+
+        verify(chatRoomService).leaveRoom(ROOM_ID, BUYER_ID);
     }
 
     private ChatRoomResponse response() {

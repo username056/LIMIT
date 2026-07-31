@@ -79,6 +79,7 @@ public class ChatMedia {
             Long chatRoomId,
             Long uploaderId,
             MediaType type,
+            String bucketName,
             String objectKey,
             String originalFilename,
             String mimeType,
@@ -89,7 +90,7 @@ public class ChatMedia {
         media.uploaderId = uploaderId;
         media.type = type;
         media.uploadStatus = UploadStatus.VERIFIED;
-        media.bucketName = "local-chat-media";
+        media.bucketName = bucketName;
         media.objectKey = objectKey;
         media.originalFilename = originalFilename;
         media.mimeType = mimeType;
@@ -104,6 +105,7 @@ public class ChatMedia {
     public Long getUploaderId() { return uploaderId; }
     public MediaType getType() { return type; }
     public UploadStatus getUploadStatus() { return uploadStatus; }
+    public String getBucketName() { return bucketName; }
     public String getObjectKey() { return objectKey; }
     public String getOriginalFilename() { return originalFilename; }
     public String getMimeType() { return mimeType; }

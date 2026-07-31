@@ -5,11 +5,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-import java.nio.file.Path;
+import java.time.Duration;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
@@ -20,12 +19,14 @@ import com.c203.limit.domain.chat.repository.ChatMediaRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomParticipantRepository;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
+import com.c203.limit.domain.product.storage.S3MediaProperties;
+import software.amazon.awssdk.services.s3.S3Client;
 
 @ExtendWith(MockitoExtension.class)
 class ChatMediaServiceTests {
     @Mock ChatMediaRepository mediaRepository;
     @Mock ChatRoomParticipantRepository participantRepository;
-    @TempDir Path tempDirectory;
+    @Mock S3Client s3Client;
 
     @Test
     void uploadsImageForParticipant() {
@@ -46,7 +47,6 @@ class ChatMediaServiceTests {
         assertThat(response.mediaId()).isEqualTo(30L);
         assertThat(response.type()).isEqualTo("IMAGE");
         assertThat(response.contentUrl()).isEqualTo("/api/v1/chat-media/30/content");
-        assertThat(tempDirectory.toFile().listFiles()).hasSize(1);
     }
 
     @Test
@@ -82,6 +82,12 @@ class ChatMediaServiceTests {
     }
 
     private ChatMediaService service() {
-        return new ChatMediaService(mediaRepository, participantRepository, tempDirectory.toString());
+        return new ChatMediaService(
+                mediaRepository,
+                participantRepository,
+                s3Client,
+                new S3MediaProperties(
+                        "ap-northeast-2", "media-bucket", null, false,
+                        Duration.ofMinutes(10), Duration.ofMinutes(5), null));
     }
 }

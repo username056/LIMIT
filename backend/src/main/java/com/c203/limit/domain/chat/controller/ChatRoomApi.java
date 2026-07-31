@@ -48,6 +48,12 @@ public interface ChatRoomApi {
             @RequestParam(required = false) Long cursor,
             @RequestParam(defaultValue = "20") int size);
 
+    @Operation(operationId = "chatBe08", summary = "채팅방 나가기",
+            description = "현재 회원의 채팅 목록에서 방을 제거합니다. 상대방의 대화는 유지됩니다.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @RequestMapping(method = RequestMethod.DELETE, path = "/api/v1/chat-rooms/{roomId}")
+    ResponseEntity<Void> leave(@PathVariable Long roomId);
+
     @Operation(operationId = "chatBe06", summary = "이전 메시지 조회 및 누락 복구",
             description = "beforeSeq는 과거 메시지를, afterSeq는 재접속 이후 누락 메시지를 조회하며 동시에 사용할 수 없습니다.",
             security = @SecurityRequirement(name = "bearerAuth"))
