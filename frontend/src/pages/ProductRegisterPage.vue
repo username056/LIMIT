@@ -2492,6 +2492,15 @@ onMounted(async () => {
               </p>
             </div>
 
+            <BaseButton
+              v-if="currentProductId"
+              variant="outline"
+              class="mt-6"
+              :to="{ name: 'seller-product-device-check', params: { productId: currentProductId } }"
+            >
+              카메라·마이크·키보드 등 실동작 자동 점검하기
+            </BaseButton>
+
             <ul class="mt-6 space-y-3">
               <li
                 v-for="item in confirmationChecklistItems"

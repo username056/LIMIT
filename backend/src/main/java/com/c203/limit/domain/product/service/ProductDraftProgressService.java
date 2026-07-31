@@ -1,6 +1,7 @@
 package com.c203.limit.domain.product.service;
 
 import com.c203.limit.domain.inspection.entity.ListingChecklistItem;
+import com.c203.limit.domain.inspection.enums.DeviceCheckResult;
 import com.c203.limit.domain.inspection.enums.EvidenceType;
 import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
 import com.c203.limit.domain.product.dto.request.UpdateProductDraftProgressRequest;
@@ -11,7 +12,9 @@ import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -43,22 +46,34 @@ public class ProductDraftProgressService {
         Listing listing = owned(sellerId, productId);
         List<ListingChecklistItem> items =
                 checklistItems.findByListingIdOrderByDisplayOrderAsc(productId);
-        Set<Long> requested = request.confirmedChecklistItemIds() == null
-                ? Set.of()
-                : Set.copyOf(request.confirmedChecklistItemIds());
+
+        List<UpdateProductDraftProgressRequest.ChecklistItemResult> results = request.results();
+        long distinctItemCount = results.stream()
+                .map(UpdateProductDraftProgressRequest.ChecklistItemResult::checklistItemId)
+                .distinct()
+                .count();
+        if (distinctItemCount != results.size()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+        Map<Long, DeviceCheckResult> requested = results.stream()
+                .collect(Collectors.toMap(
+                        UpdateProductDraftProgressRequest.ChecklistItemResult::checklistItemId,
+                        UpdateProductDraftProgressRequest.ChecklistItemResult::result));
+
         Set<Long> confirmationIds = new HashSet<>();
         for (ListingChecklistItem item : items) {
             if (item.getEvidenceType() != EvidenceType.SELLER_CONFIRMATION) continue;
             confirmationIds.add(item.getId());
-            if (requested.contains(item.getId())) item.markCompleted();
+            DeviceCheckResult result = requested.get(item.getId());
+            if (result != null) item.applyDeviceCheckResult(result);
             else item.markPending();
         }
-        if (!confirmationIds.containsAll(requested)) {
+        if (!confirmationIds.containsAll(requested.keySet())) {
             throw new BusinessException(ErrorCode.ITEM_NOT_FOUND);
         }
         listing.updateDraftStep(request.step());
         log.info(
-                "Product draft progress updated: productId={}, step={}, confirmedChecklistItemCount={}",
+                "Product draft progress updated: productId={}, step={}, checklistResultCount={}",
                 productId,
                 request.step(),
                 requested.size());
@@ -72,12 +87,11 @@ public class ProductDraftProgressService {
 
     private ProductDraftProgressResponse response(
             Listing listing, List<ListingChecklistItem> items) {
-        Set<Long> confirmed = items.stream()
+        Map<Long, DeviceCheckResult> results = items.stream()
                 .filter(item -> item.getEvidenceType() == EvidenceType.SELLER_CONFIRMATION)
-                .filter(item -> item.getCompletionStatus()
-                        == com.c203.limit.domain.inspection.enums.ChecklistItemCompletionStatus.COMPLETED)
-                .map(ListingChecklistItem::getId)
-                .collect(java.util.stream.Collectors.toUnmodifiableSet());
-        return new ProductDraftProgressResponse(listing.getDraftStep(), confirmed);
+                .filter(item -> item.getDeviceCheckResult() != null)
+                .collect(Collectors.toMap(
+                        ListingChecklistItem::getId, ListingChecklistItem::getDeviceCheckResult));
+        return new ProductDraftProgressResponse(listing.getDraftStep(), results);
     }
 }
