@@ -2,6 +2,7 @@ package com.c203.limit.domain.inspection.checklist;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.c203.limit.domain.inspection.enums.AutomationType;
 import com.c203.limit.domain.inspection.enums.EvidenceType;
 import com.c203.limit.domain.product.entity.OsFamily;
 import java.util.Set;
@@ -14,7 +15,7 @@ class LaptopChecklistPolicyTests {
     void createsWindowsDiagnosticsAsRequiredFiles() {
         var items = policy.generate(OsFamily.WINDOWS, Set.of());
 
-        assertThat(items).hasSize(12);
+        assertThat(items).hasSize(13);
         assertThat(items)
                 .filteredOn(item -> item.itemCode().equals("LAP-HNG-012"))
                 .singleElement()
@@ -36,6 +37,15 @@ class LaptopChecklistPolicyTests {
                 .singleElement()
                 .extracting(GeneratedChecklistItem::parserType)
                 .isEqualTo("DXDIAG");
+        assertThat(items)
+                .filteredOn(item -> item.itemCode().equals("LAP-SCR-013"))
+                .singleElement()
+                .satisfies(item -> {
+                    assertThat(item.evidenceType()).isEqualTo(EvidenceType.PHOTO);
+                    assertThat(item.automationType()).isEqualTo(AutomationType.OCR);
+                    assertThat(item.parserType()).isNull();
+                    assertThat(item.required()).isTrue();
+                });
     }
 
     @Test
@@ -63,7 +73,7 @@ class LaptopChecklistPolicyTests {
                         LaptopFeatureCode.OLED,
                         LaptopFeatureCode.NUMPAD));
 
-        assertThat(items).hasSize(17);
+        assertThat(items).hasSize(18);
         assertThat(items.stream()
                         .filter(item -> item.featureCode() != null)
                         .map(GeneratedChecklistItem::featureCode))
@@ -81,7 +91,7 @@ class LaptopChecklistPolicyTests {
                 OsFamily.WINDOWS,
                 Set.of(LaptopFeatureCode.RJ45_PORT, LaptopFeatureCode.MICROSD_SLOT));
 
-        assertThat(items).hasSize(14);
+        assertThat(items).hasSize(15);
         assertThat(items.stream()
                         .filter(item -> item.featureCode() != null)
                         .map(GeneratedChecklistItem::featureCode))

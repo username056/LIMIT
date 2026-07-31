@@ -89,6 +89,10 @@ export function getEvidenceHistory(productId, checklistItemId) {
   return apiClient.get(`/products/${productId}/checklist-items/${checklistItemId}/evidence`)
 }
 
+export function deleteEvidence(productId, checklistItemId, evidenceId) {
+  return apiClient.delete(`/products/${productId}/checklist-items/${checklistItemId}/evidence/${evidenceId}`)
+}
+
 export function uploadToPresignedUrl(presignedUrl, file, requiredHeaders = {}, onProgress = () => {}) {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest()
@@ -124,7 +128,7 @@ export function deleteProductImage(productId, imageId) {
 }
 
 export function updateProductImageOrder(productId, payload) {
-  return apiClient.put(`/products/${productId}/images/order`, payload).then(unwrap)
+  return apiClient.put(`/products/${productId}/images/order`, payload)
 }
 
 export function getHandoverGuide(modelId) {

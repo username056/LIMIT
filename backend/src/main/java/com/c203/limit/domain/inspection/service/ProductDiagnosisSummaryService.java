@@ -52,13 +52,14 @@ public class ProductDiagnosisSummaryService {
         List<ListingChecklistItem> checklistItems =
                 listingChecklistItemRepository.findAllByListingIdOrderByDisplayOrderAsc(productId);
 
+        // 같은 필드(예: CPU)를 여러 체크리스트 항목이 각자 취합할 수 있어(OCR 화면 항목과 DXDIAG 항목처럼),
+        // 필드마다 항목별로 다 나열하지 않고 하나만 골라 돌려준다 — 값이 있는 쪽을 우선한다.
         List<DiagnosisSummaryItem> items =
-                checklistItems.stream()
-                        .flatMap(
-                                item ->
-                                        Arrays.stream(DiagnosisFieldName.values())
-                                                .map(fieldName -> toSummaryItem(item.getId(), fieldName)))
-                        .toList();
+                checklistItems.isEmpty()
+                        ? List.of()
+                        : Arrays.stream(DiagnosisFieldName.values())
+                                .map(fieldName -> bestSummaryItem(checklistItems, fieldName))
+                                .toList();
 
         boolean allExtractionsFailed =
                 !checklistItems.isEmpty() && items.stream().noneMatch(item -> item.status() == DiagnosisSummaryStatus.AVAILABLE);
@@ -67,6 +68,21 @@ public class ProductDiagnosisSummaryService {
         }
 
         return new ProductDiagnosisSummaryResponse(productId, items, DISCLAIMER);
+    }
+
+    private DiagnosisSummaryItem bestSummaryItem(
+            List<ListingChecklistItem> checklistItems, DiagnosisFieldName fieldName) {
+        DiagnosisSummaryItem fallback = null;
+        for (ListingChecklistItem item : checklistItems) {
+            DiagnosisSummaryItem candidate = toSummaryItem(item.getId(), fieldName);
+            if (candidate.status() == DiagnosisSummaryStatus.AVAILABLE) {
+                return candidate;
+            }
+            if (fallback == null) {
+                fallback = candidate;
+            }
+        }
+        return fallback;
     }
 
     private DiagnosisSummaryItem toSummaryItem(Long itemId, DiagnosisFieldName fieldName) {

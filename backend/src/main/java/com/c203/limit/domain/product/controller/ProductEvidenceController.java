@@ -5,6 +5,7 @@ import com.c203.limit.domain.product.dto.request.CreateEvidenceUploadUrlRequest;
 import com.c203.limit.domain.product.dto.response.EvidenceResponse;
 import com.c203.limit.domain.product.dto.response.EvidenceUploadUrlResponse;
 import com.c203.limit.domain.product.dto.response.ProductChecklistItemResponse;
+import com.c203.limit.domain.product.service.EvidenceDeleteService;
 import com.c203.limit.domain.product.service.EvidenceHistoryService;
 import com.c203.limit.domain.product.service.EvidenceUploadService;
 import com.c203.limit.domain.product.service.ProductChecklistService;
@@ -23,6 +24,7 @@ public class ProductEvidenceController implements ProductEvidenceApi {
     private final ProductChecklistService productChecklistService;
     private final EvidenceUploadService evidenceUploadService;
     private final EvidenceHistoryService evidenceHistoryService;
+    private final EvidenceDeleteService evidenceDeleteService;
     private final CurrentUser currentUser;
     private final SellerStatusReader sellerStatusReader;
 
@@ -30,11 +32,13 @@ public class ProductEvidenceController implements ProductEvidenceApi {
             ProductChecklistService productChecklistService,
             EvidenceUploadService evidenceUploadService,
             EvidenceHistoryService evidenceHistoryService,
+            EvidenceDeleteService evidenceDeleteService,
             CurrentUser currentUser,
             SellerStatusReader sellerStatusReader) {
         this.productChecklistService = productChecklistService;
         this.evidenceUploadService = evidenceUploadService;
         this.evidenceHistoryService = evidenceHistoryService;
+        this.evidenceDeleteService = evidenceDeleteService;
         this.currentUser = currentUser;
         this.sellerStatusReader = sellerStatusReader;
     }
@@ -75,6 +79,15 @@ public class ProductEvidenceController implements ProductEvidenceApi {
                 ApiResponse.ok(
                         evidenceHistoryService.findAll(
                                 productId, checklistItemId, currentUser.memberIdOrNull())));
+    }
+
+    @Override
+    @PreAuthorize("hasRole('SELLER')")
+    public ResponseEntity<Void> deleteEvidence(
+            Long productId, Long checklistItemId, Long evidenceId) {
+        evidenceDeleteService.delete(
+                currentSellerMemberId(), productId, checklistItemId, evidenceId);
+        return ResponseEntity.noContent().build();
     }
 
     private Long currentSellerMemberId() {

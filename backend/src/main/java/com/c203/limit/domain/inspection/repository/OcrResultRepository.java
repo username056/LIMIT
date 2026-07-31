@@ -15,4 +15,6 @@ public interface OcrResultRepository extends JpaRepository<OcrResult, Long> {
 
     /** 같은 evidence를 다시 OCR 처리하려는 걸 막기 위한 재파싱 가드용. */
     boolean existsByEvidenceId(Long evidenceId);
+
+    long deleteByEvidenceId(Long evidenceId);
 }

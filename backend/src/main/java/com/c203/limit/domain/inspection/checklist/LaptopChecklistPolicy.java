@@ -116,6 +116,11 @@ public class LaptopChecklistPolicy {
                     "운영체제와 주요 하드웨어 사양을 확인합니다.",
                     "dxdiag에서 모든 정보 저장을 선택해 DxDiag.txt를 등록하세요. 저장이 불가능하면 시스템 정보 화면 캡처를 등록하세요.",
                     "DXDIAG"));
+            definitions.add(ocrRequired(
+                    "LAP-SCR-013",
+                    "설정 정보 화면",
+                    "설정 화면에 표시되는 모델명, CPU, RAM, GPU, 저장용량, OS 버전을 확인합니다.",
+                    "설정 > 시스템 > 정보(또는 실행에서 msinfo32) 화면을 캡처해 등록하세요."));
         } else {
             definitions.add(required(
                     "LAP-BAT-010",
@@ -324,6 +329,19 @@ public class LaptopChecklistPolicy {
                 EvidenceType.DIAGNOSTIC_FILE,
                 AutomationType.FILE_PARSE,
                 parserType,
+                null,
+                true);
+    }
+
+    private static ItemDefinition ocrRequired(String code, String name, String purpose, String guide) {
+        return new ItemDefinition(
+                code,
+                name,
+                purpose,
+                guide,
+                EvidenceType.PHOTO,
+                AutomationType.OCR,
+                null,
                 null,
                 true);
     }

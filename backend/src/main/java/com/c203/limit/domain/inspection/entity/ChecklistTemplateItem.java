@@ -128,7 +128,8 @@ public class ChecklistTemplateItem {
         if (evidenceType == EvidenceType.PHOTO) {
             item.allowedFormats = "jpg,jpeg,png";
             item.minCount = 1;
-            item.maxCount = 5;
+            // 설정 정보 화면(OCR)은 화면 한 장만 있으면 되므로 여러 장 올릴 필요가 없다.
+            item.maxCount = automationType == AutomationType.OCR ? 1 : 5;
             item.maxFileSizeMb = 20;
         } else if (evidenceType == EvidenceType.VIDEO) {
             item.allowedFormats = "mp4,mov";

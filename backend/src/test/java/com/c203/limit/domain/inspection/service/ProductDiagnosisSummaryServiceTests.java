@@ -99,6 +99,39 @@ class ProductDiagnosisSummaryServiceTests {
     }
 
     @Test
+    void dedupesSameFieldAcrossMultipleChecklistItemsPreferringAvailable() {
+        stubProductExists();
+        Long ocrItemId = 3L;
+        Long dxdiagItemId = 4L;
+        ListingChecklistItem ocrItem = mock(ListingChecklistItem.class);
+        when(ocrItem.getId()).thenReturn(ocrItemId);
+        ListingChecklistItem dxdiagItem = mock(ListingChecklistItem.class);
+        when(dxdiagItem.getId()).thenReturn(dxdiagItemId);
+        when(listingChecklistItemRepository.findAllByListingIdOrderByDisplayOrderAsc(PRODUCT_ID))
+                .thenReturn(List.of(ocrItem, dxdiagItem));
+
+        when(diagnosisAggregationService.getFieldValue(eq(ocrItemId), any(DiagnosisFieldName.class)))
+                .thenReturn(EMPTY);
+        when(diagnosisAggregationService.getFieldValue(eq(dxdiagItemId), any(DiagnosisFieldName.class)))
+                .thenReturn(EMPTY);
+        // OCR 항목은 CPU 인식에 실패했고, DXDIAG 항목이 대신 CPU 값을 갖고 있는 상황.
+        when(diagnosisAggregationService.getFieldValue(dxdiagItemId, DiagnosisFieldName.CPU))
+                .thenReturn(
+                        new DiagnosisAggregationService.DiagnosisFieldValue(
+                                null, "dxdiag cpu", 7L, DiagnosisSourceType.DXDIAG));
+        when(evidenceRepository.findById(7L))
+                .thenReturn(Optional.of(readyEvidence("https://cdn.example.com/evidence/7.txt")));
+
+        ProductDiagnosisSummaryResponse response = service.getSummary(PRODUCT_ID);
+
+        assertThat(response.items()).hasSize(DiagnosisFieldName.values().length);
+        DiagnosisSummaryItem cpu = fieldNamed(response, "CPU");
+        assertThat(cpu.status()).isEqualTo(DiagnosisSummaryStatus.AVAILABLE);
+        assertThat(cpu.value()).isEqualTo("dxdiag cpu");
+        assertThat(cpu.originalFileUrl()).isEqualTo("https://cdn.example.com/evidence/7.txt");
+    }
+
+    @Test
     void throwsProductNotFoundWhenListingDoesNotExist() {
         when(listingOwnerReader.findById(PRODUCT_ID)).thenReturn(Optional.empty());
 

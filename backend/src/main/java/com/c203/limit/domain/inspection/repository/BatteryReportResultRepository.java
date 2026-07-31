@@ -14,4 +14,6 @@ public interface BatteryReportResultRepository extends JpaRepository<BatteryRepo
 
     /** 같은 evidence를 다시 파싱하려는 걸 막기 위한 재파싱 가드용. */
     boolean existsByEvidenceId(Long evidenceId);
+
+    long deleteByEvidenceId(Long evidenceId);
 }

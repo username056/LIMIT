@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.c203.limit.domain.inspection.entity.Evidence;
 import com.c203.limit.domain.inspection.entity.ListingChecklistItem;
+import com.c203.limit.domain.inspection.enums.AutomationType;
 import com.c203.limit.domain.inspection.enums.ChecklistItemCompletionStatus;
 import com.c203.limit.domain.inspection.enums.EvidenceType;
 import com.c203.limit.domain.inspection.repository.EvidenceRepository;
@@ -132,6 +133,7 @@ class ProductChecklistServiceTests {
         when(item.getName()).thenReturn(name);
         when(item.getCaptureGuide()).thenReturn(guide);
         when(item.getEvidenceType()).thenReturn(EvidenceType.VIDEO);
+        when(item.getAutomationType()).thenReturn(AutomationType.NONE);
         when(item.isRequired()).thenReturn(required);
         when(item.getCompletionStatus()).thenReturn(status);
         return item;

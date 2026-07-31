@@ -86,7 +86,7 @@ class ChecklistGenerationServiceTests {
                 service.generateForModel(201L, Set.of("CAMERA"));
 
         assertThat(result.aiApplied()).isFalse();
-        assertThat(result.items()).hasSize(13);
+        assertThat(result.items()).hasSize(14);
         assertThat(result.aiSuggestions()).isEmpty();
         assertThat(result.reviewCandidates()).isEmpty();
         assertThat(result.researchStatus()).isEqualTo("PENDING_REVIEW");
@@ -102,7 +102,7 @@ class ChecklistGenerationServiceTests {
         GeneratedChecklist result = service.generateForModel(201L, Set.of());
 
         assertThat(result.aiApplied()).isFalse();
-        assertThat(result.items()).hasSize(12);
+        assertThat(result.items()).hasSize(13);
         assertThat(result.aiSuggestions()).isEmpty();
         assertThat(result.researchStatus()).isEqualTo("FAILED");
         ArgumentCaptor<ModelChecklistResearch> researchCaptor =

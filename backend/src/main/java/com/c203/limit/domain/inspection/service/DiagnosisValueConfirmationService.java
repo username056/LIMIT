@@ -9,6 +9,7 @@ import com.c203.limit.domain.inspection.entity.OcrResult;
 import com.c203.limit.domain.inspection.enums.DiagnosisFieldName;
 import com.c203.limit.domain.inspection.enums.DiagnosisSourceType;
 import com.c203.limit.domain.inspection.enums.OcrFieldType;
+import com.c203.limit.domain.inspection.enums.ParseStatus;
 import com.c203.limit.domain.inspection.repository.BatteryReportResultRepository;
 import com.c203.limit.domain.inspection.repository.DxdiagResultRepository;
 import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
@@ -31,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class DiagnosisValueConfirmationService {
 
     private static final Logger log = LoggerFactory.getLogger(DiagnosisValueConfirmationService.class);
+    private static final String MANUAL_SOURCE_LABEL = "manual";
 
     private final ListingChecklistItemRepository listingChecklistItemRepository;
     private final ListingOwnerReader listingOwnerReader;
@@ -92,30 +94,54 @@ public class DiagnosisValueConfirmationService {
         }
     }
 
+    /** 해당 evidence에 이 필드의 OCR 결과 row가 없으면(한 번도 인식되지 못했으면) 새로 만들어 채운다. */
     private void correctOcrResult(Long evidenceId, DiagnosisFieldName fieldName, String newValue) {
         OcrFieldType ocrFieldType = fieldName.toOcrFieldType();
         OcrResult result =
                 ocrResultRepository
                         .findByEvidenceIdAndFieldType(evidenceId, ocrFieldType)
-                        .orElseThrow(() -> new BusinessException(ErrorCode.FIELD_NOT_EDITABLE));
+                        .orElseGet(
+                                () ->
+                                        OcrResult.builder()
+                                                .evidenceId(evidenceId)
+                                                .fieldType(ocrFieldType)
+                                                .ocrModelVersion(MANUAL_SOURCE_LABEL)
+                                                .detectedAt(LocalDateTime.now())
+                                                .build());
         result.correctValue(newValue);
         ocrResultRepository.save(result);
     }
 
+    /** 해당 evidence에 dxdiag 파싱 결과 row가 없으면(파싱이 전부 실패했으면) 새로 만들어 채운다. */
     private void correctDxdiagResult(Long evidenceId, DiagnosisFieldName fieldName, String newValue) {
         DxdiagResult result =
                 dxdiagResultRepository
                         .findByEvidenceId(evidenceId)
-                        .orElseThrow(() -> new BusinessException(ErrorCode.FIELD_NOT_EDITABLE));
+                        .orElseGet(
+                                () ->
+                                        DxdiagResult.builder()
+                                                .evidenceId(evidenceId)
+                                                .parserVersion(MANUAL_SOURCE_LABEL)
+                                                .parseStatus(ParseStatus.PARTIAL)
+                                                .parsedAt(LocalDateTime.now())
+                                                .build());
         result.correctField(fieldName, newValue);
         dxdiagResultRepository.save(result);
     }
 
+    /** 해당 evidence에 배터리 리포트 파싱 결과 row가 없으면(파싱이 전부 실패했으면) 새로 만들어 채운다. */
     private void correctBatteryReportResult(Long evidenceId, DiagnosisFieldName fieldName, String newValue) {
         BatteryReportResult result =
                 batteryReportResultRepository
                         .findByEvidenceId(evidenceId)
-                        .orElseThrow(() -> new BusinessException(ErrorCode.FIELD_NOT_EDITABLE));
+                        .orElseGet(
+                                () ->
+                                        BatteryReportResult.builder()
+                                                .evidenceId(evidenceId)
+                                                .parserVersion(MANUAL_SOURCE_LABEL)
+                                                .parseStatus(ParseStatus.PARTIAL)
+                                                .parsedAt(LocalDateTime.now())
+                                                .build());
         result.correctField(fieldName, newValue);
         batteryReportResultRepository.save(result);
     }
