@@ -24,7 +24,13 @@ let refreshPromise = null
 
 function refreshAccessToken() {
   if (!refreshPromise) {
-    refreshPromise = restoreAuthSession().finally(() => {
+    refreshPromise = (async () => {
+      try {
+        return !!(await restoreAuthSession())
+      } catch {
+        return false
+      }
+    })().finally(() => {
       refreshPromise = null
     })
   }
