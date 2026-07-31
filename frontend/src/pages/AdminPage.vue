@@ -12,6 +12,7 @@ import {
   approveChecklistResearch,
   approveDeviceModelRequest,
   getAdminAccounts,
+  getAdminActionLog,
   getAdminActionLogs,
   getAdminMember,
   getAdminMembers,
@@ -23,8 +24,11 @@ import {
   rejectDeviceModelRequest,
   releaseMemberRestriction,
   retryChecklistResearch,
+  updateAdminActionLog,
   updateAdminAccount,
+  updateDeviceModelRequest,
 } from '../api/admin'
+import { getDeviceCategories } from '../api/products'
 import { clearAuthSession, setAuthSession, useAuthSession } from '../auth/session'
 
 const session = useAuthSession()
@@ -42,6 +46,21 @@ const checklistResearches = ref([])
 const checklistResearchStatus = ref('PENDING_REVIEW')
 const retryingResearchId = ref(null)
 const deviceModelRequests = ref([])
+const deviceCategories = ref([])
+const editingModelRequestId = ref(null)
+const isSavingModelRequest = ref(false)
+const modelRequestForm = reactive({
+  categoryId: '',
+  manufacturer: '',
+  modelName: '',
+  modelCode: '',
+  osFamily: 'ANDROID',
+})
+const selectedActionLog = ref(null)
+const isLoadingActionLog = ref(false)
+const isEditingActionLog = ref(false)
+const isSavingActionLog = ref(false)
+const actionLogReason = ref('')
 const selectedMember = ref(null)
 const restrictions = ref([])
 const restrictionForm = reactive({
@@ -94,6 +113,12 @@ function researchStatusLabel(status) {
   return status
 }
 
+function deviceCategoryLabel(categoryId) {
+  return deviceCategories.value.find(
+    (category) => Number(category.categoryId) === Number(categoryId),
+  )?.name || `카테고리 #${categoryId}`
+}
+
 function showError(error, fallback) {
   errorMessage.value = error.message || fallback
   successMessage.value = ''
@@ -139,9 +164,16 @@ async function loadSection(section) {
     } else if (section === 'checklist-researches') {
       checklistResearches.value = await getChecklistResearches(checklistResearchStatus.value)
     } else if (section === 'device-model-requests') {
-      deviceModelRequests.value = await getDeviceModelRequests()
+      const [requests, categories] = await Promise.all([
+        getDeviceModelRequests(),
+        getDeviceCategories({ activeOnly: true }),
+      ])
+      deviceModelRequests.value = requests
+      deviceCategories.value = categories
     } else if (section === 'logs') {
       logsPage.value = await getAdminActionLogs(0, 20)
+      selectedActionLog.value = null
+      isEditingActionLog.value = false
     } else if (section === 'accounts' && isSuperAdmin.value) {
       accountsPage.value = await getAdminAccounts(0, 20)
     }
@@ -222,6 +254,55 @@ async function approveModelRequest(request) {
   }
 }
 
+function startEditingModelRequest(request) {
+  editingModelRequestId.value = request.requestId
+  Object.assign(modelRequestForm, {
+    categoryId: request.categoryId || '',
+    manufacturer: request.manufacturer || '',
+    modelName: request.modelName || '',
+    modelCode: request.modelCode || '',
+    osFamily: request.osFamily || 'ANDROID',
+  })
+  errorMessage.value = ''
+  successMessage.value = ''
+}
+
+function cancelEditingModelRequest() {
+  editingModelRequestId.value = null
+}
+
+async function saveModelRequest(request) {
+  if (
+    !modelRequestForm.categoryId
+    || !modelRequestForm.manufacturer.trim()
+    || !modelRequestForm.modelName.trim()
+  ) {
+    errorMessage.value = '카테고리, 제조사와 모델명을 입력해 주세요.'
+    return
+  }
+  isSavingModelRequest.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+  try {
+    const updated = await updateDeviceModelRequest(request.requestId, {
+      categoryId: Number(modelRequestForm.categoryId),
+      manufacturer: modelRequestForm.manufacturer.trim(),
+      modelName: modelRequestForm.modelName.trim(),
+      modelCode: modelRequestForm.modelCode.trim() || null,
+      osFamily: modelRequestForm.osFamily,
+    })
+    deviceModelRequests.value = deviceModelRequests.value.map((item) => (
+      item.requestId === updated.requestId ? updated : item
+    ))
+    editingModelRequestId.value = null
+    successMessage.value = '모델 요청 정보를 수정했습니다. 확인 후 승인해 주세요.'
+  } catch (error) {
+    showError(error, '기기 모델 요청을 수정하지 못했습니다.')
+  } finally {
+    isSavingModelRequest.value = false
+  }
+}
+
 async function rejectModelRequest(request) {
   const note = window.prompt('반려 사유를 입력해 주세요.')
   if (!note) return
@@ -232,6 +313,63 @@ async function rejectModelRequest(request) {
     successMessage.value = '기기 모델 요청을 반려했습니다.'
   } catch (error) {
     showError(error, '기기 모델 요청을 반려하지 못했습니다.')
+  }
+}
+
+function formatActionLogData(value) {
+  if (!value) return '-'
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2)
+  } catch {
+    return value
+  }
+}
+
+async function selectActionLog(log) {
+  isLoadingActionLog.value = true
+  isEditingActionLog.value = false
+  errorMessage.value = ''
+  try {
+    selectedActionLog.value = await getAdminActionLog(log.adminActionLogId)
+    actionLogReason.value = selectedActionLog.value.reason || ''
+  } catch (error) {
+    showError(error, '관리자 작업 로그 상세를 불러오지 못했습니다.')
+  } finally {
+    isLoadingActionLog.value = false
+  }
+}
+
+function startEditingActionLog() {
+  if (!selectedActionLog.value) return
+  actionLogReason.value = selectedActionLog.value.reason || ''
+  isEditingActionLog.value = true
+}
+
+function cancelEditingActionLog() {
+  actionLogReason.value = selectedActionLog.value?.reason || ''
+  isEditingActionLog.value = false
+}
+
+async function saveActionLog() {
+  if (!selectedActionLog.value) return
+  isSavingActionLog.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+  try {
+    const updated = await updateAdminActionLog(
+      selectedActionLog.value.adminActionLogId,
+      { reason: actionLogReason.value.trim() || null },
+    )
+    selectedActionLog.value = updated
+    logsPage.value.content = logsPage.value.content.map((item) => (
+      item.adminActionLogId === updated.adminActionLogId ? updated : item
+    ))
+    isEditingActionLog.value = false
+    successMessage.value = '작업 로그 사유를 수정하고 변경 이력을 남겼습니다.'
+  } catch (error) {
+    showError(error, '관리자 작업 로그를 수정하지 못했습니다.')
+  } finally {
+    isSavingActionLog.value = false
   }
 }
 
@@ -664,21 +802,118 @@ onMounted(() => {
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p class="text-xs font-semibold text-primary">
-              카테고리 #{{ request.categoryId }} · 요청자 #{{ request.requestedByMemberId }}
+              {{ deviceCategoryLabel(request.categoryId) }} · 요청자 #{{ request.requestedByMemberId }}
             </p>
-            <h3 class="mt-1 text-lg font-bold">
-              {{ request.manufacturer }} {{ request.modelName }}
-            </h3>
-            <p class="mt-1 text-xs text-text-sub">
-              {{ request.modelCode || '모델 코드 미입력' }} · {{ request.osFamily }}
-              · {{ formatDate(request.createdAt) }}
-            </p>
+            <template v-if="editingModelRequestId !== request.requestId">
+              <h3 class="mt-1 text-lg font-bold">
+                {{ request.manufacturer }} {{ request.modelName }}
+              </h3>
+              <p class="mt-1 text-xs text-text-sub">
+                {{ request.modelCode || '모델 코드 미입력' }} · {{ request.osFamily }}
+                · {{ formatDate(request.createdAt) }}
+              </p>
+            </template>
           </div>
           <BaseBadge variant="primary">
             {{ request.status }}
           </BaseBadge>
         </div>
-        <div class="mt-5 flex gap-2">
+        <form
+          v-if="editingModelRequestId === request.requestId"
+          class="mt-5 grid gap-3 rounded-md border border-border bg-bg p-4 sm:grid-cols-2"
+          @submit.prevent="saveModelRequest(request)"
+        >
+          <label class="text-xs font-semibold text-text-main sm:col-span-2">
+            카테고리
+            <select
+              v-model="modelRequestForm.categoryId"
+              aria-label="카테고리 수정"
+              required
+              class="mt-2 w-full rounded-md border border-border bg-white px-3 py-2 text-sm font-normal"
+            >
+              <option value="">
+                카테고리 선택
+              </option>
+              <option
+                v-for="category in deviceCategories"
+                :key="category.categoryId"
+                :value="category.categoryId"
+              >
+                {{ category.name }}
+              </option>
+            </select>
+          </label>
+          <label class="text-xs font-semibold text-text-main">
+            제조사
+            <input
+              v-model="modelRequestForm.manufacturer"
+              aria-label="제조사 수정"
+              maxlength="50"
+              required
+              class="mt-2 w-full rounded-md border border-border bg-white px-3 py-2 text-sm font-normal"
+            >
+          </label>
+          <label class="text-xs font-semibold text-text-main">
+            모델명
+            <input
+              v-model="modelRequestForm.modelName"
+              aria-label="모델명 수정"
+              maxlength="100"
+              required
+              class="mt-2 w-full rounded-md border border-border bg-white px-3 py-2 text-sm font-normal"
+            >
+          </label>
+          <label class="text-xs font-semibold text-text-main">
+            모델 코드
+            <input
+              v-model="modelRequestForm.modelCode"
+              aria-label="모델 코드 수정"
+              maxlength="50"
+              class="mt-2 w-full rounded-md border border-border bg-white px-3 py-2 text-sm font-normal"
+            >
+          </label>
+          <label class="text-xs font-semibold text-text-main">
+            운영체제
+            <select
+              v-model="modelRequestForm.osFamily"
+              aria-label="운영체제 수정"
+              class="mt-2 w-full rounded-md border border-border bg-white px-3 py-2 text-sm font-normal"
+            >
+              <option value="ANDROID">Android</option>
+              <option value="IOS">iOS</option>
+              <option value="WINDOWS">Windows</option>
+              <option value="MACOS">macOS</option>
+              <option value="LINUX">Linux</option>
+            </select>
+          </label>
+          <div class="flex gap-2 sm:col-span-2">
+            <BaseButton
+              type="submit"
+              :disabled="isSavingModelRequest"
+            >
+              {{ isSavingModelRequest ? '저장 중…' : '수정 저장' }}
+            </BaseButton>
+            <BaseButton
+              type="button"
+              variant="secondary"
+              :disabled="isSavingModelRequest"
+              @click="cancelEditingModelRequest"
+            >
+              취소
+            </BaseButton>
+          </div>
+        </form>
+        <div
+          v-else
+          class="mt-5 flex gap-2"
+        >
+          <BaseButton
+            type="button"
+            variant="secondary"
+            @click="startEditingModelRequest(request)"
+          >
+            수정
+          </BaseButton>
           <BaseButton
             type="button"
             @click="approveModelRequest(request)"
@@ -853,55 +1088,197 @@ onMounted(() => {
       </BaseCard>
     </section>
 
-    <BaseCard
+    <section
       v-else-if="activeSection === 'logs'"
-      :padded="false"
-      class="overflow-hidden"
+      class="space-y-5"
     >
-      <div class="border-b border-border px-6 py-5">
-        <h2 class="font-bold">
-          감사 가능한 관리자 작업 기록
-        </h2><p class="mt-1 text-xs text-text-sub">
-          총 {{ logsPage.totalElements }}건
+      <BaseCard
+        :padded="false"
+        class="overflow-hidden"
+      >
+        <div class="border-b border-border px-6 py-5">
+          <h2 class="font-bold">
+            감사 가능한 관리자 작업 기록
+          </h2><p class="mt-1 text-xs text-text-sub">
+            총 {{ logsPage.totalElements }}건 · 작업명을 누르면 상세 내용을 확인할 수 있습니다.
+          </p>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[760px] text-left text-sm">
+            <thead class="bg-bg text-text-sub">
+              <tr>
+                <th class="px-5 py-3">
+                  일시
+                </th><th class="px-5 py-3">
+                  관리자
+                </th><th class="px-5 py-3">
+                  작업
+                </th><th class="px-5 py-3">
+                  대상
+                </th><th class="px-5 py-3">
+                  사유
+                </th>
+              </tr>
+            </thead><tbody class="divide-y divide-border">
+              <tr
+                v-for="log in logsPage.content"
+                :key="log.adminActionLogId"
+                :class="selectedActionLog?.adminActionLogId === log.adminActionLogId ? 'bg-accent/50' : ''"
+              >
+                <td class="px-5 py-4 text-text-sub">
+                  {{ formatDate(log.createdAt) }}
+                </td><td class="px-5 py-4">
+                  #{{ log.adminId }}
+                </td><td class="px-5 py-4 font-semibold">
+                  <button
+                    type="button"
+                    class="text-left text-primary underline-offset-2 hover:underline"
+                    @click="selectActionLog(log)"
+                  >
+                    {{ log.actionType }}
+                  </button>
+                </td><td class="px-5 py-4">
+                  {{ log.targetType }} #{{ log.targetId }}
+                </td><td class="max-w-xs px-5 py-4 text-text-sub">
+                  {{ log.reason || '-' }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </BaseCard>
+
+      <BaseCard v-if="isLoadingActionLog">
+        <p
+          role="status"
+          class="py-6 text-center text-sm text-text-sub"
+        >
+          작업 로그 상세 정보를 불러오는 중…
         </p>
-      </div>
-      <div class="overflow-x-auto">
-        <table class="w-full min-w-[760px] text-left text-sm">
-          <thead class="bg-bg text-text-sub">
-            <tr>
-              <th class="px-5 py-3">
-                일시
-              </th><th class="px-5 py-3">
-                관리자
-              </th><th class="px-5 py-3">
-                작업
-              </th><th class="px-5 py-3">
-                대상
-              </th><th class="px-5 py-3">
-                사유
-              </th>
-            </tr>
-          </thead><tbody class="divide-y divide-border">
-            <tr
-              v-for="log in logsPage.content"
-              :key="log.adminActionLogId"
+      </BaseCard>
+
+      <BaseCard
+        v-else-if="selectedActionLog"
+        aria-label="관리자 작업 로그 상세"
+      >
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p class="text-xs font-semibold text-primary">
+              작업 로그 #{{ selectedActionLog.adminActionLogId }}
+            </p>
+            <h3 class="mt-1 text-lg font-bold">
+              {{ selectedActionLog.actionType }}
+            </h3>
+          </div>
+          <BaseButton
+            v-if="!isEditingActionLog"
+            type="button"
+            variant="secondary"
+            @click="startEditingActionLog"
+          >
+            수정
+          </BaseButton>
+        </div>
+
+        <dl class="mt-5 grid gap-4 rounded-md border border-border bg-bg p-4 text-sm sm:grid-cols-2">
+          <div>
+            <dt class="text-xs font-semibold text-text-sub">
+              작업 일시
+            </dt>
+            <dd class="mt-1">
+              {{ formatDate(selectedActionLog.createdAt) }}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-xs font-semibold text-text-sub">
+              관리자
+            </dt>
+            <dd class="mt-1">
+              #{{ selectedActionLog.adminId }}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-xs font-semibold text-text-sub">
+              대상
+            </dt>
+            <dd class="mt-1">
+              {{ selectedActionLog.targetType }} #{{ selectedActionLog.targetId }}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-xs font-semibold text-text-sub">
+              접속 IP
+            </dt>
+            <dd class="mt-1">
+              {{ selectedActionLog.ipAddress || '-' }}
+            </dd>
+          </div>
+        </dl>
+
+        <form
+          v-if="isEditingActionLog"
+          class="mt-5"
+          @submit.prevent="saveActionLog"
+        >
+          <label class="text-sm font-semibold text-text-main">
+            작업 사유
+            <textarea
+              v-model="actionLogReason"
+              aria-label="작업 로그 사유 수정"
+              maxlength="500"
+              class="mt-2 min-h-28 w-full rounded-md border border-border bg-white px-3 py-2 font-normal"
+              placeholder="작업 사유를 입력해 주세요."
+            />
+          </label>
+          <p class="mt-2 text-xs leading-5 text-text-sub">
+            작업 종류·대상·발생 시각은 감사 무결성을 위해 변경할 수 없습니다.
+            사유 수정 전후 값은 별도의 작업 로그로 남습니다.
+          </p>
+          <div class="mt-4 flex gap-2">
+            <BaseButton
+              type="submit"
+              :disabled="isSavingActionLog"
             >
-              <td class="px-5 py-4 text-text-sub">
-                {{ formatDate(log.createdAt) }}
-              </td><td class="px-5 py-4">
-                #{{ log.adminId }}
-              </td><td class="px-5 py-4 font-semibold">
-                {{ log.actionType }}
-              </td><td class="px-5 py-4">
-                {{ log.targetType }} #{{ log.targetId }}
-              </td><td class="max-w-xs px-5 py-4 text-text-sub">
-                {{ log.reason || '-' }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </BaseCard>
+              {{ isSavingActionLog ? '저장 중…' : '수정 저장' }}
+            </BaseButton>
+            <BaseButton
+              type="button"
+              variant="secondary"
+              :disabled="isSavingActionLog"
+              @click="cancelEditingActionLog"
+            >
+              취소
+            </BaseButton>
+          </div>
+        </form>
+        <div
+          v-else
+          class="mt-5"
+        >
+          <h4 class="text-sm font-semibold">
+            작업 사유
+          </h4>
+          <p class="mt-2 whitespace-pre-wrap rounded-md bg-bg px-4 py-3 text-sm text-text-sub">
+            {{ selectedActionLog.reason || '-' }}
+          </p>
+        </div>
+
+        <div class="mt-5 grid gap-4 lg:grid-cols-2">
+          <div>
+            <h4 class="text-sm font-semibold">
+              변경 전 데이터
+            </h4>
+            <pre class="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-slate-950 p-4 text-xs text-slate-100">{{ formatActionLogData(selectedActionLog.beforeData) }}</pre>
+          </div>
+          <div>
+            <h4 class="text-sm font-semibold">
+              변경 후 데이터
+            </h4>
+            <pre class="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-slate-950 p-4 text-xs text-slate-100">{{ formatActionLogData(selectedActionLog.afterData) }}</pre>
+          </div>
+        </div>
+      </BaseCard>
+    </section>
 
     <section
       v-else-if="activeSection === 'accounts' && isSuperAdmin"

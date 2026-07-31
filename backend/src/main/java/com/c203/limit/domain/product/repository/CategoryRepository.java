@@ -24,12 +24,14 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
     @Query(
             """
             SELECT category
-              FROM Category category
+             FROM Category category
              WHERE category.modelCode IS NOT NULL
+               AND category.isActive = true
                AND (:categoryId IS NULL OR category.parent.id = :categoryId OR category.id = :categoryId)
                AND (:manufacturerId IS NULL OR category.manufacturerId = :manufacturerId)
                AND (:keyword IS NULL OR LOWER(category.name) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                    OR LOWER(category.manufacturer) LIKE LOWER(CONCAT('%', :keyword, '%')))
+                    OR LOWER(category.manufacturer) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                    OR LOWER(category.modelCode) LIKE LOWER(CONCAT('%', :keyword, '%')))
              ORDER BY category.displayOrder ASC, category.id ASC
             """)
     Page<Category> findModels(

@@ -17,6 +17,13 @@ public interface DeviceModelRequestRepository extends JpaRepository<DeviceModelR
             String modelName,
             DeviceModelRequestStatus status);
 
+    boolean existsByParentCategoryIdAndManufacturerIgnoreCaseAndModelNameIgnoreCaseAndStatusAndIdNot(
+            Long parentCategoryId,
+            String manufacturer,
+            String modelName,
+            DeviceModelRequestStatus status,
+            Long id);
+
     List<DeviceModelRequest> findByStatusOrderByCreatedAtAsc(DeviceModelRequestStatus status);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

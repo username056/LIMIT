@@ -32,6 +32,14 @@ export function getAdminActionLogs(page = 0, size = 20) {
   return apiClient.get(`/admin/action-logs${pageQuery(page, size)}`)
 }
 
+export function getAdminActionLog(actionLogId) {
+  return apiClient.get(`/admin/action-logs/${actionLogId}`)
+}
+
+export function updateAdminActionLog(actionLogId, payload) {
+  return apiClient.patch(`/admin/action-logs/${actionLogId}`, payload)
+}
+
 export function getAdminAccounts(page = 0, size = 20) {
   return apiClient.get(`/admin/accounts${pageQuery(page, size)}`)
 }
@@ -62,6 +70,10 @@ export function retryChecklistResearch(researchId) {
 
 export function getDeviceModelRequests(status = 'PENDING') {
   return apiClient.get(`/admin/device-model-requests?status=${encodeURIComponent(status)}`)
+}
+
+export function updateDeviceModelRequest(requestId, payload) {
+  return apiClient.patch(`/admin/device-model-requests/${requestId}`, payload)
 }
 
 export function approveDeviceModelRequest(requestId, payload) {

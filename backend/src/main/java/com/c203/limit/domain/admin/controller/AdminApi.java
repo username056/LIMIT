@@ -8,6 +8,8 @@ import com.c203.limit.domain.admin.dto.request.ReleaseMemberRestrictionRequest;
 import com.c203.limit.domain.admin.dto.request.ReviewChecklistResearchRequest;
 import com.c203.limit.domain.admin.dto.request.ReviewDeviceModelRequest;
 import com.c203.limit.domain.admin.dto.request.UpdateAdminAccountAccessRequest;
+import com.c203.limit.domain.admin.dto.request.UpdateAdminActionLogRequest;
+import com.c203.limit.domain.admin.dto.request.UpdateDeviceModelRequest;
 import com.c203.limit.domain.inspection.enums.ModelChecklistResearchStatus;
 import com.c203.limit.domain.product.entity.DeviceModelRequestStatus;
 import io.swagger.v3.oas.annotations.Operation;
@@ -75,6 +77,12 @@ public interface AdminApi {
     @GetMapping("/action-logs/{actionLogId}")
     ResponseEntity<?> getActionLog(@PathVariable("actionLogId") Long actionLogId);
 
+    @Operation(summary = "관리자 작업 로그 사유 수정", security = @SecurityRequirement(name = "bearerAuth"))
+    @PatchMapping("/action-logs/{actionLogId}")
+    ResponseEntity<?> updateActionLog(
+            @PathVariable("actionLogId") Long actionLogId,
+            @Valid @RequestBody UpdateAdminActionLogRequest request);
+
     @Operation(summary = "관리자 계정 목록 조회", security = @SecurityRequirement(name = "bearerAuth"))
     @GetMapping("/accounts")
     ResponseEntity<?> listAdminAccounts(
@@ -123,6 +131,12 @@ public interface AdminApi {
     @GetMapping("/device-model-requests")
     ResponseEntity<?> listDeviceModelRequests(
             @RequestParam(required = false) DeviceModelRequestStatus status);
+
+    @Operation(summary = "직접 입력 기기 모델 요청 수정", security = @SecurityRequirement(name = "bearerAuth"))
+    @PatchMapping("/device-model-requests/{requestId}")
+    ResponseEntity<?> updateDeviceModelRequest(
+            @PathVariable("requestId") Long requestId,
+            @Valid @RequestBody UpdateDeviceModelRequest request);
 
     @Operation(summary = "직접 입력 기기 모델 요청 승인", security = @SecurityRequirement(name = "bearerAuth"))
     @PostMapping("/device-model-requests/{requestId}/approval")
