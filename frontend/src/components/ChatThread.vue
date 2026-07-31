@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getChatMediaBlob, getChatMessages, uploadChatMedia } from '../api/chat'
 import { createChatSocket } from '../api/chatSocket'
 import { getMyReinspectionRequests, getProduct, getProductChecklist } from '../api/products'
@@ -38,6 +38,8 @@ const appointmentAnchorSequence = ref(0)
 const anchoredAppointmentId = ref(null)
 const fileInput = ref(null)
 const messageList = ref(null)
+const expandedImage = ref(null)
+let previousBodyOverflow = null
 let chatSocket = null
 let nextPendingMessageId = -1
 let connectionVersion = 0
@@ -51,6 +53,26 @@ async function scrollToLatest() {
   await nextTick()
   const element = messageList.value
   if (element) element.scrollTop = element.scrollHeight
+}
+
+function openImage(image) {
+  if (previousBodyOverflow === null) {
+    previousBodyOverflow = document.body.style.overflow
+  }
+  document.body.style.overflow = 'hidden'
+  expandedImage.value = image
+}
+
+function closeImage() {
+  expandedImage.value = null
+  if (previousBodyOverflow !== null) {
+    document.body.style.overflow = previousBodyOverflow
+    previousBodyOverflow = null
+  }
+}
+
+function handleImageDialogKeydown(event) {
+  if (event.key === 'Escape' && expandedImage.value) closeImage()
 }
 
 async function attachMediaUrls(message) {
@@ -537,13 +559,22 @@ function remainingSessionTime(expiresAt) {
   return `${minutes}분 ${seconds}초`
 }
 
+onMounted(() => {
+  window.addEventListener('keydown', handleImageDialogKeydown)
+})
+
 onBeforeUnmount(() => {
+  if (previousBodyOverflow !== null) {
+    document.body.style.overflow = previousBodyOverflow
+    previousBodyOverflow = null
+  }
   connectionVersion += 1
   clearTimeout(reconnectTimer)
   clearInterval(countdownTimer)
   socketStatus.value = 'closed'
   chatSocket?.close()
   mediaObjectUrls.forEach((url) => URL.revokeObjectURL(url))
+  window.removeEventListener('keydown', handleImageDialogKeydown)
 })
 </script>
 
@@ -817,13 +848,26 @@ onBeforeUnmount(() => {
               {{ message.content }}
             </template>
             <template v-else>
-              <img
+              <button
                 v-if="message.type === 'IMAGE' && message.media?.[0]?.displayUrl"
-                :src="message.media[0].displayUrl"
-                :alt="message.content || '채팅 이미지'"
-                class="max-h-72 rounded-md object-contain"
-                @load="scrollToLatest"
+                type="button"
+                class="group relative block cursor-zoom-in overflow-hidden rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                :aria-label="`${message.content || '채팅 이미지'} 확대 보기`"
+                @click="openImage({
+                  src: message.media[0].displayUrl,
+                  alt: message.content || '채팅 이미지',
+                })"
               >
+                <img
+                  :src="message.media[0].displayUrl"
+                  :alt="message.content || '채팅 이미지'"
+                  class="max-h-72 object-contain transition-transform duration-200 group-hover:scale-[1.02]"
+                  @load="scrollToLatest"
+                >
+                <span class="pointer-events-none absolute bottom-2 right-2 rounded-full bg-black/60 px-2 py-1 text-[11px] font-semibold text-white">
+                  확대
+                </span>
+              </button>
               <video
                 v-else-if="message.type === 'VIDEO' && message.media?.[0]?.displayUrl"
                 :src="message.media[0].displayUrl"
@@ -1084,6 +1128,29 @@ onBeforeUnmount(() => {
           전송
         </button>
       </form>
+    </div>
+
+    <div
+      v-if="expandedImage"
+      role="dialog"
+      aria-modal="true"
+      aria-label="채팅 이미지 확대 보기"
+      class="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-4 sm:p-8"
+      @click.self="closeImage"
+    >
+      <button
+        type="button"
+        class="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-2xl text-white transition hover:bg-white/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+        aria-label="확대 이미지 닫기"
+        @click="closeImage"
+      >
+        ×
+      </button>
+      <img
+        :src="expandedImage.src"
+        :alt="expandedImage.alt"
+        class="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
+      >
     </div>
   </div>
 </template>
