@@ -82,6 +82,7 @@ public class ChatMediaService {
                     media.getFileSizeBytes());
             return ChatMediaResponse.from(media);
         } catch (IOException | SdkException exception) {
+            log.error("chat media upload failed: roomId={}", roomId, exception);
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "채팅 파일을 저장하지 못했습니다.");
         }
     }
