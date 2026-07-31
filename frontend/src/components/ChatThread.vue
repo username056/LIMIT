@@ -39,7 +39,7 @@ const anchoredAppointmentId = ref(null)
 const fileInput = ref(null)
 const messageList = ref(null)
 const expandedImage = ref(null)
-let previousBodyOverflow = ''
+let previousBodyOverflow = null
 let chatSocket = null
 let nextPendingMessageId = -1
 let connectionVersion = 0
@@ -56,14 +56,19 @@ async function scrollToLatest() {
 }
 
 function openImage(image) {
-  previousBodyOverflow = document.body.style.overflow
+  if (previousBodyOverflow === null) {
+    previousBodyOverflow = document.body.style.overflow
+  }
   document.body.style.overflow = 'hidden'
   expandedImage.value = image
 }
 
 function closeImage() {
   expandedImage.value = null
-  document.body.style.overflow = previousBodyOverflow
+  if (previousBodyOverflow !== null) {
+    document.body.style.overflow = previousBodyOverflow
+    previousBodyOverflow = null
+  }
 }
 
 function handleImageDialogKeydown(event) {
@@ -559,7 +564,10 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  if (expandedImage.value) document.body.style.overflow = previousBodyOverflow
+  if (previousBodyOverflow !== null) {
+    document.body.style.overflow = previousBodyOverflow
+    previousBodyOverflow = null
+  }
   connectionVersion += 1
   clearTimeout(reconnectTimer)
   clearInterval(countdownTimer)
