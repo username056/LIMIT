@@ -23,6 +23,8 @@ vi.mock('../../api/products', () => ({
   getMyReinspectionRequests: vi.fn(),
 }))
 
+const futureSessionExpiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+
 const outgoingCall = {
   callId: 20,
   status: 'PROPOSED',
@@ -33,7 +35,7 @@ const outgoingCall = {
   proposerId: 1,
   respondentId: 2,
   counterpartName: '상대 회원',
-  sessionExpiresAt: '2026-08-01T16:00:00',
+  sessionExpiresAt: futureSessionExpiresAt,
 }
 
 const layoutStub = { template: '<main><slot /></main>' }
@@ -69,7 +71,7 @@ describe('CallsPage', () => {
         counterpartNickname: '상대 회원',
       }],
     })
-    getRtcSession.mockResolvedValue({ expiresAt: '2026-08-01T16:00:00' })
+    getRtcSession.mockResolvedValue({ expiresAt: futureSessionExpiresAt })
     getMyReinspectionRequests.mockResolvedValue([])
   })
 
