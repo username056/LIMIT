@@ -4,11 +4,14 @@ import com.c203.limit.global.common.BaseTimeEntity;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import jakarta.persistence.*;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Set;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * 중고 전자기기 매물(상품). DDL: listing. seller_id/buyer_id는 회원 도메인 참조라 FK 없이 ID만 보관한다.
@@ -51,6 +54,18 @@ public class Listing extends BaseTimeEntity {
     @Column(name = "custom_model_name", length = 100)
     private String customModelName;
 
+    /**
+     * 새 카탈로그의 모델 참조. 이관 시점에 device_model.model_id가 리프 category.id를 그대로
+     * 물려받았으므로 기존 매물은 category_id와 같은 값을 갖는다. 카탈로그 전환이 끝나면
+     * {@link #category}를 걷어내고 이 열만 남긴다.
+     */
+    @Column(name = "device_model_id")
+    private Long deviceModelId;
+
+    /** 선택한 실제 판매 조합. 등록 화면 개편(4단계) 전까지는 채워지지 않는다. */
+    @Column(name = "device_variant_id")
+    private Long deviceVariantId;
+
     @Column(nullable = false, length = 200)
     private String title;
 
@@ -65,6 +80,30 @@ public class Listing extends BaseTimeEntity {
 
     @Column(name = "storage_gb")
     private Integer storageGb;
+
+    @Column(name = "screen_size_inches", precision = 4, scale = 2)
+    private BigDecimal screenSizeInches;
+
+    @Column(name = "memory_gb")
+    private Integer memoryGb;
+
+    @Column(name = "connectivity", length = 20)
+    private String connectivity;
+
+    /**
+     * 등록 시점에 선택한 사양을 얼려 둔 JSON. 카탈로그가 나중에 수정돼도 이미 등록된 매물이
+     * 어떤 사양으로 팔렸는지는 바뀌지 않아야 한다.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "spec_snapshot")
+    private String specSnapshot;
+
+    /**
+     * 조회수 영속 스냅샷. 실시간 증가는 Redis가 맡고 이 값은 주기적으로 동기화된다(7단계).
+     * Redis 장애 시 정렬·노출의 기본값으로 쓴다.
+     */
+    @Column(name = "view_count", nullable = false)
+    private long viewCount;
 
     @Column(name = "trade_region", length = 100)
     private String tradeRegion;
@@ -161,6 +200,20 @@ public class Listing extends BaseTimeEntity {
     public void applyCustomModel(String customManufacturer, String customModelName) {
         this.customManufacturer = trimToNull(customManufacturer);
         this.customModelName = trimToNull(customModelName);
+    }
+
+    /**
+     * 등록 시점의 카탈로그 참조와 사양 스냅샷을 확정한다.
+     *
+     * <p>스냅샷은 한 번 정해지면 카탈로그가 바뀌어도 따라 변하지 않는다. 판매자가 상품 정보를
+     * 고치는 경로({@link #updateBySeller})에서는 건드리지 않는다 — 그 경로가 스냅샷을 다시 쓰면
+     * '등록 시점 사양을 보존한다'는 성질이 사라진다.
+     */
+    public void applyCatalogSelection(
+            Long deviceModelId, Long deviceVariantId, String specSnapshot) {
+        this.deviceModelId = deviceModelId;
+        this.deviceVariantId = deviceVariantId;
+        this.specSnapshot = specSnapshot;
     }
 
     private static String trimToNull(String value) {
