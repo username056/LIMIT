@@ -47,6 +47,13 @@ function mountThread() {
   })
 }
 
+function localDateTimeMinutesFromNow(minutes) {
+  const date = new Date(Date.now() + minutes * 60 * 1000)
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60 * 1000)
+    .toISOString()
+    .slice(0, 16)
+}
+
 describe('ChatThread', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -250,6 +257,7 @@ describe('ChatThread', () => {
   })
 
   it('채팅방에서 통화 시간과 메모로 약속을 요청한다', async () => {
+    const scheduledAt = localDateTimeMinutesFromNow(60)
     requestRtcCall.mockResolvedValue({ callId: 30, status: 'PROPOSED' })
     getMyRtcCalls
       .mockResolvedValueOnce([])
@@ -257,20 +265,20 @@ describe('ChatThread', () => {
         callId: 30,
         chatRoomId: 10,
         status: 'PROPOSED',
-        scheduledAt: '2026-08-01T15:30:00',
+        scheduledAt: `${scheduledAt}:00`,
         incoming: false,
       }])
     const wrapper = mountThread()
     await flushPromises()
 
     await wrapper.findAll('button').find((button) => button.text().includes('실시간 검증 일정 잡기')).trigger('click')
-    await wrapper.get('input[type="datetime-local"]').setValue('2026-08-01T15:30')
+    await wrapper.get('input[type="datetime-local"]').setValue(scheduledAt)
     await wrapper.get('input[placeholder="확인할 내용을 입력하세요."]').setValue('배터리 확인')
     await wrapper.find('form:has(input[type="datetime-local"])').trigger('submit')
     await flushPromises()
 
     expect(requestRtcCall).toHaveBeenCalledWith(10, {
-      scheduledAt: '2026-08-01T15:30:00',
+      scheduledAt: `${scheduledAt}:00`,
       memo: '배터리 확인',
     })
     expect(wrapper.text()).toContain('통화 약속을 요청했습니다.')
@@ -369,7 +377,7 @@ describe('ChatThread', () => {
       callId: 32,
       chatRoomId: 10,
       status: 'PROPOSED',
-      scheduledAt: '2026-08-03T14:00:00',
+      scheduledAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
       incoming: false,
     }])
     const wrapper = mountThread()
@@ -402,7 +410,7 @@ describe('ChatThread', () => {
         callId: 40,
         chatRoomId: 10,
         status: 'PROPOSED',
-        scheduledAt: '2026-08-04T14:00:00',
+        scheduledAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
         incoming: true,
       }])
     const wrapper = mountThread()
