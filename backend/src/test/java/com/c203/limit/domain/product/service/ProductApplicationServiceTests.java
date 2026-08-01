@@ -482,6 +482,7 @@ class ProductApplicationServiceTests {
     @Test
     void loadsChecklistCountsAndThumbnailsOnceForAProductPage() {
         Listing first = listing();
+        ReflectionTestUtils.setField(first, "viewCount", 128L);
         Listing second = listing();
         ReflectionTestUtils.setField(second, "id", 1002L);
         var page = new PageImpl<>(List.of(first, second));
@@ -508,6 +509,7 @@ class ProductApplicationServiceTests {
         assertThat(result.content().get(0).getVerificationStatus()).isEqualTo("COMPLETED");
         assertThat(result.content().get(0).getThumbnailUrl())
                 .isEqualTo("https://cdn.example.com/1001.jpg");
+        assertThat(result.content().get(0).getViewCount()).isEqualTo(128L);
         verify(checklistItemRepository).countRequiredByListingIds(
                 List.of(1001L, 1002L), ChecklistItemCompletionStatus.COMPLETED, EvidenceType.SELLER_CONFIRMATION);
         verify(imageRepository).findFirstByListingIdsAndImageType(
@@ -517,6 +519,29 @@ class ProductApplicationServiceTests {
                 any(Specification.class),
                 argThat((Pageable pageable) ->
                         pageable.getSort().getOrderFor("price").isAscending()));
+    }
+
+    @Test
+    void sortsPublicProductsByViewCountWithStableTieBreakers() {
+        when(listingRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        service.findPublic(
+                null, null, null, null, null, null, null, null, null, null, null, 0, 20,
+                "viewCount,desc");
+
+        verify(listingRepository).findAll(
+                any(Specification.class),
+                argThat((Pageable pageable) -> {
+                    var orders = pageable.getSort().stream().toList();
+                    return orders.size() == 3
+                            && orders.get(0).getProperty().equals("viewCount")
+                            && orders.get(0).isDescending()
+                            && orders.get(1).getProperty().equals("createdAt")
+                            && orders.get(1).isDescending()
+                            && orders.get(2).getProperty().equals("id")
+                            && orders.get(2).isDescending();
+                }));
     }
 
     @Test

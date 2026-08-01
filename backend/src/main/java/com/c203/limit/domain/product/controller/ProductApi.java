@@ -74,7 +74,7 @@ public interface ProductApi {
     @DeleteMapping(path = "/api/v1/products/{productId}")
     ResponseEntity<Void> deleteProduct(@PathVariable Long productId);
 
-    @Operation(operationId = "product04", summary = "상품 목록 조회", description = "공개 판매 상품을 기기·가격·지역·검증 상태로 검색합니다. 정렬은 createdAt, price를 지원하며 `필드,asc|desc` 형식입니다.")
+    @Operation(operationId = "product04", summary = "상품 목록 조회", description = "공개 판매 상품을 기기·가격·지역·검증 상태로 검색합니다. 정렬은 createdAt, price, viewCount를 지원하며 `필드,asc|desc` 형식입니다. 조회수 높은 순은 `viewCount,desc`입니다.")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "상품 목록 조회 성공", content = @Content(schema = @Schema(implementation = ProductSummaryPageApiResponse.class)))
     @GetMapping(path = "/api/v1/products", produces = MediaType.APPLICATION_JSON_VALUE)
     ResponseEntity<ApiResponse<List<ProductSummaryResponse>>> getProducts(

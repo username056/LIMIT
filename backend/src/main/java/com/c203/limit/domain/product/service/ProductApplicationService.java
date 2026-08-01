@@ -63,8 +63,8 @@ public class ProductApplicationService {
     private static final Logger log = LoggerFactory.getLogger(ProductApplicationService.class);
     private static final int MAX_PAGE_SIZE = 100;
     private static final ZoneId PRODUCT_TIME_ZONE = ZoneId.of("Asia/Seoul");
-    // 중복 조회 방지 전에는 조작 가능한 viewCount 정렬을 공개하지 않는다.
-    private static final Set<String> PUBLIC_SORT_FIELDS = Set.of("createdAt", "price");
+    private static final Set<String> PUBLIC_SORT_FIELDS =
+            Set.of("createdAt", "price", "viewCount");
     private static final Set<String> MY_SORT_FIELDS = Set.of("updatedAt", "createdAt", "price");
 
     private final ListingRepository listingRepository;
@@ -697,7 +697,11 @@ public class ProductApplicationService {
         } catch (IllegalArgumentException exception) {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
         }
-        return Sort.by(direction, parts[0]);
+        Sort requested = Sort.by(direction, parts[0]);
+        if ("viewCount".equals(parts[0])) {
+            return requested.and(Sort.by(Sort.Direction.DESC, "createdAt", "id"));
+        }
+        return requested;
     }
 
     private record ProductMetrics(
