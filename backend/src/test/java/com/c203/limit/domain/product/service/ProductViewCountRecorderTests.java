@@ -1,6 +1,7 @@
 package com.c203.limit.domain.product.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -31,7 +32,7 @@ class ProductViewCountRecorderTests {
         assertThat(recorder.record(7L)).isTrue();
     }
 
-    /** 숨김·판매 완료·삭제 매물의 조회수가 올라가면 인기순이 그 매물을 끌어올린다. */
+    /** 숨김·판매 완료·삭제 매물은 공개 조회수 집계 대상이 아니다. */
     @Test
     void doesNotRecordWhenListingIsNotPublic() {
         when(listingRepository.increaseViewCount(7L)).thenReturn(0);
@@ -39,13 +40,14 @@ class ProductViewCountRecorderTests {
         assertThat(recorder.record(7L)).isFalse();
     }
 
-    /** 집계는 부가 기능이다. 실패가 상세 조회를 막으면 손해가 훨씬 크다. */
+    /** 트랜잭션 프록시 밖의 디스패처가 종료 단계 예외까지 처리할 수 있도록 실패를 전파한다. */
     @Test
-    void swallowsFailureSoDetailStillResponds() {
+    void propagatesFailureToDispatcher() {
         when(listingRepository.increaseViewCount(7L))
                 .thenThrow(new DataAccessResourceFailureException("db down"));
 
-        assertThat(recorder.record(7L)).isFalse();
+        assertThatThrownBy(() -> recorder.record(7L))
+                .isInstanceOf(DataAccessResourceFailureException.class);
     }
 
     @Test

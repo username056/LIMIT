@@ -10,6 +10,7 @@ import java.util.Set;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -18,6 +19,7 @@ import org.hibernate.type.SqlTypes;
  */
 @Entity
 @Getter
+@DynamicUpdate
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "listing")
 public class Listing extends BaseTimeEntity {
@@ -98,10 +100,7 @@ public class Listing extends BaseTimeEntity {
     @Column(name = "spec_snapshot")
     private String specSnapshot;
 
-    /**
-     * 조회수 영속 스냅샷. 실시간 증가는 Redis가 맡고 이 값은 주기적으로 동기화된다(7단계).
-     * Redis 장애 시 정렬·노출의 기본값으로 쓴다.
-     */
+    /** 공개 상세 조회수. 일반 엔티티 수정이 원자 증가 결과를 덮어쓰지 않도록 동적 UPDATE를 사용한다. */
     @Column(name = "view_count", nullable = false)
     private long viewCount;
 

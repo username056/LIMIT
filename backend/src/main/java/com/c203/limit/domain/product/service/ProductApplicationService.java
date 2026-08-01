@@ -54,19 +54,17 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.beans.factory.annotation.Autowired;
 
 @Service
 public class ProductApplicationService {
     private static final Logger log = LoggerFactory.getLogger(ProductApplicationService.class);
     private static final int MAX_PAGE_SIZE = 100;
     private static final ZoneId PRODUCT_TIME_ZONE = ZoneId.of("Asia/Seoul");
-    // viewCount는 공개 목록에만 연다. 판매자 본인 목록은 내 상품을 관리하는 화면이라
-    // 인기순으로 볼 이유가 없다.
-    private static final Set<String> PUBLIC_SORT_FIELDS =
-            Set.of("createdAt", "price", "viewCount");
+    // 중복 조회 방지 전에는 조작 가능한 viewCount 정렬을 공개하지 않는다.
+    private static final Set<String> PUBLIC_SORT_FIELDS = Set.of("createdAt", "price");
     private static final Set<String> MY_SORT_FIELDS = Set.of("updatedAt", "createdAt", "price");
 
     private final ListingRepository listingRepository;
@@ -78,10 +76,8 @@ public class ProductApplicationService {
     private final ListingImageRepository imageRepository;
     private final MediaUrlResolver mediaUrlResolver;
 
-    /** 조회수 집계. 테스트용 보조 생성자에서는 주입하지 않으므로 null일 수 있다. */
-    private final ProductViewCountRecorder viewCountRecorder;
+    private final ProductViewCountDispatcher viewCountDispatcher;
 
-    @Autowired
     public ProductApplicationService(
             ListingRepository listingRepository,
             CategoryRepository categoryRepository,
@@ -91,8 +87,8 @@ public class ProductApplicationService {
             ListingStatusHistoryRepository statusHistoryRepository,
             ListingImageRepository imageRepository,
             MediaUrlResolver mediaUrlResolver,
-            ProductViewCountRecorder viewCountRecorder) {
-        this.viewCountRecorder = viewCountRecorder;
+            ProductViewCountDispatcher viewCountDispatcher) {
+        this.viewCountDispatcher = viewCountDispatcher;
         this.listingRepository = listingRepository;
         this.categoryRepository = categoryRepository;
         this.templateRepository = templateRepository;
@@ -101,26 +97,6 @@ public class ProductApplicationService {
         this.statusHistoryRepository = statusHistoryRepository;
         this.imageRepository = imageRepository;
         this.mediaUrlResolver = mediaUrlResolver;
-    }
-
-    public ProductApplicationService(
-            ListingRepository listingRepository,
-            CategoryRepository categoryRepository,
-            ChecklistTemplateRepository templateRepository,
-            ChecklistTemplateItemRepository templateItemRepository,
-            ListingChecklistItemRepository checklistItemRepository,
-            ListingStatusHistoryRepository statusHistoryRepository,
-            ListingImageRepository imageRepository) {
-        this(
-                listingRepository,
-                categoryRepository,
-                templateRepository,
-                templateItemRepository,
-                checklistItemRepository,
-                statusHistoryRepository,
-                imageRepository,
-                null,
-                null);
     }
 
     @Transactional
@@ -318,18 +294,18 @@ public class ProductApplicationService {
                 result.hasNext());
     }
 
-    /**
-     * 공개 상세 조회. 조회수를 먼저 올리고 그 결과가 반영된 매물을 돌려준다.
-     *
-     * <p>집계는 별도 트랜잭션이라 실패해도 조회는 정상 응답한다. 순서를 증가 → 조회로 둔 이유는,
-     * 반대로 하면 방금 올린 내 조회가 응답에 안 보여 사용자가 집계가 안 된다고 오해하기 때문이다.
-     */
+    /** 공개 상세 조회가 정상 구성된 뒤 조회수 집계를 비동기로 예약한다. */
     @Transactional(readOnly = true)
     public ProductDetailResponse findPublicDetail(Long productId) {
-        if (viewCountRecorder != null) viewCountRecorder.record(productId);
-        return detail(listingRepository
+        ProductDetailResponse response = detail(listingRepository
                 .findByIdAndStatusAndDeletedAtIsNull(productId, ListingStatus.ON_SALE)
                 .orElseThrow(() -> new BusinessException(ErrorCode.LISTING_NOT_FOUND)));
+        try {
+            viewCountDispatcher.dispatch(productId);
+        } catch (TaskRejectedException exception) {
+            log.warn("product view count task rejected: productId={}", productId);
+        }
+        return response;
     }
 
     @Transactional(readOnly = true)

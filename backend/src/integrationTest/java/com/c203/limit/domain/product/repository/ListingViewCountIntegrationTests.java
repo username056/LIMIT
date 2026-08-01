@@ -3,8 +3,8 @@ package com.c203.limit.domain.product.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.c203.limit.domain.product.service.ProductViewCountRecorder;
+import com.c203.limit.domain.product.entity.Listing;
 import com.c203.limit.testsupport.AbstractMySqlIntegrationTest;
-import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -14,12 +14,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 조회수 증가가 동시 요청에서 유실되지 않는지 확인한다.
  *
  * <p>엔티티를 읽어 +1 하고 저장하는 방식이면 여기서 갱신이 유실된다. 상세 조회는 서비스에서 가장
- * 동시성이 높은 경로라 이 유실이 실제로 발생하고, 그대로 두면 인기순 정렬의 근거가 무너진다.
+ * 동시성이 높은 경로라 원자 증가와 일반 상품 수정 사이의 상호작용도 함께 검증한다.
  */
 @SpringBootTest(
         properties =
@@ -39,7 +41,11 @@ class ListingViewCountIntegrationTests extends AbstractMySqlIntegrationTest {
      */
     @Autowired ProductViewCountRecorder viewCountRecorder;
 
+    @Autowired ListingRepository listingRepository;
+
     @Autowired JdbcTemplate jdbcTemplate;
+
+    @Autowired PlatformTransactionManager transactionManager;
 
     private int recordView(Long listingId) {
         return viewCountRecorder.record(listingId) ? 1 : 0;
@@ -98,25 +104,31 @@ class ListingViewCountIntegrationTests extends AbstractMySqlIntegrationTest {
         assertThat(recordView(-1L)).isZero();
     }
 
-    /** 인기순 정렬이 실제로 조회수 내림차순인지 확인한다. */
+    /** 판매자 수정이 먼저 읽은 오래된 값으로 원자 증가 결과를 되돌리면 안 된다. */
     @Test
-    void ordersByViewCountDescending() {
-        Long low = insertListing("ON_SALE");
-        Long high = insertListing("ON_SALE");
-        recordView(low);
-        for (int i = 0; i < 5; i++) recordView(high);
+    void sellerUpdateDoesNotOverwriteRecordedView() {
+        Long listingId = insertListing("ON_SALE");
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
 
-        List<Long> ordered = jdbcTemplate.queryForList(
-                """
-                SELECT id FROM listing
-                 WHERE status = 'ON_SALE' AND deleted_at IS NULL AND id IN (?, ?)
-                 ORDER BY view_count DESC
-                """,
-                Long.class,
-                low,
-                high);
+        transaction.executeWithoutResult(ignored -> {
+            Listing listing = listingRepository.findById(listingId).orElseThrow();
+            assertThat(recordView(listingId)).isEqualTo(1);
+            listing.updateBySeller(
+                    "조회수 보존 검증",
+                    null,
+                    false,
+                    null,
+                    null,
+                    false,
+                    null,
+                    false,
+                    null);
+        });
 
-        assertThat(ordered).containsExactly(high, low);
+        assertThat(viewCount(listingId)).isEqualTo(1L);
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT title FROM listing WHERE id = ?", String.class, listingId))
+                .isEqualTo("조회수 보존 검증");
     }
 
     private long viewCount(Long listingId) {

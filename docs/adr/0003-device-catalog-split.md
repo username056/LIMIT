@@ -79,13 +79,9 @@
   실제 조합과 일치한다는 보장이 없고, 추정해서 채우면 "실조합만 선택 가능"이라는 규칙의 근거가
   무너진다.
 - `spec_snapshot`은 등록 시점에만 쓰고 판매자 수정 경로에서는 갱신하지 않는다.
-- 두 구조를 병행하는 동안 모델 데이터가 두 곳에 존재한다. `category`에 직접 INSERT하는 경로는
-  새 테이블에도 함께 써야 한다. **한쪽만 쓰면 그 모델로 등록한 상품이 `fk_listing_device_model`
-  위반으로 실패한다** — 상품 등록이 `listing.device_model_id`에 리프 `category.id`를 넣기
-  때문이다. 승인 경로(`DeviceModelRequestService.approve`)는 `DeviceCatalogRegistrar`가 같은
-  트랜잭션에서 반영한다. 시드 마이그레이션 등 다른 경로를 추가할 때도 같은 규칙을 지켜야 한다.
-- 이 계약 때문에 `DeviceModel`의 id는 채번하지 않고(assigned) 대응하는 리프 `category.id`를
-  그대로 받는다. IDENTITY로 두면 새로 승인된 모델의 두 id가 어긋난다.
+- 두 구조를 병행하는 동안 모델 데이터가 두 곳에 존재한다. 이관 이후 `category`에 직접 INSERT하는
+  경로(`DeviceModelRequestService.approve`)는 새 테이블에도 함께 써야 하며, 이는 후속 단계에서
+  처리한다.
 
 ## 관련 마이그레이션
 
