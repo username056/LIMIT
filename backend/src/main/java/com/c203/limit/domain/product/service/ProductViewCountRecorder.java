@@ -1,6 +1,8 @@
 package com.c203.limit.domain.product.service;
 
 import com.c203.limit.domain.product.repository.ListingRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,6 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ProductViewCountRecorder {
 
+    private static final Logger log = LoggerFactory.getLogger(ProductViewCountRecorder.class);
+
     private final ListingRepository listingRepository;
 
     public ProductViewCountRecorder(ListingRepository listingRepository) {
@@ -28,7 +32,10 @@ public class ProductViewCountRecorder {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean record(Long productId) {
-        if (productId == null) return false;
+        if (productId == null) {
+            log.warn("product view count ignored: productId is missing");
+            return false;
+        }
         return listingRepository.increaseViewCount(productId) > 0;
     }
 }
