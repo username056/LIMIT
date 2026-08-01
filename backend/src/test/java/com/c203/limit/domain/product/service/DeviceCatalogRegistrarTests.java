@@ -106,6 +106,20 @@ class DeviceCatalogRegistrarTests {
         verify(manufacturerRepository).saveAndFlush(any());
     }
 
+    /** CRC32가 충돌해도 서로 다른 제조사를 같은 행으로 조용히 합치면 안 된다. */
+    @Test
+    void rejectsManufacturerIdCollision() {
+        givenCatalog();
+        when(manufacturerRepository.findById(Manufacturer.idOf("Samsung")))
+                .thenReturn(Optional.of(Manufacturer.create("Apple")));
+
+        assertThatThrownBy(() -> registrar.register(leaf()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("manufacturer id collision");
+        verify(manufacturerRepository, never()).saveAndFlush(any());
+        verify(modelRepository, never()).saveAndFlush(any());
+    }
+
     /** 승인 재시도나 이관 이후 재실행에서 문서가 두 번 생기면 안 된다. */
     @Test
     void doesNothingWhenAlreadyRegistered() {

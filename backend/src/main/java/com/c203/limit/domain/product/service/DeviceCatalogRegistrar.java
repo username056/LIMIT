@@ -101,8 +101,13 @@ public class DeviceCatalogRegistrar {
     private Manufacturer manufacturer(String name) {
         Long id = Manufacturer.idOf(name);
         if (id == null) return null;
-        return manufacturerRepository
-                .findById(id)
-                .orElseGet(() -> manufacturerRepository.saveAndFlush(Manufacturer.create(name)));
+        Optional<Manufacturer> existing = manufacturerRepository.findById(id);
+        if (existing.isPresent()) {
+            if (!existing.get().hasSameNormalizedName(name)) {
+                throw new IllegalStateException("manufacturer id collision: manufacturerId=" + id);
+            }
+            return existing.get();
+        }
+        return manufacturerRepository.saveAndFlush(Manufacturer.create(name));
     }
 }
