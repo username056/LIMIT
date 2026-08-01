@@ -54,15 +54,16 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.beans.factory.annotation.Autowired;
 
 @Service
 public class ProductApplicationService {
     private static final Logger log = LoggerFactory.getLogger(ProductApplicationService.class);
     private static final int MAX_PAGE_SIZE = 100;
     private static final ZoneId PRODUCT_TIME_ZONE = ZoneId.of("Asia/Seoul");
+    // 중복 조회 방지 전에는 조작 가능한 viewCount 정렬을 공개하지 않는다.
     private static final Set<String> PUBLIC_SORT_FIELDS = Set.of("createdAt", "price");
     private static final Set<String> MY_SORT_FIELDS = Set.of("updatedAt", "createdAt", "price");
 
@@ -75,25 +76,7 @@ public class ProductApplicationService {
     private final ListingImageRepository imageRepository;
     private final MediaUrlResolver mediaUrlResolver;
 
-    @Autowired
-    public ProductApplicationService(
-            ListingRepository listingRepository,
-            CategoryRepository categoryRepository,
-            ChecklistTemplateRepository templateRepository,
-            ChecklistTemplateItemRepository templateItemRepository,
-            ListingChecklistItemRepository checklistItemRepository,
-            ListingStatusHistoryRepository statusHistoryRepository,
-            ListingImageRepository imageRepository,
-            MediaUrlResolver mediaUrlResolver) {
-        this.listingRepository = listingRepository;
-        this.categoryRepository = categoryRepository;
-        this.templateRepository = templateRepository;
-        this.templateItemRepository = templateItemRepository;
-        this.checklistItemRepository = checklistItemRepository;
-        this.statusHistoryRepository = statusHistoryRepository;
-        this.imageRepository = imageRepository;
-        this.mediaUrlResolver = mediaUrlResolver;
-    }
+    private final ProductViewCountDispatcher viewCountDispatcher;
 
     public ProductApplicationService(
             ListingRepository listingRepository,
@@ -102,16 +85,18 @@ public class ProductApplicationService {
             ChecklistTemplateItemRepository templateItemRepository,
             ListingChecklistItemRepository checklistItemRepository,
             ListingStatusHistoryRepository statusHistoryRepository,
-            ListingImageRepository imageRepository) {
-        this(
-                listingRepository,
-                categoryRepository,
-                templateRepository,
-                templateItemRepository,
-                checklistItemRepository,
-                statusHistoryRepository,
-                imageRepository,
-                null);
+            ListingImageRepository imageRepository,
+            MediaUrlResolver mediaUrlResolver,
+            ProductViewCountDispatcher viewCountDispatcher) {
+        this.viewCountDispatcher = viewCountDispatcher;
+        this.listingRepository = listingRepository;
+        this.categoryRepository = categoryRepository;
+        this.templateRepository = templateRepository;
+        this.templateItemRepository = templateItemRepository;
+        this.checklistItemRepository = checklistItemRepository;
+        this.statusHistoryRepository = statusHistoryRepository;
+        this.imageRepository = imageRepository;
+        this.mediaUrlResolver = mediaUrlResolver;
     }
 
     @Transactional
@@ -309,11 +294,18 @@ public class ProductApplicationService {
                 result.hasNext());
     }
 
+    /** 공개 상세 조회가 정상 구성된 뒤 조회수 집계를 비동기로 예약한다. */
     @Transactional(readOnly = true)
     public ProductDetailResponse findPublicDetail(Long productId) {
-        return detail(listingRepository
+        ProductDetailResponse response = detail(listingRepository
                 .findByIdAndStatusAndDeletedAtIsNull(productId, ListingStatus.ON_SALE)
                 .orElseThrow(() -> new BusinessException(ErrorCode.LISTING_NOT_FOUND)));
+        try {
+            viewCountDispatcher.dispatch(productId);
+        } catch (TaskRejectedException exception) {
+            log.warn("product view count task rejected: productId={}", productId);
+        }
+        return response;
     }
 
     @Transactional(readOnly = true)
@@ -479,7 +471,8 @@ public class ProductApplicationService {
                 metrics.completedRequired(),
                 metrics.required(),
                 metrics.thumbnailUrl(),
-                listing.getTradeRegion());
+                listing.getTradeRegion(),
+                listing.getViewCount());
     }
 
     private ChecklistSummaryResponse checklistSummary(ProductMetrics metrics) {
