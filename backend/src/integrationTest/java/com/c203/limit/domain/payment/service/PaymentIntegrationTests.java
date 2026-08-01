@@ -75,7 +75,7 @@ class PaymentIntegrationTests extends AbstractMySqlIntegrationTest {
         paymentRepository.deleteAll();
         listingStatusHistoryRepository.deleteAll();
         listingRepository.deleteAll();
-        categoryRepository.deleteAll();
+        categoryRepository.deleteById(categoryId);
         memberRepository.deleteAll();
     }
 
