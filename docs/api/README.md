@@ -57,9 +57,6 @@
 - DTO: `backend/src/main/java/com/c203/limit/domain/<domain>/dto/{request,response,event}/*.java`
 - 공통 응답: `backend/src/main/java/com/c203/limit/global/response`
 - Swagger 설정: `backend/src/main/java/com/c203/limit/global/config/swagger`
-- 생성기: `scripts/generate-openapi-stubs.py`
-
-API/DTO 내보내기 파일에서 106개 고유 operation을 생성합니다. 동일 method/path로 정의된 상품 action 2개는 하나의 operation으로 병합됩니다. 생성기는 공통 응답 DTO를 다시 만들지 않으며 기존 `*Controller` 구현을 덮어쓰지 않습니다.
 
 미구현 Controller는 계약 확인을 위해 빈 `200` 응답을 반환합니다. Swagger UI와 API docs는 기본 비활성화하며 local 또는 명시적으로 허용한 환경에서만 활성화합니다.
 
