@@ -19,9 +19,11 @@ pr_agent_review:
   variables:
     GIT_STRATEGY: none
     CONFIG__GIT_PROVIDER: "gitlab"
-    CONFIG__MODEL: "gpt-5-mini"
+    # GMS 크레딧 절감을 위해 gpt-5-mini(5 크레딧)에서 내렸다.
+    # CONFIG__REASONING_EFFORT는 추론 모델 전용이라 이 모델에서는 제거한다 — 남겨 두면
+    # 게이트웨이가 지원하지 않는 파라미터로 요청이 거부될 수 있다.
+    CONFIG__MODEL: "gpt-4o-mini"
     CONFIG__FALLBACK_MODELS: '[]'
-    CONFIG__REASONING_EFFORT: "low"
     GITLAB__URL: "$CI_SERVER_URL"
     OPENAI__API_BASE: "https://gms.ssafy.io/gmsapi/api.openai.com/v1"
   script:
