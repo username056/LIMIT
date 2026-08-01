@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import com.c203.limit.domain.product.dto.response.ChecklistTemplateResponse;
 import com.c203.limit.domain.product.dto.response.DeviceCategoryResponse;
 import com.c203.limit.domain.product.dto.response.DeviceModelDetailResponse;
+import com.c203.limit.domain.product.dto.response.DeviceModelOptionsResponse;
 import com.c203.limit.domain.product.dto.response.DeviceModelSummaryResponse;
 import com.c203.limit.domain.product.dto.response.HandoverGuideResponse;
 import com.c203.limit.global.response.ApiResponse;
@@ -51,6 +52,24 @@ public interface ProductCatalogApi {
     })
     @GetMapping(path = "/api/v1/device-models/{deviceModelId}", produces = MediaType.APPLICATION_JSON_VALUE)
     ResponseEntity<ApiResponse<DeviceModelDetailResponse>> getDeviceModel(@PathVariable Long deviceModelId);
+
+    @Operation(operationId = "model03", summary = "모델 판매 옵션 조회", description = "이미 고른 축의 값을 넘기면 그 조건에서 실제로 존재하는 다음 옵션만 돌려줍니다. 각 축의 후보는 자기 축의 선택을 제외한 나머지 조건으로 계산하므로, 앞 단계 선택을 바꿔도 막다른 길이 생기지 않습니다.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "판매 옵션 조회 성공", content = @Content(schema = @Schema(implementation = DeviceModelOptionsResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "INVALID_INPUT_VALUE — 어떤 조합과도 맞지 않는 선택"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "DEVICE_MODEL_NOT_FOUND")
+    })
+    @GetMapping(path = "/api/v1/device-models/{deviceModelId}/options", produces = MediaType.APPLICATION_JSON_VALUE)
+    ResponseEntity<ApiResponse<DeviceModelOptionsResponse>> getDeviceModelOptions(
+            @PathVariable Long deviceModelId,
+            @RequestParam(required = false) String color,
+            @RequestParam(required = false) String storageGb,
+            @RequestParam(required = false) String memoryGb,
+            @RequestParam(required = false) String screenSizeInches,
+            @RequestParam(required = false) String cpu,
+            @RequestParam(required = false) String gpu,
+            @RequestParam(required = false) String connectivity
+    );
 
     @Operation(operationId = "checklist01", summary = "모델 체크리스트 템플릿 조회", description = "상품 등록 시 스냅샷으로 고정될 현재 PUBLISHED 템플릿을 조회합니다.")
     @ApiResponses({
