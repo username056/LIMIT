@@ -23,19 +23,17 @@ vi.mock('../../api/products', () => ({
   getMyReinspectionRequests: vi.fn(),
 }))
 
-const futureSessionExpiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString()
-
 const outgoingCall = {
   callId: 20,
   status: 'PROPOSED',
   incoming: false,
-  scheduledAt: '2026-08-01T14:00:00',
+  scheduledAt: '2099-08-01T14:00:00',
   memo: '제품 상태 확인',
   rtcSessionId: null,
   proposerId: 1,
   respondentId: 2,
   counterpartName: '상대 회원',
-  sessionExpiresAt: futureSessionExpiresAt,
+  sessionExpiresAt: '2099-08-01T14:30:00',
 }
 
 const layoutStub = { template: '<main><slot /></main>' }
@@ -71,7 +69,7 @@ describe('CallsPage', () => {
         counterpartNickname: '상대 회원',
       }],
     })
-    getRtcSession.mockResolvedValue({ expiresAt: futureSessionExpiresAt })
+    getRtcSession.mockResolvedValue({ expiresAt: '2099-08-01T14:30:00' })
     getMyReinspectionRequests.mockResolvedValue([])
   })
 
@@ -111,7 +109,7 @@ describe('CallsPage', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('상대 회원')
-    expect(wrapper.text()).toContain('2026년 8월 1일')
+    expect(wrapper.text()).toContain('2099년 8월 1일')
     expect(wrapper.text()).toContain('세션 만료까지')
   })
 
