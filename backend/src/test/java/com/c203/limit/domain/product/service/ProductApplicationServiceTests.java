@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -64,13 +66,15 @@ class ProductApplicationServiceTests {
     @Mock ListingChecklistItemRepository checklistItemRepository;
     @Mock ListingStatusHistoryRepository statusHistoryRepository;
     @Mock ListingImageRepository imageRepository;
+    @Mock ProductViewCountDispatcher viewCountDispatcher;
     ProductApplicationService service;
 
     @BeforeEach
     void setUp() {
         service = new ProductApplicationService(
                 listingRepository, categoryRepository, templateRepository, templateItemRepository,
-                checklistItemRepository, statusHistoryRepository, imageRepository);
+                checklistItemRepository, statusHistoryRepository, imageRepository, null,
+                viewCountDispatcher);
     }
 
     @Test
@@ -214,6 +218,34 @@ class ProductApplicationServiceTests {
                         BusinessException.class,
                         exception -> assertThat(exception.getErrorCode())
                                 .isEqualTo(ErrorCode.LISTING_NOT_FOUND));
+        verify(viewCountDispatcher, never()).dispatch(1001L);
+    }
+
+    @Test
+    void publicDetailSurvivesRejectedViewCountDispatchAfterBuildingResponse() {
+        Listing listing = listing();
+        listing.completePrecheck();
+        listing.publish();
+        when(listingRepository.findByIdAndStatusAndDeletedAtIsNull(
+                        1001L, ListingStatus.ON_SALE))
+                .thenReturn(Optional.of(listing));
+        when(checklistItemRepository.countRequiredByListingIds(
+                        List.of(1001L),
+                        ChecklistItemCompletionStatus.COMPLETED,
+                        EvidenceType.SELLER_CONFIRMATION))
+                .thenReturn(List.of());
+        when(imageRepository.findFirstByListingIdsAndImageType(
+                        List.of(1001L),
+                        com.c203.limit.domain.product.entity.ListingImageType.THUMBNAIL))
+                .thenReturn(List.of());
+        doThrow(new org.springframework.core.task.TaskRejectedException("queue full"))
+                .when(viewCountDispatcher)
+                .dispatch(1001L);
+
+        var result = service.findPublicDetail(1001L);
+
+        assertThat(result.getProductId()).isEqualTo(1001L);
+        verify(viewCountDispatcher).dispatch(1001L);
     }
 
     @Test
