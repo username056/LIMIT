@@ -63,6 +63,11 @@ public class Manufacturer {
         return crc32.getValue();
     }
 
+    /** CRC32 식별자가 같을 때 실제로도 같은 정규화 이름인지 확인한다. */
+    public boolean hasSameNormalizedName(String name) {
+        return normalizedName.equals(normalize(name));
+    }
+
     private static String normalize(String name) {
         if (name == null || name.isBlank()) return null;
         return name.trim().toLowerCase(Locale.ROOT);

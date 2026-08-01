@@ -32,18 +32,21 @@ public class DeviceModelRequestService {
     private final ChecklistTemplateRepository templateRepository;
     private final ChecklistTemplateItemRepository templateItemRepository;
     private final AdminActionLogRepository actionLogRepository;
+    private final DeviceCatalogRegistrar catalogRegistrar;
 
     public DeviceModelRequestService(
             CategoryRepository categoryRepository,
             DeviceModelRequestRepository requestRepository,
             ChecklistTemplateRepository templateRepository,
             ChecklistTemplateItemRepository templateItemRepository,
-            AdminActionLogRepository actionLogRepository) {
+            AdminActionLogRepository actionLogRepository,
+            DeviceCatalogRegistrar catalogRegistrar) {
         this.categoryRepository = categoryRepository;
         this.requestRepository = requestRepository;
         this.templateRepository = templateRepository;
         this.templateItemRepository = templateItemRepository;
         this.actionLogRepository = actionLogRepository;
+        this.catalogRegistrar = catalogRegistrar;
     }
 
     @Transactional
@@ -157,6 +160,9 @@ public class DeviceModelRequestService {
                 modelCode,
                 List.of(),
                 displayOrder));
+        // category에만 쓰면 이 모델로는 상품 등록이 FK 위반으로 실패한다. 승인과 카탈로그
+        // 반영은 같은 트랜잭션에서 끝나야 한다.
+        catalogRegistrar.register(model);
         ChecklistTemplate template = templateRepository.saveAndFlush(
                 ChecklistTemplate.createDraft(model.getId(), 1));
         templateItemRepository.saveAllAndFlush(sourceItems.stream()

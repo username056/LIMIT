@@ -129,6 +129,12 @@ class OpenApiContractTests {
     com.c203.limit.domain.product.repository.DeviceVariantRepository deviceVariantRepository;
 
     @MockitoBean
+    com.c203.limit.domain.product.repository.DeviceCategoryRepository deviceCategoryRepository;
+
+    @MockitoBean
+    com.c203.limit.domain.product.repository.ManufacturerRepository manufacturerRepository;
+
+    @MockitoBean
     WishlistRepository wishlistRepository;
 
     @MockitoBean
