@@ -16,6 +16,8 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +29,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class DeviceCatalogOptionService {
+
+    private static final Logger log = LoggerFactory.getLogger(DeviceCatalogOptionService.class);
 
     private final DeviceModelRepository modelRepository;
     private final DeviceVariantRepository variantRepository;
@@ -46,7 +50,11 @@ public class DeviceCatalogOptionService {
         DeviceModel model = modelRepository
                 .findWithCatalogById(modelId)
                 .filter(DeviceModel::isActive)
-                .orElseThrow(() -> new BusinessException(ErrorCode.DEVICE_MODEL_NOT_FOUND));
+                .orElseThrow(
+                        () -> {
+                            log.warn("device catalog options lookup rejected: modelId={}", modelId);
+                            return new BusinessException(ErrorCode.DEVICE_MODEL_NOT_FOUND);
+                        });
         List<DeviceVariant> variants =
                 variantRepository.findByModelIdAndIsActiveTrueOrderByIdAsc(modelId);
 
