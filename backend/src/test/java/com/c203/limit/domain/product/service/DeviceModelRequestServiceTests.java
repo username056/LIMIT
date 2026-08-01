@@ -38,9 +38,10 @@ class DeviceModelRequestServiceTests {
         ChecklistTemplateItemRepository templateItems =
                 mock(ChecklistTemplateItemRepository.class);
         AdminActionLogRepository logs = mock(AdminActionLogRepository.class);
+        DeviceCatalogRegistrar catalogRegistrar = mock(DeviceCatalogRegistrar.class);
         DeviceModelRequestService service =
                 new DeviceModelRequestService(
-                        categories, requests, templates, templateItems, logs);
+                        categories, requests, templates, templateItems, logs, catalogRegistrar);
         DeviceModelRequest request =
                 DeviceModelRequest.create(
                         7L, 1L, "Samsung", "Galaxy S25", "SM-S931N", OsFamily.ANDROID);
@@ -74,9 +75,10 @@ class DeviceModelRequestServiceTests {
         ChecklistTemplateItemRepository templateItems =
                 mock(ChecklistTemplateItemRepository.class);
         AdminActionLogRepository logs = mock(AdminActionLogRepository.class);
+        DeviceCatalogRegistrar catalogRegistrar = mock(DeviceCatalogRegistrar.class);
         DeviceModelRequestService service =
                 new DeviceModelRequestService(
-                        categories, requests, templates, templateItems, logs);
+                        categories, requests, templates, templateItems, logs, catalogRegistrar);
         DeviceModelRequest request =
                 DeviceModelRequest.create(
                         7L, 1L, "Samsnug", "Galxy S25", "SM-S931", OsFamily.ANDROID);
@@ -113,8 +115,9 @@ class DeviceModelRequestServiceTests {
         ChecklistTemplateItemRepository templateItems =
                 mock(ChecklistTemplateItemRepository.class);
         AdminActionLogRepository logs = mock(AdminActionLogRepository.class);
+        DeviceCatalogRegistrar catalogRegistrar = mock(DeviceCatalogRegistrar.class);
         DeviceModelRequestService service = new DeviceModelRequestService(
-                categories, requests, templates, templateItems, logs);
+                categories, requests, templates, templateItems, logs, catalogRegistrar);
 
         Category parent =
                 Category.createTopLevel("스마트폰", DeviceType.SMARTPHONE, 1);
