@@ -368,11 +368,18 @@ watch(() => [route.query.q, route.query.categoryId], async ([keyword, categoryId
                 @change="search(0)"
               >
                 <option value="createdAt,desc">최신 등록순</option>
+                <option value="viewCount,desc">조회수 높은 순</option>
                 <option value="price,asc">낮은 가격순</option>
                 <option value="price,desc">높은 가격순</option>
               </select>
             </label>
           </div>
+          <p
+            v-if="filters.sort === 'viewCount,desc'"
+            class="-mt-3 mb-5 text-right text-xs text-text-sub"
+          >
+            반복 조회가 포함된 누적 조회수 기준입니다.
+          </p>
 
           <p
             v-if="errorMessage"
