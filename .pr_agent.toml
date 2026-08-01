@@ -1,7 +1,8 @@
 [config]
-model = "gpt-5-mini"
+# GMS 크레딧 절감을 위해 gpt-5-mini(5 크레딧)에서 내렸다.
+# reasoning_effort는 추론 모델 전용 옵션이라 이 모델에서는 제거한다.
+model = "gpt-4o-mini"
 fallback_models = []
-reasoning_effort = "low"
 response_language = "ko-KR"
 
 [pr_reviewer]
