@@ -53,8 +53,8 @@ run_backend_scripts() {
   sh -n scripts/apply-ci-s3-env-remote.sh
   bash -n scripts/apply-ci-s3-env-remote.test.sh
   sh -n scripts/check-backend-logging.sh
+  # Git이 필요한 실제 회귀 테스트는 관련 변경 시 secret_guard Job이 실행한다.
   sh -n scripts/check-backend-logging.test.sh
-  sh scripts/check-backend-logging.test.sh
   bash -n scripts/cors-config.test.sh
   bash -n scripts/deploy-monitoring.sh
   sh -n scripts/configure-rtc-turn.sh
