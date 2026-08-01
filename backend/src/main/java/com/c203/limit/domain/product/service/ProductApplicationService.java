@@ -26,6 +26,7 @@ import com.c203.limit.domain.product.dto.response.ProductSummaryResponse;
 import com.c203.limit.domain.product.entity.Category;
 import com.c203.limit.domain.product.entity.Listing;
 import com.c203.limit.domain.product.entity.ListingImageType;
+import com.c203.limit.domain.product.entity.ListingSpecSnapshot;
 import com.c203.limit.domain.product.entity.ListingStatus;
 import com.c203.limit.domain.product.entity.ListingStatusHistory;
 import com.c203.limit.domain.product.repository.CategoryRepository;
@@ -157,6 +158,27 @@ public class ProductApplicationService {
                 template.getId());
         // '기타 (직접 입력)' 모델 한 행에 여러 기기가 매달리므로 실제 제조사·모델명은 매물에 남긴다.
         draft.applyCustomModel(request.getCustomManufacturer(), request.getCustomModelName());
+        // 카탈로그 참조와 등록 시점 사양을 확정한다. device_model.model_id는 이관 시 리프
+        // category.id를 그대로 물려받았으므로 model.getId()가 곧 모델 참조다. variant 선택은
+        // 등록 화면 개편(4단계) 전까지 들어오지 않아 아직 비워 둔다.
+        draft.applyCatalogSelection(
+                model.getId(),
+                null,
+                ListingSpecSnapshot.of(
+                        request.getCustomManufacturer() == null
+                                ? model.getManufacturer()
+                                : request.getCustomManufacturer(),
+                        request.getCustomModelName() == null
+                                ? model.getName()
+                                : request.getCustomModelName(),
+                        model.getModelCode(),
+                        request.getColor(),
+                        request.getStorageGb(),
+                        null,
+                        null,
+                        null,
+                        null,
+                        null));
         Listing listing = listingRepository.saveAndFlush(draft);
         List<ListingChecklistItem> snapshots = templateItems.stream()
                 .map(item -> ListingChecklistItem.createFromTemplateItem(listing.getId(), item))
