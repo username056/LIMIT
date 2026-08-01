@@ -159,11 +159,8 @@ class DeviceCatalogOptionServiceTests {
     private DeviceModel model() {
         DeviceCategory category = DeviceCategory.create(DeviceType.SMARTPHONE, "일반형 스마트폰", 1);
         ReflectionTestUtils.setField(category, "id", 1L);
-        DeviceModel model =
-                DeviceModel.create(
-                        category, null, "Galaxy S24", "SM-S921N", OsFamily.ANDROID, null, 1);
-        ReflectionTestUtils.setField(model, "id", MODEL_ID);
-        return model;
+        return DeviceModel.create(
+                MODEL_ID, category, null, "Galaxy S24", "SM-S921N", OsFamily.ANDROID, null, 1);
     }
 
     private DeviceVariant variant(String key, String color, Integer storageGb) {

@@ -32,8 +32,15 @@ import lombok.NoArgsConstructor;
 @Table(name = "device_model")
 public class DeviceModel extends BaseTimeEntity {
 
+    /**
+     * 채번하지 않고 대응하는 리프 {@code category.id}를 그대로 받는다.
+     *
+     * <p>이 테이블은 아직 {@code category} 리프의 사본이고, 두 id가 같다는 것이 전제다
+     * ({@code listing.device_model_id}에 {@code listing.category_id}와 같은 값이 들어가고
+     * FK가 걸려 있다). IDENTITY로 채번하면 새로 승인된 모델의 두 id가 어긋나 그 모델로는
+     * 상품 등록이 FK 위반으로 실패한다. 종속 관계를 매핑에 드러낸다.
+     */
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "model_id")
     private Long id;
 
@@ -67,7 +74,11 @@ public class DeviceModel extends BaseTimeEntity {
     @Column(name = "display_order", nullable = false)
     private int displayOrder;
 
+    /**
+     * @param id 대응하는 리프 {@code category.id}. 채번하지 않는 이유는 {@link #id} 주석 참고.
+     */
     public static DeviceModel create(
+            Long id,
             DeviceCategory category,
             Manufacturer manufacturer,
             String modelName,
@@ -75,6 +86,7 @@ public class DeviceModel extends BaseTimeEntity {
             OsFamily osFamily,
             Short releaseYear,
             int displayOrder) {
+        if (id == null) throw new IllegalArgumentException("model id must not be null");
         if (category == null) throw new IllegalArgumentException("category must not be null");
         if (modelName == null || modelName.isBlank()) {
             throw new IllegalArgumentException("model name must not be blank");
@@ -83,6 +95,7 @@ public class DeviceModel extends BaseTimeEntity {
             throw new IllegalArgumentException("model code must not be blank");
         }
         DeviceModel model = new DeviceModel();
+        model.id = id;
         model.category = category;
         model.manufacturer = manufacturer;
         model.modelName = modelName.trim();
