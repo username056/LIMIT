@@ -45,4 +45,7 @@ public class ProductSummaryResponse {
 
     @Schema(example = "서울 강남구")
     private final String tradeRegion;
+
+    @Schema(description = "공개 상세 조회 수. 인기순 정렬의 기준", example = "128")
+    private final Long viewCount;
 }

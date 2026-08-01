@@ -8,7 +8,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.repository.query.Param;
 
 public interface ListingRepository
         extends JpaRepository<Listing, Long>, JpaSpecificationExecutor<Listing> {
@@ -36,4 +39,29 @@ public interface ListingRepository
     @EntityGraph(attributePaths = "category")
     Page<Listing> findBySellerIdAndStatusAndDeletedAtIsNull(
             Long sellerId, ListingStatus status, Pageable pageable);
+
+    /**
+     * 조회수를 DB에서 원자적으로 올린다.
+     *
+     * <p>엔티티를 읽어 +1 하고 저장하면 동시 조회에서 갱신이 유실된다. 조회는 서비스에서 가장
+     * 동시성이 높은 경로라 그 유실이 실제로 발생한다.
+     *
+     * <p>벌크 갱신이라 {@code @Version}을 건드리지 않는 것도 의도한 바다. 조회수가 버전을 올리면
+     * 누군가 상세를 보는 것만으로 판매자의 상품 수정이 낙관적 락 충돌로 실패할 수 있다.
+     *
+     * <p>공개 상태가 아닌 매물은 조건에서 걸러 0을 반환한다. 숨김·판매 완료·삭제된 매물의
+     * 조회수가 올라가면 인기순 정렬이 그 매물을 끌어올린다.
+     *
+     * @return 갱신된 행 수. 0이면 공개 매물이 아니었다는 뜻이다.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(
+            """
+            UPDATE Listing listing
+               SET listing.viewCount = listing.viewCount + 1
+             WHERE listing.id = :listingId
+               AND listing.status = com.c203.limit.domain.product.entity.ListingStatus.ON_SALE
+               AND listing.deletedAt IS NULL
+            """)
+    int increaseViewCount(@Param("listingId") Long listingId);
 }
