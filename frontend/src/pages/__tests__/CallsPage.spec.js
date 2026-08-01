@@ -23,17 +23,25 @@ vi.mock('../../api/products', () => ({
   getMyReinspectionRequests: vi.fn(),
 }))
 
+const futureScheduledAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
+const futureSessionExpiresAt = new Date(futureScheduledAt.getTime() + 30 * 60 * 1000)
+const futureScheduledDateLabel = new Intl.DateTimeFormat('ko-KR', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+}).format(futureScheduledAt)
+
 const outgoingCall = {
   callId: 20,
   status: 'PROPOSED',
   incoming: false,
-  scheduledAt: '2099-08-01T14:00:00',
+  scheduledAt: futureScheduledAt.toISOString(),
   memo: '제품 상태 확인',
   rtcSessionId: null,
   proposerId: 1,
   respondentId: 2,
   counterpartName: '상대 회원',
-  sessionExpiresAt: '2099-08-01T14:30:00',
+  sessionExpiresAt: futureSessionExpiresAt.toISOString(),
 }
 
 const layoutStub = { template: '<main><slot /></main>' }
@@ -69,7 +77,7 @@ describe('CallsPage', () => {
         counterpartNickname: '상대 회원',
       }],
     })
-    getRtcSession.mockResolvedValue({ expiresAt: '2099-08-01T14:30:00' })
+    getRtcSession.mockResolvedValue({ expiresAt: futureSessionExpiresAt.toISOString() })
     getMyReinspectionRequests.mockResolvedValue([])
   })
 
@@ -109,7 +117,7 @@ describe('CallsPage', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('상대 회원')
-    expect(wrapper.text()).toContain('2099년 8월 1일')
+    expect(wrapper.text()).toContain(futureScheduledDateLabel)
     expect(wrapper.text()).toContain('세션 만료까지')
   })
 
