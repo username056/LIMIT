@@ -54,6 +54,7 @@ run_backend_scripts() {
   bash -n scripts/apply-ci-s3-env-remote.test.sh
   sh -n scripts/check-backend-logging.sh
   sh -n scripts/check-backend-logging.test.sh
+  sh scripts/check-backend-logging.test.sh
   bash -n scripts/cors-config.test.sh
   bash -n scripts/deploy-monitoring.sh
   sh -n scripts/configure-rtc-turn.sh
