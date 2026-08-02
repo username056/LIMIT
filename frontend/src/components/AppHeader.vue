@@ -1,11 +1,11 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { logout } from '../api/auth'
 import { clearAuthSession, useAuthSession } from '../auth/session'
 import { SELL_ENTRY_PATH, useSellerGate } from '../auth/sellerGate'
 import SellerNoticeModal from './SellerNoticeModal.vue'
-import limitLogo from '../assets/limit_logo.png'
+import limitLogo from '../assets/real_limt_logo.png'
 
 const props = defineProps({
   navItems: {
@@ -51,6 +51,25 @@ async function goToSell() {
 // 어느 쪽에 쳐야 하는지 헷갈리고, 로고 옆 여백도 답답해집니다.
 const showSearch = computed(() => route.name !== 'home')
 
+/*
+  맨 위에서는 헤더를 투명하게 둡니다. 히어로 배경이 헤더 뒤까지 이어져 화면이
+  한 덩어리로 보입니다. 다만 그대로 두면 스크롤할 때 본문 글자가 헤더 뒤로 지나가며
+  메뉴와 겹쳐 읽히므로, 조금이라도 내리면 배경을 깔아 줍니다.
+  구분선 대신 아주 옅은 그림자로 경계를 냅니다. 선을 그으면 다시 두 조각으로 보입니다.
+*/
+const isScrolled = ref(false)
+
+function syncScrolled() {
+  isScrolled.value = window.scrollY > 8
+}
+
+onMounted(() => {
+  syncScrolled()
+  window.addEventListener('scroll', syncScrolled, { passive: true })
+})
+
+onBeforeUnmount(() => window.removeEventListener('scroll', syncScrolled))
+
 function isActiveNavItem(href) {
   return route.path === href
 }
@@ -81,16 +100,23 @@ async function logoutMember() {
 </script>
 
 <template>
-  <header class="header-glass sticky top-0 z-50 w-full">
+  <header
+    class="header-glass sticky top-0 z-50 w-full"
+    :class="{ 'header-glass--solid': isScrolled }"
+  >
     <div class="mx-auto flex h-[72px] max-w-[1200px] items-center gap-6 px-6 lg:px-10">
       <RouterLink
         to="/"
         class="flex shrink-0 items-center"
       >
+        <!--
+          새 로고는 위아래에 여백이 들어 있어, 예전 로고에 쓰던 -6.4px 보정은 뺍니다.
+          그만큼 글자가 작아 보이므로 높이를 32px에서 40px로 올렸습니다.
+        -->
         <img
           :src="limitLogo"
           alt="LIMIT"
-          class="-mt-[6.4px] h-8 w-auto"
+          class="h-10 w-auto"
         >
       </RouterLink>
 
@@ -406,16 +432,30 @@ async function logoutMember() {
   아래 내용이 비쳐 보이게 하고, 경계는 브랜드 색으로 옅게만 긋습니다.
 */
 .header-glass {
+  background-color: transparent;
+  transition:
+    background-color 0.3s ease,
+    box-shadow 0.3s ease,
+    backdrop-filter 0.3s ease;
+}
+
+/* 조금이라도 내리면 배경이 깔립니다. 선 대신 옅은 그림자로만 경계를 냅니다. */
+.header-glass--solid {
   background-color: rgb(255 255 255 / 85%);
   backdrop-filter: blur(12px);
-  border-bottom: 1px solid transparent;
-  border-image: linear-gradient(90deg, rgb(99 102 241 / 22%) 0%, rgb(147 197 253 / 22%) 100%) 1;
+  box-shadow: 0 1px 12px -4px rgb(76 100 200 / 20%);
 }
 
 /* backdrop-filter를 지원하지 않는 브라우저에서는 불투명 배경으로 둡니다. */
 @supports not (backdrop-filter: blur(12px)) {
-  .header-glass {
+  .header-glass--solid {
     background-color: #fff;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header-glass {
+    transition: none;
   }
 }
 
