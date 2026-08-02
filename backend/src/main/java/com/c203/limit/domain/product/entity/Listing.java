@@ -377,16 +377,29 @@ public class Listing extends BaseTimeEntity {
         this.reservedUntil = reservedUntil;
     }
 
-    /** 결제 완료된 매물을 검수 단계로 전환한다. */
-    public void markInspecting() {
+    /**
+     * 결제 완료 즉시 검수 단계로 전환한다. 이 서비스에는 판매자의 별도 "전달완료" 액션이 없어서,
+     * 결제 확정 시점을 handedOverAt으로 기록하고 그 시점 기준으로 자동 구매확정 기한
+     * (autoConfirmAt)을 함께 계산해 저장한다.
+     */
+    public void enterInspection(LocalDateTime handedOverAt, LocalDateTime autoConfirmAt) {
         requireStatus(ListingStatus.PAID, ErrorCode.LISTING_NOT_PAID);
         this.status = ListingStatus.INSPECTING;
+        this.handedOverAt = handedOverAt;
+        this.autoConfirmAt = autoConfirmAt;
     }
 
-    public void confirm() {
+    /**
+     * 검수 단계의 매물을 구매확정으로 전환한다. buyerId가 주어지면(구매자 본인 요청) 예약 주체와
+     * 일치하는지 검증하고, null이면(자동 구매확정 스케줄러가 기한 경과로 호출) 검증 없이 진행한다.
+     */
+    public void confirm(Long buyerId, LocalDateTime now) {
         requireStatus(ListingStatus.INSPECTING, ErrorCode.LISTING_NOT_INSPECTING);
+        if (buyerId != null && !buyerId.equals(this.buyerId)) {
+            throw new BusinessException(ErrorCode.LISTING_RESERVATION_MISMATCH);
+        }
         this.status = ListingStatus.CONFIRMED;
-        this.confirmedAt = LocalDateTime.now();
+        this.confirmedAt = now;
     }
 
     public void settle() {

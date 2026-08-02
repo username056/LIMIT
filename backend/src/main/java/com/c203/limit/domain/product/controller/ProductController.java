@@ -10,6 +10,9 @@ import com.c203.limit.domain.product.dto.response.ProductCreatedResponse;
 import com.c203.limit.domain.product.dto.response.ProductDetailResponse;
 import com.c203.limit.domain.product.dto.response.ProductStatusTransitionResponse;
 import com.c203.limit.domain.product.dto.response.ProductSummaryResponse;
+import com.c203.limit.domain.product.dto.response.PurchaseConfirmationResponse;
+import com.c203.limit.domain.product.entity.Listing;
+import com.c203.limit.domain.product.service.ListingService;
 import com.c203.limit.domain.product.service.ProductApplicationService;
 import com.c203.limit.domain.product.service.ProductApplicationService.MyProductPage;
 import com.c203.limit.domain.product.service.ProductApplicationService.ProductPage;
@@ -18,6 +21,7 @@ import com.c203.limit.global.response.ApiResponse;
 import com.c203.limit.global.response.PageMetaResponse;
 import com.c203.limit.global.security.CurrentUser;
 import java.math.BigDecimal;
+import java.time.ZoneId;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -26,17 +30,22 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 public class ProductController implements ProductApi {
+    private static final ZoneId PRODUCT_TIME_ZONE = ZoneId.of("Asia/Seoul");
+
     private final ProductApplicationService productService;
+    private final ListingService listingService;
     private final CurrentUser currentUser;
     private final SellerStatusReader sellerStatusReader;
     private final ChecklistGenerationService checklistGenerationService;
 
     public ProductController(
             ProductApplicationService productService,
+            ListingService listingService,
             CurrentUser currentUser,
             SellerStatusReader sellerStatusReader,
             ChecklistGenerationService checklistGenerationService) {
         this.productService = productService;
+        this.listingService = listingService;
         this.currentUser = currentUser;
         this.sellerStatusReader = sellerStatusReader;
         this.checklistGenerationService = checklistGenerationService;
@@ -156,6 +165,18 @@ public class ProductController implements ProductApi {
         ProductStatusTransitionResponse response =
                 productService.transition(currentSellerMemberId(), productId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(response));
+    }
+
+    @Override
+    public ResponseEntity<ApiResponse<PurchaseConfirmationResponse>> confirmPurchase(Long productId) {
+        Listing listing = listingService.confirmByBuyer(productId, currentUser.memberId());
+        PurchaseConfirmationResponse response = new PurchaseConfirmationResponse(
+                listing.getId(),
+                listing.getStatus().name(),
+                listing.getConfirmedAt() == null
+                        ? null
+                        : listing.getConfirmedAt().atZone(PRODUCT_TIME_ZONE).toOffsetDateTime());
+        return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
     private Long currentSellerMemberId() {
