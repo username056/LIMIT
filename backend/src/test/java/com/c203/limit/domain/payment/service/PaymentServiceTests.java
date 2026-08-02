@@ -21,6 +21,8 @@ import com.c203.limit.domain.payment.client.TossPaymentClientException;
 import com.c203.limit.domain.payment.client.TossPaymentResponse;
 import com.c203.limit.domain.payment.dto.request.ConfirmPaymentRequest;
 import com.c203.limit.domain.payment.dto.request.CreatePaymentRequest;
+import com.c203.limit.domain.payment.dto.response.PaymentReconcileOutcome;
+import com.c203.limit.domain.payment.dto.response.PaymentReconcileResponse;
 import com.c203.limit.domain.payment.dto.response.PaymentResponse;
 import com.c203.limit.domain.payment.entity.Payment;
 import com.c203.limit.domain.payment.entity.PaymentMethod;
@@ -417,6 +419,7 @@ class PaymentServiceTests {
         Payment payment = requestedPayment();
         when(paymentRepository.findById(PAYMENT_ID))
                 .thenReturn(Optional.of(payment))
+                .thenReturn(Optional.of(payment))
                 .thenThrow(new RuntimeException("db down"));
         when(tossPaymentClient.confirm(
                         "payment-key-1", payment.getProviderOrderId(), 650_000L, "payment-confirm-" + PAYMENT_ID + "-1"))
@@ -486,7 +489,22 @@ class PaymentServiceTests {
     }
 
     @Test
-    void confirmRejectsWhenPaymentAlreadyApproved() {
+    void confirmReturnsExistingApprovalWhenReplayMatchesApprovedRecord() {
+        Payment payment = requestedPayment();
+        payment.approve(java.math.BigDecimal.valueOf(650_000), "payment-key-1");
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+
+        PaymentResponse response = service.confirm(
+                BUYER_ID,
+                PAYMENT_ID,
+                new ConfirmPaymentRequest("payment-key-1", payment.getProviderOrderId(), 650_000L));
+
+        assertThat(response.getStatus()).isEqualTo("APPROVED");
+        verifyNoInteractions(tossPaymentClient);
+    }
+
+    @Test
+    void confirmRejectsWhenReplayPaymentKeyMismatchesApprovedRecord() {
         Payment payment = requestedPayment();
         payment.approve(java.math.BigDecimal.valueOf(650_000), "txn-1");
         when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
@@ -499,8 +517,27 @@ class PaymentServiceTests {
                         BusinessException.class,
                         exception ->
                                 assertThat(exception.getErrorCode())
-                                        .isEqualTo(ErrorCode.PAYMENT_NOT_CONFIRMABLE));
+                                        .isEqualTo(ErrorCode.PAYMENT_ALREADY_CONFIRMED_MISMATCH));
         verifyNoInteractions(tossPaymentClient);
+    }
+
+    @Test
+    void confirmMarksConfirmAttemptedBeforeCallingToss() {
+        Payment payment = requestedPayment();
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        when(tossPaymentClient.confirm(
+                        "payment-key-1", payment.getProviderOrderId(), 650_000L, "payment-confirm-" + PAYMENT_ID + "-1"))
+                .thenReturn(new TossPaymentResponse(
+                        "payment-key-1", payment.getProviderOrderId(), "DONE", 650_000L, "CARD", null));
+
+        assertThat(payment.getConfirmAttemptedAt()).isNull();
+
+        service.confirm(
+                BUYER_ID,
+                PAYMENT_ID,
+                new ConfirmPaymentRequest("payment-key-1", payment.getProviderOrderId(), 650_000L));
+
+        assertThat(payment.getConfirmAttemptedAt()).isNotNull();
     }
 
     @Test
@@ -546,6 +583,31 @@ class PaymentServiceTests {
                         });
         assertThat(payment.getStatus().name()).isEqualTo("FAILED");
         verify(listingService, never()).markPaid(any(), any());
+        verify(listingService, times(1)).cancelReservation(eq(LISTING_ID), eq(BUYER_ID), any());
+    }
+
+    @Test
+    void confirmKeepsFailedStatusWhenReservationReleaseFailsAfterRejection() {
+        Payment payment = requestedPayment();
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        TossPaymentClientException rejected = mock(TossPaymentClientException.class);
+        when(rejected.isRetryable()).thenReturn(false);
+        when(rejected.getTossMessage()).thenReturn("카드 승인이 거절되었습니다.");
+        when(tossPaymentClient.confirm(any(), any(), anyLong(), any())).thenThrow(rejected);
+        doThrow(new BusinessException(ErrorCode.LISTING_NOT_RESERVED))
+                .when(listingService)
+                .cancelReservation(eq(LISTING_ID), eq(BUYER_ID), any());
+
+        assertThatThrownBy(() -> service.confirm(
+                        BUYER_ID,
+                        PAYMENT_ID,
+                        new ConfirmPaymentRequest("payment-key-1", payment.getProviderOrderId(), 650_000L)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PAYMENT_CONFIRM_REJECTED));
+        assertThat(payment.getStatus().name()).isEqualTo("FAILED");
     }
 
     @Test
@@ -687,5 +749,94 @@ class PaymentServiceTests {
                         exception ->
                                 assertThat(exception.getErrorCode())
                                         .isEqualTo(ErrorCode.PAYMENT_NOT_FOUND));
+    }
+
+    @Test
+    void reconcileRecoversPaymentWhenTossReportsDoneWithMatchingAmount() {
+        Payment payment = requestedPayment();
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        when(tossPaymentClient.findByOrderId(payment.getProviderOrderId()))
+                .thenReturn(new TossPaymentResponse(
+                        "payment-key-1", payment.getProviderOrderId(), "DONE", 650_000L, "CARD", null));
+
+        PaymentReconcileResponse response = service.reconcile(PAYMENT_ID);
+
+        assertThat(response.getOutcome()).isEqualTo(PaymentReconcileOutcome.RECOVERED);
+        assertThat(response.getPayment().getStatus()).isEqualTo("APPROVED");
+        verify(listingService, times(1)).markPaid(LISTING_ID, BUYER_ID);
+    }
+
+    @Test
+    void reconcileTakesNoActionWhenPaymentAlreadyResolved() {
+        Payment payment = requestedPayment();
+        payment.cancel("구매자가 결제 전 예약을 취소함");
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+
+        PaymentReconcileResponse response = service.reconcile(PAYMENT_ID);
+
+        assertThat(response.getOutcome()).isEqualTo(PaymentReconcileOutcome.NO_ACTION);
+        verifyNoInteractions(tossPaymentClient);
+    }
+
+    @Test
+    void reconcileTakesNoActionWhenTossHasNoMatchingRecord() {
+        Payment payment = requestedPayment();
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        TossPaymentClientException notFound = mock(TossPaymentClientException.class);
+        when(notFound.isRetryable()).thenReturn(false);
+        when(tossPaymentClient.findByOrderId(payment.getProviderOrderId())).thenThrow(notFound);
+
+        PaymentReconcileResponse response = service.reconcile(PAYMENT_ID);
+
+        assertThat(response.getOutcome()).isEqualTo(PaymentReconcileOutcome.NO_ACTION);
+        assertThat(payment.getStatus().name()).isEqualTo("REQUESTED");
+    }
+
+    @Test
+    void reconcileThrowsRetryableWhenTossLookupFailsTemporarily() {
+        Payment payment = requestedPayment();
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        TossPaymentClientException retryable = mock(TossPaymentClientException.class);
+        when(retryable.isRetryable()).thenReturn(true);
+        when(tossPaymentClient.findByOrderId(payment.getProviderOrderId())).thenThrow(retryable);
+
+        assertThatThrownBy(() -> service.reconcile(PAYMENT_ID))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PAYMENT_RECONCILE_RETRYABLE));
+        assertThat(payment.getStatus().name()).isEqualTo("REQUESTED");
+    }
+
+    @Test
+    void reconcileThrowsMismatchWhenTossAmountDiffersFromRequestedAmount() {
+        Payment payment = requestedPayment();
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        when(tossPaymentClient.findByOrderId(payment.getProviderOrderId()))
+                .thenReturn(new TossPaymentResponse(
+                        "payment-key-1", payment.getProviderOrderId(), "DONE", 1_000L, "CARD", null));
+
+        assertThatThrownBy(() -> service.reconcile(PAYMENT_ID))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PAYMENT_RECONCILE_MISMATCH));
+        assertThat(payment.getStatus().name()).isEqualTo("REQUESTED");
+    }
+
+    @Test
+    void reconcileTakesNoActionWhenTossStatusIsNotDone() {
+        Payment payment = requestedPayment();
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        when(tossPaymentClient.findByOrderId(payment.getProviderOrderId()))
+                .thenReturn(new TossPaymentResponse(
+                        "payment-key-1", payment.getProviderOrderId(), "READY", 650_000L, "CARD", null));
+
+        PaymentReconcileResponse response = service.reconcile(PAYMENT_ID);
+
+        assertThat(response.getOutcome()).isEqualTo(PaymentReconcileOutcome.NO_ACTION);
+        assertThat(payment.getStatus().name()).isEqualTo("REQUESTED");
     }
 }

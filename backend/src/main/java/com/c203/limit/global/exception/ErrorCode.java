@@ -145,6 +145,14 @@ public enum ErrorCode {
             "PAY014", HttpStatus.CONFLICT, "예약이 만료되었거나 유효하지 않아 결제를 확정할 수 없습니다."),
     PAYMENT_NOT_CANCELLABLE(
             "PAY015", HttpStatus.CONFLICT, "요청 상태의 결제만 취소할 수 있습니다. 이미 승인된 결제는 환불을 이용해 주세요."),
+    PAYMENT_ALREADY_CONFIRMED_MISMATCH(
+            "PAY016",
+            HttpStatus.CONFLICT,
+            "이미 승인된 결제이지만 요청한 결제 키가 승인 기록과 일치하지 않습니다. 고객센터로 문의해 주세요."),
+    PAYMENT_RECONCILE_MISMATCH(
+            "PAY017", HttpStatus.CONFLICT, "PG 조회 결과가 결제 정보와 일치하지 않아 운영자 확인이 필요합니다."),
+    PAYMENT_RECONCILE_RETRYABLE(
+            "PAY018", HttpStatus.SERVICE_UNAVAILABLE, "PG 조회가 일시적으로 실패했습니다. 잠시 후 다시 시도해 주세요."),
 
     // ========== 장소 검색 에러 ==========
     PLACE_SEARCH_UNAVAILABLE("PLC001", HttpStatus.SERVICE_UNAVAILABLE, "장소 검색 설정을 확인해 주세요."),

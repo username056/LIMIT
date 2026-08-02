@@ -15,6 +15,7 @@ import com.c203.limit.domain.admin.service.AdminService;
 import com.c203.limit.domain.auth.service.AuthCookieService;
 import com.c203.limit.domain.inspection.enums.ModelChecklistResearchStatus;
 import com.c203.limit.domain.inspection.service.ModelChecklistResearchService;
+import com.c203.limit.domain.payment.service.PaymentService;
 import com.c203.limit.domain.product.entity.DeviceModelRequestStatus;
 import com.c203.limit.domain.product.service.DeviceModelRequestService;
 import com.c203.limit.global.response.ApiResponse;
@@ -33,6 +34,7 @@ public class AdminController implements AdminApi {
     private final AdminAccountManagementService adminAccountManagementService;
     private final ModelChecklistResearchService checklistResearchService;
     private final DeviceModelRequestService deviceModelRequestService;
+    private final PaymentService paymentService;
     private final CurrentUser currentUser;
     private final AuthCookieService authCookieService;
 
@@ -192,5 +194,10 @@ public class AdminController implements AdminApi {
                 ApiResponse.ok(
                         deviceModelRequestService.reject(
                                 requestId, currentUser.adminId(), request.note())));
+    }
+
+    @Override
+    public ResponseEntity<?> reconcilePayment(Long paymentId) {
+        return ResponseEntity.ok(ApiResponse.ok(paymentService.reconcile(paymentId)));
     }
 }
