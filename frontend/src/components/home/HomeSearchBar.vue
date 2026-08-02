@@ -75,19 +75,25 @@ function submit() {
 </template>
 
 <style scoped>
+/*
+  헤더 판과 같은 유리 결로 맞춥니다. 흰색을 92%까지 얹어 뒤 배경이 살짝만 비치게
+  하고, 테두리와 그림자는 존재만 알 정도로 옅게 둡니다. 진하면 배너 위에서
+  혼자 무겁게 떠 보입니다.
+*/
 .search {
   display: flex;
   align-items: center;
   gap: 12px;
   width: 100%;
-  max-width: 620px;
+  max-width: 660px;
+  height: 50px;
   margin: 0 auto;
-  padding: 10px 10px 10px 22px;
-  background: rgb(255 255 255 / 88%);
-  border: 1px solid rgb(255 255 255 / 90%);
+  padding: 0 6px 0 20px;
+  background: rgb(255 255 255 / 92%);
+  border: 1px solid rgb(99 102 241 / 8%);
   border-radius: var(--radius-pill);
-  box-shadow: 0 14px 40px -14px rgb(76 100 200 / 28%);
-  backdrop-filter: blur(14px);
+  box-shadow: 0 10px 30px rgb(15 23 42 / 5%);
+  backdrop-filter: blur(20px);
   transition:
     box-shadow 0.3s var(--home-ease),
     transform 0.3s var(--home-ease);
@@ -96,7 +102,7 @@ function submit() {
 .search:hover,
 .search:focus-within {
   transform: translateY(-2px);
-  box-shadow: 0 18px 48px -14px rgb(76 100 200 / 36%);
+  box-shadow: 0 14px 36px rgb(15 23 42 / 9%);
 }
 
 .search__icon {
@@ -148,8 +154,8 @@ function submit() {
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  width: 46px;
-  height: 46px;
+  width: 38px;
+  height: 38px;
   border: 0;
   border-radius: var(--radius-pill);
   background: var(--color-primary-gradient);
@@ -173,7 +179,8 @@ function submit() {
 @media (max-width: 640px) {
   .search {
     gap: 8px;
-    padding: 8px 8px 8px 18px;
+    height: 46px;
+    padding: 0 5px 0 16px;
   }
 
   .search__input {
@@ -181,8 +188,8 @@ function submit() {
   }
 
   .search__submit {
-    width: 40px;
-    height: 40px;
+    width: 34px;
+    height: 34px;
   }
 }
 
