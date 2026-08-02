@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class OrderQueryService {
+    private static final Logger log = LoggerFactory.getLogger(OrderQueryService.class);
     private static final ZoneId ORDER_TIME_ZONE = ZoneId.of("Asia/Seoul");
 
     private final PaymentRepository paymentRepository;
@@ -59,6 +62,14 @@ public class OrderQueryService {
     }
 
     private OrderSummaryResponse toOrderSummary(Payment payment, ListingOrderSummary listing) {
+        if (listing == null) {
+            // 결제가 존재하면 매물도 항상 있어야 한다 — 못 찾았다는 건 데이터 정합성 문제라
+            // 운영자가 조사할 신호를 남긴다. 목록 자체는 계속 내려주되(상품명 등은 null) 막지 않는다.
+            log.warn(
+                    "order summary missing listing data: paymentId={}, listingId={}",
+                    payment.getId(),
+                    payment.getListingId());
+        }
         String thumbnailUrl =
                 listing == null ? null : mediaUrlResolver.resolve(listing.s3Key(), listing.cdnUrl());
         return new OrderSummaryResponse(
