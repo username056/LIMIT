@@ -245,7 +245,7 @@ async function logoutMember() {
             </template>
           </div>
         </template>
-        <!-- 글자 크기는 옆의 내비 링크(nav-link, 15px)와 맞춥니다. -->
+        <!-- 글자 크기는 옆의 내비 링크(nav-link, 16px)와 맞춥니다. -->
         <template v-else>
           <RouterLink
             to="/login"
@@ -426,23 +426,26 @@ async function logoutMember() {
 }
 
 /*
-  헤더 내비 링크. 현재 위치는 굵기·색과 함께 아래 밑줄로도 표시합니다.
-  색만으로 구분하면 어디에 있는지 한눈에 안 들어옵니다.
+  헤더 내비 링크. 배포되어 있던 모양 그대로입니다. 굵기·색과 함께 아래 밑줄로
+  현재 위치를 알립니다. 색만으로 구분하면 어디에 있는지 한눈에 안 들어옵니다.
 */
 .nav-link {
   position: relative;
-  padding-bottom: 4px;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   color: #64748b;
   white-space: nowrap;
   transition: color 0.2s ease;
 }
 
+/*
+  밑줄은 글자 밖 8px 아래에 띄웁니다. padding으로 만들면 링크 높이가 늘어나
+  같은 줄에 선 검색창·버튼과 세로 가운데가 어긋납니다.
+*/
 .nav-link::after {
   content: '';
   position: absolute;
-  bottom: 0;
+  bottom: -8px;
   left: 0;
   right: 0;
   height: 2px;
@@ -452,20 +455,21 @@ async function logoutMember() {
 }
 
 .nav-link:hover {
-  color: #0f172a;
+  font-weight: 700;
+  color: #1f2937;
 }
 
 .nav-link:hover::after {
-  background-color: rgb(99 102 241 / 35%);
+  background-color: #6c8dff;
 }
 
 .nav-link--active {
   font-weight: 700;
-  color: #0f172a;
+  color: #1f2937;
 }
 
 .nav-link--active::after {
-  background-color: #6366f1;
+  background-color: #6c8dff;
 }
 
 /*
