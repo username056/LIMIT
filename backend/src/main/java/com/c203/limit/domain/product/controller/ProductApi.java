@@ -26,6 +26,8 @@ import com.c203.limit.domain.product.dto.response.ProductStatusTransitionApiResp
 import com.c203.limit.domain.product.dto.response.ProductStatusTransitionResponse;
 import com.c203.limit.domain.product.dto.response.ProductSummaryPageApiResponse;
 import com.c203.limit.domain.product.dto.response.ProductSummaryResponse;
+import com.c203.limit.domain.product.dto.response.PurchaseConfirmationApiResponse;
+import com.c203.limit.domain.product.dto.response.PurchaseConfirmationResponse;
 import com.c203.limit.global.response.ApiResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -139,4 +141,19 @@ public interface ProductApi {
             @PathVariable Long productId,
             @Valid @RequestBody TransitionProductStatusRequest request
     );
+
+    @Operation(
+            operationId = "product08",
+            summary = "구매확정",
+            description = "검수 단계(INSPECTING)인 상품을 구매자 본인이 구매확정합니다. 확정 기한(자동 "
+                    + "구매확정 기준 시각) 안에 확정하지 않으면 스케줄러가 자동으로 확정 처리합니다.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "구매확정 성공", content = @Content(schema = @Schema(implementation = PurchaseConfirmationApiResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "UNAUTHORIZED"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "LISTING_NOT_FOUND"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "LISTING_NOT_INSPECTING / LISTING_RESERVATION_MISMATCH")
+    })
+    @PostMapping(path = "/api/v1/products/{productId}/purchase-confirmation", produces = MediaType.APPLICATION_JSON_VALUE)
+    ResponseEntity<ApiResponse<PurchaseConfirmationResponse>> confirmPurchase(@PathVariable Long productId);
 }

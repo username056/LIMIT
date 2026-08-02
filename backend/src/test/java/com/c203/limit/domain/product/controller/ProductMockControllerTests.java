@@ -6,9 +6,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.any;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
@@ -18,8 +20,15 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.http.MediaType;
+
+import com.c203.limit.domain.inspection.enums.DeviceType;
+import com.c203.limit.domain.product.entity.Category;
+import com.c203.limit.domain.product.entity.Listing;
+import com.c203.limit.domain.product.entity.ListingStatus;
+import com.c203.limit.domain.product.entity.ListingStatusHistory;
 
 import com.c203.limit.domain.admin.repository.AdminAccountRepository;
 import com.c203.limit.domain.admin.repository.AdminActionLogRepository;
@@ -399,6 +408,34 @@ class ProductMockControllerTests {
         mockMvc.perform(post("/api/v1/checklist-generations")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"deviceModelId\":201}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void confirmsPurchaseForInspectingListingOwnedByBuyer() throws Exception {
+        Category category = Category.createTopLevel("스마트폰", DeviceType.SMARTPHONE, 0);
+        Listing listing = Listing.createDraft(10L, category, "갤럭시 S24", "설명", 650_000, 10L);
+        ReflectionTestUtils.setField(listing, "id", 1001L);
+        ReflectionTestUtils.setField(listing, "status", ListingStatus.INSPECTING);
+        ReflectionTestUtils.setField(listing, "buyerId", 55L);
+        when(listingRepository.findById(1001L)).thenReturn(Optional.of(listing));
+
+        mockMvc.perform(post("/api/v1/products/1001/purchase-confirmation")
+                        .header(
+                                "Authorization",
+                                "Bearer "
+                                        + tokens.issueAccess(55L, "MEMBER", Set.of("MEMBER"))
+                                                .value()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.productId").value(1001))
+                .andExpect(jsonPath("$.data.status").value("CONFIRMED"));
+
+        verify(listingStatusHistoryRepository).save(any(ListingStatusHistory.class));
+    }
+
+    @Test
+    void requiresAuthenticationForPurchaseConfirmation() throws Exception {
+        mockMvc.perform(post("/api/v1/products/1001/purchase-confirmation"))
                 .andExpect(status().isUnauthorized());
     }
 }

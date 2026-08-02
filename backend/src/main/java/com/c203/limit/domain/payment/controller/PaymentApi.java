@@ -56,7 +56,7 @@ public interface PaymentApi {
             summary = "결제 승인(confirm)",
             description = "Toss 결제창에서 승인된 결제를 서버에서 확정합니다. orderId·금액을 저장된 결제 "
                     + "요청과 대조한 뒤 Toss 승인 API를 호출하고, 성공하면 결제를 APPROVED로, 매물을 "
-                    + "PAID로 전환합니다.",
+                    + "PAID를 거쳐 곧바로 INSPECTING(검수중)으로 전환합니다.",
             security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
