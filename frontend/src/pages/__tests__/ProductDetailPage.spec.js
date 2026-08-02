@@ -344,7 +344,7 @@ describe('ProductDetailPage', () => {
     expect(rows[0].text()).toContain('공개 항목')
   })
 
-  it('자동 인식된 사양을 필드별로 보여주고, 값을 누르면 전체 값을 툴팁으로 보여준다', async () => {
+  it('자동 인식된 사양을 필드별로 보여주고, 값에 커서를 올리면 전체 값을 툴팁으로 보여준다', async () => {
     getAccessToken.mockReturnValue(null)
     getProductDiagnosisSummary.mockResolvedValue({
       items: [
@@ -376,18 +376,22 @@ describe('ProductDetailPage', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('자동 인식된 사양')
-    // 원본 파일로 바로 이동하는 링크는 없어야 합니다 — 클릭하면 툴팁으로 전체 값만 보여줍니다.
+    // 원본 파일로 바로 이동하는 링크는 없어야 합니다 — 커서를 올리면 툴팁으로 전체 값만 보여줍니다.
     expect(wrapper.find('a[href="https://cdn.example.test/evidence/1.txt"]').exists()).toBe(false)
 
-    const cpuButton = wrapper.findAll('button')
-      .find((button) => button.text() === '13th Gen Intel(R) Core(TM) i7-13700H')
-    expect(cpuButton).toBeTruthy()
+    const cpuValue = wrapper.findAll('span')
+      .find((node) => node.text() === '13th Gen Intel(R) Core(TM) i7-13700H')
+    expect(cpuValue).toBeTruthy()
     expect(wrapper.find('.bg-slate-800').exists()).toBe(false)
 
-    await cpuButton.trigger('click')
+    // 누르지 않고 올려놓기만 해도 보여야 합니다.
+    await cpuValue.trigger('mouseenter')
     const tooltip = wrapper.find('.bg-slate-800')
     expect(tooltip.exists()).toBe(true)
     expect(tooltip.text()).toBe('13th Gen Intel(R) Core(TM) i7-13700H')
+
+    await cpuValue.trigger('mouseleave')
+    expect(wrapper.find('.bg-slate-800').exists()).toBe(false)
 
     expect(wrapper.text()).toContain('GPU 메모리')
     expect(wrapper.text()).toContain('인식 실패')

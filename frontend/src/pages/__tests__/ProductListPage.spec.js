@@ -324,8 +324,10 @@ describe('ProductListPage', () => {
       const wrapper = mountList()
       await flushPromises()
 
-      // 하트 모양은 늘 같고, 담은 상태는 색으로 구분합니다(흰 하트 → 빨간 하트).
-      expect(wrapper.get('button[aria-label="상품 좋아요 해제"]').classes()).toContain('text-red-500')
+      // 상품 상세와 같은 모양입니다 — 담았으면 채워진 하트에 강조 테두리.
+      const heart = wrapper.get('button[aria-label="상품 좋아요 해제"]')
+      expect(heart.text()).toBe('♥')
+      expect(heart.classes()).toContain('border-primary')
     })
 
     it('하트를 누르면 담고 다시 누르면 해제한다', async () => {
