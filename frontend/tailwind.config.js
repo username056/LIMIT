@@ -7,7 +7,8 @@ export default {
   theme: {
     extend: {
       colors: {
-        bg: '#FAFBFC',
+        // tokens.css의 --color-bg와 같은 값입니다. 한쪽만 바꾸면 화면마다 바탕이 달라집니다.
+        bg: '#F7F8FD',
         surface: '#FFFFFF',
         primary: {
           DEFAULT: '#6C8DFF',
