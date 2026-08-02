@@ -34,7 +34,7 @@ public class ListingService {
             ListingRepository listingRepository,
             ListingStatusHistoryRepository listingStatusHistoryRepository,
             Clock clock,
-            @Value("${limit.product.reservation-ttl-minutes:30}") long reservationTtlMinutes) {
+            @Value("${limit.product.reservation-ttl-minutes:10}") long reservationTtlMinutes) {
         this.listingRepository = listingRepository;
         this.listingStatusHistoryRepository = listingStatusHistoryRepository;
         this.clock = clock;
@@ -85,6 +85,21 @@ public class ListingService {
     public Listing markPaid(Long listingId, Long buyerId) {
         LocalDateTime now = LocalDateTime.now(clock);
         return transition(listingId, buyerId, null, listing -> listing.markPaid(buyerId, now));
+    }
+
+    /**
+     * PG 대사(reconcile)로 Toss 승인을 확인한 결제를 복구할 때만 사용한다. 예약 유예 시간이 이미
+     * 지났어도 결제완료로 전환하는 예외 경로라, 일반 결제 확정({@link #markPaid})과는 별도로
+     * 이력에 남긴다.
+     */
+    @Transactional
+    public Listing markPaidRecoveredFromPg(Long listingId, Long buyerId) {
+        LocalDateTime now = LocalDateTime.now(clock);
+        return transition(
+                listingId,
+                buyerId,
+                "PG 승인 대사로 만료된 예약을 결제완료로 복구함",
+                listing -> listing.markPaidRecoveredFromPg(buyerId, now));
     }
 
     @Transactional

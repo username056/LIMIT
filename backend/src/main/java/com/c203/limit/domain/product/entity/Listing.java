@@ -348,6 +348,22 @@ public class Listing extends BaseTimeEntity {
         this.paidAt = now;
     }
 
+    /**
+     * PG 대사(reconcile)로 Toss가 이미 승인했음을 확인한 결제를 복구할 때 호출한다.
+     * {@link #markPaid(Long, LocalDateTime)}와 달리 예약 유예 시간(reservedUntil)이 이미 지났어도
+     * 허용한다 — 대사 자체가 "시간과 무관하게 PG가 승인했다"는 증거이기 때문이다. 다만 예약 주체
+     * (buyerId)는 여전히 이 결제의 구매자와 일치해야 한다. 그 사이 다른 구매자에게 재배정됐다면
+     * 자동 복구 대상이 아니므로 그대로 거부한다.
+     */
+    public void markPaidRecoveredFromPg(Long buyerId, LocalDateTime now) {
+        requireStatus(ListingStatus.RESERVED, ErrorCode.LISTING_NOT_RESERVED);
+        if (!buyerId.equals(this.buyerId) || this.reservedUntil == null) {
+            throw new BusinessException(ErrorCode.LISTING_RESERVATION_MISMATCH);
+        }
+        this.status = ListingStatus.PAID;
+        this.paidAt = now;
+    }
+
     /** 결제 완료된 매물을 검수 단계로 전환한다. */
     public void markInspecting() {
         requireStatus(ListingStatus.PAID, ErrorCode.LISTING_NOT_PAID);

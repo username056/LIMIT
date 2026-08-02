@@ -763,7 +763,31 @@ class PaymentServiceTests {
 
         assertThat(response.getOutcome()).isEqualTo(PaymentReconcileOutcome.RECOVERED);
         assertThat(response.getPayment().getStatus()).isEqualTo("APPROVED");
-        verify(listingService, times(1)).markPaid(LISTING_ID, BUYER_ID);
+        // TTL이 지난 REQUESTED 건도 복구할 수 있어야 하므로, TTL을 검증하는 markPaid()가 아니라
+        // 대사 전용 markPaidRecoveredFromPg()를 써야 한다.
+        verify(listingService, times(1)).markPaidRecoveredFromPg(LISTING_ID, BUYER_ID);
+        verify(listingService, never()).markPaid(any(), any());
+    }
+
+    @Test
+    void reconcileEscalatesButKeepsApprovalWhenListingRecoveryFails() {
+        Payment payment = requestedPayment();
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        when(tossPaymentClient.findByOrderId(payment.getProviderOrderId()))
+                .thenReturn(new TossPaymentResponse(
+                        "payment-key-1", payment.getProviderOrderId(), "DONE", 650_000L, "CARD", null));
+        doThrow(new BusinessException(ErrorCode.LISTING_RESERVATION_MISMATCH))
+                .when(listingService)
+                .markPaidRecoveredFromPg(LISTING_ID, BUYER_ID);
+
+        assertThatThrownBy(() -> service.reconcile(PAYMENT_ID))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PAYMENT_CONFIRM_RESERVATION_INVALID));
+
+        assertThat(payment.getStatus().name()).isEqualTo("APPROVED");
     }
 
     @Test

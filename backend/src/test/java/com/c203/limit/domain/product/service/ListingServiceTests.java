@@ -33,7 +33,7 @@ class ListingServiceTests {
 
     private static final Long LISTING_ID = 100L;
     private static final Long BUYER_ID = 2L;
-    private static final long RESERVATION_TTL_MINUTES = 30;
+    private static final long RESERVATION_TTL_MINUTES = 10;
     private static final Clock FIXED_CLOCK =
             Clock.fixed(Instant.parse("2026-07-28T00:00:00Z"), ZoneId.systemDefault());
 
@@ -193,6 +193,38 @@ class ListingServiceTests {
         when(listingRepository.findById(LISTING_ID)).thenReturn(Optional.of(listing));
 
         assertThatThrownBy(() -> service.markPaid(LISTING_ID, BUYER_ID + 1))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.LISTING_RESERVATION_MISMATCH));
+        assertThat(listing.getStatus()).isEqualTo(ListingStatus.RESERVED);
+        verifyNoInteractions(listingStatusHistoryRepository);
+    }
+
+    @Test
+    void markPaidRecoveredFromPgTransitionsListingEvenAfterReservationExpired() {
+        Listing listing = listingWithStatus(ListingStatus.RESERVED);
+        ReflectionTestUtils.setField(listing, "buyerId", BUYER_ID);
+        ReflectionTestUtils.setField(
+                listing, "reservedUntil", LocalDateTime.now(FIXED_CLOCK).minusMinutes(30));
+        when(listingRepository.findById(LISTING_ID)).thenReturn(Optional.of(listing));
+
+        Listing result = service.markPaidRecoveredFromPg(LISTING_ID, BUYER_ID);
+
+        assertThat(result.getStatus()).isEqualTo(ListingStatus.PAID);
+        verify(listingStatusHistoryRepository).save(any(ListingStatusHistory.class));
+    }
+
+    @Test
+    void markPaidRecoveredFromPgRejectsWhenReservationBelongsToAnotherBuyer() {
+        Listing listing = listingWithStatus(ListingStatus.RESERVED);
+        ReflectionTestUtils.setField(listing, "buyerId", BUYER_ID);
+        ReflectionTestUtils.setField(
+                listing, "reservedUntil", LocalDateTime.now(FIXED_CLOCK).minusMinutes(30));
+        when(listingRepository.findById(LISTING_ID)).thenReturn(Optional.of(listing));
+
+        assertThatThrownBy(() -> service.markPaidRecoveredFromPg(LISTING_ID, BUYER_ID + 1))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         exception ->

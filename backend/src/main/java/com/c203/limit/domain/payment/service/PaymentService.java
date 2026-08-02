@@ -190,7 +190,7 @@ public class PaymentService {
 
     /**
      * 결제창 진입 전(REQUESTED) 단계에서 구매자가 명시적으로 취소한다. Toss 결제창에서 취소하거나
-     * 브라우저를 닫아도 30분 예약 유예가 끝나야 스케줄러가 매물을 풀어주는데, 이 API는 그 대기 없이
+     * 브라우저를 닫아도 10분 예약 유예가 끝나야 스케줄러가 매물을 풀어주는데, 이 API는 그 대기 없이
      * 즉시 예약을 해제한다 — 스케줄러는 이 호출이 유실됐을 때의 최종 안전망으로 계속 남는다.
      *
      * <p>이미 CANCELLED·EXPIRED인 결제는 사용자가 취소 버튼을 여러 번 누르거나 재접속해도 오류 없이
@@ -394,7 +394,8 @@ public class PaymentService {
         }
 
         Long listingId = approvePayment(paymentId, tossResponse);
-        markListingPaidOrEscalate(listingId, payment.getBuyer().getId(), paymentId, payment.getProviderOrderId());
+        markListingPaidRecoveredOrEscalate(
+                listingId, payment.getBuyer().getId(), paymentId, payment.getProviderOrderId());
         Payment recovered = paymentRepository
                 .findById(paymentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_NOT_FOUND));
@@ -446,11 +447,41 @@ public class PaymentService {
      * 돈은 빠져나갔는데 우리 DB에는 승인 흔적이 남지 않는, 더 추적하기 어려운 상태가 된다. 원인이
      * 업무 규칙 위반이든 일시적 인프라 장애든 동일하게 운영자가 이 로그로 정산/환불을 수동 처리해야
      * 하므로 BusinessException으로 좁히지 않고 RuntimeException 전체를 잡는다.
+     *
+     * <p>일반 confirm() 경로에서는 예약 유예 시간(TTL) 검증이 살아있는 {@link ListingService#markPaid}
+     * 를 그대로 써야 한다 — 이미 다른 구매자에게 넘어갔거나 만료된 예약을 결제완료로 덮어쓰면 안
+     * 되기 때문이다.
      */
     private void markListingPaidOrEscalate(
             Long listingId, Long buyerId, Long paymentId, String providerOrderId) {
+        applyListingPaidTransitionOrEscalate(
+                paymentId,
+                listingId,
+                buyerId,
+                providerOrderId,
+                () -> listingService.markPaid(listingId, buyerId));
+    }
+
+    /**
+     * PG 대사(reconcile)로 Toss 승인을 확인한 결제를 복구할 때만 쓴다. 예약 유예 시간이 이미
+     * 지났어도 결제완료로 전환하는 {@link ListingService#markPaidRecoveredFromPg}를 호출한다 —
+     * 여기서 일반 markPaid()를 쓰면 대사 대상(=TTL이 이미 지난 REQUESTED 건)일수록 항상 실패하는
+     * 자기모순이 생긴다.
+     */
+    private void markListingPaidRecoveredOrEscalate(
+            Long listingId, Long buyerId, Long paymentId, String providerOrderId) {
+        applyListingPaidTransitionOrEscalate(
+                paymentId,
+                listingId,
+                buyerId,
+                providerOrderId,
+                () -> listingService.markPaidRecoveredFromPg(listingId, buyerId));
+    }
+
+    private void applyListingPaidTransitionOrEscalate(
+            Long paymentId, Long listingId, Long buyerId, String providerOrderId, Runnable transition) {
         try {
-            listingService.markPaid(listingId, buyerId);
+            transition.run();
         } catch (RuntimeException exception) {
             log.error(
                     "payment approved by PG but listing could not be marked paid, needs manual "
