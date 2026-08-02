@@ -6,33 +6,58 @@ import BaseCard from '../components/BaseCard.vue'
 import BaseButton from '../components/BaseButton.vue'
 import { confirmPayment } from '../api/payment'
 
+// 서버가 일시적 오류로 보고 재시도를 허용하는 코드만 "다시 승인 시도"를 보여준다(같은 결제 재confirm).
+const RETRYABLE_ERROR_CODES = new Set(['PAY011'])
+// Toss가 승인을 명확히 거절한 코드다. 카드가 실제로 청구되지 않았으므로 새 결제를 시작해도
+// 이중 청구 위험이 낮다 — "다른 결제수단으로 다시 결제"로 새 payment 생성을 허용한다. 그 외
+// (위·변조 의심, PG 대사 필요 등 승인 여부가 불명확한 확정 실패)는 새 결제 경로로 보내지 않고
+// 주문 내역·상품 상세로만 안내한다.
+const TERMINAL_REJECTED_ERROR_CODES = new Set(['PAY012'])
+
 const route = useRoute()
 const payment = ref(null)
 const isConfirming = ref(true)
 const confirmError = ref('')
+const confirmErrorCode = ref('')
+const confirmParams = ref(null)
 
 const address = computed(() => route.query.address || '-')
 const productName = computed(() => route.query.productName || '-')
 const manufacturer = computed(() => route.query.manufacturer || '')
+const isRetryableError = computed(() => RETRYABLE_ERROR_CODES.has(confirmErrorCode.value))
+const isTerminalRejectedError = computed(() => TERMINAL_REJECTED_ERROR_CODES.has(confirmErrorCode.value))
 
-onMounted(async () => {
+async function attemptConfirm() {
+  if (!confirmParams.value) {
+    return
+  }
+  isConfirming.value = true
+  confirmError.value = ''
+  confirmErrorCode.value = ''
   try {
-    const { paymentId, paymentKey, orderId, amount } = route.query
-    if (!paymentId || !paymentKey || !orderId || !amount) {
-      confirmError.value = '결제 승인 정보가 올바르지 않습니다.'
-      return
-    }
-
-    payment.value = await confirmPayment(paymentId, {
-      paymentKey,
-      orderId,
-      amount: Number(amount),
+    payment.value = await confirmPayment(confirmParams.value.paymentId, {
+      paymentKey: confirmParams.value.paymentKey,
+      orderId: confirmParams.value.orderId,
+      amount: confirmParams.value.amount,
     })
   } catch (error) {
     confirmError.value = error.message || '결제 승인에 실패했습니다.'
+    confirmErrorCode.value = error.code || ''
   } finally {
     isConfirming.value = false
   }
+}
+
+onMounted(async () => {
+  const { paymentId, paymentKey, orderId, amount } = route.query
+  if (!paymentId || !paymentKey || !orderId || !amount) {
+    confirmError.value = '결제 승인 정보가 올바르지 않습니다.'
+    isConfirming.value = false
+    return
+  }
+
+  confirmParams.value = { paymentId, paymentKey, orderId, amount: Number(amount) }
+  await attemptConfirm()
 })
 </script>
 
@@ -60,11 +85,34 @@ onMounted(async () => {
         </p>
         <div class="mt-6 flex flex-col gap-3">
           <BaseButton
+            v-if="isRetryableError"
+            block
+            @click="attemptConfirm"
+          >
+            다시 승인 시도
+          </BaseButton>
+          <BaseButton
+            v-else-if="isTerminalRejectedError"
             :to="`/purchase/${route.params.productId}`"
             block
           >
-            다시 시도하기
+            다른 결제수단으로 다시 결제
           </BaseButton>
+          <template v-else>
+            <BaseButton
+              to="/mypage/orders"
+              block
+            >
+              주문 내역에서 확인하기
+            </BaseButton>
+            <BaseButton
+              :to="{ name: 'product-detail', params: { productId: route.params.productId } }"
+              variant="outline"
+              block
+            >
+              상품 상세로 돌아가기
+            </BaseButton>
+          </template>
         </div>
       </BaseCard>
 
