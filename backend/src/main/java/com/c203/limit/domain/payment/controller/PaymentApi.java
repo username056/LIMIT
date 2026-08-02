@@ -65,7 +65,9 @@ public interface PaymentApi {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "UNAUTHORIZED"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "PAYMENT_ACCESS_DENIED"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "PAYMENT_NOT_FOUND"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "PAYMENT_NOT_CONFIRMABLE"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "409",
+                description = "PAYMENT_NOT_CONFIRMABLE / PAYMENT_ALREADY_CONFIRMED_MISMATCH"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "422", description = "PAYMENT_CONFIRM_REJECTED"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "PAYMENT_CONFIRM_RETRYABLE")
     })

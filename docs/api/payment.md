@@ -54,7 +54,7 @@ confirm 연동 시 `payment-confirm-{paymentId}-{attemptNo}` 형태로 결정적
 
 `POST /api/v1/payments/{paymentId}/cancel`은 Toss 결제창 진입 전(`REQUESTED`) 단계에서 구매자가
 명시적으로 취소할 때 쓴다. 결제창을 취소하거나 브라우저를 닫아도 자동 만료 스케줄러가 예약
-유예(`reservation-ttl-minutes`, 기본 30분)를 다 채워야 매물을 풀어주므로, 이 API가 그 대기 없이
+유예(`reservation-ttl-minutes`, 기본 10분)를 다 채워야 매물을 풀어주므로, 이 API가 그 대기 없이
 `Payment.CANCELLED` 전환과 `Listing.cancelReservation()`(`RESERVED -> ON_SALE`)을 한 트랜잭션으로
 묶어 즉시 처리한다 — 스케줄러는 이 호출이 유실됐을 때의 최종 안전망으로 계속 남는다. 이미
 `CANCELLED`·`EXPIRED`인 결제는 같은 결과를 그대로 반환하고(멱등), `APPROVED`·`FAILED`처럼 이미
@@ -112,10 +112,10 @@ Toss 응답이 실패면 `TossPaymentClientException.isRetryable()`로 갈린다
 없어 현재는 승인 자체가 불가능) 매물이 영구히 예약 상태로 묶일 수 있다. 이를 정리하기 위해
 `PaymentReservationExpirationScheduler`가 주기적으로 유예 시간이 지난 예약을 찾아 되돌린다.
 
-- **유예 시간**: 기본 30분이며 `limit.product.reservation-ttl-minutes` 설정으로 변경할 수 있다.
+- **유예 시간**: 기본 10분이며 `limit.product.reservation-ttl-minutes` 설정으로 변경할 수 있다.
   `ListingService.reserve()`가 주입된 `Clock` 기준으로 `reservedUntil`을 계산해 `Listing.reserve()`에
   전달하고, `Listing.reserve()`는 이를 그대로 저장하면서 `reservedAt`은 별도로(시스템 시각) 기록한다.
-  두 값은 서로 다른 시점에 계산되므로 `reservedUntil = reservedAt + 30분`처럼 정확히 일치한다고
+  두 값은 서로 다른 시점에 계산되므로 `reservedUntil = reservedAt + 10분`처럼 정확히 일치한다고
   가정하면 안 된다 — 만료 판정에는 `reservedUntil`만 쓰인다.
 - **대상 조회**: `status = RESERVED AND reserved_until < now() AND deleted_at IS NULL`인 매물을
   `ExpiredReservationCandidateReader`(payment 도메인, raw JDBC)가 조회한다. product 도메인의
@@ -144,14 +144,59 @@ Toss 응답이 실패면 `TossPaymentClientException.isRetryable()`로 갈린다
   분산 락은 후속 과제.
 - `(status, reserved_until)` 복합 인덱스가 아직 없다. 데이터가 늘면 스케줄러 조회가 매물 테이블을
   풀스캔할 수 있어 운영 전 인덱스 마이그레이션이 필요하다.
-- PG 웹훅 승인/거절 처리는 이번 범위에 없다. confirm은 클라이언트가 successUrl로 돌아와 명시적으로
-  호출해야만 승인되므로, 결제창을 닫거나 브라우저가 successUrl 진입 전에 종료되면 Toss는 승인됐지만
-  우리 시스템은 `REQUESTED`로 남는 상태가 생길 수 있다. 웹훅 또는 주기적 조회 복구는 후속 과제.
+- PG 웹훅 승인/거절 처리는 이번 범위에 없다. confirm이 클라이언트 successUrl 호출로만 트리거되는
+  구조 자체는 그대로이고, 아래 "confirm 재시도·PG 대사(reconcile)" 절에서 그 유실 사례에 대한
+  수동 복구 경로만 추가했다. 실시간 웹훅은 여전히 후속 과제.
 - confirm 성공 경로에서 `Payment.approve()` 이후 `ListingService.markPaid()`가 실패하면 트랜잭션이
   롤백돼 Toss 승인과 우리 DB 상태가 어긋날 수 있다(위 "동작" 절 참고). 결제 취소·재조정 로직은
   아직 없다.
 - `PaymentService.retryAttempt()`(재시도 게이트)는 이번에도 API로 열지 않았다 — 결제창을 다시 열 때
   같은 `providerOrderId`를 재사용할지, 새 시도를 발급할지는 프론트 재시도 흐름이 정해지면 연결한다.
+
+## confirm 재시도·PG 대사(reconcile) (`fix/payment-confirm-recovery`)
+
+결제 성공 페이지에서 confirm이 재시도되거나 새로고침되는 상황을 새 결제로 취급하지 않도록
+`confirm`, 관리자 대사 API, 예약 만료 배치를 함께 보강했다.
+
+- **이중 청구 방지(멱등 confirm)**: `orderId`·`amount`가 저장된 값과 일치하는데 결제 상태가 이미
+  `APPROVED`면 Toss를 다시 부르지 않고 기존 승인 결과를 그대로 반환한다. 단 `paymentKey`까지
+  승인 기록(`Payment.providerTransactionId`)과 일치해야 하며, 다르면 위조 가능성으로 보고
+  `PAYMENT_ALREADY_CONFIRMED_MISMATCH`(`PAY016`, 409)로 거부한다.
+- **confirm 시도 흔적**: `Payment.confirmAttemptedAt`을 Toss confirm 호출 직전에 기록한다
+  (`V20260815__add_payment_confirm_attempted_at_column.sql`). confirm을 시도한 적 없는 순수
+  이탈 건과, 서버가 실제로 confirm을 불렀지만 응답을 받지 못한 건을 구분하는 용도다.
+- **관리자 PG 대사 API**: `POST /api/v1/admin/payments/{paymentId}/reconcile`
+  (`PaymentService.reconcile()`)이 REQUESTED로 남은 결제를 `TossPaymentClient.findByOrderId()`로
+  재조회한다. Toss가 `DONE`이고 금액·orderId가 일치하면 승인·매물 PAID를 복구하고(`RECOVERED`),
+  이미 REQUESTED가 아니거나 Toss에 승인 기록이 없으면 아무 것도 바꾸지 않는다(`NO_ACTION`).
+  금액·orderId가 어긋나면 자동 복구하지 않고 `PAYMENT_RECONCILE_MISMATCH`(`PAY017`, 409)로
+  운영자 확인을 요구하고, Toss 조회 자체가 일시 실패하면 `PAYMENT_RECONCILE_RETRYABLE`
+  (`PAY018`, 503)을 반환한다.
+- **예약 만료 배치 안전화**: `PaymentReservationExpirationService.expireOne()`은 대상 결제에
+  `confirmAttemptedAt`이 있으면 만료 전에 먼저 `reconcile()`을 호출한다. 복구되면 만료시키지 않고
+  `RECOVERED`로 집계하며, `NO_ACTION`이면 기존대로 즉시 만료한다. confirm을 시도한 적 없는 건은
+  이 조회 없이 바로 만료해 배치가 Toss 가용성에 불필요하게 묶이지 않게 한다.
+- **거절된 결제의 즉시 예약 해제**: Toss가 confirm을 명확히 거절(카드 거절 등, `PAYMENT_CONFIRM_REJECTED`
+  /`PAY012`)하면 `Payment.fail()`과 별도 트랜잭션으로 `listingService.cancelReservation()`을 호출해
+  매물을 곧바로 `ON_SALE`로 되돌린다. 거절은 승인 여부가 불명확한 상태가 아니라 Toss가 확정적으로
+  끝낸 시도라 예약 TTL(기본 10분)이 끝날 때까지 매물을 묶어둘 이유가 없다 — 다른 결제수단으로 새
+  결제를 시작하거나 다른 구매자가 살 수 있게 한다. 예약 해제 자체가 실패해도(TTL 만료로 스케줄러가
+  먼저 처리한 경우 등) 로그만 남기고 `Payment.FAILED`, `PAYMENT_CONFIRM_REJECTED` 응답은 그대로
+  유지한다. 승인 여부가 불명확한 `PAYMENT_ALREADY_CONFIRMED_MISMATCH`/`PAYMENT_RECONCILE_MISMATCH`
+  등은 대상이 아니며 예약을 그대로 둔다.
+- **대사 복구 전용 매물 전이(`Listing.markPaidRecoveredFromPg`)**: `reconcile()`이 대상으로 삼는
+  결제는 정의상 예약 TTL이 이미 지난 REQUESTED 건이다. 그런데 일반 결제 확정이 쓰는
+  `Listing.markPaid()`는 `reservedUntil`이 지났으면 거부하도록 설계돼 있어(다른 구매자에게 넘어간
+  예약을 덮어쓰지 않기 위한 안전장치), 그대로 재사용하면 "복구가 필요한 경우일수록 복구가 실패하는"
+  자기모순이 생긴다 — Payment는 APPROVED인데 Listing은 RESERVED에 갇히고, 이후 배치는
+  `findByListingIdAndStatus(..., REQUESTED)`가 더 이상 이 건을 찾지 못해 영영 복구도 만료도 못 하게
+  된다. 그래서 `reconcile()`은 TTL 검증 없이 buyerId 일치만 확인하는 별도 전이
+  `ListingService.markPaidRecoveredFromPg()` /
+  `Listing.markPaidRecoveredFromPg(buyerId, now)`를 쓴다. 일반 `confirm()`의 `markPaid()`는
+  TTL 검증을 그대로 유지한다 — 체크 시점과 확정 시점 사이의 경합을 막는 이중 방어선이라 완화하면
+  안 된다. 매물 반영이 그래도 실패하면(그 사이 다른 구매자가 재예약한 경우 등) 로그만 남기고
+  `PAYMENT_CONFIRM_RESERVATION_INVALID`로 승격하는 건 `confirm()`의 매물 반영 실패 처리와 동일하다
+  (`PaymentService.applyListingPaidTransitionOrEscalate`로 공통화).
 
 ## Swagger 그룹
 

@@ -96,6 +96,11 @@ public class Payment extends BaseTimeEntity {
     @Column(name = "approved_at")
     private LocalDateTime approvedAt;
 
+    // confirm 호출을 실제로 시작한 시점. 예약 만료 배치가 "PG에 confirm을 시도한 적 있는" 요청 상태
+    // 결제만 골라 만료 전 재확인을 거치도록 구분하는 용도다.
+    @Column(name = "confirm_attempted_at")
+    private LocalDateTime confirmAttemptedAt;
+
     public static Payment request(
             Long listingId,
             Member buyer,
@@ -171,6 +176,10 @@ public class Payment extends BaseTimeEntity {
 
     public void markWebhookVerified() {
         this.webhookVerified = true;
+    }
+
+    public void markConfirmAttempted() {
+        this.confirmAttemptedAt = LocalDateTime.now();
     }
 
     public void retry() {

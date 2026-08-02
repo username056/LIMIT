@@ -57,6 +57,7 @@ public class PaymentReservationExpirationScheduler {
         }
 
         int expired = 0;
+        int recovered = 0;
         int skippedNoPayment = 0;
         int failed = 0;
         for (Long listingId : targets) {
@@ -64,6 +65,8 @@ public class PaymentReservationExpirationScheduler {
                 ReservationExpirationResult result = expirationService.expireOne(listingId);
                 if (result == ReservationExpirationResult.EXPIRED) {
                     expired++;
+                } else if (result == ReservationExpirationResult.RECOVERED) {
+                    recovered++;
                 } else {
                     skippedNoPayment++;
                 }
@@ -83,9 +86,11 @@ public class PaymentReservationExpirationScheduler {
         }
 
         log.info(
-                "reservation expiration batch finished: targets={}, expired={}, skippedNoPayment={}, failed={}",
+                "reservation expiration batch finished: targets={}, expired={}, recovered={}, "
+                        + "skippedNoPayment={}, failed={}",
                 targets.size(),
                 expired,
+                recovered,
                 skippedNoPayment,
                 failed);
     }
