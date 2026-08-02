@@ -1,250 +1,149 @@
 <script setup>
+// 랜딩 페이지.
+// -------------------------------------------------------------------------
+// 이 화면만 Tailwind가 아니라 순수 CSS로 짭니다. 나머지 화면은 정보를 빠르게
+// 훑는 곳이라 유틸리티 클래스가 잘 맞지만, 여기는 여백과 리듬 자체가 내용이어서
+// 섹션마다 값을 직접 잡는 편이 읽기 쉽습니다. 색·반지름은 tokens.css의 변수를
+// 그대로 쓰므로 다른 화면과 톤은 어긋나지 않습니다.
+//
+// 헤더와 푸터는 DefaultLayout의 것(AppHeader/AppFooter)을 그대로 씁니다.
+// 랜딩용으로 하나 더 만들면 로그인 상태·검색·반응형 동작을 두 벌 관리하게 됩니다.
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
-import BaseBadge from '../components/BaseBadge.vue'
-import BaseButton from '../components/BaseButton.vue'
-import BaseCard from '../components/BaseCard.vue'
-import { getDeviceCategories } from '../api/products'
-// 파일 형식이 서로 달라 확장자를 실제 형식에 맞춰 두었습니다(확장자와 내용이 다르면 MIME이 틀어집니다).
-import galaxyFlip from '../assets/galaxy_flip.png'
-import galaxyNotebook from '../assets/galaxy_notebook.avif'
-import galaxyPhone from '../assets/galaxy_phone.png'
-import galaxyTap from '../assets/galaxy_tap.webp'
-import mainHeroBanner from '../assets/main_hero_banner.png'
+import HomeHero from '../components/home/HomeHero.vue'
+import HomeProductSection from '../components/home/HomeProductSection.vue'
+import HomeProcess from '../components/home/HomeProcess.vue'
+import HomeServicePreview from '../components/home/HomeServicePreview.vue'
+import '../styles/home.css'
 
 const route = useRoute()
 const router = useRouter()
 const showForbiddenNotice = ref(false)
 
+// 권한이 없어 되돌려보낸 경우입니다. 한 번 보여 주고 주소에서 흔적을 지웁니다.
 onMounted(() => {
   if (route.query.notice !== 'forbidden') return
   showForbiddenNotice.value = true
   const { notice, ...rest } = route.query
   router.replace({ query: rest })
 })
-
-// 실제 판매 카테고리를 그대로 보여줍니다. 하위 기종은 빼고 최상위 카테고리만 노출합니다.
-const categories = ref([])
-
-// 카테고리 대표 이미지. 이름이 바뀌어도 깨지지 않도록 code(deviceType)로 연결합니다.
-const CATEGORY_IMAGES = {
-  SMARTPHONE: galaxyPhone,
-  FOLDABLE: galaxyFlip,
-  TABLET: galaxyTap,
-  LAPTOP: galaxyNotebook,
-}
-
-function categoryImage(category) {
-  return CATEGORY_IMAGES[category.code] || ''
-}
-
-onMounted(async () => {
-  try {
-    const items = await getDeviceCategories({ activeOnly: true })
-    categories.value = (items || []).slice(0, 4)
-  } catch {
-    categories.value = []
-  }
-})
-
-const steps = [
-  {
-    number: '01',
-    title: '자가 검수 체크 리스트',
-    description: '기기별 검증 체크 리스트가 있어 기기 성능 및 외관 검수를 확인할 수 있습니다.',
-  },
-  {
-    number: '02',
-    title: '실시간 채팅 및 WebRTC 화상 연결',
-    description: '판매자 내 사진이랑 영상으로 부족하다면 구매자와 판매자를 연결하는 1대1 채팅과 화상 연결을 이용해보세요!',
-  },
-]
-
-// '최근 올라온 실시간 확인 가능 상품' 섹션은 잠시 내려 두었습니다(템플릿도 함께 주석 처리).
-// 아래 목업 배열이 실제 판매 상품이 아니라 하드코딩된 가짜 데이터여서, 그대로 노출하면
-// 홈에서 눌러도 존재하지 않는 상품으로 이어지기 때문입니다.
-// 다시 살릴 때는 목업을 지우고 /products와 같은 데이터를 쓰세요.
-//   const recentProducts = ref([])
-//   onMounted(async () => {
-//     const page = await getProducts({ page: 0, size: 4, sort: 'createdAt,desc' })
-//     recentProducts.value = page?.data || []
-//   })
-// 카드에는 thumbnailUrl·name·price를 쓰고, 링크는 { name: 'product-detail',
-// params: { productId } }로 걸어야 실제 상품 상세로 이어집니다.
 </script>
 
 <template>
   <DefaultLayout>
-    <!-- Hero -->
-    <section class="mx-auto max-w-[1200px] px-6 pt-8 lg:px-10">
-      <div class="grid items-center gap-10 overflow-hidden rounded-lg bg-accent px-8 py-12 lg:grid-cols-2 lg:px-14 lg:py-16">
-        <div>
-          <BaseBadge class="mb-4">
-            실시간 화상 확인
-          </BaseBadge>
-          <h1 class="mb-4 text-3xl font-bold leading-snug text-text-main lg:text-4xl">
-            검증된 중고 전자기기,<br>
-            실시간 화상으로도 확인하세요!
-          </h1>
-          <p class="mb-8 max-w-md text-sm leading-relaxed text-text-sub">
-            판매자가 올린 체크리스트 자료를 눈으로 직접 검증하고
-            WebRTC 화상 채팅을 통해 제품 작동 상태를 1:1로 확인하는 중고 거래 플랫폼.
-          </p>
-          <BaseButton :to="{ name: 'products' }">
-            상품 둘러보기
-          </BaseButton>
-        </div>
-
-        <div class="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg bg-surface shadow-elevated lg:aspect-[16/11]">
-          <img
-            :src="mainHeroBanner"
-            alt="실시간 화상으로 중고 기기 상태를 확인하는 모습"
-            class="h-full w-full object-cover"
-          >
-        </div>
-      </div>
-    </section>
-
-    <!-- Categories -->
-    <section class="mx-auto max-w-[1200px] px-6 py-12 lg:px-10">
-      <h2 class="mb-5 text-lg font-bold text-text-main">
-        인기 전자기기 카테고리
-      </h2>
-      <div
-        v-if="categories.length"
-        class="grid grid-cols-2 gap-4 sm:grid-cols-4"
-      >
-        <RouterLink
-          v-for="category in categories"
-          :key="category.categoryId"
-          :to="{ name: 'products', query: { categoryId: category.categoryId } }"
-          class="group overflow-hidden rounded-lg border border-border bg-surface transition-shadow hover:shadow-elevated"
-        >
-          <div class="flex aspect-square items-center justify-center overflow-hidden bg-bg">
-            <img
-              v-if="categoryImage(category)"
-              :src="categoryImage(category)"
-              :alt="category.name"
-              class="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-            >
-            <span
-              v-else
-              class="text-xs text-text-sub"
-            >이미지 준비 중</span>
-          </div>
-          <div class="flex items-center justify-between px-4 py-3">
-            <span class="text-sm font-semibold text-text-main">{{ category.name }}</span>
-          </div>
-        </RouterLink>
-      </div>
-      <p
-        v-else
-        class="rounded-lg border border-border bg-surface px-4 py-10 text-center text-sm text-text-sub"
-      >
-        카테고리를 불러오지 못했습니다.
-      </p>
-    </section>
-
-    <!-- Verification process -->
-    <section class="mx-auto max-w-[1200px] px-6 pb-12 lg:px-10">
-      <BaseCard class="p-8 lg:p-10">
-        <h2 class="mb-1 text-lg font-bold text-text-main">
-          안전한 LIMIT 검증 프로세스
-        </h2>
-        <p class="mb-8 text-sm text-text-sub">
-          투명하고 안전한 고가 전자기기 구매를 위해 리미트는 해당 서비스를 제공합니다
-        </p>
-
-        <div class="grid gap-8 sm:grid-cols-2">
-          <div
-            v-for="step in steps"
-            :key="step.number"
-          >
-            <p class="mb-2 bg-primary-gradient bg-clip-text text-3xl font-extrabold text-transparent">
-              {{ step.number }}
-            </p>
-            <h3 class="mb-2 text-base font-bold text-text-main">
-              {{ step.title }}
-            </h3>
-            <p class="text-sm leading-relaxed text-text-sub">
-              {{ step.description }}
-            </p>
-          </div>
-        </div>
-      </BaseCard>
-    </section>
-
-    <!--
-      Products: '최근 올라온 실시간 확인 가능 상품' 섹션을 잠시 내려 두었습니다.
-      목업 데이터라 눌러도 실제 상품으로 가지 않아, /products의 최신 4개를 붙일 때 되살립니다.
-      복구 방법은 script의 recentProducts 주석을 참고하세요.
-
-    <section class="mx-auto max-w-[1200px] px-6 pb-16 lg:px-10">
-      <div class="mb-5 flex items-center justify-between">
-        <h2 class="text-lg font-bold text-text-main">
-          최근 올라온 실시간 확인 가능 상품
-        </h2>
-        <RouterLink
-          :to="{ name: 'products' }"
-          class="text-sm font-semibold text-primary hover:underline"
-        >
-          전체 상품 보기
-        </RouterLink>
-      </div>
-
-      <div class="grid grid-cols-2 gap-6 lg:grid-cols-4">
-        <RouterLink
-          v-for="product in recentProducts"
-          :key="product.productId"
-          :to="{ name: 'product-detail', params: { productId: product.productId } }"
-          class="group overflow-hidden rounded-lg border border-border bg-surface transition-shadow hover:shadow-elevated"
-        >
-          <div class="flex aspect-square items-center justify-center bg-bg text-xs text-text-sub">
-            상품 이미지
-          </div>
-          <div class="p-4">
-            <p class="mt-1 text-sm font-semibold text-text-main">
-              {{ product.name }}
-            </p>
-            <p class="mt-1 text-sm font-bold text-text-main">
-              ₩{{ product.price }}
-            </p>
-          </div>
-        </RouterLink>
-      </div>
-    </section>
-    -->
-
-    <!-- 목업 섹션을 내린 자리에 전체 상품으로 가는 동선만 남겨 둡니다. -->
-    <section class="mx-auto max-w-[1200px] px-6 pb-16 lg:px-10">
-      <RouterLink
-        :to="{ name: 'products' }"
-        class="flex items-center justify-center rounded-lg border border-border bg-surface px-6 py-8 text-sm font-semibold text-primary transition-shadow hover:shadow-elevated"
-      >
-        전체 상품 보기 →
-      </RouterLink>
-    </section>
-
-    <div
+    <p
       v-if="showForbiddenNotice"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+      role="alert"
+      class="home-notice"
     >
-      <BaseCard class="w-full max-w-sm text-center">
-        <h2 class="text-lg font-bold text-text-main">
-          해당 페이지에 권한이 없습니다
-        </h2>
-        <p class="mt-2 text-sm text-text-sub">
-          메인 페이지로 돌아갑니다.
-        </p>
-        <BaseButton
-          block
-          class="mt-5"
-          @click="showForbiddenNotice = false"
-        >
-          확인
-        </BaseButton>
-      </BaseCard>
+      접근 권한이 없어 홈으로 이동했습니다.
+    </p>
+
+    <div class="home">
+      <HomeHero />
+
+      <!--
+        히어로 아래부터 색을 입힙니다. 페이지 전체에 %로 그라데이션을 걸면 히어로가
+        끝나는 지점의 색이 페이지 길이에 따라 달라져, 히어로 밑동(흰색)과 어긋나
+        가로줄이 생깁니다. 여기서 흰색으로 시작하면 그 경계가 사라집니다.
+      -->
+      <div class="home__body">
+        <!-- 크게 번진 빛 두 덩어리. 경계 없이 색만 돌게 하는 장치입니다. -->
+        <span
+          class="home__glow home__glow--1"
+          aria-hidden="true"
+        />
+        <span
+          class="home__glow home__glow--2"
+          aria-hidden="true"
+        />
+
+        <!--
+          두 상품 섹션은 같은 컴포넌트입니다. 정렬 기준과 카드에 적는 한 줄만 다릅니다.
+          공개 목록이 허용하는 정렬은 createdAt·price·viewCount 셋뿐입니다.
+        -->
+        <HomeProductSection
+          title="지금 가장 인기 있는 상품"
+          subtitle="많이 본 순서대로 보여 드려요"
+          sort="viewCount,desc"
+          :size="4"
+          :columns="4"
+          variant="popular"
+        />
+
+        <HomeProcess />
+        <HomeServicePreview />
+
+        <HomeProductSection
+          title="최근 등록된 상품"
+          subtitle="방금 올라온 매물을 가장 먼저 확인해보세요"
+          sort="createdAt,desc"
+          :size="4"
+          :columns="4"
+          variant="recent"
+        />
+      </div>
     </div>
   </DefaultLayout>
 </template>
+
+<style scoped>
+.home {
+  position: relative;
+}
+
+/*
+  히어로 아래 영역의 바탕. 흰색에서 시작해 아주 느리게 도는 그라데이션 한 겹입니다.
+  흰색만 깔면 밋밋하고, 섹션마다 색을 나누면 경계마다 가로줄이 생깁니다.
+  한 겹으로 길게 흐르게 두면 색은 도는데 어디서 바뀌는지는 보이지 않습니다.
+  시작이 흰색이라 히어로 밑동과 이어지는 자리에도 선이 생기지 않습니다.
+*/
+.home__body {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(
+    180deg,
+    #fff 0%,
+    #f7f9ff 12%,
+    #f2f6ff 34%,
+    #f8faff 58%,
+    #f3f7ff 82%,
+    #fff 100%
+  );
+}
+
+/* 크게 번진 빛 두 덩어리. 경계가 없어야 하므로 아주 흐리고 옅게 둡니다. */
+.home__glow {
+  position: absolute;
+  z-index: 0;
+  border-radius: 50%;
+  filter: blur(120px);
+  pointer-events: none;
+}
+
+.home__glow--1 {
+  top: 20%;
+  left: -14%;
+  width: 46%;
+  height: 26%;
+  background: radial-gradient(circle, rgb(99 102 241 / 12%) 0%, rgb(99 102 241 / 0%) 70%);
+}
+
+.home__glow--2 {
+  top: 62%;
+  right: -16%;
+  width: 50%;
+  height: 24%;
+  background: radial-gradient(circle, rgb(147 197 253 / 16%) 0%, rgb(147 197 253 / 0%) 70%);
+}
+
+.home-notice {
+  padding: 12px 24px;
+  background: var(--color-accent-bg);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--color-gradient-start);
+}
+</style>
