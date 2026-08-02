@@ -16,6 +16,14 @@ defineProps({
 function formatPrice(price) {
   return Number(price || 0).toLocaleString('ko-KR')
 }
+
+function hasViewCount(viewCount) {
+  return viewCount !== null && viewCount !== undefined && Number.isFinite(Number(viewCount))
+}
+
+function formatViewCount(viewCount) {
+  return Math.max(0, Number(viewCount)).toLocaleString('ko-KR')
+}
 </script>
 
 <template>
@@ -82,7 +90,12 @@ function formatPrice(price) {
       </div>
       <div class="mt-3 border-t border-border pt-3 text-xs text-text-sub">
         <slot name="footer">
-          <div class="flex items-center justify-end">
+          <div class="flex items-center justify-between gap-3">
+            <span
+              v-if="hasViewCount(product.viewCount)"
+              class="shrink-0"
+              :aria-label="`조회수 ${formatViewCount(product.viewCount)}회`"
+            >조회 {{ formatViewCount(product.viewCount) }}</span>
             <span class="shrink-0 font-semibold text-primary">상세 보기 →</span>
           </div>
         </slot>

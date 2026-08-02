@@ -22,6 +22,7 @@ const product = {
   modelName: 'Galaxy Book4 Pro',
   price: 1890000,
   status: 'ON_SALE',
+  viewCount: 128,
   thumbnailUrl: 'https://cdn.example.com/1001.jpg',
 }
 
@@ -34,6 +35,7 @@ describe('ProductCard', () => {
     expect(wrapper.text()).toContain('Galaxy Book4 Pro 팝니다')
     expect(wrapper.text()).toContain('1,890,000원')
     expect(wrapper.text()).toContain('Samsung · Galaxy Book4 Pro')
+    expect(wrapper.text()).toContain('조회 128')
   })
 
   it('대표 이미지가 없으면 자리표시자를 보여준다', () => {
@@ -77,5 +79,11 @@ describe('ProductCard', () => {
     const wrapper = mountCard({ product })
 
     expect(wrapper.find('[data-to]').exists()).toBe(false)
+  })
+
+  it('조회수가 없는 응답에는 임의의 0회를 표시하지 않는다', () => {
+    const wrapper = mountCard({ product: { ...product, viewCount: undefined } })
+
+    expect(wrapper.text()).not.toContain('조회 0')
   })
 })

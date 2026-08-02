@@ -215,6 +215,32 @@ describe('ProductListPage', () => {
     expect(wrapper.text()).not.toContain('과거 요청 상품')
   })
 
+  it('조회수 높은 순을 선택하면 서버 정렬을 요청하고 중복 포함 안내를 보여준다', async () => {
+    getProducts.mockResolvedValue({
+      data: [{ productId: 1001, name: '많이 본 상품', price: 100000, viewCount: 1234 }],
+      meta: { page: 0, totalPages: 1, hasNext: false },
+    })
+    const wrapper = mount(ProductListPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    await wrapper.get('select[aria-label="상품 정렬"]').setValue('viewCount,desc')
+    await flushPromises()
+
+    expect(getProducts).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sort: 'viewCount,desc', page: 0 }),
+    )
+    expect(wrapper.text()).toContain('반복 조회가 포함된 누적 조회수 기준입니다.')
+    expect(wrapper.text()).toContain('조회 1,234')
+  })
+
   it('필터 초기화 시 URL 검색어도 제거한다', async () => {
     routeQuery.q = '노트북'
     getProducts.mockResolvedValue({
