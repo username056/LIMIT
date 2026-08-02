@@ -5,7 +5,8 @@
 
 :root {
   /* Colors */
-  --color-bg: #FAFBFC;
+  /* 중립 회색 대신 아주 옅은 보랏빛을 섞습니다. 랜딩의 바탕과 결을 맞추기 위해서입니다. */
+  --color-bg: #F7F8FD;
   --color-surface: #FFFFFF;
 
   --color-primary: #6C8DFF;         /* 밝은 블루 (텍스트/강조, 버튼 아닌 일반 텍스트용) */
