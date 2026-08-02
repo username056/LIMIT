@@ -111,11 +111,12 @@ onMounted(() => loadFavorites(0))
           </BaseBadge>
           <!--
             '해제'라는 글자 버튼 대신 이미 눌러진 하트를 한 번 더 눌러 끕니다.
-            상품 상세에서 하트로 켰으니 끄는 동작도 같은 모양이어야 헷갈리지 않습니다.
+            모양은 상품 목록·상세의 좋아요 버튼과 같게 둡니다 — 같은 동작이 화면마다 달라 보이면
+            누를 수 있는 것인지 매번 다시 판단해야 합니다.
           -->
           <button
             type="button"
-            class="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full border border-primary bg-surface/95 text-lg text-primary transition hover:bg-accent disabled:opacity-60"
+            class="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-md border border-primary bg-accent text-lg leading-none text-primary transition disabled:opacity-60"
             :aria-label="`${product.name} 좋아요 해제`"
             :disabled="removingProductIds.has(product.productId)"
             @click="removeFavorite(product)"

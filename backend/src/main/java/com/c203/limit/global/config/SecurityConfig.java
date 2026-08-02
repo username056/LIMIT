@@ -63,6 +63,11 @@ public class SecurityConfig {
                                                 HttpMethod.GET,
                                                 "/api/v1/products",
                                                 "/api/v1/products/{productId}",
+                                                // 검증 자료는 이 서비스에서 구매 판단의 근거다.
+                                                // 로그인해야 볼 수 있으면 둘러보러 온 사람은
+                                                // 무엇을 믿고 살지 판단할 수가 없다.
+                                                "/api/v1/products/{productId}/checklist-items",
+                                                "/api/v1/products/{productId}/checklist-items/{checklistItemId}/evidence",
                                                 "/api/v1/sellers/{sellerId}",
                                                 "/api/v1/device-categories",
                                                 "/api/v1/device-models/**",

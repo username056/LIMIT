@@ -359,6 +359,16 @@ class ProductMockControllerTests {
                 .andExpect(jsonPath("$.data[0].status").value("PENDING"));
     }
 
+    // 검증 자료는 구매 판단의 근거라 로그인 없이도 보여야 한다. 예전에는 401이라 둘러보러 온
+    // 사람에게 '공개된 검증 항목이 없습니다'로만 보였다.
+    @Test
+    void allowsAnonymousAccessToProductChecklist() throws Exception {
+        when(productChecklistService.findAll(1001L, null, false)).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/v1/products/1001/checklist-items"))
+                .andExpect(status().isOk());
+    }
+
     @Test
     void requiresAuthenticationForMyProducts() throws Exception {
         mockMvc.perform(get("/api/v1/members/me/products"))

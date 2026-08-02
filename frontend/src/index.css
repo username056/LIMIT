@@ -3,3 +3,90 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/*
+  브랜드 인터랙션
+  ------------------------------------------------------------------
+  버튼과 카드가 손에 반응하는 느낌을 주는 공통 규칙입니다.
+  색과 반지름은 tokens.css/tailwind.config.js의 값을 그대로 씁니다.
+*/
+@layer components {
+  /* 주요 버튼: 올리면 살짝 떠오르고 브랜드 색으로 은은하게 번집니다. */
+  .btn-glow {
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /*
+    번짐은 짧고 옅게. 강하면 버튼이 화면에서 혼자 튀어 다른 정보를 가립니다.
+    색은 브랜드 그라데이션(#6366F1 → #93C5FD)의 남색을 그대로 씁니다. 보라빛을 쓰면
+    서비스 색과 따로 놉니다.
+  */
+  .btn-glow:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgb(99 102 241 / 22%);
+  }
+
+  .btn-glow:active:not(:disabled) {
+    transform: translateY(1px) scale(0.98);
+    box-shadow: 0 2px 6px rgb(99 102 241 / 18%);
+  }
+
+  /* 상품 카드: 올리면 떠오르고 테두리에 브랜드 색이 감돕니다. */
+  .card-lift {
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+      border-color 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .card-lift:hover {
+    transform: translateY(-5px);
+    border-color: rgb(99 102 241 / 35%);
+    box-shadow:
+      0 12px 30px -5px rgb(99 102 241 / 15%),
+      0 4px 12px -2px rgb(147 197 253 / 18%);
+  }
+
+  /* 카드 위 사진은 아주 살짝만 커집니다. 크게 움직이면 목록이 산만해집니다. */
+  .card-zoom-img {
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .card-lift:hover .card-zoom-img {
+    transform: scale(1.03);
+  }
+}
+
+/* 움직임을 줄여 달라고 설정한 사용자에게는 이동·확대를 걸지 않습니다. */
+@media (prefers-reduced-motion: reduce) {
+  .btn-glow,
+  .card-lift,
+  .card-zoom-img {
+    transition: none;
+  }
+
+  .btn-glow:hover:not(:disabled),
+  .card-lift:hover,
+  .card-lift:hover .card-zoom-img {
+    transform: none;
+  }
+}
+
+/* 담은 순간을 눈으로 확인할 수 있게 하트가 한 번 톡 튑니다. 목록·상세가 같은 정의를 씁니다. */
+@layer components {
+  .favorite-button--on {
+    animation: favorite-pop 320ms ease-out;
+  }
+}
+
+@keyframes favorite-pop {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .favorite-button--on {
+    animation: none;
+  }
+}
