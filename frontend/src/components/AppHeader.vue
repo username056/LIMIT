@@ -120,8 +120,12 @@ async function logoutMember() {
         >
       </RouterLink>
 
-      <!-- 로고 옆: 물건을 사고파는 두 가지 주 동선. 로고와 붙지 않게 한 칸 띄웁니다. -->
-      <nav class="hidden shrink-0 items-center gap-6 md:ml-2 md:flex lg:ml-4">
+      <!--
+        로고 옆: 물건을 사고파는 두 가지 주 동선. 로고와 붙지 않게 한 칸 띄웁니다.
+        로고 이미지는 글자가 상자 가운데보다 아래쪽에 놓여 있어, 메뉴를 세로 가운데에
+        그대로 두면 로고보다 살짝 위로 떠 보입니다. 2px만 내려 눈높이를 맞춥니다.
+      -->
+      <nav class="mt-0.5 hidden shrink-0 items-center gap-6 md:ml-2 md:flex lg:ml-4">
         <RouterLink
           to="/products"
           class="nav-link"
@@ -179,9 +183,11 @@ async function logoutMember() {
         >
       </form>
 
-      <div class="ml-auto flex shrink-0 items-center gap-3">
+      <!-- 알림·프로필 아이콘도 옆 글자와 같이 2px 내려 로고에 눈높이를 맞춥니다. -->
+      <div class="ml-auto mt-0.5 flex shrink-0 items-center gap-3">
         <!-- 검색 오른쪽: 거래가 시작된 뒤에 쓰는 동선 -->
         <!-- 왼쪽 내비와 같은 간격·여백으로 두어 헤더 전체가 한 줄로 읽히게 합니다. -->
+        <!-- 내림은 바깥 묶음(mt-0.5)이 이미 하고 있어 여기서 또 주면 4px이 됩니다. -->
         <nav class="hidden items-center gap-6 md:mr-2 md:flex lg:mr-4">
           <!-- 채팅과 실시간 확인은 로그인해야 쓸 수 있어, 비로그인에는 보여 주지 않습니다. -->
           <RouterLink
