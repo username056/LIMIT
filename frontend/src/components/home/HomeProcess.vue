@@ -149,7 +149,7 @@ const STEPS = [
 }
 
 .process__step {
-  padding: 0 12px;
+  padding: 0 4px;
   text-align: center;
 }
 
@@ -181,18 +181,28 @@ const STEPS = [
   color: var(--color-text-main);
 }
 
+/*
+  설명은 두 줄로 떨어집니다. 그냥 두면 마지막 줄에 '요.' 한 글자만 남아 어색해서,
+  두 줄 길이를 비슷하게 나눠 줍니다(text-wrap: balance).
+  keep-all은 '검수할'처럼 한 낱말이 줄 끝에서 쪼개지는 것을 막습니다.
+*/
 .process__desc {
   margin-top: 8px;
+  max-width: 22em;
+  margin-inline: auto;
   font-size: 13px;
   line-height: 1.65;
   color: var(--color-text-sub);
+  text-wrap: balance;
+  word-break: keep-all;
 }
 
+/* 화살표 칸은 최소한만 차지하게 둡니다. 그만큼 설명이 쓸 가로폭이 늘어납니다. */
 .process__arrow {
   align-self: center;
   margin-top: -34px;
-  padding: 0 6px;
-  font-size: 22px;
+  padding: 0;
+  font-size: 20px;
   color: #cbd5e1;
 }
 
