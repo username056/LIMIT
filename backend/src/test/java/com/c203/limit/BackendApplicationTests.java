@@ -142,6 +142,10 @@ class BackendApplicationTests {
     PaymentService paymentService;
 
     @MockitoBean
+    com.c203.limit.domain.payment.service.PaymentReservationExpirationService
+            paymentReservationExpirationService;
+
+    @MockitoBean
     com.c203.limit.domain.payment.repository.PaymentRepository paymentRepository;
 
     @MockitoBean

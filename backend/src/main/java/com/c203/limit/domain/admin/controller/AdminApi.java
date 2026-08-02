@@ -149,4 +149,12 @@ public interface AdminApi {
     ResponseEntity<?> rejectDeviceModelRequest(
             @PathVariable("requestId") Long requestId,
             @Valid @RequestBody ReviewDeviceModelRequest request);
+
+    @Operation(
+            summary = "결제 PG 대사(reconcile)",
+            description = "REQUESTED로 남은 결제를 Toss 실제 승인 여부로 재확인해 필요하면 로컬 상태를 "
+                    + "복구한다. confirm 응답을 받지 못해 승인 흔적이 없는 결제를 수동으로 복구할 때 사용한다.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @PostMapping("/payments/{paymentId}/reconcile")
+    ResponseEntity<?> reconcilePayment(@PathVariable("paymentId") Long paymentId);
 }

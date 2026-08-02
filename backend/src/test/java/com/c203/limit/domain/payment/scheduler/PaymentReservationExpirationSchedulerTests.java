@@ -47,18 +47,20 @@ class PaymentReservationExpirationSchedulerTests {
 
     @Test
     void expireOverdueReservationsProcessesEachTargetIndependently() {
-        when(candidateReader.findExpiredListingIds(any(), anyInt())).thenReturn(List.of(1L, 2L, 3L));
+        when(candidateReader.findExpiredListingIds(any(), anyInt())).thenReturn(List.of(1L, 2L, 3L, 4L));
         doThrow(new BusinessException(ErrorCode.PAYMENT_NOT_EXPIRABLE))
                 .when(expirationService)
                 .expireOne(1L);
         when(expirationService.expireOne(2L)).thenReturn(ReservationExpirationResult.EXPIRED);
         when(expirationService.expireOne(3L))
                 .thenReturn(ReservationExpirationResult.SKIPPED_NO_PAYMENT);
+        when(expirationService.expireOne(4L)).thenReturn(ReservationExpirationResult.RECOVERED);
 
         scheduler.expireOverdueReservations();
 
         verify(expirationService).expireOne(1L);
         verify(expirationService).expireOne(2L);
         verify(expirationService).expireOne(eq(3L));
+        verify(expirationService).expireOne(eq(4L));
     }
 }

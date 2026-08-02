@@ -156,6 +156,43 @@ class ListingTests {
     }
 
     @Test
+    void markPaidRecoveredFromPgAllowsExpiredReservationForSameBuyer() {
+        Listing listing = onSaleListing();
+        listing.reserve(2L, RESERVED_UNTIL);
+
+        listing.markPaidRecoveredFromPg(2L, RESERVED_UNTIL.plusMinutes(30));
+
+        assertThat(listing.getStatus()).isEqualTo(ListingStatus.PAID);
+        assertThat(listing.getPaidAt()).isNotNull();
+    }
+
+    @Test
+    void markPaidRecoveredFromPgRequiresReservedListing() {
+        Listing listing = onSaleListing();
+
+        assertThatThrownBy(() -> listing.markPaidRecoveredFromPg(2L, RESERVED_UNTIL))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.LISTING_NOT_RESERVED));
+    }
+
+    @Test
+    void markPaidRecoveredFromPgRejectsMismatchedBuyer() {
+        Listing listing = onSaleListing();
+        listing.reserve(2L, RESERVED_UNTIL);
+
+        assertThatThrownBy(() -> listing.markPaidRecoveredFromPg(3L, RESERVED_UNTIL.plusMinutes(30)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.LISTING_RESERVATION_MISMATCH));
+        assertThat(listing.getStatus()).isEqualTo(ListingStatus.RESERVED);
+    }
+
+    @Test
     void markInspectingRequiresPaidListing() {
         Listing listing = onSaleListing();
 
