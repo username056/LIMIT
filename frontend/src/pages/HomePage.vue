@@ -65,7 +65,7 @@ onMounted(() => {
         -->
         <HomeProductSection
           title="지금 가장 인기 있는 상품"
-          subtitle="많이 본 순서대로 보여 드려요"
+          subtitle="조회수가 높은 순서대로 보여 드려요"
           sort="viewCount,desc"
           :size="4"
           :columns="4"
@@ -77,7 +77,7 @@ onMounted(() => {
 
         <HomeProductSection
           title="최근 등록된 상품"
-          subtitle="방금 올라온 매물을 가장 먼저 확인해보세요"
+          subtitle="방금 업로드 된 상품들을 가장 먼저 확인해보세요"
           sort="createdAt,desc"
           :size="4"
           :columns="4"

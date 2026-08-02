@@ -14,7 +14,7 @@ import { vReveal } from '../../composables/useReveal'
         class="preview__copy"
       >
         <p class="home-section__eyebrow">
-          이게 바로, LIMIT
+          LIMIT만의 특별한 서비스
         </p>
         <h2 class="home-section__title">
           실제 검증 화면을<br>
@@ -24,12 +24,6 @@ import { vReveal } from '../../composables/useReveal'
           판매자가 직접 체크리스트를 따라 검수하고,<br>
           구매자는 실시간으로 확인하며 거래할 수 있어요.
         </p>
-        <RouterLink
-          :to="{ name: 'products' }"
-          class="preview__cta"
-        >
-          서비스 둘러보기 →
-        </RouterLink>
       </div>
 
       <div
@@ -63,25 +57,6 @@ import { vReveal } from '../../composables/useReveal'
   grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
   align-items: center;
   gap: 56px;
-}
-
-.preview__cta {
-  display: inline-block;
-  margin-top: 30px;
-  padding: 13px 26px;
-  border-radius: var(--radius-pill);
-  background: var(--color-primary-gradient);
-  font-size: 15px;
-  font-weight: 700;
-  color: #fff;
-  transition:
-    transform 0.25s var(--home-ease),
-    box-shadow 0.25s var(--home-ease);
-}
-
-.preview__cta:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 24px -8px rgb(99 102 241 / 45%);
 }
 
 /* ---- 노트북 목업 ------------------------------------------------------- */
@@ -140,14 +115,6 @@ import { vReveal } from '../../composables/useReveal'
 @media (prefers-reduced-motion: reduce) {
   .preview__device {
     animation: none;
-  }
-
-  .preview__cta {
-    transition: none;
-  }
-
-  .preview__cta:hover {
-    transform: none;
   }
 }
 </style>
