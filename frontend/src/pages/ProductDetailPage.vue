@@ -492,9 +492,10 @@ onMounted(async () => {
             <section>
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
+                  <!-- 목록 카드와 같은 줄입니다. 한쪽만 회색이면 같은 정보가 화면마다 달라 보입니다. -->
                   <p class="truncate text-sm font-semibold text-primary">
                     {{ product.device?.manufacturer || '제조사 미등록' }}
-                    <span class="text-text-sub">· {{ product.device?.model || '모델 미등록' }}</span>
+                    · {{ product.device?.model || '모델 미등록' }}
                   </p>
                   <h1 class="mt-2 text-3xl font-bold leading-tight tracking-tight text-text-main">
                     {{ product.name }}
