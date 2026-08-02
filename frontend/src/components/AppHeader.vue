@@ -47,6 +47,10 @@ async function goToSell() {
   await openSellFlow()
 }
 
+// 홈에서는 히어로 한가운데에 큰 검색창이 이미 있습니다. 같은 화면에 검색창이 둘이면
+// 어느 쪽에 쳐야 하는지 헷갈리고, 로고 옆 여백도 답답해집니다.
+const showSearch = computed(() => route.name !== 'home')
+
 function isActiveNavItem(href) {
   return route.path === href
 }
@@ -111,6 +115,7 @@ async function logoutMember() {
 
       <!-- 검색이 이 서비스에서 가장 자주 쓰는 입구라 가운데에 크게 둡니다. -->
       <form
+        v-if="showSearch"
         class="header-search mx-auto hidden w-full max-w-xs items-center gap-2 rounded-pill px-4 py-2.5 sm:flex md:ml-4 lg:ml-8 lg:max-w-md"
         role="search"
         @submit.prevent="submitSearch"
