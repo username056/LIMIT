@@ -15,7 +15,7 @@ const KEYWORDS = [
 
 <template>
   <div class="keywords">
-    <span class="keywords__label">인기 검색</span>
+    <span class="keywords__label">인기 검색어</span>
     <RouterLink
       v-for="keyword in KEYWORDS"
       :key="keyword"
