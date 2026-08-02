@@ -50,12 +50,24 @@ class PaymentTests {
         String firstOrderId = payment.getProviderOrderId();
         payment.expire("예약 만료");
 
-        payment.retry();
+        payment.retry(PaymentMethod.CARD);
 
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REQUESTED);
         assertThat(payment.getAttemptNo()).isEqualTo(2);
         assertThat(payment.getProviderOrderId()).isEqualTo("PAY-500-2");
         assertThat(payment.getProviderOrderId()).isNotEqualTo(firstOrderId);
+    }
+
+    @Test
+    void retryUpdatesMethodWhenChanged() {
+        Payment payment = requestedPayment();
+        ReflectionTestUtils.setField(payment, "id", 500L);
+        payment.assignProviderOrderId();
+        payment.expire("예약 만료");
+
+        payment.retry(PaymentMethod.TOSSPAY);
+
+        assertThat(payment.getMethod()).isEqualTo(PaymentMethod.TOSSPAY);
     }
 
     @Test

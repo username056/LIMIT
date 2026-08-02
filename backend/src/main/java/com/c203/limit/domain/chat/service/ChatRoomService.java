@@ -3,6 +3,7 @@ package com.c203.limit.domain.chat.service;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,6 +46,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class ChatRoomService {
     private static final Logger log = LoggerFactory.getLogger(ChatRoomService.class);
     private static final String CHAT_CREATABLE_LISTING_STATUS = "ON_SALE";
+    // 결제까지 마친 구매자는 판매자에게 계속 문의할 수 있어야 한다 — ON_SALE만 허용하면 결제 완료
+    // 후 처음 문의하는 구매자가 CHAT_ROOM_CREATION_NOT_ALLOWED로 막힌다. 그 외 상태(취소·숨김 등)는
+    // 여전히 막고, 이 상태에서도 실제 구매자 본인일 때만 허용한다(관계없는 제3자는 계속 거부).
+    private static final Set<String> POST_PURCHASE_CHAT_ALLOWED_LISTING_STATUS =
+            Set.of("PAID", "INSPECTING", "CONFIRMED", "SETTLED");
     private static final int MAX_PAGE_SIZE = 100;
 
     private final ListingChatReader listingReader;
@@ -346,7 +352,13 @@ public class ChatRoomService {
         if (buyerId.equals(listing.sellerId())) {
             throw new BusinessException(ErrorCode.SELF_CHAT_NOT_ALLOWED);
         }
-        if (!CHAT_CREATABLE_LISTING_STATUS.equals(listing.status())) {
+        if (CHAT_CREATABLE_LISTING_STATUS.equals(listing.status())) {
+            return;
+        }
+        boolean isPurchaserPostSaleInquiry =
+                POST_PURCHASE_CHAT_ALLOWED_LISTING_STATUS.contains(listing.status())
+                        && buyerId.equals(listing.buyerId());
+        if (!isPurchaserPostSaleInquiry) {
             throw new BusinessException(ErrorCode.CHAT_ROOM_CREATION_NOT_ALLOWED);
         }
     }

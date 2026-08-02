@@ -164,6 +164,9 @@ class OpenApiContractTests {
             paymentReservationExpirationService;
 
     @MockitoBean
+    com.c203.limit.domain.payment.repository.ListingOrderSummaryReader listingOrderSummaryReader;
+
+    @MockitoBean
     com.c203.limit.domain.payment.repository.PaymentRepository paymentRepository;
 
     @MockitoBean

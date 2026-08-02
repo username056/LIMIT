@@ -15,3 +15,7 @@ export function getPayment(paymentId) {
 export function cancelPayment(paymentId) {
   return apiClient.post(`/payments/${paymentId}/cancel`)
 }
+
+export function retryPayment(paymentId, method) {
+  return apiClient.post(`/payments/${paymentId}/retry`, { method })
+}

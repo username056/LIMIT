@@ -193,6 +193,44 @@ class ListingTests {
     }
 
     @Test
+    void renewReservationForBuyerExtendsReservedUntilForSameBuyer() {
+        Listing listing = onSaleListing();
+        listing.reserve(2L, RESERVED_UNTIL);
+        LocalDateTime renewedUntil = RESERVED_UNTIL.plusMinutes(10);
+
+        listing.renewReservationForBuyer(2L, renewedUntil);
+
+        assertThat(listing.getStatus()).isEqualTo(ListingStatus.RESERVED);
+        assertThat(listing.getReservedUntil()).isEqualTo(renewedUntil);
+    }
+
+    @Test
+    void renewReservationForBuyerRequiresReservedListing() {
+        Listing listing = onSaleListing();
+
+        assertThatThrownBy(() -> listing.renewReservationForBuyer(2L, RESERVED_UNTIL))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.LISTING_NOT_RESERVED));
+    }
+
+    @Test
+    void renewReservationForBuyerRejectsMismatchedBuyer() {
+        Listing listing = onSaleListing();
+        listing.reserve(2L, RESERVED_UNTIL);
+
+        assertThatThrownBy(() -> listing.renewReservationForBuyer(3L, RESERVED_UNTIL.plusMinutes(10)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.LISTING_RESERVATION_MISMATCH));
+        assertThat(listing.getReservedUntil()).isEqualTo(RESERVED_UNTIL);
+    }
+
+    @Test
     void markInspectingRequiresPaidListing() {
         Listing listing = onSaleListing();
 
