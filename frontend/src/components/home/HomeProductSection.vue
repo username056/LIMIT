@@ -2,6 +2,10 @@
 // 상품을 줄지어 보여 주는 섹션. 인기 상품과 최근 등록 상품이 이 하나를 함께 씁니다.
 // 다른 건 정렬 기준·개수·카드 모양뿐이라 props로 받습니다.
 //
+// 카드는 상품 목록·관심상품이 쓰는 ProductCard 그대로입니다. 홈 전용 카드를 따로
+// 두었더니 제조사·모델과 상품명의 위아래가 뒤바뀌어, 같은 상품이 화면마다 다르게
+// 보였습니다. 한 벌만 두면 한쪽을 고칠 때 다른 쪽이 뒤처지는 일도 없습니다.
+//
 // 여기는 처음부터 실제 /products 데이터를 씁니다. 예전에 이 자리에 있던 목업 카드가
 // 눌러도 없는 상품으로 이어져서 통째로 내려간 적이 있습니다(HomePage 옛 주석 참고).
 import { onMounted, ref } from 'vue'
@@ -9,7 +13,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { getProducts } from '../../api/products'
 import { useFavoriteIds } from '../../composables/useFavoriteIds'
 import { vReveal } from '../../composables/useReveal'
-import HomeProductCard from './HomeProductCard.vue'
+import ProductCard from '../ProductCard.vue'
 
 const props = defineProps({
   title: { type: String, required: true },
@@ -116,17 +120,43 @@ onMounted(async () => {
             class="products__skeleton"
           />
         </template>
-        <HomeProductCard
+        <ProductCard
           v-for="(product, index) in products"
           v-else
           :key="product.productId"
           v-reveal="index * 80"
           :product="product"
-          :variant="variant"
-          :is-favorite="favoriteIds.has(product.productId)"
-          :is-pending="pendingIds.has(product.productId)"
-          @toggle-favorite="onToggleFavorite"
-        />
+          :to="{ name: 'product-detail', params: { productId: product.productId } }"
+        >
+          <!-- 인기 섹션에서만 왜 이 카드가 여기 있는지 사진 위에 적어 둡니다. -->
+          <template
+            v-if="variant === 'popular'"
+            #image-overlay
+          >
+            <span class="products__badge">인기</span>
+          </template>
+
+          <!--
+            가격 줄 오른쪽 하트. 목록 화면과 같은 모양·같은 클래스를 씁니다.
+            카드 전체가 상세로 가는 링크라 기본 동작을 막아야 담기만 됩니다.
+          -->
+          <template #body-action>
+            <button
+              type="button"
+              class="favorite-button flex h-9 w-9 shrink-0 items-center justify-center rounded-md border text-lg leading-none transition disabled:opacity-60"
+              :class="favoriteIds.has(product.productId)
+                ? 'favorite-button--on border-primary bg-accent text-primary'
+                : 'border-border bg-surface text-text-sub hover:border-primary hover:text-primary'"
+              :aria-label="favoriteIds.has(product.productId)
+                ? `${product.name} 좋아요 해제`
+                : `${product.name} 좋아요`"
+              :disabled="pendingIds.has(product.productId)"
+              @click.prevent.stop="onToggleFavorite(product)"
+            >
+              {{ favoriteIds.has(product.productId) ? '♥' : '♡' }}
+            </button>
+          </template>
+        </ProductCard>
       </div>
 
       <p
@@ -165,6 +195,20 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: repeat(var(--products-columns, 3), minmax(0, 1fr));
   gap: 28px;
+}
+
+/* 사진 왼쪽 위에 얹는 '인기' 표시. 사진을 가리지 않게 작고 반투명하게 둡니다. */
+.products__badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 90%);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-gradient-start);
+  backdrop-filter: blur(6px);
 }
 
 .products__empty {
