@@ -94,15 +94,16 @@ function submit() {
   border-radius: var(--radius-pill);
   box-shadow: 0 10px 30px rgb(15 23 42 / 5%);
   backdrop-filter: blur(20px);
-  transition:
-    box-shadow 0.3s var(--home-ease),
-    transform 0.3s var(--home-ease);
+  transition: border-color 0.2s var(--home-ease);
 }
 
-.search:hover,
+/*
+  커서를 올렸다고 반응하지는 않습니다. 가만히 있는 편이 깔끔합니다.
+  다만 키보드로 옮겨 왔을 때는 어디에 와 있는지 보여야 하므로, 포커스에는 남깁니다.
+  input의 기본 외곽선을 껐기 때문에 이게 없으면 표시가 아예 사라집니다.
+*/
 .search:focus-within {
-  transform: translateY(-2px);
-  box-shadow: 0 14px 36px rgb(15 23 42 / 9%);
+  border-color: rgb(99 102 241 / 45%);
 }
 
 .search__icon {
@@ -199,8 +200,6 @@ function submit() {
     transition: none;
   }
 
-  .search:hover,
-  .search:focus-within,
   .search__submit:hover {
     transform: none;
   }
