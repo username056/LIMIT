@@ -425,8 +425,13 @@ async function logoutMember() {
   box-shadow: 0 0 0 3px rgb(99 102 241 / 10%);
 }
 
-/* 헤더 내비 링크. 현재 위치만 굵고 진하게 둡니다. */
+/*
+  헤더 내비 링크. 현재 위치는 굵기·색과 함께 아래 밑줄로도 표시합니다.
+  색만으로 구분하면 어디에 있는지 한눈에 안 들어옵니다.
+*/
 .nav-link {
+  position: relative;
+  padding-bottom: 4px;
   font-size: 15px;
   font-weight: 600;
   color: #64748b;
@@ -434,13 +439,33 @@ async function logoutMember() {
   transition: color 0.2s ease;
 }
 
+.nav-link::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 9999px;
+  background-color: transparent;
+  transition: background-color 0.2s ease;
+}
+
 .nav-link:hover {
   color: #0f172a;
+}
+
+.nav-link:hover::after {
+  background-color: rgb(99 102 241 / 35%);
 }
 
 .nav-link--active {
   font-weight: 700;
   color: #0f172a;
+}
+
+.nav-link--active::after {
+  background-color: #6366f1;
 }
 
 /*
