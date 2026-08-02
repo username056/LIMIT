@@ -417,7 +417,7 @@ onMounted(async () => {
 
       <template v-else>
         <!-- 상단: 사진을 크게 보고, 옆에서 바로 살 수 있게 둡니다. -->
-        <div class="grid gap-8 lg:grid-cols-[7fr_3fr]">
+        <div class="grid gap-8 lg:grid-cols-[6fr_4fr]">
           <section aria-label="상품 이미지">
             <!--
               4:3을 그대로 두면 넓은 화면에서 사진 높이가 600px를 넘어, 오른쪽 정보 카드가 끝난
@@ -471,14 +471,18 @@ onMounted(async () => {
           </section>
 
           <div class="space-y-4">
-            <section class="rounded-lg border border-border bg-surface p-4">
+            <!--
+              바깥 카드는 두지 않습니다. 사진 옆이라 테두리를 한 겹 더 두르면 답답해 보이고,
+              안에 판매자 카드가 또 들어가 상자가 겹칩니다.
+            -->
+            <section>
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
-                  <p class="truncate text-xs font-semibold text-primary">
+                  <p class="truncate text-sm font-semibold text-primary">
                     {{ product.device?.manufacturer || '제조사 미등록' }}
                     <span class="text-text-sub">· {{ product.device?.model || '모델 미등록' }}</span>
                   </p>
-                  <h1 class="mt-2 text-xl font-bold leading-snug tracking-tight text-text-main">
+                  <h1 class="mt-2 text-3xl font-bold leading-tight tracking-tight text-text-main">
                     {{ product.name }}
                   </h1>
                 </div>
@@ -495,7 +499,7 @@ onMounted(async () => {
                   {{ isFavorite ? '♥' : '♡' }}
                 </button>
               </div>
-              <p class="mt-4 text-2xl font-bold text-text-main">
+              <p class="mt-5 text-3xl font-bold text-text-main">
                 {{ formatPrice(product.price) }}원
               </p>
 
@@ -509,7 +513,7 @@ onMounted(async () => {
               <RouterLink
                 v-if="sellerProfile"
                 :to="{ name: 'seller-profile', params: { sellerId: sellerProfile.sellerId } }"
-                class="mt-4 flex items-center gap-2.5 rounded-lg border border-border bg-surface p-2.5 transition hover:border-primary/50 hover:shadow-card"
+                class="mt-6 flex items-center gap-3 rounded-lg border border-border bg-surface p-3 transition hover:border-primary/50 hover:shadow-card"
               >
                 <span
                   class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-gradient text-sm font-bold text-white"
@@ -527,10 +531,7 @@ onMounted(async () => {
                     {{ sellerProfile.sellerType === 'BUSINESS' ? '사업자 판매자' : '개인 판매자' }}
                   </span>
                 </span>
-                <span
-                  class="shrink-0 text-sm font-semibold text-primary"
-                  aria-hidden="true"
-                >→</span>
+                <span class="shrink-0 text-xs font-semibold text-primary">판매자 상품 보기 →</span>
               </RouterLink>
               <p
                 v-else
@@ -539,7 +540,7 @@ onMounted(async () => {
                 판매자 정보를 불러오지 못했습니다.
               </p>
 
-              <dl class="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-border pt-4 text-sm">
+              <dl class="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-border pt-5 text-sm">
                 <div>
                   <dt class="text-xs text-text-sub">
                     색상
@@ -799,9 +800,19 @@ onMounted(async () => {
             v-if="diagnosisSummaryItems.length"
             class="rounded-lg border border-border bg-surface p-5 sm:p-6"
           >
-            <h3 class="text-sm font-bold text-text-main">
+            <!-- 옆 검증 카드와 같은 3단 머리글(작은 파란 라벨 → 굵은 제목 → 설명)로 맞춥니다. -->
+            <p class="text-xs font-semibold text-primary">
+              사양 체크리스트
+            </p>
+            <h2 class="mt-1 text-lg font-bold text-text-main">
               자동 인식된 사양
-            </h3>
+            </h2>
+            <p
+              v-if="diagnosisDisclaimer"
+              class="mt-1 text-xs text-text-sub"
+            >
+              {{ diagnosisDisclaimer }}
+            </p>
             <!--
                 항목마다 회색 박스를 두면 개수만큼 상자가 늘어서 지저분해집니다. 하나의 옅은 카드
                 안에서 구분선으로만 나눕니다. 순서는 서버가 준 그대로 둡니다.
@@ -848,12 +859,6 @@ onMounted(async () => {
                 </div>
               </div>
             </dl>
-            <p
-              v-if="diagnosisDisclaimer"
-              class="mt-3 text-xs text-text-sub"
-            >
-              {{ diagnosisDisclaimer }}
-            </p>
           </div>
         </div>
 
