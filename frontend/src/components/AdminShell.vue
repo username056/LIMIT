@@ -1,5 +1,5 @@
 <script setup>
-import limitLogo from '../assets/limit_logo.png'
+import limitLogo from '../assets/real_limt_logo.png'
 
 defineProps({
   adminName: { type: String, required: true },
@@ -21,7 +21,7 @@ defineEmits(['select', 'logout'])
           <img
             :src="limitLogo"
             alt="LIMIT"
-            class="h-7 w-auto"
+            class="h-9 w-auto"
           >
         </RouterLink>
         <button

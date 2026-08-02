@@ -1,11 +1,11 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { logout } from '../api/auth'
 import { clearAuthSession, useAuthSession } from '../auth/session'
 import { SELL_ENTRY_PATH, useSellerGate } from '../auth/sellerGate'
 import SellerNoticeModal from './SellerNoticeModal.vue'
-import limitLogo from '../assets/limit_logo.png'
+import limitLogo from '../assets/real_limt_logo.png'
 
 const props = defineProps({
   navItems: {
@@ -47,6 +47,29 @@ async function goToSell() {
   await openSellFlow()
 }
 
+// 홈에서는 히어로 한가운데에 큰 검색창이 이미 있습니다. 같은 화면에 검색창이 둘이면
+// 어느 쪽에 쳐야 하는지 헷갈리고, 로고 옆 여백도 답답해집니다.
+const showSearch = computed(() => route.name !== 'home')
+
+/*
+  맨 위에서는 헤더를 투명하게 둡니다. 히어로 배경이 헤더 뒤까지 이어져 화면이
+  한 덩어리로 보입니다. 다만 그대로 두면 스크롤할 때 본문 글자가 헤더 뒤로 지나가며
+  메뉴와 겹쳐 읽히므로, 조금이라도 내리면 배경을 깔아 줍니다.
+  구분선 대신 아주 옅은 그림자로 경계를 냅니다. 선을 그으면 다시 두 조각으로 보입니다.
+*/
+const isScrolled = ref(false)
+
+function syncScrolled() {
+  isScrolled.value = window.scrollY > 8
+}
+
+onMounted(() => {
+  syncScrolled()
+  window.addEventListener('scroll', syncScrolled, { passive: true })
+})
+
+onBeforeUnmount(() => window.removeEventListener('scroll', syncScrolled))
+
 function isActiveNavItem(href) {
   return route.path === href
 }
@@ -77,21 +100,32 @@ async function logoutMember() {
 </script>
 
 <template>
-  <header class="header-glass sticky top-0 z-50 w-full">
+  <header
+    class="header-glass sticky top-0 z-50 w-full"
+    :class="{ 'header-glass--solid': isScrolled }"
+  >
     <div class="mx-auto flex h-[72px] max-w-[1200px] items-center gap-6 px-6 lg:px-10">
       <RouterLink
         to="/"
         class="flex shrink-0 items-center"
       >
+        <!--
+          새 로고는 위아래에 여백이 들어 있어, 예전 로고에 쓰던 -6.4px 보정은 뺍니다.
+          그만큼 글자가 작아 보이므로 높이를 32px에서 40px로 올렸습니다.
+        -->
         <img
           :src="limitLogo"
           alt="LIMIT"
-          class="-mt-[6.4px] h-8 w-auto"
+          class="h-10 w-auto"
         >
       </RouterLink>
 
-      <!-- 로고 옆: 물건을 사고파는 두 가지 주 동선. 로고와 붙지 않게 한 칸 띄웁니다. -->
-      <nav class="hidden shrink-0 items-center gap-6 md:ml-2 md:flex lg:ml-4">
+      <!--
+        로고 옆: 물건을 사고파는 두 가지 주 동선. 로고와 붙지 않게 한 칸 띄웁니다.
+        로고 이미지는 글자가 상자 가운데보다 아래쪽에 놓여 있어, 메뉴를 세로 가운데에
+        그대로 두면 로고보다 살짝 위로 떠 보입니다. 2px만 내려 눈높이를 맞춥니다.
+      -->
+      <nav class="mt-0.5 hidden shrink-0 items-center gap-6 md:ml-2 md:flex lg:ml-4">
         <RouterLink
           to="/products"
           class="nav-link"
@@ -111,6 +145,7 @@ async function logoutMember() {
 
       <!-- 검색이 이 서비스에서 가장 자주 쓰는 입구라 가운데에 크게 둡니다. -->
       <form
+        v-if="showSearch"
         class="header-search mx-auto hidden w-full max-w-xs items-center gap-2 rounded-pill px-4 py-2.5 sm:flex md:ml-4 lg:ml-8 lg:max-w-md"
         role="search"
         @submit.prevent="submitSearch"
@@ -148,9 +183,11 @@ async function logoutMember() {
         >
       </form>
 
-      <div class="ml-auto flex shrink-0 items-center gap-3">
+      <!-- 알림·프로필 아이콘도 옆 글자와 같이 2px 내려 로고에 눈높이를 맞춥니다. -->
+      <div class="ml-auto mt-0.5 flex shrink-0 items-center gap-3">
         <!-- 검색 오른쪽: 거래가 시작된 뒤에 쓰는 동선 -->
         <!-- 왼쪽 내비와 같은 간격·여백으로 두어 헤더 전체가 한 줄로 읽히게 합니다. -->
+        <!-- 내림은 바깥 묶음(mt-0.5)이 이미 하고 있어 여기서 또 주면 4px이 됩니다. -->
         <nav class="hidden items-center gap-6 md:mr-2 md:flex lg:mr-4">
           <!-- 채팅과 실시간 확인은 로그인해야 쓸 수 있어, 비로그인에는 보여 주지 않습니다. -->
           <RouterLink
@@ -401,16 +438,30 @@ async function logoutMember() {
   아래 내용이 비쳐 보이게 하고, 경계는 브랜드 색으로 옅게만 긋습니다.
 */
 .header-glass {
+  background-color: transparent;
+  transition:
+    background-color 0.3s ease,
+    box-shadow 0.3s ease,
+    backdrop-filter 0.3s ease;
+}
+
+/* 조금이라도 내리면 배경이 깔립니다. 선 대신 옅은 그림자로만 경계를 냅니다. */
+.header-glass--solid {
   background-color: rgb(255 255 255 / 85%);
   backdrop-filter: blur(12px);
-  border-bottom: 1px solid transparent;
-  border-image: linear-gradient(90deg, rgb(99 102 241 / 22%) 0%, rgb(147 197 253 / 22%) 100%) 1;
+  box-shadow: 0 1px 12px -4px rgb(76 100 200 / 20%);
 }
 
 /* backdrop-filter를 지원하지 않는 브라우저에서는 불투명 배경으로 둡니다. */
 @supports not (backdrop-filter: blur(12px)) {
-  .header-glass {
+  .header-glass--solid {
     background-color: #fff;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header-glass {
+    transition: none;
   }
 }
 
