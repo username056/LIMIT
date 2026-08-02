@@ -438,7 +438,7 @@ watch(() => [route.query.q, route.query.categoryId], async ([keyword, categoryId
                   class="favorite-button flex h-9 w-9 shrink-0 items-center justify-center rounded-md border text-lg leading-none transition disabled:opacity-60"
                   :class="favoriteIds.has(product.productId)
                     ? 'favorite-button--on border-primary bg-accent text-primary'
-                    : 'border-border bg-surface text-text-sub hover:border-primary'"
+                    : 'border-border bg-surface text-text-sub hover:border-primary hover:text-primary'"
                   :aria-label="favoriteIds.has(product.productId)
                     ? `${product.name} 좋아요 해제`
                     : `${product.name} 좋아요`"
@@ -507,23 +507,3 @@ watch(() => [route.query.q, route.query.categoryId], async ([keyword, categoryId
     />
   </DefaultLayout>
 </template>
-
-<style scoped>
-/* 담은 순간을 눈으로 확인할 수 있게 하트가 한 번 톡 튑니다. */
-.favorite-button--on {
-  animation: favorite-pop 320ms ease-out;
-}
-
-@keyframes favorite-pop {
-  0% { transform: scale(1); }
-  45% { transform: scale(1.35); }
-  100% { transform: scale(1); }
-}
-
-/* 움직임을 줄여 달라고 설정한 사용자에게는 애니메이션을 걸지 않습니다. */
-@media (prefers-reduced-motion: reduce) {
-  .favorite-button--on {
-    animation: none;
-  }
-}
-</style>

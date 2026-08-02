@@ -42,11 +42,6 @@ const isOwner = computed(() => {
 })
 
 const checklist = computed(() => product.value?.checklistSummary || {})
-const checklistRate = computed(() => {
-  const required = Number(checklist.value.required || 0)
-  const completed = Number(checklist.value.completed || 0)
-  return required ? Math.min(100, Math.round((completed / required) * 100)) : 0
-})
 const canPurchase = computed(() => product.value?.status === 'ON_SALE')
 const purchaseButtonLabel = computed(() => {
   if (canPurchase.value) return '상품 구매하기'
@@ -65,12 +60,32 @@ const buyerChecklistItems = computed(
 
 // 판매글에 스냅샷된 체크리스트를 그대로 보여줍니다. 항목 순서·이름·필수 여부는 판매자가 등록할 때
 // 본 것과 동일한 목록(getProductChecklist)이고, 증빙만 항목별로 묶어 붙입니다.
-const buyerChecklist = computed(() => buyerChecklistItems.value.map((item) => ({
-  ...item,
-  required: item.required ?? item.isRequired ?? false,
-  completed: item.status === 'COMPLETED',
-  evidence: evidenceByChecklistItem.value[item.checklistItemId] || [],
-})))
+const buyerChecklist = computed(() => buyerChecklistItems.value.map((item) => {
+  const evidence = evidenceByChecklistItem.value[item.checklistItemId] || []
+  return {
+    ...item,
+    required: item.required ?? item.isRequired ?? false,
+    // 자료가 한 장이라도 올라와 있으면 확인된 것으로 봅니다. 서버는 항목별 최소 장수·길이까지
+    // 채워야 COMPLETED로 두는데, 구매자에게는 "자료가 있느냐"가 먼저 궁금한 정보입니다.
+    completed: item.status === 'COMPLETED' || evidence.length > 0,
+    evidence,
+  }
+}))
+
+// 위 기준으로 다시 셉니다. 서버가 준 요약을 그대로 쓰면 항목에는 ✓가 떠 있는데 개수는 안 올라가
+// 화면 안에서 숫자가 어긋납니다.
+const buyerChecklistProgress = computed(() => {
+  const required = buyerChecklist.value.filter((item) => item.required)
+  return {
+    required: required.length,
+    completed: required.filter((item) => item.completed).length,
+  }
+})
+
+const checklistRate = computed(() => {
+  const { required, completed } = buyerChecklistProgress.value
+  return required ? Math.min(100, Math.round((completed / required) * 100)) : 0
+})
 
 const EVIDENCE_TYPE_LABELS = {
   PHOTO: '사진',
@@ -107,12 +122,9 @@ function diagnosisFieldLabel(fieldName) {
   return DIAGNOSIS_FIELD_LABELS[fieldName] || fieldName
 }
 
-// 값이 길어 잘린(...) 항목만 눌러서 원문 전체를 한 줄 툴팁으로 봅니다. 원본 파일로 이동하지 않습니다.
+// 값이 길면 잘려(...) 보입니다. 커서를 올리면 원문 전체를 툴팁으로 보여 줍니다.
+// 눌러서 펼치는 방식은 누를 수 있다는 걸 먼저 알아야 해서 올려놓기만 해도 보이게 했습니다.
 const activeDiagnosisField = ref(null)
-
-function toggleDiagnosisValueTooltip(fieldName) {
-  activeDiagnosisField.value = activeDiagnosisField.value === fieldName ? null : fieldName
-}
 
 // 증빙 원본을 크게 보는 팝업입니다. 목록 안 썸네일은 56px이라 영상 재생에는 너무 작습니다.
 const mediaViewer = ref(null)
@@ -121,7 +133,8 @@ function openMediaViewer(item, evidence) {
   mediaViewer.value = { itemName: item.name, evidence }
 }
 
-// 설명은 기본 4줄로 접어 두고, 길면 펼쳐 봅니다. 체크리스트가 먼저 눈에 들어오게 하려는 의도입니다.
+// 설명은 기본 4줄로 접어 두고, 길면 펼쳐 봅니다. 설명이 길어도 아래 검증 자료까지 한 화면에
+// 들어오게 하려는 것입니다.
 const isDescriptionExpanded = ref(false)
 const isDescriptionLong = computed(() => (product.value?.description || '').length > 180)
 const isRecaptureModalOpen = ref(false)
@@ -403,9 +416,14 @@ onMounted(async () => {
       </div>
 
       <template v-else>
-        <div class="grid gap-8 lg:grid-cols-[1.08fr_0.92fr] lg:gap-12">
+        <!-- 상단: 사진을 크게 보고, 옆에서 바로 살 수 있게 둡니다. -->
+        <div class="grid gap-8 lg:grid-cols-[7fr_3fr]">
           <section aria-label="상품 이미지">
-            <div class="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-md bg-slate-50">
+            <!--
+              4:3을 그대로 두면 넓은 화면에서 사진 높이가 600px를 넘어, 오른쪽 정보 카드가 끝난
+              아래로 빈 공간이 크게 생깁니다. 최대 높이를 두어 설명이 화면 안으로 올라오게 합니다.
+            -->
+            <div class="relative flex aspect-[4/3] max-h-[460px] items-center justify-center overflow-hidden rounded-md bg-slate-50">
               <img
                 v-if="activeImageUrl"
                 :src="activeImageUrl"
@@ -452,153 +470,180 @@ onMounted(async () => {
             </ul>
           </section>
 
-          <section>
-            <div class="flex items-start justify-between gap-4">
-              <div class="min-w-0">
-                <p class="text-sm font-semibold text-primary">
-                  {{ product.device?.manufacturer || '제조사 미등록' }}
-                  <span class="text-text-sub">· {{ product.device?.model || '모델 미등록' }}</span>
-                </p>
-                <h1 class="mt-3 text-3xl font-bold leading-tight tracking-tight text-text-main">
-                  {{ product.name }}
-                </h1>
+          <div class="space-y-4">
+            <section class="rounded-lg border border-border bg-surface p-4">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <p class="truncate text-xs font-semibold text-primary">
+                    {{ product.device?.manufacturer || '제조사 미등록' }}
+                    <span class="text-text-sub">· {{ product.device?.model || '모델 미등록' }}</span>
+                  </p>
+                  <h1 class="mt-2 text-xl font-bold leading-snug tracking-tight text-text-main">
+                    {{ product.name }}
+                  </h1>
+                </div>
+                <button
+                  type="button"
+                  class="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-md border text-xl leading-none transition"
+                  :class="isFavorite
+                    ? 'favorite-button--on border-primary bg-accent text-primary'
+                    : 'border-border bg-surface text-text-sub hover:border-primary hover:text-primary'"
+                  :disabled="isUpdatingFavorite"
+                  :aria-label="isFavorite ? '좋아요한 상품 해제' : '좋아요한 상품 등록'"
+                  @click="toggleFavorite"
+                >
+                  {{ isFavorite ? '♥' : '♡' }}
+                </button>
               </div>
-              <button
-                type="button"
-                class="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-md border text-xl transition"
-                :class="isFavorite ? 'border-primary bg-accent text-primary' : 'border-border bg-surface text-text-sub hover:border-primary'"
-                :disabled="isUpdatingFavorite"
-                :aria-label="isFavorite ? '좋아요한 상품 해제' : '좋아요한 상품 등록'"
-                @click="toggleFavorite"
-              >
-                {{ isFavorite ? '♥' : '♡' }}
-              </button>
-            </div>
-            <p class="mt-5 text-3xl font-bold text-text-main">
-              {{ formatPrice(product.price) }}원
-            </p>
+              <p class="mt-4 text-2xl font-bold text-text-main">
+                {{ formatPrice(product.price) }}원
+              </p>
 
-            <!--
+              <!--
               가격 바로 아래에 판매자를 둡니다. 누구에게 사는지가 기기 옵션보다 먼저 읽혀야 합니다.
               누르면 그 판매자의 판매 목록으로 갑니다.
               판매 중 개수는 여기서 보여주지 않습니다 — 이 화면의 관심은 '이 상품'이고, 판매자의
               재고 규모는 프로필 페이지에서 볼 내용입니다.
               정산 계좌 같은 값은 공개 프로필에 담기지 않습니다.
             -->
-            <RouterLink
-              v-if="sellerProfile"
-              :to="{ name: 'seller-profile', params: { sellerId: sellerProfile.sellerId } }"
-              class="mt-6 flex items-center gap-3 rounded-lg border border-border bg-surface p-3 transition hover:border-primary/50 hover:shadow-card"
-            >
-              <span
-                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-gradient text-sm font-bold text-white"
-                aria-hidden="true"
-              >{{ (sellerProfile.nickname || '판').trim().charAt(0) }}</span>
-              <span class="min-w-0 flex-1">
-                <span class="block truncate text-sm font-semibold text-text-main">
-                  {{ sellerProfile.nickname }}
-                </span>
-                <!-- 판매자 등록 행이 없는 회원이면 sellerType이 비어 옵니다. -->
+              <RouterLink
+                v-if="sellerProfile"
+                :to="{ name: 'seller-profile', params: { sellerId: sellerProfile.sellerId } }"
+                class="mt-4 flex items-center gap-2.5 rounded-lg border border-border bg-surface p-2.5 transition hover:border-primary/50 hover:shadow-card"
+              >
                 <span
-                  v-if="sellerProfile.sellerType"
-                  class="mt-0.5 block text-xs text-text-sub"
-                >
-                  {{ sellerProfile.sellerType === 'BUSINESS' ? '사업자 판매자' : '개인 판매자' }}
+                  class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-gradient text-sm font-bold text-white"
+                  aria-hidden="true"
+                >{{ (sellerProfile.nickname || '판').trim().charAt(0) }}</span>
+                <span class="min-w-0 flex-1">
+                  <span class="block truncate text-sm font-semibold text-text-main">
+                    {{ sellerProfile.nickname }}
+                  </span>
+                  <!-- 판매자 등록 행이 없는 회원이면 sellerType이 비어 옵니다. -->
+                  <span
+                    v-if="sellerProfile.sellerType"
+                    class="mt-0.5 block text-xs text-text-sub"
+                  >
+                    {{ sellerProfile.sellerType === 'BUSINESS' ? '사업자 판매자' : '개인 판매자' }}
+                  </span>
                 </span>
-              </span>
-              <span class="shrink-0 text-xs font-semibold text-primary">판매자 상품 보기 →</span>
-            </RouterLink>
-            <p
-              v-else
-              class="mt-6 text-sm text-text-sub"
-            >
-              판매자 정보를 불러오지 못했습니다.
-            </p>
+                <span
+                  class="shrink-0 text-sm font-semibold text-primary"
+                  aria-hidden="true"
+                >→</span>
+              </RouterLink>
+              <p
+                v-else
+                class="mt-4 text-xs text-text-sub"
+              >
+                판매자 정보를 불러오지 못했습니다.
+              </p>
 
-            <dl class="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-border pt-5 text-sm">
-              <div>
-                <dt class="text-xs text-text-sub">
-                  색상
-                </dt>
-                <dd class="mt-1 font-semibold text-text-main">
-                  {{ product.device?.color || '미입력' }}
-                </dd>
+              <dl class="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-border pt-4 text-sm">
+                <div>
+                  <dt class="text-xs text-text-sub">
+                    색상
+                  </dt>
+                  <dd class="mt-1 font-semibold text-text-main">
+                    {{ product.device?.color || '미입력' }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-xs text-text-sub">
+                    저장 용량
+                  </dt>
+                  <dd class="mt-1 font-semibold text-text-main">
+                    {{ product.device?.storageGb ? `${product.device.storageGb}GB` : '미입력' }}
+                  </dd>
+                </div>
+              </dl>
+
+              <!-- 내 상품에서는 구매·문의처럼 자기 자신을 향하는 행동 대신 수정 동선만 보여줍니다. -->
+              <div class="mt-5 space-y-3">
+                <template v-if="isOwner">
+                  <BaseButton
+                    block
+                    :to="{ name: 'seller-product-edit', params: { productId: product.productId } }"
+                  >
+                    수정하기
+                  </BaseButton>
+                  <!-- 서비스 결제를 거치지 않은 직거래를 정리하는 버튼입니다. -->
+                  <BaseButton
+                    v-if="canMarkSold"
+                    block
+                    variant="outline"
+                    :disabled="isMarkingSold"
+                    @click="markSold"
+                  >
+                    {{ isMarkingSold ? '처리 중…' : '판매 완료 처리하기' }}
+                  </BaseButton>
+                  <!-- 직거래가 깨졌을 때 상품을 새로 등록하지 않고 이 글로 돌아옵니다. -->
+                  <BaseButton
+                    v-if="canReopen"
+                    block
+                    variant="outline"
+                    :disabled="isMarkingSold"
+                    @click="reopen"
+                  >
+                    {{ isMarkingSold ? '처리 중…' : '다시 판매하기' }}
+                  </BaseButton>
+                </template>
+                <!-- 구매하기와 문의하기 두 개만 둡니다. 영상 확인은 채팅방 안에서 요청합니다. -->
+                <template v-else>
+                  <BaseButton
+                    block
+                    :to="canPurchase ? { name: 'purchase', params: { productId: product.productId } } : ''"
+                    :disabled="!canPurchase"
+                  >
+                    {{ purchaseButtonLabel }}
+                  </BaseButton>
+                  <BaseButton
+                    block
+                    variant="outline"
+                    :disabled="isOpeningChat"
+                    @click="openChat"
+                  >
+                    {{ isOpeningChat ? '채팅방 여는 중…' : '판매자에게 문의하기' }}
+                  </BaseButton>
+                </template>
               </div>
-              <div>
-                <dt class="text-xs text-text-sub">
-                  저장 용량
-                </dt>
-                <dd class="mt-1 font-semibold text-text-main">
-                  {{ product.device?.storageGb ? `${product.device.storageGb}GB` : '미입력' }}
-                </dd>
-              </div>
-            </dl>
 
-            <!-- 내 상품에서는 구매·문의처럼 자기 자신을 향하는 행동 대신 수정 동선만 보여줍니다. -->
-            <div class="mt-5 space-y-3">
-              <template v-if="isOwner">
-                <BaseButton
-                  block
-                  :to="{ name: 'seller-product-edit', params: { productId: product.productId } }"
-                >
-                  수정하기
-                </BaseButton>
-                <!-- 서비스 결제를 거치지 않은 직거래를 정리하는 버튼입니다. -->
-                <BaseButton
-                  v-if="canMarkSold"
-                  block
-                  variant="outline"
-                  :disabled="isMarkingSold"
-                  @click="markSold"
-                >
-                  {{ isMarkingSold ? '처리 중…' : '판매 완료 처리하기' }}
-                </BaseButton>
-                <!-- 직거래가 깨졌을 때 상품을 새로 등록하지 않고 이 글로 돌아옵니다. -->
-                <BaseButton
-                  v-if="canReopen"
-                  block
-                  variant="outline"
-                  :disabled="isMarkingSold"
-                  @click="reopen"
-                >
-                  {{ isMarkingSold ? '처리 중…' : '다시 판매하기' }}
-                </BaseButton>
-              </template>
-              <!-- 구매하기와 문의하기 두 개만 둡니다. 영상 확인은 채팅방 안에서 요청합니다. -->
-              <template v-else>
-                <BaseButton
-                  block
-                  :to="canPurchase ? { name: 'purchase', params: { productId: product.productId } } : ''"
-                  :disabled="!canPurchase"
-                >
-                  {{ purchaseButtonLabel }}
-                </BaseButton>
-                <BaseButton
-                  block
-                  variant="outline"
-                  :disabled="isOpeningChat"
-                  @click="openChat"
-                >
-                  {{ isOpeningChat ? '채팅방 여는 중…' : '판매자에게 문의하기' }}
-                </BaseButton>
-              </template>
-            </div>
+              <p
+                v-if="errorMessage"
+                role="alert"
+                class="mt-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700"
+              >
+                {{ errorMessage }}
+              </p>
+            </section>
+          </div>
+        </div>
 
+        <!-- 중단: 설명은 테두리 없이 두되 한 줄이 너무 길지 않게 폭을 제한합니다. -->
+        <div class="mt-8 max-w-3xl">
+          <section>
+            <h2 class="font-bold text-text-main">
+              상품 설명
+            </h2>
             <p
-              v-if="errorMessage"
-              role="alert"
-              class="mt-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700"
+              class="mt-3 whitespace-pre-wrap text-sm leading-6 text-text-sub"
+              :class="isDescriptionExpanded ? '' : 'line-clamp-4'"
             >
-              {{ errorMessage }}
+              {{ product.description || '판매자가 등록한 상세 설명이 없습니다.' }}
             </p>
+            <button
+              v-if="isDescriptionLong"
+              type="button"
+              class="mt-2 text-xs font-semibold text-primary hover:underline"
+              @click="isDescriptionExpanded = !isDescriptionExpanded"
+            >
+              {{ isDescriptionExpanded ? '접기' : '더 보기' }}
+            </button>
           </section>
         </div>
 
-        <!--
-          검증 체크리스트를 넓은 쪽에 두고 상품 설명을 좁게 접어 둡니다. 이 서비스에서 구매 판단의
-          근거는 판매자가 쓴 설명글보다 항목별 검증 자료라서, 그 쪽이 먼저 읽히게 배치했습니다.
-        -->
-        <div class="mt-16 grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-10">
+        <!-- 하단: 검증 자료와 인식된 사양을 나란히 두어 세로 길이를 줄입니다. -->
+        <div class="mt-10 grid items-start gap-8 lg:grid-cols-2">
           <section class="rounded-lg border border-border bg-surface p-5 sm:p-6">
             <div class="flex flex-wrap items-start justify-between gap-4">
               <div>
@@ -615,7 +660,7 @@ onMounted(async () => {
               <!-- 목록 카드와 같은 모양으로 둡니다. 같은 값을 화면마다 다르게 읽지 않도록. -->
               <div class="shrink-0 text-right">
                 <span class="rounded-pill bg-accent px-2.5 py-1 text-xs font-bold text-primary">
-                  {{ checklist.completed || 0 }}/{{ checklist.required || 0 }}
+                  {{ buyerChecklistProgress.completed }}/{{ buyerChecklistProgress.required }}
                 </span>
               </div>
             </div>
@@ -636,15 +681,19 @@ onMounted(async () => {
               항목을 빠뜨리지 않고 전부 보여주되 화면이 끝없이 길어지지 않게, 5개 높이만 열어 두고
               나머지는 스크롤로 봅니다. 행 높이(5rem)와 간격(0.5rem)을 고정해야 5개에서 잘립니다.
             -->
+            <!--
+              항목마다 상자를 두면 테두리가 겹쳐 보여 지저분합니다. 하나의 카드 안에서 구분선으로만
+              나눕니다.
+            -->
             <ul
               v-if="buyerChecklist.length"
-              class="mt-4 max-h-[27.5rem] space-y-2 overflow-y-auto pr-1"
+              class="checklist-card mt-4 max-h-[27.5rem] overflow-y-auto"
               aria-label="검증 체크리스트 항목"
             >
               <li
                 v-for="item in buyerChecklist"
                 :key="item.checklistItemId"
-                class="flex h-20 items-center gap-3 rounded-md border border-border bg-bg px-3"
+                class="checklist-row flex h-20 items-center gap-3"
               >
                 <span
                   class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold"
@@ -722,64 +771,20 @@ onMounted(async () => {
               공개된 검증 항목이 없습니다.
             </p>
 
-            <!-- ocr_result/dxdiag_result/battery_report_result 취합값. 항목별 자료 첨부 여부와는
-                 별개로, 실제로 인식된 사양 값 자체를 필드 단위로 보여줍니다. -->
+            <!--
+              카드 안에 카드를 또 두지 않고 구분선으로만 나눕니다.
+              내 상품에서는 통째로 감춥니다 — 자기 자신에게 재촬영을 요청할 일이 없어,
+              안내 문구만 남으면 빈 상자처럼 보입니다.
+            -->
             <div
-              v-if="diagnosisSummaryItems.length"
-              class="mt-6 border-t border-border pt-4"
+              v-if="!isOwner"
+              class="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4"
             >
-              <h3 class="text-sm font-bold text-text-main">
-                자동 인식된 사양
-              </h3>
-              <dl class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <div
-                  v-for="item in diagnosisSummaryItems"
-                  :key="item.fieldName"
-                  class="relative flex items-center justify-between gap-3 rounded-md bg-bg px-3 py-2"
-                >
-                  <dt class="shrink-0 text-xs text-text-sub">
-                    {{ diagnosisFieldLabel(item.fieldName) }}
-                  </dt>
-                  <dd class="min-w-0 text-right text-sm font-semibold">
-                    <button
-                      v-if="item.status === 'AVAILABLE'"
-                      type="button"
-                      class="block w-full truncate text-right text-text-main"
-                      @click="toggleDiagnosisValueTooltip(item.fieldName)"
-                      @blur="activeDiagnosisField = null"
-                    >
-                      {{ item.value }}
-                    </button>
-                    <span
-                      v-else
-                      class="block truncate text-text-sub"
-                    >
-                      인식 실패
-                    </span>
-                  </dd>
-                  <div
-                    v-if="activeDiagnosisField === item.fieldName"
-                    class="absolute right-0 top-full z-10 mt-1 whitespace-nowrap rounded-md bg-slate-800 px-3 py-1.5 text-xs font-normal text-white shadow-elevated"
-                  >
-                    {{ item.value }}
-                  </div>
-                </div>
-              </dl>
-              <p
-                v-if="diagnosisDisclaimer"
-                class="mt-3 text-xs text-text-sub"
-              >
-                {{ diagnosisDisclaimer }}
-              </p>
-            </div>
-
-            <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
-              <p class="text-xs text-text-sub">
+              <p class="min-w-0 flex-1 text-xs text-text-sub">
                 자료가 부족하면 판매자에게 다시 찍어 달라고 요청할 수 있습니다.
               </p>
               <BaseButton
-                v-if="!isOwner"
-                class="px-3 py-2 text-sm"
+                class="shrink-0 px-3 py-1.5 text-sm"
                 variant="outline"
                 @click="openRecaptureModal"
               >
@@ -788,25 +793,68 @@ onMounted(async () => {
             </div>
           </section>
 
-          <section class="lg:border-l lg:border-border lg:pl-8">
-            <h2 class="font-bold text-text-main">
-              상품 설명
-            </h2>
+          <!-- ocr_result/dxdiag_result/battery_report_result 취합값. 항목별 자료 첨부 여부와는
+               별개로, 실제로 인식된 사양 값 자체를 필드 단위로 보여줍니다. -->
+          <div
+            v-if="diagnosisSummaryItems.length"
+            class="rounded-lg border border-border bg-surface p-5 sm:p-6"
+          >
+            <h3 class="text-sm font-bold text-text-main">
+              자동 인식된 사양
+            </h3>
+            <!--
+                항목마다 회색 박스를 두면 개수만큼 상자가 늘어서 지저분해집니다. 하나의 옅은 카드
+                안에서 구분선으로만 나눕니다. 순서는 서버가 준 그대로 둡니다.
+              -->
+            <dl class="spec-list mt-3">
+              <div
+                v-for="item in diagnosisSummaryItems"
+                :key="item.fieldName"
+                class="spec-row relative"
+              >
+                <dt class="w-[130px] shrink-0 text-[13px] font-medium text-text-sub">
+                  {{ diagnosisFieldLabel(item.fieldName) }}
+                </dt>
+                <!--
+                    값이 길면 잘려 보입니다. 눌러서 펼치게 하면 눌러야 한다는 걸 먼저 알아야 하므로,
+                    올려놓기만 해도 전체가 보이게 합니다. 키보드 포커스에도 같이 뜹니다.
+                  -->
+                <dd class="min-w-0 flex-1 text-right">
+                  <span
+                    v-if="item.status === 'AVAILABLE'"
+                    class="block cursor-default truncate text-sm font-semibold text-text-main"
+                    tabindex="0"
+                    @mouseenter="activeDiagnosisField = item.fieldName"
+                    @mouseleave="activeDiagnosisField = null"
+                    @focus="activeDiagnosisField = item.fieldName"
+                    @blur="activeDiagnosisField = null"
+                  >
+                    {{ item.value }}
+                  </span>
+                  <!-- 인식하지 못한 값은 흐리게 둡니다. 읽을 게 없는 줄에 시선이 가면 안 됩니다. -->
+                  <span
+                    v-else
+                    class="block truncate text-sm font-normal text-slate-300"
+                  >
+                    인식 실패
+                  </span>
+                </dd>
+                <div
+                  v-if="activeDiagnosisField === item.fieldName"
+                  role="tooltip"
+                  class="diagnosis-tooltip pointer-events-none absolute right-0 top-full z-10 mt-1 max-w-[min(20rem,80vw)] whitespace-normal break-words rounded-md bg-slate-800 px-3 py-1.5 text-left text-xs font-normal text-white shadow-elevated"
+                >
+                  {{ item.value }}
+                </div>
+              </div>
+            </dl>
             <p
-              class="mt-3 whitespace-pre-wrap text-sm leading-6 text-text-sub"
-              :class="isDescriptionExpanded ? '' : 'line-clamp-4'"
+              v-if="diagnosisDisclaimer"
+              class="mt-3 text-xs text-text-sub"
             >
-              {{ product.description || '판매자가 등록한 상세 설명이 없습니다.' }}
+              {{ diagnosisDisclaimer }}
             </p>
-            <button
-              v-if="isDescriptionLong"
-              type="button"
-              class="mt-2 text-xs font-semibold text-primary hover:underline"
-              @click="isDescriptionExpanded = !isDescriptionExpanded"
-            >
-              {{ isDescriptionExpanded ? '접기' : '더 보기' }}
-            </button>
-          </section>
+          </div>
         </div>
 
         <!-- 증빙 원본 팝업. 목록 썸네일이 작아서 영상은 여기서 재생합니다. -->
@@ -947,3 +995,59 @@ onMounted(async () => {
     </main>
   </DefaultLayout>
 </template>
+
+<style scoped>
+/* 자동 인식 사양: 옅은 카드 하나에 구분선으로만 행을 나눕니다. */
+.spec-list {
+  background-color: #f8fafc;
+  border: 1px solid #f1f5f9;
+  border-radius: 16px;
+  padding: 0 16px;
+}
+
+.spec-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.spec-row:last-child {
+  border-bottom: none;
+}
+
+/* 검증 체크리스트: 흰 카드 하나에 구분선으로만 항목을 나눕니다. */
+.checklist-card {
+  background: #fff;
+  border: 1px solid #f1f5f9;
+  border-radius: 20px;
+  box-shadow: 0 4px 20px rgb(15 23 42 / 3%);
+  padding: 4px 20px;
+}
+
+.checklist-row {
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.checklist-row:last-child {
+  border-bottom: none;
+}
+
+/* 툴팁이 툭 튀어나오지 않고 짧게 떠오르게 합니다. */
+.diagnosis-tooltip {
+  animation: tooltip-in 140ms ease-out;
+}
+
+@keyframes tooltip-in {
+  from { opacity: 0; transform: translateY(-2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .diagnosis-tooltip {
+    animation: none;
+  }
+}
+</style>

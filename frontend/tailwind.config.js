@@ -29,6 +29,9 @@ export default {
         sm: '8px',
         md: '12px',
         lg: '16px',
+        // tokens.css의 --radius-pill과 같은 값입니다. 이게 없으면 rounded-pill이 무시돼
+        // 알약 모양으로 만든 검색창·배지가 각지게 보입니다.
+        pill: '999px',
       },
       boxShadow: {
         card: '0 1px 2px rgba(16, 24, 40, 0.04)',
