@@ -10,17 +10,29 @@ import { formatAddress } from '../utils/daumPostcode'
 import { getAccessToken } from '../auth/session'
 import { getMyProfile } from '../api/member'
 import { getProduct } from '../api/products'
-import { createPayment } from '../api/payment'
+import { createPayment, getPayment, retryPayment } from '../api/payment'
 import { getDefaultAddress } from '../stores/addressBook'
 
 const route = useRoute()
 const router = useRouter()
 const product = ref(null)
 const isLoadingProduct = ref(true)
+// URL을 직접 바꿔 /purchase/다른상품?retryPaymentId=내결제ID로 들어오면, 실제 결제는
+// retryPaymentId가 가리키는 매물로 진행되는데 화면에는 route의 productId 상품이 보인다.
+// 백엔드가 소유자 확인은 해도 "화면 상품"과 "실제 결제 대상"이 어긋나는 것 자체는 막지 못하므로,
+// 재시도 대상 결제의 listingId를 조회해 route productId와 다르면 결제를 아예 진행하지 못하게 막는다.
+const retryListingMismatch = ref(false)
 
 onMounted(async () => {
   try {
     product.value = await getProduct(route.params.productId)
+    const retryPaymentId = route.query.retryPaymentId
+    if (retryPaymentId) {
+      const payment = await getPayment(retryPaymentId)
+      if (Number(payment.listingId) !== Number(route.params.productId)) {
+        retryListingMismatch.value = true
+      }
+    }
   } catch (error) {
     checkoutError.value = error.message || '상품 정보를 불러오지 못했습니다.'
   } finally {
@@ -97,6 +109,7 @@ function validateCheckout() {
 
 async function submitPayment() {
   checkoutError.value = ''
+  if (retryListingMismatch.value) return
   if (!validateCheckout()) return
   if (!product.value) return
 
@@ -112,11 +125,17 @@ async function submitPayment() {
 
   isSubmitting.value = true
   try {
-    const payment = await createPayment({
-      listingId: Number(route.params.productId),
-      method: selectedPayment.value.apiMethod,
-      idempotencyKey: crypto.randomUUID(),
-    })
+    // 결제창 이탈 후 예약이 살아있는 상태에서 다시 왔다면(PurchaseFailPage에서 취소 실패로
+    // retryPaymentId를 넘겨준 경우), 새 결제를 만들지 않고 같은 예약을 재사용하는 retry를 쓴다 —
+    // 그래야 이미 RESERVED인 매물에 다시 예약을 걸다 LISTING_NOT_ON_SALE로 거부되지 않는다.
+    const retryPaymentId = route.query.retryPaymentId
+    const payment = retryPaymentId
+      ? await retryPayment(retryPaymentId, selectedPayment.value.apiMethod)
+      : await createPayment({
+          listingId: Number(route.params.productId),
+          method: selectedPayment.value.apiMethod,
+          idempotencyKey: crypto.randomUUID(),
+        })
 
     const origin = window.location.origin
     const productId = route.params.productId
@@ -242,6 +261,24 @@ async function submitPayment() {
             <p class="text-sm text-text-sub">
               상품 정보를 불러오는 중...
             </p>
+          </BaseCard>
+          <BaseCard
+            v-else-if="retryListingMismatch"
+            class="sticky top-6"
+          >
+            <p
+              role="alert"
+              class="text-sm leading-6 text-red-700"
+            >
+              재시도할 결제와 현재 상품 정보가 일치하지 않습니다. 주문 내역에서 다시 시도해 주세요.
+            </p>
+            <BaseButton
+              to="/mypage/orders"
+              block
+              class="mt-5"
+            >
+              주문 내역으로 이동
+            </BaseButton>
           </BaseCard>
           <BaseCard
             v-else-if="product"

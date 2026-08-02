@@ -182,9 +182,12 @@ public class Payment extends BaseTimeEntity {
         this.confirmAttemptedAt = LocalDateTime.now();
     }
 
-    public void retry() {
+    // 결제창을 다시 열 때 결제 수단을 바꿀 수 있으므로, 이전 시도의 method를 그대로 유지하지 않고
+    // 매번 새로 받아 반영한다 — 그래야 실제로 Toss에 요청한 수단과 DB의 method가 어긋나지 않는다.
+    public void retry(PaymentMethod method) {
         this.attemptNo += 1;
         this.status = PaymentStatus.REQUESTED;
+        this.method = method;
         this.requestedAt = LocalDateTime.now();
         this.providerOrderId = buildProviderOrderId();
     }

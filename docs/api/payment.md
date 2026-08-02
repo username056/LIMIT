@@ -5,11 +5,16 @@
 - 결제 요청 생성 `POST /api/v1/payments`
 - 결제 승인(confirm) `POST /api/v1/payments/{paymentId}/confirm`
 - 결제 전 예약 취소 `POST /api/v1/payments/{paymentId}/cancel`
+- 결제 재시도 `POST /api/v1/payments/{paymentId}/retry`
 - 결제 상세 조회 `GET /api/v1/payments/{paymentId}`
+- 구매자 주문 내역 목록 `GET /api/v1/orders`
 - 예약 유예 시간이 지난 미결제 건 자동 만료 스케줄러
 
-PG 웹훅 승인/거절 처리, 타임아웃 후 자동 조회·복구, 결제 실패 재시도 API, 이상거래 테이블·관리자
-화면, IP 화이트리스트, 다중 PG 추상화는 이번 범위에서 제외했다. 실결제가 불가능한 Toss 테스트
+PG 웹훅 실시간 승인/거절 처리, 이상거래 테이블·관리자 화면, IP 화이트리스트, 다중 PG 추상화는
+이번 범위에서 제외했다. 타임아웃 후 자동 조회·복구와 결제 실패 재시도 API는 이 시점에는 제외였지만
+이후 `fix/payment-confirm-recovery`(관리자 reconcile + 만료 배치 연동)와
+`feat/payment-retry-order-history`(retry API 노출)에서 추가됐다 — 아래 관련 절 참고. 실결제가
+불가능한 Toss 테스트
 키 단계에서 상품 선택 → 결제 요청 → Toss 결제창 → 승인 → `Payment.APPROVED`/`Listing.PAID`
 전환까지의 수직 흐름을 먼저 완성하는 것을 목표로 한다. 이번 작업은
 `V20260728__add_reservation_deadline_and_payment_event_id_columns.sql` 등 선행 스키마 PR에서
@@ -37,8 +42,9 @@ NULL 다중 값을 허용하므로 이 일시 상태와 충돌하지 않는다.
 예약(`Listing.reservedUntil`)이 이미 만료됐으면 `PAYMENT_RETRY_NOT_ALLOWED`(`PAY007`, 409)로
 거부해 만료된 매물에 새 providerOrderId가 계속 발급되는 것을 막는다 — 이 확인은
 `ListingService.isReservationActive(listingId, buyerId)`를 통해서만 하고 `Payment`가 `Listing`
-엔티티를 직접 참조하지 않는다. `retryAttempt()`는 이번 PR에서 API로는 아직 열지 않았다 — Toss
-confirm/웹훅 연동(후속 PR)에서 실제 재시도 진입점이 정해지면 그때 컨트롤러에 연결한다.
+엔티티를 직접 참조하지 않는다. `retryAttempt()`는 이후 `POST /api/v1/payments/{paymentId}/retry`로
+API에 노출됐다 — 자세한 내용과 이후 보강(method 갱신, confirmAttemptedAt 검증, reservedUntil 연장,
+본인 활성 예약 자동 이어받기)은 아래 "결제 재시도·주문 내역·구매확정 후 문의" 절 참고.
 
 Toss confirm 요청에 쓸 멱등키는 이 `idempotencyKey`(결제 생성 요청 중복 방지용)와 별개로,
 confirm 연동 시 `payment-confirm-{paymentId}-{attemptNo}` 형태로 결정적으로 생성한다(별도 컬럼
@@ -150,8 +156,9 @@ Toss 응답이 실패면 `TossPaymentClientException.isRetryable()`로 갈린다
 - confirm 성공 경로에서 `Payment.approve()` 이후 `ListingService.markPaid()`가 실패하면 트랜잭션이
   롤백돼 Toss 승인과 우리 DB 상태가 어긋날 수 있다(위 "동작" 절 참고). 결제 취소·재조정 로직은
   아직 없다.
-- `PaymentService.retryAttempt()`(재시도 게이트)는 이번에도 API로 열지 않았다 — 결제창을 다시 열 때
-  같은 `providerOrderId`를 재사용할지, 새 시도를 발급할지는 프론트 재시도 흐름이 정해지면 연결한다.
+- ~~`PaymentService.retryAttempt()`(재시도 게이트)는 API로 열지 않았다~~ → `feat/payment-retry-order-history`
+  에서 `POST /api/v1/payments/{paymentId}/retry`로 노출하고 프론트(`PurchaseFailPage`/`PurchasePage`)
+  까지 연결했다. 아래 관련 절 참고.
 
 ## confirm 재시도·PG 대사(reconcile) (`fix/payment-confirm-recovery`)
 
@@ -197,6 +204,71 @@ Toss 응답이 실패면 `TossPaymentClientException.isRetryable()`로 갈린다
   안 된다. 매물 반영이 그래도 실패하면(그 사이 다른 구매자가 재예약한 경우 등) 로그만 남기고
   `PAYMENT_CONFIRM_RESERVATION_INVALID`로 승격하는 건 `confirm()`의 매물 반영 실패 처리와 동일하다
   (`PaymentService.applyListingPaidTransitionOrEscalate`로 공통화).
+
+## 결제 재시도·주문 내역·구매확정 후 문의 (`feat/payment-retry-order-history`)
+
+결제창 이탈·취소 후 같은 구매자가 다시 결제할 수 있게 하고, 주문 내역과 구매확정 후 판매자 문의를
+실제 데이터로 연결했다.
+
+- **`POST /api/v1/payments/{paymentId}/retry`**: 서비스 계층에는 이미 있던
+  `PaymentService.retryAttempt()`를 API로 노출했다. 예약이 여전히 활성 상태면 `attemptNo`를 올리고
+  새 `providerOrderId`를 발급해 같은 결제 요청을 재사용한다. API로 노출하며
+  `payment.getStatus() != REQUESTED`를 소유자 확인 직후 명시적으로 검증하도록 보강했다 —
+  `isReservationActive()`만으로는 매물 반영 실패로 Payment는 APPROVED/FAILED로 끝났는데 Listing만
+  RESERVED로 남는 갈라진 상태에서 재시도가 통과할 수 있었다(문서상 계약은 "이미 승인·거절된 결제는
+  재시도 불가"였지만 코드가 이를 완전히 보장하지 못했다).
+- **retry 요청에 `method`를 받는다(`RetryPaymentRequest`)**: 재시도 결제창에서 사용자가 결제 수단을
+  바꿀 수 있는데(예: CARD로 생성된 결제를 TOSSPAY로 재시도), `retryAttempt()`가 method를 받지
+  않으면 Toss에는 새로 고른 수단으로 요청하면서 DB의 `Payment.method`는 최초 생성 시점 값으로
+  남아 실제 처리 수단과 어긋난다. `Payment.retry(PaymentMethod method)`가 매번 method를 갱신하도록
+  바꿔 이 불일치를 없앴다.
+- **`PurchaseFailPage` → `PurchasePage` 재시도 연동**: `cancelPayment()`가 성공하면(예약 해제됨)
+  "다시 시도하기"는 그대로 `/purchase/{productId}`로 보내 새 결제를 만든다. `cancelPayment()`가
+  실패하면(네트워크 오류 등) 예약이 여전히 이 구매자 앞으로 살아있을 수 있어, `retryPaymentId` 쿼리
+  파라미터를 붙여 같은 `/purchase/{productId}`로 보낸다. `PurchasePage`는 이 파라미터가 있으면
+  `createPayment()` 대신 `retryPayment()`를 호출해 새 예약을 만들지 않는다 — 이미 `RESERVED`인
+  매물에 새로 `reserve()`를 시도하면 `LISTING_NOT_ON_SALE`로 거부되기 때문이다.
+- **`GET /api/v1/orders`**: `OrderQueryService`가 구매자의 결제 내역(`REQUESTED` 제외, 최신순)을
+  조회하고, 매물 표시 정보(상품명·상태·대표 이미지)는 `ListingOrderSummaryReader`(payment 도메인 안,
+  raw JDBC)로 별도 조회해 product 도메인 Entity를 직접 참조하지 않는다 — `ListingChatReader`,
+  `ExpiredReservationCandidateReader`와 같은 방식이다. 대표 이미지 URL은 `MediaUrlResolver`(product
+  도메인의 인프라 유틸리티, Entity 아님)를 재사용해 해석한다. `MyOrdersPage`의 더미 데이터를 이
+  API 응답으로 교체했다.
+- **결제 완료 후 판매자 문의가 막히던 문제**: `ChatRoomService`의 신규 채팅방 생성은 매물이
+  `ON_SALE`일 때만 허용했다. 결제까지 마친 구매자가 주문 내역에서 처음 문의를 보내면(사전에 채팅한
+  적 없는 경우) 매물이 이미 `PAID`/`INSPECTING`/`CONFIRMED`/`SETTLED`라 `CHAT_ROOM_CREATION_NOT_ALLOWED`
+  로 거부됐다. `ListingChatReader`가 매물의 `buyer_id`도 함께 조회하도록 넓히고, 이 네 상태에서는
+  요청자가 실제 구매자(`listing.buyerId()`와 일치)일 때만 생성을 허용하도록 `validateCreation()`을
+  수정했다 — 관계없는 제3자가 결제 완료 매물에 채팅을 거는 것은 여전히 막는다. `CANCELLED`·`HIDDEN`
+  등 나머지 상태는 그대로 거부한다.
+- **`confirmAttemptedAt`이 찍힌 REQUESTED 결제는 retry도 막는다**: confirm 호출은 나갔는데 서버가
+  결과를 확정하지 못한 애매한 상태에서 `retryAttempt()`가 새 `providerOrderId`를 발급해 새 결제창을
+  열도록 허용하면, 원래 시도가 실제로는 Toss에서 승인됐을 경우 이중 청구로 이어진다. 이 상태는
+  재시도가 아니라 관리자 `reconcile()`로만 풀어야 하므로 `status == REQUESTED` 확인 다음에
+  `confirmAttemptedAt != null`이면 `PAYMENT_RETRY_NOT_ALLOWED`로 거부한다.
+- **`PurchasePage`의 retry 대상 검증**: `retryPaymentId`는 URL 쿼리라 사용자가 직접
+  `/purchase/다른상품?retryPaymentId=내결제ID`처럼 바꿔 들어올 수 있다. 백엔드는 소유자 확인만
+  하고 "화면에 보이는 상품"과 "실제 결제 대상"이 같은지는 보장하지 않으므로, 프론트가
+  `GET /api/v1/payments/{paymentId}`로 재시도 대상 결제를 조회해 `listingId`가 현재 route의
+  `productId`와 다르면 결제 자체를 진행하지 못하게 막는다(주문 요약·결제 버튼 대신 안내 카드만
+  보여줌).
+- **`POST /api/v1/payments`가 본인의 활성 예약을 자동으로 이어받는다**: `retryPaymentId` 기반 재시도는
+  Toss `failUrl`을 거쳐 `PurchaseFailPage`로 돌아온 경우만 커버한다. 상품 상세에서 "구매하기"를
+  다시 누르는 일반 경로는 매번 새 `idempotencyKey`(`crypto.randomUUID()`)를 만들기 때문에 기존
+  idempotencyKey 조회로는 못 잡고, 매물이 본인 예약으로 `RESERVED`라 `LISTING_NOT_ON_SALE`로
+  막혔다. `PaymentService.createPayment()`가 idempotencyKey로 못 찾으면
+  `findTopByListingIdAndBuyer_IdAndStatusOrderByRequestedAtDesc()`로 같은 매물·같은 구매자의
+  REQUESTED 결제를 조회하고, 있으면 새로 예약·생성하지 않고 `continueRequestedPayment()`로
+  이어간다. 이 메서드는 `retryAttempt()`(명시적 `/payments/{paymentId}/retry`)와 검증·갱신 로직을
+  그대로 공유한다 — 두 경로가 서로 다른 규칙으로 갈라지지 않게 하기 위함이다: `status ==
+  REQUESTED` 확인, `confirmAttemptedAt` 확인(있으면 절대 이어받지 않고 `PAYMENT_RETRY_NOT_ALLOWED`),
+  예약 활성 확인, `ListingService.renewReservationForBuyer()`로 `reservedUntil`을 지금부터 다시
+  10분 연장, `Payment.retry(method)`로 결제수단 갱신까지 동일하다. 이 변경으로 명시적 retry API도
+  호출할 때마다 예약 유예 시간이 새로 연장되도록 함께 바뀌었다(기존에는 원래 유예 시간 안에서만
+  재시도를 허용했다).
+  같은 매물·구매자에 정상 흐름이라면 REQUESTED가 하나여야 하지만, 과거 데이터 이상으로 여러 건이
+  남아 있을 가능성까지 고려해 `findTopBy...`로 최신 1건만 가져온다 — DB 유니크 제약까지는 MySQL
+  partial unique 이슈가 있어 이번 범위에서 다루지 않았다.
 
 ## Swagger 그룹
 

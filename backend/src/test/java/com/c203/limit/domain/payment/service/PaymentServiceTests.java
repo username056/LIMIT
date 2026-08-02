@@ -26,6 +26,7 @@ import com.c203.limit.domain.payment.dto.response.PaymentReconcileResponse;
 import com.c203.limit.domain.payment.dto.response.PaymentResponse;
 import com.c203.limit.domain.payment.entity.Payment;
 import com.c203.limit.domain.payment.entity.PaymentMethod;
+import com.c203.limit.domain.payment.entity.PaymentStatus;
 import com.c203.limit.domain.payment.repository.PaymentRepository;
 import com.c203.limit.domain.product.entity.Listing;
 import com.c203.limit.domain.product.service.ListingReservationView;
@@ -115,6 +116,94 @@ class PaymentServiceTests {
         assertThat(response.getMethod()).isEqualTo("CARD");
         assertThat(response.getRequestedAmount()).isEqualByComparingTo("650000");
         assertThat(response.getProviderOrderId()).isEqualTo("PAY-" + PAYMENT_ID + "-1");
+    }
+
+    @Test
+    void requestContinuesExistingRequestedPaymentInsteadOfCreatingNew() {
+        Payment existingRequested = requestedPayment();
+        when(paymentRepository.findByBuyerIdAndIdempotencyKey(BUYER_ID, "idem-new"))
+                .thenReturn(Optional.empty());
+        when(paymentRepository.findTopByListingIdAndBuyer_IdAndStatusOrderByRequestedAtDesc(
+                        LISTING_ID, BUYER_ID, PaymentStatus.REQUESTED))
+                .thenReturn(Optional.of(existingRequested));
+        when(listingService.isReservationActive(LISTING_ID, BUYER_ID)).thenReturn(true);
+
+        PaymentResponse response = service.request(
+                BUYER_ID, new CreatePaymentRequest(LISTING_ID, PaymentMethod.TOSSPAY, "idem-new"));
+
+        assertThat(response.getPaymentId()).isEqualTo(PAYMENT_ID);
+        assertThat(response.getMethod()).isEqualTo("TOSSPAY");
+        assertThat(existingRequested.getAttemptNo()).isEqualTo(2);
+        verify(listingService).renewReservationForBuyer(LISTING_ID, BUYER_ID);
+        verify(listingService, never()).reserve(any(), any());
+        verify(listingService, never()).get(any());
+        verify(paymentRepository, never()).save(any());
+        verifyNoInteractions(memberRepository);
+    }
+
+    @Test
+    void requestStillContinuesWithMostRecentWhenMultipleActiveRequestedPaymentsExist() {
+        // findTopBy...가 "구매자당 REQUESTED는 최대 1건" 가정을 깔고 최신 1건만 가져오는데, 데이터
+        // 이상으로 실제로는 여러 건일 수 있다. 그래도 흐름은 막지 않고 최신 1건으로 계속 진행해야
+        // 한다 — 개수 확인은 운영자용 경고 로그만 남기고 결과에는 영향을 주지 않는다.
+        Payment mostRecentRequested = requestedPayment();
+        when(paymentRepository.findByBuyerIdAndIdempotencyKey(BUYER_ID, "idem-new"))
+                .thenReturn(Optional.empty());
+        when(paymentRepository.findTopByListingIdAndBuyer_IdAndStatusOrderByRequestedAtDesc(
+                        LISTING_ID, BUYER_ID, PaymentStatus.REQUESTED))
+                .thenReturn(Optional.of(mostRecentRequested));
+        when(paymentRepository.countByListingIdAndBuyer_IdAndStatus(
+                        LISTING_ID, BUYER_ID, PaymentStatus.REQUESTED))
+                .thenReturn(2L);
+        when(listingService.isReservationActive(LISTING_ID, BUYER_ID)).thenReturn(true);
+
+        PaymentResponse response = service.request(
+                BUYER_ID, new CreatePaymentRequest(LISTING_ID, PaymentMethod.CARD, "idem-new"));
+
+        assertThat(response.getPaymentId()).isEqualTo(PAYMENT_ID);
+        assertThat(mostRecentRequested.getAttemptNo()).isEqualTo(2);
+    }
+
+    @Test
+    void requestRejectsWhenExistingRequestedPaymentHasConfirmAttempted() {
+        Payment existingRequested = requestedPayment();
+        existingRequested.markConfirmAttempted();
+        when(paymentRepository.findByBuyerIdAndIdempotencyKey(BUYER_ID, "idem-new"))
+                .thenReturn(Optional.empty());
+        when(paymentRepository.findTopByListingIdAndBuyer_IdAndStatusOrderByRequestedAtDesc(
+                        LISTING_ID, BUYER_ID, PaymentStatus.REQUESTED))
+                .thenReturn(Optional.of(existingRequested));
+
+        assertThatThrownBy(() -> service.request(
+                        BUYER_ID, new CreatePaymentRequest(LISTING_ID, PaymentMethod.CARD, "idem-new")))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PAYMENT_RETRY_NOT_ALLOWED));
+        verify(listingService, never()).reserve(any(), any());
+        verify(paymentRepository, never()).save(any());
+    }
+
+    @Test
+    void requestRejectsWhenExistingRequestedPaymentReservationNoLongerActive() {
+        Payment existingRequested = requestedPayment();
+        when(paymentRepository.findByBuyerIdAndIdempotencyKey(BUYER_ID, "idem-new"))
+                .thenReturn(Optional.empty());
+        when(paymentRepository.findTopByListingIdAndBuyer_IdAndStatusOrderByRequestedAtDesc(
+                        LISTING_ID, BUYER_ID, PaymentStatus.REQUESTED))
+                .thenReturn(Optional.of(existingRequested));
+        when(listingService.isReservationActive(LISTING_ID, BUYER_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.request(
+                        BUYER_ID, new CreatePaymentRequest(LISTING_ID, PaymentMethod.CARD, "idem-new")))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PAYMENT_RETRY_NOT_ALLOWED));
+        verify(listingService, never()).reserve(any(), any());
+        verify(paymentRepository, never()).save(any());
     }
 
     @Test
@@ -264,12 +353,30 @@ class PaymentServiceTests {
         when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
         when(listingService.isReservationActive(LISTING_ID, BUYER_ID)).thenReturn(true);
 
-        PaymentResponse response = service.retryAttempt(BUYER_ID, PAYMENT_ID);
+        PaymentResponse response = service.retryAttempt(BUYER_ID, PAYMENT_ID, PaymentMethod.CARD);
 
         assertThat(response.getStatus()).isEqualTo("REQUESTED");
         assertThat(payment.getAttemptNo()).isEqualTo(2);
         assertThat(payment.getProviderOrderId()).isEqualTo("PAY-" + PAYMENT_ID + "-2");
         assertThat(payment.getProviderOrderId()).isNotEqualTo(firstOrderId);
+        verify(listingService).renewReservationForBuyer(LISTING_ID, BUYER_ID);
+    }
+
+    @Test
+    void retryAttemptUpdatesPaymentMethodWhenChangedAtRetry() {
+        Payment payment =
+                Payment.request(
+                        LISTING_ID, buyer(), "idem-1", java.math.BigDecimal.valueOf(650_000), PaymentMethod.CARD);
+        ReflectionTestUtils.setField(payment, "id", PAYMENT_ID);
+        payment.assignProviderOrderId();
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        when(listingService.isReservationActive(LISTING_ID, BUYER_ID)).thenReturn(true);
+
+        PaymentResponse response = service.retryAttempt(BUYER_ID, PAYMENT_ID, PaymentMethod.TOSSPAY);
+
+        assertThat(response.getMethod()).isEqualTo("TOSSPAY");
+        assertThat(payment.getMethod()).isEqualTo(PaymentMethod.TOSSPAY);
+        verify(listingService).renewReservationForBuyer(LISTING_ID, BUYER_ID);
     }
 
     @Test
@@ -281,13 +388,95 @@ class PaymentServiceTests {
         when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
         when(listingService.isReservationActive(LISTING_ID, BUYER_ID)).thenReturn(false);
 
-        assertThatThrownBy(() -> service.retryAttempt(BUYER_ID, PAYMENT_ID))
+        assertThatThrownBy(() -> service.retryAttempt(BUYER_ID, PAYMENT_ID, PaymentMethod.CARD))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         exception ->
                                 assertThat(exception.getErrorCode())
                                         .isEqualTo(ErrorCode.PAYMENT_RETRY_NOT_ALLOWED));
         assertThat(payment.getAttemptNo()).isEqualTo(1);
+    }
+
+    @Test
+    void retryAttemptRejectsApprovedPayment() {
+        Payment payment =
+                Payment.request(
+                        LISTING_ID, buyer(), "idem-1", java.math.BigDecimal.valueOf(650_000), PaymentMethod.CARD);
+        ReflectionTestUtils.setField(payment, "id", PAYMENT_ID);
+        payment.approve(java.math.BigDecimal.valueOf(650_000), "txn-1");
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+
+        assertThatThrownBy(() -> service.retryAttempt(BUYER_ID, PAYMENT_ID, PaymentMethod.CARD))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PAYMENT_RETRY_NOT_ALLOWED));
+        assertThat(payment.getAttemptNo()).isEqualTo(1);
+        verifyNoInteractions(listingService);
+    }
+
+    @Test
+    void retryAttemptRejectsFailedPayment() {
+        Payment payment =
+                Payment.request(
+                        LISTING_ID, buyer(), "idem-1", java.math.BigDecimal.valueOf(650_000), PaymentMethod.CARD);
+        ReflectionTestUtils.setField(payment, "id", PAYMENT_ID);
+        payment.fail("카드 승인이 거절되었습니다.");
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+
+        assertThatThrownBy(() -> service.retryAttempt(BUYER_ID, PAYMENT_ID, PaymentMethod.CARD))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PAYMENT_RETRY_NOT_ALLOWED));
+        assertThat(payment.getAttemptNo()).isEqualTo(1);
+        verifyNoInteractions(listingService);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(
+            value = PaymentStatus.class,
+            names = {"CANCELLED", "EXPIRED"})
+    void retryAttemptRejectsClosedPayments(PaymentStatus status) {
+        Payment payment =
+                Payment.request(
+                        LISTING_ID, buyer(), "idem-1", java.math.BigDecimal.valueOf(650_000), PaymentMethod.CARD);
+        ReflectionTestUtils.setField(payment, "id", PAYMENT_ID);
+        if (status == PaymentStatus.CANCELLED) {
+            payment.cancel("구매자가 결제 전 예약을 취소함");
+        } else {
+            payment.expire("예약 유예 시간 초과로 자동 만료");
+        }
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+
+        assertThatThrownBy(() -> service.retryAttempt(BUYER_ID, PAYMENT_ID, PaymentMethod.CARD))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PAYMENT_RETRY_NOT_ALLOWED));
+        verifyNoInteractions(listingService);
+    }
+
+    @Test
+    void retryAttemptRejectsRequestedPaymentWithConfirmAttempted() {
+        Payment payment =
+                Payment.request(
+                        LISTING_ID, buyer(), "idem-1", java.math.BigDecimal.valueOf(650_000), PaymentMethod.CARD);
+        ReflectionTestUtils.setField(payment, "id", PAYMENT_ID);
+        payment.markConfirmAttempted();
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+
+        assertThatThrownBy(() -> service.retryAttempt(BUYER_ID, PAYMENT_ID, PaymentMethod.CARD))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PAYMENT_RETRY_NOT_ALLOWED));
+        assertThat(payment.getAttemptNo()).isEqualTo(1);
+        verifyNoInteractions(listingService);
     }
 
     @Test
@@ -299,7 +488,7 @@ class PaymentServiceTests {
         when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
 
         Long otherMemberId = 999L;
-        assertThatThrownBy(() -> service.retryAttempt(otherMemberId, PAYMENT_ID))
+        assertThatThrownBy(() -> service.retryAttempt(otherMemberId, PAYMENT_ID, PaymentMethod.CARD))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         exception ->
@@ -312,7 +501,7 @@ class PaymentServiceTests {
     void retryAttemptThrowsNotFoundWhenPaymentMissing() {
         when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.retryAttempt(BUYER_ID, PAYMENT_ID))
+        assertThatThrownBy(() -> service.retryAttempt(BUYER_ID, PAYMENT_ID, PaymentMethod.CARD))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         exception ->
