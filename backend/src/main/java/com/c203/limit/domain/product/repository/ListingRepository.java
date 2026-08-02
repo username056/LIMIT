@@ -1,6 +1,8 @@
 package com.c203.limit.domain.product.repository;
 
 import com.c203.limit.domain.product.entity.Listing;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import com.c203.limit.domain.product.entity.ListingStatus;
 import org.springframework.data.domain.Page;
@@ -64,4 +66,16 @@ public interface ListingRepository
                AND listing.deletedAt IS NULL
             """)
     int increaseViewCount(@Param("listingId") Long listingId);
+
+    /** 자동 구매확정 스케줄러가 처리할 대상 ID만 가볍게 조회한다. */
+    @Query(
+            """
+            SELECT listing.id FROM Listing listing
+             WHERE listing.status = com.c203.limit.domain.product.entity.ListingStatus.INSPECTING
+               AND listing.autoConfirmAt IS NOT NULL
+               AND listing.autoConfirmAt < :before
+               AND listing.deletedAt IS NULL
+             ORDER BY listing.autoConfirmAt ASC
+            """)
+    List<Long> findAutoConfirmCandidateIds(@Param("before") LocalDateTime before, Pageable pageable);
 }

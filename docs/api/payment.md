@@ -16,6 +16,7 @@ PG 웹훅 실시간 승인/거절 처리, 이상거래 테이블·관리자 화�
 `feat/payment-retry-order-history`(retry API 노출)에서 추가됐다 — 아래 관련 절 참고. 실결제가
 불가능한 Toss 테스트
 키 단계에서 상품 선택 → 결제 요청 → Toss 결제창 → 승인 → `Payment.APPROVED`/`Listing.PAID`
+(직후 자동으로 `INSPECTING` 진입, `feat/order-post-payment-flow`)
 전환까지의 수직 흐름을 먼저 완성하는 것을 목표로 한다. 이번 작업은
 `V20260728__add_reservation_deadline_and_payment_event_id_columns.sql` 등 선행 스키마 PR에서
 이미 추가된 `payment`, `listing` 컬럼 위에 최소한의 생성·승인·조회 유스케이스만 올린다.
@@ -91,7 +92,9 @@ Toss 응답이 실패면 `TossPaymentClientException.isRetryable()`로 갈린다
 `Payment` 상태를 건드리지 않고 `PAYMENT_CONFIRM_RETRYABLE`(`PAY011`, 503)만 반환해 클라이언트가
 같은 멱등키로 다시 confirm을 호출하게 한다. 그 외(카드 거절 등)는 `Payment.fail()`로 `FAILED`
 전환 후 Toss 메시지를 그대로 담아 `PAYMENT_CONFIRM_REJECTED`(`PAY012`, 422)를 반환한다. 승인 성공
-시 `Payment.approve()`(`REQUESTED -> APPROVED`)와 `ListingService.markPaid()`(`RESERVED -> PAID`)를
+시 `Payment.approve()`(`REQUESTED -> APPROVED`)와
+`ListingService.markPaid()`(`RESERVED -> PAID`, 곧바로 이어서 `INSPECTING`까지 진입 —
+자세한 내용은 `product.md`의 "결제 이후 주문 흐름 완성" 절 참고)를
 같은 트랜잭션에서 호출한다 — Toss 승인 후 `markPaid()`가 실패(예: 예약이 이미 다른 경로로
 바뀐 경우)하면 트랜잭션이 롤백되어 우리 DB는 `REQUESTED`로 남지만 Toss 쪽은 이미 승인된 상태로
 남는 불일치가 생길 수 있다. 웹훅·조회 기반 재조정은 아직 없으므로 후속 과제로 남긴다.
@@ -174,7 +177,8 @@ Toss 응답이 실패면 `TossPaymentClientException.isRetryable()`로 갈린다
   이탈 건과, 서버가 실제로 confirm을 불렀지만 응답을 받지 못한 건을 구분하는 용도다.
 - **관리자 PG 대사 API**: `POST /api/v1/admin/payments/{paymentId}/reconcile`
   (`PaymentService.reconcile()`)이 REQUESTED로 남은 결제를 `TossPaymentClient.findByOrderId()`로
-  재조회한다. Toss가 `DONE`이고 금액·orderId가 일치하면 승인·매물 PAID를 복구하고(`RECOVERED`),
+  재조회한다. Toss가 `DONE`이고 금액·orderId가 일치하면 승인·매물을 PAID(곧바로 INSPECTING까지)로
+  복구하고(`RECOVERED`),
   이미 REQUESTED가 아니거나 Toss에 승인 기록이 없으면 아무 것도 바꾸지 않는다(`NO_ACTION`).
   금액·orderId가 어긋나면 자동 복구하지 않고 `PAYMENT_RECONCILE_MISMATCH`(`PAY017`, 409)로
   운영자 확인을 요구하고, Toss 조회 자체가 일시 실패하면 `PAYMENT_RECONCILE_RETRYABLE`

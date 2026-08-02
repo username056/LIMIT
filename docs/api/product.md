@@ -106,3 +106,40 @@ JVM 기본 시간대와 상품 `OffsetDateTime` 변환이 같은 기준을 사�
 6. 관심상품 동시 등록 테스트를 위해 클래스 수준 테스트 트랜잭션을 제거하자 기존 삭제 테스트가
    트랜잭션 없이 수정 쿼리를 호출했다. 삭제 테스트에만 트랜잭션을 명시하고 동시성 테스트는 서로
    독립된 두 트랜잭션으로 유지해 MySQL에서 8건을 통과시켰다.
+
+## 결제 이후 주문 흐름 완성 (`feat/order-post-payment-flow`)
+
+결제 완료(`PAID`) 이후로는 죽어 있던 `INSPECTING -> CONFIRMED -> SETTLED` 상태 전이를
+실제로 연결했다. `SETTLED`(정산)로의 전이는 이번 범위에서 제외한다.
+
+- **결제 완료 즉시 검수 진입**: `ListingService.markPaid()` /
+  `markPaidRecoveredFromPg()`는 매물을 `PAID`로 바꾼 직후 같은 트랜잭션 안에서
+  `Listing.enterInspection(handedOverAt, autoConfirmAt)`을 호출해 곧바로 `INSPECTING`으로
+  전이한다. 이 서비스에는 판매자가 누르는 별도의 "전달완료" 액션이 없어서, 결제 확정 시각을
+  그대로 `handedOverAt`으로 기록하고 그 시각 기준으로 자동 구매확정 기한
+  `autoConfirmAt = handedOverAt + limit.product.auto-confirm-days`(기본 7일)을 함께 저장한다.
+  히스토리(`ListingStatusHistory`)에는 `PAID` 전이와 `INSPECTING` 전이가 각각 별도 행으로
+  남는다.
+- **구매확정 API**: `POST /api/v1/products/{productId}/purchase-confirmation`
+  (`ProductController.confirmPurchase` / `ListingService.confirmByBuyer`)로 검수중인 매물을
+  구매자 본인이 확정한다. 인증만 요구하고 `SELLER` 역할은 필요 없다 — 매물의 `buyerId`와
+  요청자가 일치하는지만 검증하며, 어긋나면 `LISTING_RESERVATION_MISMATCH`(`PRD017`, 409),
+  매물이 `INSPECTING`이 아니면 `LISTING_NOT_INSPECTING`(`PRD004`, 409)으로 거절한다. 이 API는
+  아직 별도 브랜치인 결제/주문(Order) 인프라에 의존하지 않고 `Listing.buyerId`만으로 권한을
+  판단한다.
+- **자동 구매확정 스케줄러**: `ListingAutoConfirmScheduler`가
+  `status = INSPECTING AND auto_confirm_at < now() AND deleted_at IS NULL`인 매물을 주기적으로
+  찾아 `ListingService.autoConfirm()`(`Listing.confirm(null)`, buyerId 검증 생략)으로 확정한다.
+  구매자가 검수 기한 안에 직접 확정하지 않아도 에스크로가 무기한 묶이지 않게 하는 안전망이다.
+  `PaymentReservationExpirationScheduler`와 동일하게 대상마다 독립 트랜잭션으로 처리해 한 건의
+  실패가 나머지를 막지 않는다. 한 번에 최대 100건, 기본 1시간 주기
+  (`limit.product.auto-confirm.*` 프로퍼티로 조정 가능하며
+  `limit.product.auto-confirm.enabled=false`로 끌 수 있다).
+- **설정값**: `limit.product.auto-confirm-days`(기본 7),
+  `limit.product.auto-confirm.enabled`(기본 true),
+  `limit.product.auto-confirm.initial-delay-ms`(기본 60000),
+  `limit.product.auto-confirm.fixed-delay-ms`(기본 3600000). 기존
+  `limit.product.reservation-ttl-minutes`와 같은 방식으로 `@Value` 기본값만 두고
+  `application.yml`에는 별도 항목을 추가하지 않았다.
+- **남은 범위**: `Listing.settle()`(`CONFIRMED -> SETTLED`, 정산)을 트리거하는 경로는 아직 없다 —
+  후속 브랜치(`feat/payment-refund-flow`)에서 정산·환불 흐름과 함께 다룬다.
