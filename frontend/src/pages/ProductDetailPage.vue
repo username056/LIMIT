@@ -122,6 +122,20 @@ function diagnosisFieldLabel(fieldName) {
   return DIAGNOSIS_FIELD_LABELS[fieldName] || fieldName
 }
 
+// 인식에 성공한 항목 수입니다. 옆 검증 카드와 같은 배지·막대로 보여 주어 두 카드를 같은
+// 눈으로 읽게 합니다. 실패한 항목도 목록에는 남기므로 분모는 전체 항목 수입니다.
+const diagnosisProgress = computed(() => {
+  const total = diagnosisSummaryItems.value.length
+  const available = diagnosisSummaryItems.value
+    .filter((item) => item.status === 'AVAILABLE').length
+  return { total, available }
+})
+
+const diagnosisRate = computed(() => {
+  const { total, available } = diagnosisProgress.value
+  return total ? Math.round((available / total) * 100) : 0
+})
+
 // 값이 길면 잘려(...) 보입니다. 커서를 올리면 원문 전체를 툴팁으로 보여 줍니다.
 // 눌러서 펼치는 방식은 누를 수 있다는 걸 먼저 알아야 해서 올려놓기만 해도 보이게 했습니다.
 const activeDiagnosisField = ref(null)
@@ -801,18 +815,37 @@ onMounted(async () => {
             class="rounded-lg border border-border bg-surface p-5 sm:p-6"
           >
             <!-- 옆 검증 카드와 같은 3단 머리글(작은 파란 라벨 → 굵은 제목 → 설명)로 맞춥니다. -->
-            <p class="text-xs font-semibold text-primary">
-              사양 체크리스트
-            </p>
-            <h2 class="mt-1 text-lg font-bold text-text-main">
-              자동 인식된 사양
-            </h2>
-            <p
-              v-if="diagnosisDisclaimer"
-              class="mt-1 text-xs text-text-sub"
-            >
-              {{ diagnosisDisclaimer }}
-            </p>
+            <div class="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p class="text-xs font-semibold text-primary">
+                  사양 체크리스트
+                </p>
+                <h2 class="mt-1 text-lg font-bold text-text-main">
+                  자동 인식된 사양
+                </h2>
+                <p
+                  v-if="diagnosisDisclaimer"
+                  class="mt-1 text-xs text-text-sub"
+                >
+                  {{ diagnosisDisclaimer }}
+                </p>
+              </div>
+              <!--
+                옆 검증 카드와 같은 배지·막대를 씁니다. 다만 이 숫자는 판매자가 채운 양이 아니라
+                파일에서 읽어낸 양입니다. 낮다고 상품이 나쁜 게 아니라서 라벨로 구분해 둡니다.
+              -->
+              <div class="shrink-0 text-right">
+                <span class="rounded-pill bg-accent px-2.5 py-1 text-xs font-bold text-primary">
+                  {{ diagnosisProgress.available }}/{{ diagnosisProgress.total }}
+                </span>
+              </div>
+            </div>
+            <div class="mt-4 h-2 overflow-hidden rounded-pill bg-slate-100">
+              <div
+                class="h-full rounded-pill bg-primary-gradient"
+                :style="{ width: `${diagnosisRate}%` }"
+              />
+            </div>
             <!--
                 항목마다 회색 박스를 두면 개수만큼 상자가 늘어서 지저분해집니다. 하나의 옅은 카드
                 안에서 구분선으로만 나눕니다. 순서는 서버가 준 그대로 둡니다.
