@@ -11,6 +11,7 @@ import com.c203.limit.domain.payment.dto.response.PaymentReconcileOutcome;
 import com.c203.limit.domain.payment.dto.response.PaymentReconcileResponse;
 import com.c203.limit.domain.payment.dto.response.PaymentResponse;
 import com.c203.limit.domain.payment.entity.Payment;
+import com.c203.limit.domain.payment.entity.PaymentMethod;
 import com.c203.limit.domain.payment.entity.PaymentStatus;
 import com.c203.limit.domain.payment.repository.PaymentRepository;
 import com.c203.limit.domain.product.service.ListingReservationView;
@@ -127,7 +128,26 @@ public class PaymentService {
         }
     }
 
+    /**
+     * 같은 매물에 이 구매자의 활성 REQUESTED 결제가 이미 있으면(상품 페이지에서 뒤로 갔다가 다시
+     * "구매하기"를 누른 경우 등) 새 결제를 만들지 않고 그 결제를 그대로 이어간다 — idempotencyKey는
+     * 매 요청 새로 발급되므로 기존 키 조회로는 이 경우를 잡지 못한다. 이어갈 결제가 없을 때만 새로
+     * 예약하고 Payment를 만든다.
+     */
     private PaymentResponse createPayment(Long buyerId, CreatePaymentRequest request) {
+        Optional<Payment> existingRequested = paymentRepository
+                .findTopByListingIdAndBuyer_IdAndStatusOrderByRequestedAtDesc(
+                        request.getListingId(), buyerId, PaymentStatus.REQUESTED);
+        if (existingRequested.isPresent()) {
+            warnIfMoreThanOneActiveRequestedPayment(request.getListingId(), buyerId);
+            log.info(
+                    "payment request continues existing reservation: paymentId={}, listingId={}, buyerId={}",
+                    existingRequested.get().getId(),
+                    request.getListingId(),
+                    buyerId);
+            return continueRequestedPayment(existingRequested.get(), buyerId, request.getMethod());
+        }
+
         ListingReservationView listing = listingService.get(request.getListingId());
         if (listing.sellerId().equals(buyerId)) {
             throw new BusinessException(ErrorCode.SELF_PURCHASE_NOT_ALLOWED);
@@ -154,6 +174,24 @@ public class PaymentService {
         return PaymentResponse.from(payment);
     }
 
+    /**
+     * findTopBy...는 "매물 하나당 구매자 하나의 REQUESTED는 최대 1건"이라는 가정 위에서 조용히
+     * 최신 1건만 가져온다. 이 가정이 과거 버그나 수동 데이터로 깨져 있어도 예외 없이 넘어가므로,
+     * 최소한 운영자가 알아챌 수 있게 개수를 세서 1건 초과면 경고만 남긴다(흐름은 막지 않는다).
+     */
+    private void warnIfMoreThanOneActiveRequestedPayment(Long listingId, Long buyerId) {
+        long count = paymentRepository.countByListingIdAndBuyer_IdAndStatus(
+                listingId, buyerId, PaymentStatus.REQUESTED);
+        if (count > 1) {
+            log.warn(
+                    "found more than one active REQUESTED payment for the same listing and buyer, "
+                            + "continuing with the most recent one only: listingId={}, buyerId={}, count={}",
+                    listingId,
+                    buyerId,
+                    count);
+        }
+    }
+
     private PaymentResponse toResponseOrConflict(Payment payment, CreatePaymentRequest request) {
         if (!payment.getListingId().equals(request.getListingId())
                 || payment.getMethod() != request.getMethod()) {
@@ -163,28 +201,53 @@ public class PaymentService {
     }
 
     /**
-     * 결제창을 새로 열어 재시도할 때 호출한다. 예약(Listing.reservedUntil)이 이미 만료됐으면
-     * attemptNo를 올리지 않고 거부해, 만료된 매물에 새 providerOrderId가 계속 발급되는 것을 막는다.
+     * 결제창을 새로 열어 명시적으로 재시도할 때 호출한다. 검증·갱신 로직은 상품 페이지에서 다시
+     * 구매하기를 눌러 기존 예약을 이어받는 경로({@link #createPayment})와 {@link
+     * #continueRequestedPayment}를 공유한다 — 두 경로의 규칙이 서로 어긋나지 않게 하기 위함이다.
      */
     @Transactional
-    public PaymentResponse retryAttempt(Long buyerId, Long paymentId) {
+    public PaymentResponse retryAttempt(Long buyerId, Long paymentId, PaymentMethod method) {
         Payment payment = paymentRepository
                 .findById(paymentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_NOT_FOUND));
         if (!payment.getBuyer().getId().equals(buyerId)) {
             throw new BusinessException(ErrorCode.PAYMENT_ACCESS_DENIED);
         }
+        return continueRequestedPayment(payment, buyerId, method);
+    }
+
+    /**
+     * REQUESTED 결제를 같은 예약 위에서 이어간다(같은 Payment 레코드를 재사용). 예약(Listing.
+     * reservedUntil)은 지금부터 다시 계산해 늘려주고, 결제창에서 다른 수단으로 바꿨을 수 있으므로
+     * method도 매번 갱신한다.
+     *
+     * <p>isReservationActive()만으로는 부족하다 — 매물 반영이 실패해 Payment는 APPROVED/FAILED로
+     * 이미 끝났는데 Listing만 RESERVED로 남는 갈라진 상태에서는 예약이 여전히 활성으로 보일 수 있다.
+     * 그래서 상태를 직접 검증한다. confirm 호출은 나갔는데 서버가 결과를 확정 못 한 애매한 상태
+     * (confirmAttemptedAt != null)도 마찬가지다 — Toss가 실제로는 이미 승인했을 수 있어, 여기서 새
+     * providerOrderId 발급을 허용하면 이중 청구로 이어질 수 있다. 이 상태는 관리자 reconcile로만
+     * 풀어야 한다.
+     */
+    private PaymentResponse continueRequestedPayment(Payment payment, Long buyerId, PaymentMethod method) {
+        if (payment.getStatus() != PaymentStatus.REQUESTED) {
+            throw new BusinessException(ErrorCode.PAYMENT_RETRY_NOT_ALLOWED);
+        }
+        if (payment.getConfirmAttemptedAt() != null) {
+            throw new BusinessException(ErrorCode.PAYMENT_RETRY_NOT_ALLOWED);
+        }
         if (!listingService.isReservationActive(payment.getListingId(), buyerId)) {
             throw new BusinessException(ErrorCode.PAYMENT_RETRY_NOT_ALLOWED);
         }
 
-        payment.retry();
+        listingService.renewReservationForBuyer(payment.getListingId(), buyerId);
+        payment.retry(method);
 
         log.info(
-                "payment attempt retried: paymentId={}, attemptNo={}, providerOrderId={}",
+                "payment attempt retried: paymentId={}, attemptNo={}, providerOrderId={}, method={}",
                 payment.getId(),
                 payment.getAttemptNo(),
-                payment.getProviderOrderId());
+                payment.getProviderOrderId(),
+                payment.getMethod());
         return PaymentResponse.from(payment);
     }
 

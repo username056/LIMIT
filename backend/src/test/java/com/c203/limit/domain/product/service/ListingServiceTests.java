@@ -235,6 +235,39 @@ class ListingServiceTests {
     }
 
     @Test
+    void renewReservationForBuyerExtendsReservedUntilAndRecordsHistory() {
+        Listing listing = listingWithStatus(ListingStatus.RESERVED);
+        ReflectionTestUtils.setField(listing, "buyerId", BUYER_ID);
+        ReflectionTestUtils.setField(
+                listing, "reservedUntil", LocalDateTime.now(FIXED_CLOCK).plusMinutes(1));
+        when(listingRepository.findById(LISTING_ID)).thenReturn(Optional.of(listing));
+
+        Listing result = service.renewReservationForBuyer(LISTING_ID, BUYER_ID);
+
+        assertThat(result.getReservedUntil())
+                .isEqualTo(LocalDateTime.now(FIXED_CLOCK).plusMinutes(RESERVATION_TTL_MINUTES));
+        assertThat(result.getStatus()).isEqualTo(ListingStatus.RESERVED);
+        verify(listingStatusHistoryRepository).save(any(ListingStatusHistory.class));
+    }
+
+    @Test
+    void renewReservationForBuyerRejectsWhenReservationBelongsToAnotherBuyer() {
+        Listing listing = listingWithStatus(ListingStatus.RESERVED);
+        ReflectionTestUtils.setField(listing, "buyerId", BUYER_ID);
+        ReflectionTestUtils.setField(
+                listing, "reservedUntil", LocalDateTime.now(FIXED_CLOCK).plusMinutes(1));
+        when(listingRepository.findById(LISTING_ID)).thenReturn(Optional.of(listing));
+
+        assertThatThrownBy(() -> service.renewReservationForBuyer(LISTING_ID, BUYER_ID + 1))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.LISTING_RESERVATION_MISMATCH));
+        verifyNoInteractions(listingStatusHistoryRepository);
+    }
+
+    @Test
     void cancelReservationReturnsListingToOnSaleAndRecordsHistory() {
         Listing listing = listingWithStatus(ListingStatus.RESERVED);
         ReflectionTestUtils.setField(listing, "buyerId", BUYER_ID);

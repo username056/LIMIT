@@ -2,6 +2,7 @@ package com.c203.limit.domain.payment.controller;
 
 import com.c203.limit.domain.payment.dto.request.ConfirmPaymentRequest;
 import com.c203.limit.domain.payment.dto.request.CreatePaymentRequest;
+import com.c203.limit.domain.payment.dto.request.RetryPaymentRequest;
 import com.c203.limit.domain.payment.dto.response.PaymentResponse;
 import com.c203.limit.domain.payment.service.PaymentService;
 import com.c203.limit.global.response.ApiResponse;
@@ -36,6 +37,14 @@ public class PaymentController implements PaymentApi {
     @Override
     public ResponseEntity<ApiResponse<PaymentResponse>> cancelPayment(Long paymentId) {
         PaymentResponse response = paymentService.cancel(currentUser.memberId(), paymentId);
+        return ResponseEntity.ok(ApiResponse.ok(response));
+    }
+
+    @Override
+    public ResponseEntity<ApiResponse<PaymentResponse>> retryPayment(
+            Long paymentId, RetryPaymentRequest request) {
+        PaymentResponse response =
+                paymentService.retryAttempt(currentUser.memberId(), paymentId, request.getMethod());
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 

@@ -115,6 +115,27 @@ class PaymentControllerTests {
     }
 
     @Test
+    void retryPaymentReturns200() throws Exception {
+        when(paymentService.retryAttempt(
+                        org.mockito.ArgumentMatchers.eq(BUYER_ID),
+                        org.mockito.ArgumentMatchers.eq(PAYMENT_ID),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(response());
+
+        mockMvc.perform(
+                        post("/api/v1/payments/{paymentId}/retry", PAYMENT_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        """
+                                        {
+                                          "method": "TOSSPAY"
+                                        }
+                                        """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.paymentId").value(PAYMENT_ID));
+    }
+
+    @Test
     void cancelPaymentReturns200() throws Exception {
         when(paymentService.cancel(BUYER_ID, PAYMENT_ID)).thenReturn(response());
 

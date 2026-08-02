@@ -102,6 +102,21 @@ public class ListingService {
                 listing -> listing.markPaidRecoveredFromPg(buyerId, now));
     }
 
+    /**
+     * 같은 구매자가 결제를 다시 시도할 때 예약 유예 시간을 지금부터 다시 계산해 늘린다. 명시적
+     * 재시도 API와, 상품 페이지에서 다시 구매하기를 눌러 기존 예약을 이어받는 경로 둘 다 이 메서드를
+     * 공유한다.
+     */
+    @Transactional
+    public Listing renewReservationForBuyer(Long listingId, Long buyerId) {
+        LocalDateTime reservedUntil = LocalDateTime.now(clock).plusMinutes(reservationTtlMinutes);
+        return transition(
+                listingId,
+                buyerId,
+                "구매자 재시도로 예약 유효시간 연장",
+                listing -> listing.renewReservationForBuyer(buyerId, reservedUntil));
+    }
+
     @Transactional
     public Listing markInspecting(Long listingId) {
         return transition(listingId, null, null, Listing::markInspecting);
