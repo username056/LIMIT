@@ -17,6 +17,7 @@
 import { onMounted, ref } from 'vue'
 import HomeSearchBar from './HomeSearchBar.vue'
 import HomePopularKeywords from './HomePopularKeywords.vue'
+import limitLogo from '../../assets/real_limt_logo.png'
 
 // public/ 아래 실제 파일명입니다. 번들에 묶이지 않으므로 경로 문자열로 참조합니다.
 const HERO_VIDEO_MP4 = '/limit_hero_banner.mp4'
@@ -125,7 +126,15 @@ function onVideoError(event) {
           <span class="hero__srOnly">{{ ROTATING_WORDS.join(', ') }},</span>
         </span>
 
-        LIMIT에서 더 안전하게.
+        <!--
+          글자 LIMIT 자리에 로고를 넣습니다. alt에 LIMIT을 적어 두어 읽어 주는
+          프로그램에는 'LIMIT에서 더 안전하게'로 그대로 읽힙니다.
+          '에서'가 조사라 로고와 붙어야 해서 사이에 공백을 두지 않습니다.
+        --><span class="hero__logoLine"><img
+          :src="limitLogo"
+          alt="LIMIT"
+          class="hero__logo"
+        >에서 더 안전하게.</span>
       </h1>
 
       <div
@@ -152,17 +161,44 @@ function onVideoError(event) {
       바꾸려면 여기 한 줄만 고치면 됩니다. 아래 .hero__word와,
       움직임 줄이기 설정에서 대신 보이는 .hero__wordStatic이 같이 따라옵니다.
   */
-  --hero-word-color: #0820f1;
+  --hero-word-color: #3547eafa;
+
+  /*
+    ▼ 배경 위에 덮는 흰색 농도. 높일수록 영상이 옅어집니다.
+      0%면 영상 그대로, 100%면 완전한 흰 바탕입니다.
+  */
+  --hero-veil-white: 55%;
+
+  /* ▼ 마지막 줄 LIMIT 로고. 아래 .hero__logo 설명 참고. */
+  --hero-logo-size: 1.55em;
+
+  /* 위쪽 빈 공간을 줄 높이에서 덜어내는 양. 윗줄과 겹치면 값을 줄이세요(-0.5em 등). */
+  --hero-logo-lift: -0.6em;
+
+  /*
+    로고를 밑으로 내리는 양. 글자가 위로 뜨면 키우고, 내려가면 줄이세요.
+    계산상 밑선을 맞추는 값은 0.205em인데, 옆의 한글이 알파벳 밑선보다 조금 아래까지
+    내려와서 그대로 두면 로고만 떠 보입니다. 그만큼 더 내렸습니다.
+  */
+  --hero-logo-drop: -0.24em;
 
   position: relative;
   display: flex;
   align-items: center;
-  min-height: 640px;
-  /* 헤더를 뺀 나머지를 꽉 채웁니다. svh라 모바일 주소창이 접혀도 튀지 않습니다. */
-  height: calc(100svh - 72px);
-  max-height: 900px;
+
+  /*
+    헤더 뒤까지 배경을 올려 보냅니다. 헤더가 투명해졌는데 히어로가 그 아래에서만
+    시작하면 헤더 자리에 흰 띠가 남아 화면이 두 조각으로 보입니다.
+    끌어올린 만큼 안쪽 여백으로 되돌려 글자는 헤더에 가리지 않습니다.
+  */
+  margin-top: -72px;
+  padding-top: 72px;
+
+  /* 한 화면을 꽉 채웁니다. svh라 모바일 주소창이 접혀도 튀지 않습니다. */
+  min-height: 712px;
+  height: 100svh;
+  max-height: 960px;
   overflow: hidden;
-  background: var(--color-surface);
 }
 
 /* ---- 배경 ------------------------------------------------------------- */
@@ -269,7 +305,7 @@ function onVideoError(event) {
   inset: 0;
   background:
     linear-gradient(180deg, rgb(255 255 255 / 0%) 78%, rgb(255 255 255 / 70%) 93%, var(--color-surface) 100%),
-    rgb(255 255 255 / 42%);
+    rgb(255 255 255 / var(--hero-veil-white));
   backdrop-filter: blur(2px);
 }
 
@@ -287,6 +323,40 @@ function onVideoError(event) {
   line-height: 1.28;
   letter-spacing: -0.03em;
   color: var(--color-text-main);
+}
+
+/*
+  마지막 줄의 로고.
+  ---------------------------------------------------------------------------
+  이미지(998x427)에서 실제 잉크가 있는 범위를 재 보면 이렇습니다.
+
+      y=0                  ↑ 위 빈 공간 11.2%
+      y=48   체크 표시 위
+      y=169  글자 윗선     ↑ 글자는 높이의 47.1%
+      y=370  글자 밑선
+      y=427                ↓ 아래 빈 공간 13.1%
+
+  두 가지를 이 여백이 망칩니다.
+  하나, 키우면 빈 공간까지 커져 줄 높이를 밀어 올립니다(윗줄과 간격만 벌어짐).
+  둘, 글자 밑선이 이미지 밑에서 13.1% 떠 있어 그냥 두면 로고만 위로 올라갑니다.
+
+  그래서 위쪽은 --hero-logo-lift 로 줄 높이 계산에서 덜어내고,
+  아래쪽은 --hero-logo-drop(= 아래 빈 공간 13.1% × 크기 1.55em ≒ 0.205em) 만큼
+  내려서 글자 밑선을 문장의 밑선에 맞춥니다.
+*/
+.hero__logoLine {
+  display: block;
+  white-space: nowrap;
+}
+
+.hero__logo {
+  display: inline-block;
+  width: auto;
+  height: var(--hero-logo-size);
+
+  margin-top: var(--hero-logo-lift);
+  margin-bottom: var(--hero-logo-drop);
+  vertical-align: baseline;
 }
 
 /* ---- 돌아가는 낱말 ----------------------------------------------------- */
@@ -364,9 +434,10 @@ function onVideoError(event) {
 
 @media (max-width: 640px) {
   .hero {
-    min-height: 560px;
+    min-height: 620px;
     height: auto;
-    padding: 72px 0 64px;
+    /* 위쪽 72px은 끌어올린 헤더 자리입니다. 그 아래로 원래 여백을 둡니다. */
+    padding: 144px 0 64px;
   }
 
   .hero__title {
