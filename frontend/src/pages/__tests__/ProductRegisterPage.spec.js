@@ -1083,8 +1083,8 @@ describe('ProductRegisterPage', () => {
 
       const modal = wrapper.find('[role="dialog"][aria-label="촬영 가이드"]')
       expect(modal.exists()).toBe(true)
-      expect(modal.text()).toContain('찍힘·균열·변색 등 외관 상태 확인')
-      expect(modal.text()).toContain('케이스를 제거하고 기기의 전면, 후면과 모든 측면을 밝은 곳에서 촬영하세요.')
+      expect(modal.text()).toContain('외관 손상 여부 확인')
+      expect(modal.text()).toContain('사면 테두리가 모두 잘 보이도록')
       expect(modal.text()).not.toContain('서버가 내려준 원본 가이드 문구')
       expect(modal.find('img').attributes('src')).toBeTruthy()
 
@@ -1141,7 +1141,7 @@ describe('ProductRegisterPage', () => {
 
       const modal = wrapper.find('[role="dialog"][aria-label="촬영 가이드"]')
       expect(modal.text()).toContain('비필수 항목의 서버 기본 가이드 문구')
-      expect(modal.text()).not.toContain('케이스를 제거하고 기기의 전면, 후면과 모든 측면을 밝은 곳에서 촬영하세요.')
+      expect(modal.text()).not.toContain('사면 테두리가 모두 잘 보이도록')
     })
 
     // 영상 녹화는 지원하지 않습니다. 촬영 버튼을 보여주면 눌러도 할 수 있는 게 없습니다.
