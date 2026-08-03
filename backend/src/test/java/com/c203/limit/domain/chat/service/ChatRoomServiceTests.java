@@ -242,7 +242,8 @@ class ChatRoomServiceTests {
         when(chatMessageRepository.countUnreadFromCounterpart(100L, BUYER_ID, 3L))
                 .thenReturn(5L);
         when(contextReader.findAll(List.of(100L), BUYER_ID)).thenReturn(
-                java.util.Map.of(100L, new ChatRoomContext(100L, "판매자", "상품", "https://cdn/image.jpg")));
+                java.util.Map.of(100L, new ChatRoomContext(
+                        100L, "판매자", "상품", "https://cdn/image.jpg", "오늘 오후에 가능하실까요?")));
 
         CursorResponse<ChatRoomSummaryResponse> result = service.findRooms(BUYER_ID, null, 1);
 
@@ -250,6 +251,7 @@ class ChatRoomServiceTests {
         assertThat(result.content().get(0).counterpartId()).isEqualTo(SELLER_ID);
         assertThat(result.content().get(0).counterpartNickname()).isEqualTo("판매자");
         assertThat(result.content().get(0).listingTitle()).isEqualTo("상품");
+        assertThat(result.content().get(0).lastMessagePreview()).isEqualTo("오늘 오후에 가능하실까요?");
         assertThat(result.content().get(0).unreadCount()).isEqualTo(5L);
         assertThat(result.content().get(0).counterpartLastReadSequence()).isEqualTo(2L);
         assertThat(result.nextCursor()).isEqualTo("100");
