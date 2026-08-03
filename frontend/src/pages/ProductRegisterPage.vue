@@ -219,6 +219,8 @@ const guideModalItem = ref(null)
 // captureState[checklistItemId] = { media: [...], busy: '' | 'optimizing' | 'uploading', progress: 0..100 }
 const captureState = reactive({})
 const confirmState = reactive({})
+const DEVICE_CHECK_RESULT = { SUCCESS: 'SUCCESS' }
+const draftProgressResults = ref(new Map())
 // diagnosisState[checklistItemId] = { status: 'parsing'|'ready'|'error', fields: [...], errorMessage }
 // fields의 각 항목은 취합 응답(fieldName/ocrValue/fileParseValue/conflict/confirmedValue)에
 // draftValue(입력창 값)와 saving(저장 중 여부)을 더한 것입니다.
@@ -605,15 +607,30 @@ async function persistDraftProgress() {
   // 이미 판매 중·숨김인 상품은 초안 진행도를 갖지 않습니다. 서버가 409로 거절하므로 호출하지 않습니다.
   if (editingStatus.value && editingStatus.value !== 'DRAFT') return
   try {
-    await updateProductDraftProgress(currentProductId.value, {
-      step: activeStep.value,
-      confirmedChecklistItemIds: confirmationChecklistItems.value
-        .filter((item) => confirmState[item.checklistItemId])
-        .map((item) => item.checklistItemId),
+    const resultsByItemId = new Map(draftProgressResults.value)
+    confirmationChecklistItems.value.forEach((item) => {
+      if (confirmState[item.checklistItemId]) {
+        resultsByItemId.set(item.checklistItemId, DEVICE_CHECK_RESULT.SUCCESS)
+      } else if (resultsByItemId.get(item.checklistItemId) === DEVICE_CHECK_RESULT.SUCCESS) {
+        resultsByItemId.delete(item.checklistItemId)
+      }
     })
+    const response = await updateProductDraftProgress(currentProductId.value, {
+      step: activeStep.value,
+      results: [...resultsByItemId.entries()].map(([checklistItemId, result]) => ({
+        checklistItemId,
+        result,
+      })),
+    })
+    draftProgressResults.value = progressResultsMap(response?.results) || resultsByItemId
   } catch {
     notice.value = '임시저장 상태를 서버에 반영하지 못했습니다.'
   }
+}
+
+function progressResultsMap(results) {
+  if (!results) return null
+  return new Map(Object.entries(results).map(([itemId, result]) => [Number(itemId), result]))
 }
 
 function resetForm() {
@@ -643,6 +660,7 @@ function resetForm() {
   confirmedFeatures.value = []
   isGeneratingChecklist.value = false
   checklistItems.value = []
+  draftProgressResults.value = new Map()
   activeCaptureItemId.value = null
   handoverGuide.value = null
   isCustomStorage.value = false
@@ -1564,9 +1582,10 @@ async function startEdit(productId) {
       ? await getProductDraftProgress(productId)
       : null
     if (draftProgress) {
+      draftProgressResults.value = progressResultsMap(draftProgress.results) || new Map()
       Object.keys(confirmState).forEach((key) => { confirmState[key] = false })
-      draftProgress.confirmedChecklistItemIds.forEach((itemId) => {
-        confirmState[itemId] = true
+      draftProgressResults.value.forEach((result, itemId) => {
+        confirmState[itemId] = result === DEVICE_CHECK_RESULT.SUCCESS
       })
     }
     activeCaptureItemId.value = mediaChecklistItems.value[0]?.checklistItemId || null
