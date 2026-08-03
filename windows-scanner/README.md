@@ -8,7 +8,7 @@ SDK는 `global.json`에서 .NET 8.0.415로 고정한다.
 ## 로컬 실행
 
 ```powershell
-$env:LIMIT_API_BASE_URL='http://localhost:8080/'
+$env:LIMIT_API_BASE_URL='http://localhost:18080/'
 dotnet run --project .\src\LimitScanner\LimitScanner.csproj
 ```
 

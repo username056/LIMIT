@@ -16,7 +16,7 @@
     <Company>Limit</Company>
     <Description>Limit 노트북 자동 진단 프로그램</Description>
     <Version>0.1.0</Version>
-    <LimitApiBaseUrl Condition="'$(LimitApiBaseUrl)' == ''">http://localhost:8080/</LimitApiBaseUrl>
+    <LimitApiBaseUrl Condition="'$(LimitApiBaseUrl)' == ''">http://localhost:18080/</LimitApiBaseUrl>
   </PropertyGroup>
   <ItemGroup>
     <AssemblyMetadata Include="LimitApiBaseUrl" Value="$(LimitApiBaseUrl)" />

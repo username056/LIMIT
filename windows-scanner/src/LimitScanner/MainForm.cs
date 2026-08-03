@@ -113,9 +113,17 @@ public sealed class MainForm : Form
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
         }
+        catch (HttpRequestException)
+        {
+            statusLabel.Text = "서버에 연결하지 못했습니다. 백엔드 실행 상태와 연결 코드를 확인해 주세요.";
+        }
+        catch (TaskCanceledException)
+        {
+            statusLabel.Text = "검사 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.";
+        }
         catch (Exception)
         {
-            statusLabel.Text = "검사를 완료하지 못했습니다. 코드를 확인하고 다시 시도해 주세요.";
+            statusLabel.Text = "검사를 완료하지 못했습니다. 연결 코드를 확인하고 다시 시도해 주세요.";
         }
         finally
         {

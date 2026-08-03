@@ -377,7 +377,7 @@ windows_scanner_build:
   needs: []
   image: mcr.microsoft.com/dotnet/sdk:8.0.415
   script:
-    - scanner_api_base_url="${WINDOWS_SCANNER_API_BASE_URL:-${VITE_API_BASE_URL:-http://localhost:8080/}}"
+    - scanner_api_base_url="${WINDOWS_SCANNER_API_BASE_URL:-${VITE_API_BASE_URL:-http://localhost:18080/}}"
     - dotnet publish windows-scanner/src/LimitScanner/LimitScanner.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false -p:LimitApiBaseUrl="$scanner_api_base_url" -o windows-scanner/artifacts
     - test -s windows-scanner/artifacts/LimitScanner.exe
   artifacts:
