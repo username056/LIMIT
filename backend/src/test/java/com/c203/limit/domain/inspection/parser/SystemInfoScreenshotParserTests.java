@@ -336,6 +336,47 @@ class SystemInfoScreenshotParserTests {
         assertThat(results).extracting(OcrFieldExtraction::fieldType).doesNotContain(OcrFieldType.MODEL_NAME);
     }
 
+    /**
+     * 창 너비가 좁아 상단 요약 카드가 3개(저장소/그래픽카드/설치된RAM)+1개(프로세서)로 줄바꿈된 반응형
+     * 레이아웃을 흉내낸다. 프로세서 카드가 완전히 다른 세로 위치(다음 행)에 있어도 각 행을 독립적으로 처리해
+     * 저장소·그래픽카드·설치된RAM은 첫 행에서, 프로세서는 둘째 행에서 각각 값을 찾아야 한다. "장치 사양"
+     * 표는 없다고 가정해(펼치지 않은 화면) 카드 값만으로 판단하는지 확인한다.
+     */
+    private static List<OcrToken> wrappedCardRowTokens() {
+        List<OcrToken> tokens = new ArrayList<>();
+        // 첫 행: 저장소 / 그래픽카드 / 설치된RAM 라벨
+        tokens.add(t("저장소", 0.999, 813, 247, 888, 273));
+        tokens.add(t("그래픽", 0.998, 1240, 247, 1312, 273));
+        tokens.add(t("카드", 0.998, 1319, 247, 1368, 273));
+        tokens.add(t("설치된", 0.999, 1660, 243, 1735, 273));
+        tokens.add(t("RAM", 0.9997, 1743, 251, 1799, 273));
+        // 첫 행의 값 (라벨 바로 아래)
+        tokens.add(t("1.86", 0.99, 800, 299, 850, 333));
+        tokens.add(t("TB", 0.99, 853, 299, 884, 333));
+        tokens.add(t("8", 0.99, 1290, 299, 1310, 333));
+        tokens.add(t("GB", 0.99, 1313, 299, 1360, 333));
+        tokens.add(t("64.0GB", 0.99, 1660, 299, 1770, 333));
+        // 둘째 행: 프로세서 라벨 (첫 행보다 훨씬 아래, 카드 줄바꿈으로 다음 줄에 위치)
+        tokens.add(t("프로세서", 0.999, 2088, 650, 2185, 676));
+        // 둘째 행의 값
+        tokens.add(t("Intel(R)", 0.999, 2043, 702, 2160, 736));
+        tokens.add(t("Core(TM)", 0.999, 2163, 702, 2280, 736));
+        tokens.add(t("Ultra", 0.999, 2283, 702, 2360, 736));
+        tokens.add(t("9", 0.999, 2363, 702, 2380, 736));
+        return tokens;
+    }
+
+    @Test
+    void extractsAllCardFieldsWhenCardsWrapToTwoRows() {
+        List<OcrFieldExtraction> results =
+                parser.parse(wrappedCardRowTokens(), OcrFieldExpectations.SCREENSHOT_FIELD_TYPES);
+
+        assertThat(fieldValue(results, OcrFieldType.STORAGE_CAPACITY)).isEqualTo("1.86 TB");
+        assertThat(fieldValue(results, OcrFieldType.GPU)).isEqualTo("8 GB");
+        assertThat(fieldValue(results, OcrFieldType.RAM)).isEqualTo("64.0GB");
+        assertThat(fieldValue(results, OcrFieldType.CPU)).isEqualTo("Intel(R) Core(TM) Ultra 9");
+    }
+
     @Test
     void stillFindsOtherCardFieldsWhenOneCardLabelIsMissing() {
         // 카드 라벨 4개 중 하나(그래픽카드)가 없어도(다른 Windows 버전 등) 나머지는 찾은 대로 반영한다.

@@ -6,7 +6,6 @@ import com.c203.limit.domain.inspection.enums.OcrFieldType;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumMap;
@@ -85,24 +84,29 @@ public class SystemInfoScreenshotParser {
 
     // ===================== 카드형 상단 요약 (저장소 / 그래픽카드 / 설치된RAM / 프로세서) =====================
 
-    /** 찾은 카드 라벨들의 centerY가 이 배수(평균 라벨 높이 기준) 안에서 모여 있어야 "같은 가로줄의 카드"로 본다. */
+    /** 같은 카드 행으로 묶을 라벨들의 centerY가 이 배수(평균 라벨 높이 기준) 안에서 모여 있어야 한다. */
     private static final double CARD_LABEL_ALIGNMENT_RATIO = 1.5;
 
     /**
      * 저장소 / 그래픽 카드 / 설치된 RAM / 프로세서 카드가 나란히 배치된 상단 요약 영역. 4개 중 일부 라벨만
      * 찾아도(다른 Windows 버전이라 카드 구성이 다르거나, 라벨 하나가 오인식된 경우) 찾은 것만 반영한다.
      *
+     * <p>4개가 항상 한 가로줄에 있는 건 아니다 — 창 너비가 좁아지면 3개+1개처럼 두 줄로 줄바꿈되는 반응형
+     * 레이아웃도 있다(실제 확인된 사례: 그래픽카드까지 3개는 첫 줄, 프로세서만 다음 줄). 그래서 찾은 라벨
+     * 전부가 한 줄에 있어야 한다고 요구하지 않고, {@link #groupLabelsIntoRows}로 먼저 세로 위치가 가까운
+     * 라벨끼리 행 단위로 묶은 뒤, 각 행을 독립적으로 처리해 그 행에 있는 라벨들만으로 값을 찾는다.
+     *
      * <p>클로바가 이 라벨들과 값을 반환하는 순서는 이미지마다 다르다 — 깨끗한 스크린샷에서는 "라벨들을 몰아서
      * 반환한 뒤 값들을 몰아서" 반환하지만, 카메라로 촬영한 사진 등에서는 "라벨 → 그 값 → 다음 라벨 → 그
      * 값"처럼 카드별로 붙여서 반환하는 경우가 있다(실제 라이브 테스트로 확인됨). 그래서 값은 "마지막 라벨 뒤"라는
-     * 한 지점에서만 모으지 않고, 라벨 자신이 차지한 토큰 구간과 라벨 행 높이 안에 있는 토큰(라벨 행에 걸친 노이즈,
-     * 예: 아이콘 오인식)을 제외한 나머지 후보 토큰 전체에서 모은다.
+     * 한 지점에서만 모으지 않고, 그 행의 라벨들이 차지한 토큰 구간과 라벨 행 높이 안에 있는 토큰(라벨 행에 걸친
+     * 노이즈, 예: 아이콘 오인식)을 제외한 나머지 후보 토큰에서, 다음 행이 시작되기 전까지만 모은다.
      *
      * <p>Windows 10처럼 카드 없이 "저장소"/"설치된 RAM"/"프로세서"라는 같은 라벨 문구가 세로로 나열된 표만
-     * 있는 화면에서는, 이 라벨들이 서로 전혀 다른 세로 위치에서 각자 독립적으로 발견된다 — 실제 카드라면 라벨들이
-     * 같은 가로줄에 나란히 있어야 하므로, 찾은 라벨들의 centerY가 서로 크게 떨어져 있으면(카드가 아니라고
-     * 판단되면) 아무것도 하지 않고 표 스캔({@link #assignFieldsFromRows})에 맡긴다. 그렇게 걸러지지 않는
-     * 경우에 대비해 값도 {@link #VALUE_VALIDATORS}로 한 번 더 확인한다.
+     * 있는 화면에서는, 이 라벨들이 서로 전혀 다른 세로 위치에서 각자 독립된 행으로 묶인다 — 그런 표 레이아웃은
+     * 값이 라벨 아래가 아니라 옆에 있어서 라벨 아래 후보 토큰이 그 필드다운 모양이 아니게 되고
+     * {@link #VALUE_VALIDATORS}가 걸러낸다. 그렇게 걸러지지 않는 경우에 대비해 표 스캔
+     * ({@link #assignFieldsFromRows})이 최종적으로 표 값을 우선 채택한다.
      */
     private void extractCardRow(
             List<OcrToken> tokens,
@@ -118,15 +122,66 @@ public class SystemInfoScreenshotParser {
         findLabel(tokens, 0, "그래픽카드").ifPresent(match -> foundLabels.put(OcrFieldType.GPU, match));
         findLabel(tokens, 0, "설치된RAM").ifPresent(match -> foundLabels.put(OcrFieldType.RAM, match));
         findLabel(tokens, 0, "프로세서").ifPresent(match -> foundLabels.put(OcrFieldType.CPU, match));
-        if (foundLabels.isEmpty() || !areRoughlySameRow(foundLabels.values())) {
+        if (foundLabels.isEmpty()) {
             return;
         }
 
-        List<OcrFieldType> orderedFields = new ArrayList<>(foundLabels.keySet());
+        List<Map<OcrFieldType, LabelMatch>> rows = groupLabelsIntoRows(foundLabels);
+        for (int i = 0; i < rows.size(); i++) {
+            double nextRowTop =
+                    i + 1 < rows.size()
+                            ? rows.get(i + 1).values().stream().mapToDouble(LabelMatch::top).min().orElseThrow()
+                            : Double.MAX_VALUE;
+            extractCardValuesForRow(tokens, rows.get(i), nextRowTop, expected, confidence, results);
+        }
+    }
+
+    /** 라벨들을 centerY로 정렬한 뒤, 인접한 라벨끼리 {@link #CARD_LABEL_ALIGNMENT_RATIO} 이내면 같은 행으로 묶는다. */
+    private List<Map<OcrFieldType, LabelMatch>> groupLabelsIntoRows(Map<OcrFieldType, LabelMatch> foundLabels) {
+        List<Map.Entry<OcrFieldType, LabelMatch>> sorted =
+                foundLabels.entrySet().stream()
+                        .sorted(Comparator.comparingDouble(entry -> entry.getValue().centerY()))
+                        .toList();
+
+        List<Map<OcrFieldType, LabelMatch>> rows = new ArrayList<>();
+        Map<OcrFieldType, LabelMatch> current = new EnumMap<>(OcrFieldType.class);
+        double refCenterY = 0;
+        double refHeight = 1.0;
+        for (Map.Entry<OcrFieldType, LabelMatch> entry : sorted) {
+            LabelMatch label = entry.getValue();
+            if (current.isEmpty()) {
+                current.put(entry.getKey(), label);
+                refCenterY = label.centerY();
+                refHeight = Math.max(label.bottom() - label.top(), 1.0);
+            } else if (Math.abs(label.centerY() - refCenterY) <= refHeight * CARD_LABEL_ALIGNMENT_RATIO) {
+                current.put(entry.getKey(), label);
+            } else {
+                rows.add(current);
+                current = new EnumMap<>(OcrFieldType.class);
+                current.put(entry.getKey(), label);
+                refCenterY = label.centerY();
+                refHeight = Math.max(label.bottom() - label.top(), 1.0);
+            }
+        }
+        if (!current.isEmpty()) {
+            rows.add(current);
+        }
+        return rows;
+    }
+
+    /** 한 카드 행에 있는 라벨들만으로 값을 찾아 결과에 반영한다. */
+    private void extractCardValuesForRow(
+            List<OcrToken> tokens,
+            Map<OcrFieldType, LabelMatch> rowLabels,
+            double nextRowTop,
+            Set<OcrFieldType> expected,
+            BigDecimal confidence,
+            List<OcrFieldExtraction> results) {
+        List<OcrFieldType> orderedFields = new ArrayList<>(rowLabels.keySet());
         double[] columnCenters =
-                orderedFields.stream().mapToDouble(field -> foundLabels.get(field).centerX()).toArray();
+                orderedFields.stream().mapToDouble(field -> rowLabels.get(field).centerX()).toArray();
         List<OcrToken> valueCandidates =
-                collectCardValueCandidates(tokens, new ArrayList<>(foundLabels.values()));
+                collectCardValueCandidates(tokens, new ArrayList<>(rowLabels.values()), nextRowTop);
         List<List<OcrToken>> valueRows = collectValueBlockRows(valueCandidates, 0);
         if (valueRows.isEmpty()) {
             return;
@@ -142,32 +197,21 @@ public class SystemInfoScreenshotParser {
         }
     }
 
-    private boolean areRoughlySameRow(Collection<LabelMatch> labels) {
-        if (labels.size() <= 1) {
-            return true;
-        }
-        double averageHeight =
-                labels.stream().mapToDouble(label -> label.bottom() - label.top()).average().orElse(1.0);
-        double minCenterY = labels.stream().mapToDouble(LabelMatch::centerY).min().orElseThrow();
-        double maxCenterY = labels.stream().mapToDouble(LabelMatch::centerY).max().orElseThrow();
-        return (maxCenterY - minCenterY) <= Math.max(averageHeight, 1.0) * CARD_LABEL_ALIGNMENT_RATIO;
-    }
-
     /**
-     * 카드 라벨들이 차지한 토큰과, 라벨 행의 세로 범위 안에 있는 토큰(라벨 행 높이에 걸친 노이즈)을 뺀
-     * 나머지를, 원래 순서를 유지한 채 값 후보로 모은다.
+     * 그 행의 라벨들이 차지한 토큰과 라벨 행 높이 안에 있는 토큰을 뺀 나머지를, 그 행의 라벨 아래(그리고 다음
+     * 행이 시작되기 전)에서 원래 순서를 유지한 채 값 후보로 모은다.
      */
-    private List<OcrToken> collectCardValueCandidates(List<OcrToken> tokens, List<LabelMatch> labels) {
-        int firstIndex = labels.stream().mapToInt(LabelMatch::startIndex).min().orElseThrow();
+    private List<OcrToken> collectCardValueCandidates(
+            List<OcrToken> tokens, List<LabelMatch> labels, double nextRowTop) {
         double labelRowBottom = labels.stream().mapToDouble(LabelMatch::bottom).max().orElseThrow();
 
         List<OcrToken> candidates = new ArrayList<>();
-        for (int i = firstIndex; i < tokens.size(); i++) {
+        for (int i = 0; i < tokens.size(); i++) {
             if (isWithinAnyLabel(i, labels)) {
                 continue;
             }
             OcrToken token = tokens.get(i);
-            if (token.top() > labelRowBottom) {
+            if (token.top() > labelRowBottom && token.top() < nextRowTop) {
                 candidates.add(token);
             }
         }
