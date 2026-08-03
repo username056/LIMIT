@@ -7,5 +7,6 @@ package com.c203.limit.domain.inspection.enums;
 public enum AutomationType {
     NONE,
     FILE_PARSE,
-    OCR
+    OCR,
+    AGENT_TEST
 }

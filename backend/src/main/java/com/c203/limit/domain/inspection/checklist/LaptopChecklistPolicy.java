@@ -20,6 +20,16 @@ public class LaptopChecklistPolicy {
     public List<GeneratedChecklistItem> generate(
             OsFamily osFamily, Set<LaptopFeatureCode> confirmedFeatures) {
         List<GeneratedChecklistItem> result = new ArrayList<>(baseItems(osFamily));
+        result.addAll(additionalItems(confirmedFeatures, result.size() + 1));
+        for (int index = 0; index < result.size(); index++) {
+            result.set(index, result.get(index).withDisplayOrder(index + 1));
+        }
+        return List.copyOf(result);
+    }
+
+    public List<GeneratedChecklistItem> additionalItems(
+            Set<LaptopFeatureCode> confirmedFeatures, int firstDisplayOrder) {
+        List<GeneratedChecklistItem> result = new ArrayList<>();
         Set<LaptopFeatureCode> uniqueFeatures = confirmedFeatures == null
                 ? Set.of()
                 : new LinkedHashSet<>(confirmedFeatures);
@@ -28,12 +38,17 @@ public class LaptopChecklistPolicy {
                 .sorted()
                 .limit(MAX_ADDITIONAL_ITEMS)
                 .map(featureItems::get)
-                .map(definition -> definition.toItem(result.size() + 1))
+                .map(definition -> definition.toItem(firstDisplayOrder + result.size()))
                 .forEach(result::add);
-        for (int index = 0; index < result.size(); index++) {
-            result.set(index, result.get(index).withDisplayOrder(index + 1));
-        }
         return List.copyOf(result);
+    }
+
+    public EvidenceType evidenceType(LaptopFeatureCode featureCode) {
+        ItemDefinition definition = featureItems.get(featureCode);
+        if (definition == null) {
+            throw new IllegalArgumentException("unsupported laptop feature");
+        }
+        return definition.evidenceType();
     }
 
     public boolean supports(LaptopFeatureCode featureCode) {

@@ -4,9 +4,12 @@ import com.c203.limit.domain.inspection.agent.InspectionSessionDtos.CompleteAgen
 import com.c203.limit.domain.inspection.agent.InspectionSessionDtos.CreateAgentUploadRequest;
 import com.c203.limit.domain.inspection.agent.InspectionSessionDtos.CreateSessionRequest;
 import com.c203.limit.domain.inspection.agent.InspectionSessionDtos.PairRequest;
+import com.c203.limit.domain.inspection.agent.InspectionSessionDtos.SubmitTestResultRequest;
+import com.c203.limit.domain.inspection.agent.InspectionSessionDtos.TestResultResponse;
 import com.c203.limit.global.response.ApiResponse;
 import com.c203.limit.global.security.CurrentUser;
 import jakarta.validation.Valid;
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -71,5 +74,23 @@ public class InspectionSessionController {
             @RequestHeader("Authorization") String authorization,
             @PathVariable String sessionKey) {
         return ResponseEntity.ok(ApiResponse.ok(service.complete(authorization, sessionKey)));
+    }
+
+    // TODO(다음 세션): 저장이 구현되면 실제로 결과가 생성되므로 201 Created로 되돌린다.
+    @PostMapping("/api/v1/inspection-agent/sessions/{sessionKey}/test-results")
+    public ResponseEntity<ApiResponse<TestResultResponse>> submitTestResult(
+            @RequestHeader("Authorization") String authorization,
+            @PathVariable String sessionKey,
+            @Valid @RequestBody SubmitTestResultRequest request) {
+        return ResponseEntity.ok(
+                ApiResponse.ok(service.submitTestResult(authorization, sessionKey, request)));
+    }
+
+    @GetMapping("/api/v1/inspection-sessions/{sessionKey}/test-results")
+    @PreAuthorize("hasRole('SELLER')")
+    public ResponseEntity<ApiResponse<List<TestResultResponse>>> testResults(
+            @PathVariable String sessionKey) {
+        return ResponseEntity.ok(
+                ApiResponse.ok(service.listTestResults(currentUser.memberId(), sessionKey)));
     }
 }

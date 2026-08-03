@@ -7,8 +7,11 @@ import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.when;
 
+import com.c203.limit.domain.inspection.agent.InspectionSessionDtos.SubmitTestResultRequest;
 import com.c203.limit.domain.inspection.entity.ListingChecklistItem;
 import com.c203.limit.domain.inspection.enums.AutomationType;
+import com.c203.limit.domain.inspection.enums.MeasurementStatus;
+import com.c203.limit.domain.inspection.enums.TestType;
 import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
 import com.c203.limit.domain.inspection.service.BatteryReportParsingService;
 import com.c203.limit.domain.inspection.service.DxdiagParsingService;
@@ -19,9 +22,11 @@ import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -123,6 +128,96 @@ class InspectionSessionServiceTests {
                         BusinessException.class,
                         exception -> assertThat(exception.getErrorCode())
                                 .isEqualTo(ErrorCode.INSPECTION_SESSION_INVALID_STATE));
+    }
+
+    @Test
+    void completedSessionCannotSubmitTestResult() {
+        var created = service.create(10L, 1001L);
+        InspectionSession stored = captureCreatedSession(created.sessionKey());
+        when(sessionRepository
+                        .findFirstByPairingCodeHashAndStatusAndExpiresAtAfterOrderByCreatedAtDesc(
+                                any(byte[].class),
+                                eq(InspectionSessionStatus.CREATED),
+                                any()))
+                .thenReturn(Optional.of(stored));
+        when(sessionRepository.findById(created.sessionKey())).thenReturn(Optional.of(stored));
+
+        var paired = service.pair(created.pairingCode(), "0.1.0");
+        stored.complete(java.time.LocalDateTime.parse("2026-08-03T01:01:00"));
+
+        var request = new SubmitTestResultRequest(
+                UUID.randomUUID(),
+                TestType.CAMERA,
+                MeasurementStatus.DETECTED,
+                null,
+                null,
+                OffsetDateTime.parse("2026-08-03T01:00:00Z"),
+                null);
+
+        assertThatThrownBy(() -> service.submitTestResult(
+                        "Bearer " + paired.agentToken(), created.sessionKey(), request))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INSPECTION_SESSION_INVALID_STATE));
+    }
+
+    @Test
+    void submitTestResultEchoesRequestForPairedSession() {
+        var created = service.create(10L, 1001L);
+        InspectionSession stored = captureCreatedSession(created.sessionKey());
+        when(sessionRepository
+                        .findFirstByPairingCodeHashAndStatusAndExpiresAtAfterOrderByCreatedAtDesc(
+                                any(byte[].class),
+                                eq(InspectionSessionStatus.CREATED),
+                                any()))
+                .thenReturn(Optional.of(stored));
+        when(sessionRepository.findById(created.sessionKey())).thenReturn(Optional.of(stored));
+
+        var paired = service.pair(created.pairingCode(), "0.1.0");
+
+        UUID clientResultId = UUID.randomUUID();
+        OffsetDateTime testedAt = OffsetDateTime.parse("2026-08-03T01:00:00Z");
+        var request = new SubmitTestResultRequest(
+                clientResultId,
+                TestType.CAMERA,
+                MeasurementStatus.DETECTED,
+                null,
+                null,
+                testedAt,
+                null);
+
+        var response = service.submitTestResult(
+                "Bearer " + paired.agentToken(), created.sessionKey(), request);
+
+        assertThat(response.clientResultId()).isEqualTo(clientResultId);
+        assertThat(response.testType()).isEqualTo(TestType.CAMERA);
+        assertThat(response.measurementStatus()).isEqualTo(MeasurementStatus.DETECTED);
+        assertThat(response.attemptNo()).isEqualTo(1);
+        assertThat(response.rawDataSaved()).isFalse();
+        assertThat(response.testedAt()).isEqualTo(testedAt);
+    }
+
+    @Test
+    void sellerWithoutOwnershipCannotListTestResults() {
+        var created = service.create(10L, 1001L);
+        InspectionSession stored = captureCreatedSession(created.sessionKey());
+        when(sessionRepository.findById(created.sessionKey())).thenReturn(Optional.of(stored));
+
+        assertThatThrownBy(() -> service.listTestResults(99L, created.sessionKey()))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN));
+    }
+
+    @Test
+    void listTestResultsReturnsEmptyForOwner() {
+        var created = service.create(10L, 1001L);
+        InspectionSession stored = captureCreatedSession(created.sessionKey());
+        when(sessionRepository.findById(created.sessionKey())).thenReturn(Optional.of(stored));
+
+        assertThat(service.listTestResults(10L, created.sessionKey())).isEmpty();
     }
 
     private InspectionSession captureCreatedSession(String sessionKey) {
