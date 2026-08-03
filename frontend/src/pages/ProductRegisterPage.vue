@@ -320,6 +320,12 @@ const listingImageBusy = ref(false)
 const listingImageProgress = ref(0)
 let listingImageInFlight = 0
 
+// 파일 입력은 label 안에 숨겨 둡니다. label에는 :disabled가 안 걸리므로,
+// 못 누르는 상태를 라벨 쪽에도 따로 알려 줘야 버튼이 눌리는 것처럼 보이지 않습니다.
+const listingImageAddDisabled = computed(
+  () => listingImageBusy.value || listingImages.value.length >= 10,
+)
+
 // 대표 이미지는 고르는 즉시 서버에 올립니다. presigned URL이 productId 기준이라 상품이 없으면
 // 올릴 수 없어서, 상품이 아직 없을 때는 초안을 먼저 만든 뒤 업로드합니다.
 // 초안을 만들 수 없는 상태(카테고리·모델·글제목·가격 미입력)에서만 파일을 임시로 들고 있다가
@@ -2095,14 +2101,17 @@ onMounted(async () => {
                   </p>
                 </div>
                 <!-- 다른 주요 버튼(BaseButton primary)과 같은 그라데이션·번짐을 씁니다. -->
-                <label class="btn-glow inline-flex cursor-pointer items-center justify-center rounded-md bg-primary-gradient px-4 py-2 text-sm font-semibold text-white shadow-elevated transition-all hover:brightness-110">
+                <label
+                  class="btn-glow inline-flex cursor-pointer items-center justify-center rounded-md bg-primary-gradient px-4 py-2 text-sm font-semibold text-white shadow-elevated transition-all hover:brightness-110"
+                  :class="listingImageAddDisabled ? 'pointer-events-none opacity-55' : ''"
+                >
                   {{ listingImageBusy ? '업로드 중…' : '이미지 추가' }}
                   <input
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
                     multiple
                     class="sr-only"
-                    :disabled="listingImageBusy || listingImages.length >= 10"
+                    :disabled="listingImageAddDisabled"
                     @change="onListingImageInput"
                   >
                 </label>
