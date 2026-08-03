@@ -26,6 +26,8 @@ public interface DeviceModelRequestRepository extends JpaRepository<DeviceModelR
 
     List<DeviceModelRequest> findByStatusOrderByCreatedAtAsc(DeviceModelRequestStatus status);
 
+    Optional<DeviceModelRequest> findFirstByResolvedModelIdOrderByCreatedAtDesc(Long modelId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select request from DeviceModelRequest request where request.id = :id")
     Optional<DeviceModelRequest> findByIdForUpdate(@Param("id") Long id);

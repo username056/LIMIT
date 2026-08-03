@@ -2,6 +2,7 @@ package com.c203.limit.domain.product.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -34,6 +35,7 @@ class ListingServiceTests {
     private static final Long LISTING_ID = 100L;
     private static final Long BUYER_ID = 2L;
     private static final long RESERVATION_TTL_MINUTES = 10;
+    private static final long AUTO_CONFIRM_DAYS = 7;
     private static final Clock FIXED_CLOCK =
             Clock.fixed(Instant.parse("2026-07-28T00:00:00Z"), ZoneId.systemDefault());
 
@@ -48,7 +50,8 @@ class ListingServiceTests {
                 listingRepository,
                 listingStatusHistoryRepository,
                 FIXED_CLOCK,
-                RESERVATION_TTL_MINUTES);
+                RESERVATION_TTL_MINUTES,
+                AUTO_CONFIRM_DAYS);
     }
 
     private Listing listingWithStatus(ListingStatus status) {
@@ -171,7 +174,7 @@ class ListingServiceTests {
     }
 
     @Test
-    void markPaidTransitionsListingAndRecordsHistory() {
+    void markPaidTransitionsListingIntoInspectionAndRecordsHistory() {
         Listing listing = listingWithStatus(ListingStatus.RESERVED);
         ReflectionTestUtils.setField(listing, "buyerId", BUYER_ID);
         ReflectionTestUtils.setField(
@@ -180,8 +183,11 @@ class ListingServiceTests {
 
         Listing result = service.markPaid(LISTING_ID, BUYER_ID);
 
-        assertThat(result.getStatus()).isEqualTo(ListingStatus.PAID);
-        verify(listingStatusHistoryRepository).save(any(ListingStatusHistory.class));
+        assertThat(result.getStatus()).isEqualTo(ListingStatus.INSPECTING);
+        assertThat(result.getHandedOverAt()).isEqualTo(LocalDateTime.now(FIXED_CLOCK));
+        assertThat(result.getAutoConfirmAt())
+                .isEqualTo(LocalDateTime.now(FIXED_CLOCK).plusDays(AUTO_CONFIRM_DAYS));
+        verify(listingStatusHistoryRepository, times(2)).save(any(ListingStatusHistory.class));
     }
 
     @Test
@@ -203,7 +209,7 @@ class ListingServiceTests {
     }
 
     @Test
-    void markPaidRecoveredFromPgTransitionsListingEvenAfterReservationExpired() {
+    void markPaidRecoveredFromPgTransitionsListingIntoInspectionEvenAfterReservationExpired() {
         Listing listing = listingWithStatus(ListingStatus.RESERVED);
         ReflectionTestUtils.setField(listing, "buyerId", BUYER_ID);
         ReflectionTestUtils.setField(
@@ -212,8 +218,11 @@ class ListingServiceTests {
 
         Listing result = service.markPaidRecoveredFromPg(LISTING_ID, BUYER_ID);
 
-        assertThat(result.getStatus()).isEqualTo(ListingStatus.PAID);
-        verify(listingStatusHistoryRepository).save(any(ListingStatusHistory.class));
+        assertThat(result.getStatus()).isEqualTo(ListingStatus.INSPECTING);
+        assertThat(result.getHandedOverAt()).isEqualTo(LocalDateTime.now(FIXED_CLOCK));
+        assertThat(result.getAutoConfirmAt())
+                .isEqualTo(LocalDateTime.now(FIXED_CLOCK).plusDays(AUTO_CONFIRM_DAYS));
+        verify(listingStatusHistoryRepository, times(2)).save(any(ListingStatusHistory.class));
     }
 
     @Test
@@ -235,6 +244,39 @@ class ListingServiceTests {
     }
 
     @Test
+    void renewReservationForBuyerExtendsReservedUntilAndRecordsHistory() {
+        Listing listing = listingWithStatus(ListingStatus.RESERVED);
+        ReflectionTestUtils.setField(listing, "buyerId", BUYER_ID);
+        ReflectionTestUtils.setField(
+                listing, "reservedUntil", LocalDateTime.now(FIXED_CLOCK).plusMinutes(1));
+        when(listingRepository.findById(LISTING_ID)).thenReturn(Optional.of(listing));
+
+        Listing result = service.renewReservationForBuyer(LISTING_ID, BUYER_ID);
+
+        assertThat(result.getReservedUntil())
+                .isEqualTo(LocalDateTime.now(FIXED_CLOCK).plusMinutes(RESERVATION_TTL_MINUTES));
+        assertThat(result.getStatus()).isEqualTo(ListingStatus.RESERVED);
+        verify(listingStatusHistoryRepository).save(any(ListingStatusHistory.class));
+    }
+
+    @Test
+    void renewReservationForBuyerRejectsWhenReservationBelongsToAnotherBuyer() {
+        Listing listing = listingWithStatus(ListingStatus.RESERVED);
+        ReflectionTestUtils.setField(listing, "buyerId", BUYER_ID);
+        ReflectionTestUtils.setField(
+                listing, "reservedUntil", LocalDateTime.now(FIXED_CLOCK).plusMinutes(1));
+        when(listingRepository.findById(LISTING_ID)).thenReturn(Optional.of(listing));
+
+        assertThatThrownBy(() -> service.renewReservationForBuyer(LISTING_ID, BUYER_ID + 1))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.LISTING_RESERVATION_MISMATCH));
+        verifyNoInteractions(listingStatusHistoryRepository);
+    }
+
+    @Test
     void cancelReservationReturnsListingToOnSaleAndRecordsHistory() {
         Listing listing = listingWithStatus(ListingStatus.RESERVED);
         ReflectionTestUtils.setField(listing, "buyerId", BUYER_ID);
@@ -248,16 +290,58 @@ class ListingServiceTests {
     }
 
     @Test
-    void markInspectingRequiresPaidListing() {
-        Listing listing = listingWithStatus(ListingStatus.RESERVED);
+    void confirmByBuyerTransitionsInspectingListingToConfirmed() {
+        Listing listing = listingWithStatus(ListingStatus.INSPECTING);
+        ReflectionTestUtils.setField(listing, "buyerId", BUYER_ID);
         when(listingRepository.findById(LISTING_ID)).thenReturn(Optional.of(listing));
 
-        assertThatThrownBy(() -> service.markInspecting(LISTING_ID))
+        Listing result = service.confirmByBuyer(LISTING_ID, BUYER_ID);
+
+        assertThat(result.getStatus()).isEqualTo(ListingStatus.CONFIRMED);
+        assertThat(result.getConfirmedAt()).isEqualTo(LocalDateTime.now(FIXED_CLOCK));
+        verify(listingStatusHistoryRepository).save(any(ListingStatusHistory.class));
+    }
+
+    @Test
+    void confirmByBuyerRejectsWhenBuyerDoesNotMatch() {
+        Listing listing = listingWithStatus(ListingStatus.INSPECTING);
+        ReflectionTestUtils.setField(listing, "buyerId", BUYER_ID);
+        when(listingRepository.findById(LISTING_ID)).thenReturn(Optional.of(listing));
+
+        assertThatThrownBy(() -> service.confirmByBuyer(LISTING_ID, BUYER_ID + 1))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         exception ->
                                 assertThat(exception.getErrorCode())
-                                        .isEqualTo(ErrorCode.LISTING_NOT_PAID));
+                                        .isEqualTo(ErrorCode.LISTING_RESERVATION_MISMATCH));
+        assertThat(listing.getStatus()).isEqualTo(ListingStatus.INSPECTING);
+        verifyNoInteractions(listingStatusHistoryRepository);
+    }
+
+    @Test
+    void autoConfirmTransitionsInspectingListingToConfirmedWithoutBuyerCheck() {
+        Listing listing = listingWithStatus(ListingStatus.INSPECTING);
+        ReflectionTestUtils.setField(listing, "buyerId", BUYER_ID);
+        when(listingRepository.findById(LISTING_ID)).thenReturn(Optional.of(listing));
+
+        Listing result = service.autoConfirm(LISTING_ID);
+
+        assertThat(result.getStatus()).isEqualTo(ListingStatus.CONFIRMED);
+        assertThat(result.getConfirmedAt()).isEqualTo(LocalDateTime.now(FIXED_CLOCK));
+        verify(listingStatusHistoryRepository).save(any(ListingStatusHistory.class));
+    }
+
+    @Test
+    void autoConfirmRequiresInspectingListing() {
+        Listing listing = listingWithStatus(ListingStatus.PAID);
+        when(listingRepository.findById(LISTING_ID)).thenReturn(Optional.of(listing));
+
+        assertThatThrownBy(() -> service.autoConfirm(LISTING_ID))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.LISTING_NOT_INSPECTING));
 
         verifyNoInteractions(listingStatusHistoryRepository);
     }

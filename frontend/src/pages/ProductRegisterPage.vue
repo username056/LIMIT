@@ -673,13 +673,28 @@ async function submitModelRequest() {
   isRequestingModel.value = true
   errorMessage.value = ''
   try {
-    modelRequestResult.value = await requestDeviceModel({
+    const created = await requestDeviceModel({
       categoryId: Number(form.categoryId),
       manufacturer: customModel.manufacturer,
       modelName: customModel.modelName,
       modelCode: customModel.modelCode || null,
       osFamily: customModel.osFamily,
     })
+    modelRequestResult.value = created
+    const modelId = created.resolvedModelId || created.resolvedCategoryId
+    models.value = [{
+      deviceModelId: modelId,
+      manufacturerName: created.manufacturer,
+      categoryId: created.categoryId,
+      modelCode: created.modelCode,
+      modelName: created.modelName,
+      defaultOs: created.osFamily,
+      isActive: true,
+    }]
+    form.deviceModelId = modelId
+    isCustomModelInput.value = false
+    notice.value = '새 모델을 바로 사용할 수 있습니다. AI 추가 항목을 확인해 주세요.'
+    await loadTemplatePreview()
   } catch (error) {
     errorMessage.value = error.message || '모델 검토 요청을 등록하지 못했습니다.'
   } finally {
@@ -760,7 +775,7 @@ async function persistSaleInfo() {
       ...payload,
       categoryId: Number(form.categoryId),
       deviceModelId: Number(form.deviceModelId),
-      confirmedFeatures: [],
+      confirmedFeatures: confirmedFeatures.value,
     })
     productId = created.productId
     draftProductId.value = productId
@@ -1635,7 +1650,7 @@ onMounted(async () => {
                   v-else-if="form.categoryId"
                   class="mt-2 block text-xs font-normal text-text-muted"
                 >
-                  관리자 승인 모델은 이 목록에 즉시 추가됩니다. 제조사·모델명·모델 코드로 검색할 수 있습니다.
+                  등록된 모델은 이 목록에 즉시 추가됩니다. 제조사·모델명·모델 코드로 검색할 수 있습니다.
                 </span>
               </label>
             </div>
@@ -1730,7 +1745,7 @@ onMounted(async () => {
                   v-if="modelRequestResult"
                   class="mt-3 rounded-md bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-700"
                 >
-                  모델 요청이 등록되었습니다. 관리자 승인 후 모델 목록에서 선택해 상품을 등록할 수 있습니다.
+                  모델이 즉시 등록되었습니다. 관리자 검토와 관계없이 현재 판매 등록을 계속할 수 있습니다.
                 </p>
               </div>
             </div>
@@ -1787,8 +1802,8 @@ onMounted(async () => {
                     : checklistGeneration.aiApplied ? 'primary' : 'gray'"
                 >
                   {{
-                    checklistGeneration.researchStatus === 'PENDING_REVIEW'
-                      ? '관리자 검토 대기'
+                    checklistGeneration.aiSuggestions?.length
+                      ? 'AI 추가 항목 선택 가능'
                       : checklistGeneration.researchStatus === 'FAILED'
                         ? 'AI 조사 실패 · 기본 정책 적용'
                         : checklistGeneration.aiApplied
@@ -1801,8 +1816,8 @@ onMounted(async () => {
                 v-if="checklistGeneration.researchStatus === 'PENDING_REVIEW'"
                 class="mt-3 rounded-md bg-white/80 px-3 py-2 text-xs leading-5 text-text-sub"
               >
-                이 모델의 공식 자료 조사는 한 번만 수행되며 현재 관리자 검토 대기 중입니다.
-                승인 전까지는 검증된 기본 체크리스트를 사용합니다.
+                공식 자료 조사 결과는 관리자에게도 사후 보고됩니다.
+                아래 AI 추가 항목 중 실제 기기에 해당하는 항목만 선택해 주세요.
               </p>
               <p
                 v-else-if="checklistGeneration.researchStatus === 'FAILED'"
@@ -1813,7 +1828,7 @@ onMounted(async () => {
                 관리자가 실패 원인을 확인하고 재조사할 수 있으며 상품 등록은 그대로 진행할 수 있습니다.
               </p>
               <p
-                v-else-if="!checklistGeneration.aiApplied"
+                v-else-if="!checklistGeneration.aiSuggestions?.length && !checklistGeneration.aiApplied"
                 class="mt-3 rounded-md bg-white/80 px-3 py-2 text-xs leading-5 text-text-sub"
               >
                 AI 연결 없이 검증된 기기별 기본 정책으로 생성했습니다. 상품 등록은 그대로 진행할 수 있습니다.
@@ -1826,9 +1841,51 @@ onMounted(async () => {
               </p>
             </div>
 
+            <div
+              v-if="checklistGeneration?.aiSuggestions?.length"
+              class="mt-5 rounded-lg border border-primary/30 bg-white p-4"
+            >
+              <h3 class="text-sm font-bold text-text-main">
+                AI가 공식 자료에서 찾은 추가 항목
+              </h3>
+              <p class="mt-1 text-xs leading-5 text-text-sub">
+                기본 항목은 항상 적용됩니다. 아래 항목은 실제 기기에 해당하는 경우에만 선택해 주세요.
+              </p>
+              <ul class="mt-3 grid gap-3 sm:grid-cols-2">
+                <li
+                  v-for="suggestion in checklistGeneration.aiSuggestions"
+                  :key="suggestion.featureCode"
+                  class="rounded-md border border-border bg-bg p-3"
+                >
+                  <label class="flex cursor-pointer items-start gap-3">
+                    <input
+                      v-model="confirmedFeatures"
+                      type="checkbox"
+                      :value="suggestion.featureCode"
+                      class="mt-1 h-4 w-4 rounded border-border text-primary"
+                    >
+                    <span>
+                      <strong class="text-sm text-text-main">
+                        {{ suggestion.featureName || suggestion.featureCode }}
+                      </strong>
+                      <span class="mt-1 block text-xs leading-5 text-text-sub">
+                        {{ suggestion.checkGuide || suggestion.reason }}
+                      </span>
+                    </span>
+                  </label>
+                </li>
+              </ul>
+            </div>
+
+            <h3
+              v-if="templateItems.length"
+              class="mt-5 text-sm font-bold text-text-main"
+            >
+              필수 기본 체크리스트
+            </h3>
             <ul
               v-if="templateItems.length"
-              class="mt-5 grid gap-2 sm:grid-cols-2"
+              class="mt-2 grid gap-2 sm:grid-cols-2"
             >
               <li
                 v-for="item in templateItems"

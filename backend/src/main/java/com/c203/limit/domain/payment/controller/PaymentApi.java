@@ -2,6 +2,7 @@ package com.c203.limit.domain.payment.controller;
 
 import com.c203.limit.domain.payment.dto.request.ConfirmPaymentRequest;
 import com.c203.limit.domain.payment.dto.request.CreatePaymentRequest;
+import com.c203.limit.domain.payment.dto.request.RetryPaymentRequest;
 import com.c203.limit.domain.payment.dto.response.PaymentApiResponse;
 import com.c203.limit.domain.payment.dto.response.PaymentResponse;
 import com.c203.limit.global.response.ApiResponse;
@@ -19,14 +20,16 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 
-@Tag(name = "08. 결제", description = "매물 결제 요청 생성·조회 API")
+@Tag(name = "08. 결제", description = "매물 결제 요청·재시도·주문 내역 API")
 public interface PaymentApi {
 
     @Operation(
             operationId = "payment01",
             summary = "결제 요청 생성",
             description = "판매중 매물을 예약하고 결제 요청을 생성합니다. 동일한 idempotencyKey로 재요청하면 "
-                    + "기존 결제 요청을 그대로 반환합니다.",
+                    + "기존 결제 요청을 그대로 반환합니다. 이 매물에 본인 명의의 활성 REQUESTED 결제가 "
+                    + "이미 있으면(예: 결제 중 이탈 후 다시 진입) idempotencyKey와 무관하게 새로 만들지 "
+                    + "않고 그 결제를 이어서 재사용합니다.",
             security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -38,7 +41,8 @@ public interface PaymentApi {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "LISTING_NOT_FOUND"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
                 responseCode = "409",
-                description = "LISTING_NOT_ON_SALE / IDEMPOTENCY_KEY_CONFLICT / PAYMENT_REQUEST_CONFLICT")
+                description = "LISTING_NOT_ON_SALE / IDEMPOTENCY_KEY_CONFLICT / PAYMENT_REQUEST_CONFLICT / "
+                        + "PAYMENT_RETRY_NOT_ALLOWED")
     })
     @PostMapping(
             path = "/api/v1/payments",
@@ -52,7 +56,7 @@ public interface PaymentApi {
             summary = "결제 승인(confirm)",
             description = "Toss 결제창에서 승인된 결제를 서버에서 확정합니다. orderId·금액을 저장된 결제 "
                     + "요청과 대조한 뒤 Toss 승인 API를 호출하고, 성공하면 결제를 APPROVED로, 매물을 "
-                    + "PAID로 전환합니다.",
+                    + "PAID를 거쳐 곧바로 INSPECTING(검수중)으로 전환합니다.",
             security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -77,6 +81,31 @@ public interface PaymentApi {
             produces = MediaType.APPLICATION_JSON_VALUE)
     ResponseEntity<ApiResponse<PaymentResponse>> confirmPayment(
             @PathVariable Long paymentId, @Valid @RequestBody ConfirmPaymentRequest request);
+
+    @Operation(
+            operationId = "payment05",
+            summary = "결제 재시도",
+            description = "결제창 이탈·취소 후 같은 구매자가 다시 결제창을 열 때 호출한다. 예약이 "
+                    + "여전히 유효하면 attemptNo를 올리고 새 providerOrderId를 발급해 같은 결제 요청을 "
+                    + "재사용한다. 이미 승인·거절된 결제나 예약이 만료된 결제는 재시도할 수 없다. "
+                    + "결제창에서 다른 결제 수단으로 바꿔 재시도할 수 있으므로 method를 매번 받아 갱신한다.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                responseCode = "200",
+                description = "재시도 성공, 새 providerOrderId 발급",
+                content = @Content(schema = @Schema(implementation = PaymentApiResponse.class))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "UNAUTHORIZED"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "PAYMENT_ACCESS_DENIED"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "PAYMENT_NOT_FOUND"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "PAYMENT_RETRY_NOT_ALLOWED")
+    })
+    @PostMapping(
+            path = "/api/v1/payments/{paymentId}/retry",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    ResponseEntity<ApiResponse<PaymentResponse>> retryPayment(
+            @PathVariable Long paymentId, @Valid @RequestBody RetryPaymentRequest request);
 
     @Operation(
             operationId = "payment04",

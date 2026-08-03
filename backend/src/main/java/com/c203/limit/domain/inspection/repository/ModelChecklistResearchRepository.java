@@ -13,8 +13,11 @@ import org.springframework.data.repository.query.Param;
 public interface ModelChecklistResearchRepository
         extends JpaRepository<ModelChecklistResearch, Long> {
 
-    Optional<ModelChecklistResearch> findByCategoryIdAndResearchVersion(
-            Long categoryId, int researchVersion);
+    Optional<ModelChecklistResearch> findByDeviceModelIdAndResearchVersion(
+            Long deviceModelId, int researchVersion);
+
+    Optional<ModelChecklistResearch> findFirstByDeviceModelIdOrderByResearchVersionDesc(
+            Long deviceModelId);
 
     List<ModelChecklistResearch> findByStatusOrderByCreatedAtAsc(
             ModelChecklistResearchStatus status);

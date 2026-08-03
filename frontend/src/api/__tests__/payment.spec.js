@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { confirmPayment, createPayment, getPayment } from '../payment'
+import { confirmPayment, createPayment, getPayment, retryPayment } from '../payment'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
@@ -17,11 +17,14 @@ describe('payment api', () => {
     await createPayment({ listingId: 1001, method: 'CARD', idempotencyKey: 'idem-1' })
     await confirmPayment(500, { paymentKey: 'pk-1', orderId: 'PAY-500-1', amount: 650000 })
     await getPayment(500)
+    await retryPayment(500, 'TOSSPAY')
 
     expect(fetchMock.mock.calls.map(([url, options]) => [url, options.method])).toEqual([
       [`${API_BASE_URL}/payments`, 'POST'],
       [`${API_BASE_URL}/payments/500/confirm`, 'POST'],
       [`${API_BASE_URL}/payments/500`, 'GET'],
+      [`${API_BASE_URL}/payments/500/retry`, 'POST'],
     ])
+    expect(fetchMock.mock.calls[3][1].body).toBe(JSON.stringify({ method: 'TOSSPAY' }))
   })
 })

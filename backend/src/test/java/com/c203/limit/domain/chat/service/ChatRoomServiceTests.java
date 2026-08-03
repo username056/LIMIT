@@ -77,7 +77,7 @@ class ChatRoomServiceTests {
 
     @Test
     void createsRoomWhenItDoesNotExist() {
-        ListingChatInfo listing = new ListingChatInfo(LISTING_ID, SELLER_ID, "ON_SALE");
+        ListingChatInfo listing = new ListingChatInfo(LISTING_ID, SELLER_ID, BUYER_ID, "ON_SALE");
         ChatRoom room = room(100L);
         when(listingReader.findById(LISTING_ID)).thenReturn(Optional.of(listing));
         when(chatRoomRepository.findByListingIdAndBuyerIdAndSellerId(LISTING_ID, BUYER_ID, SELLER_ID))
@@ -92,7 +92,7 @@ class ChatRoomServiceTests {
 
     @Test
     void returnsExistingRoomWithoutCreatingAnotherOne() {
-        ListingChatInfo listing = new ListingChatInfo(LISTING_ID, SELLER_ID, "PAID");
+        ListingChatInfo listing = new ListingChatInfo(LISTING_ID, SELLER_ID, BUYER_ID, "PAID");
         ChatRoom room = room(100L);
         when(listingReader.findById(LISTING_ID)).thenReturn(Optional.of(listing));
         when(chatRoomRepository.findByListingIdAndBuyerIdAndSellerId(LISTING_ID, BUYER_ID, SELLER_ID))
@@ -108,7 +108,7 @@ class ChatRoomServiceTests {
     void returnsExistingRoomForReinspection() {
         ChatRoom room = room(100L);
         when(listingReader.findById(LISTING_ID))
-                .thenReturn(Optional.of(new ListingChatInfo(LISTING_ID, SELLER_ID, "PAID")));
+                .thenReturn(Optional.of(new ListingChatInfo(LISTING_ID, SELLER_ID, BUYER_ID, "PAID")));
         when(chatRoomRepository.findByListingIdAndBuyerIdAndSellerId(
                         LISTING_ID, BUYER_ID, SELLER_ID))
                 .thenReturn(Optional.of(room));
@@ -123,7 +123,7 @@ class ChatRoomServiceTests {
     void createsRoomForReinspectionWhenRoomDoesNotExist() {
         ChatRoom room = room(100L);
         when(listingReader.findById(LISTING_ID))
-                .thenReturn(Optional.of(new ListingChatInfo(LISTING_ID, SELLER_ID, "PAID")));
+                .thenReturn(Optional.of(new ListingChatInfo(LISTING_ID, SELLER_ID, BUYER_ID, "PAID")));
         when(chatRoomRepository.findByListingIdAndBuyerIdAndSellerId(
                         LISTING_ID, BUYER_ID, SELLER_ID))
                 .thenReturn(Optional.empty());
@@ -138,7 +138,7 @@ class ChatRoomServiceTests {
     void reusesLatestRoomWithSameCounterpartForReinspection() {
         ChatRoom room = room(100L);
         when(listingReader.findById(LISTING_ID))
-                .thenReturn(Optional.of(new ListingChatInfo(LISTING_ID, SELLER_ID, "PAID")));
+                .thenReturn(Optional.of(new ListingChatInfo(LISTING_ID, SELLER_ID, BUYER_ID, "PAID")));
         when(chatRoomRepository.findByListingIdAndBuyerIdAndSellerId(
                         LISTING_ID, BUYER_ID, SELLER_ID))
                 .thenReturn(Optional.empty());
@@ -153,7 +153,7 @@ class ChatRoomServiceTests {
 
     @Test
     void returnsRoomCreatedByConcurrentRequest() {
-        ListingChatInfo listing = new ListingChatInfo(LISTING_ID, SELLER_ID, "ON_SALE");
+        ListingChatInfo listing = new ListingChatInfo(LISTING_ID, SELLER_ID, BUYER_ID, "ON_SALE");
         ChatRoom room = room(100L);
         when(listingReader.findById(LISTING_ID)).thenReturn(Optional.of(listing));
         when(chatRoomRepository.findByListingIdAndBuyerIdAndSellerId(LISTING_ID, BUYER_ID, SELLER_ID))
@@ -170,13 +170,57 @@ class ChatRoomServiceTests {
     @Test
     void rejectsSellerChattingWithOwnListing() {
         when(listingReader.findById(LISTING_ID))
-                .thenReturn(Optional.of(new ListingChatInfo(LISTING_ID, BUYER_ID, "ON_SALE")));
+                .thenReturn(Optional.of(new ListingChatInfo(LISTING_ID, BUYER_ID, BUYER_ID, "ON_SALE")));
         when(chatRoomRepository.findByListingIdAndBuyerIdAndSellerId(LISTING_ID, BUYER_ID, BUYER_ID))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.createOrGet(LISTING_ID, BUYER_ID))
                 .isInstanceOfSatisfying(BusinessException.class,
                         exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.SELF_CHAT_NOT_ALLOWED));
+        verifyNoInteractions(creator);
+    }
+
+    @Test
+    void createsRoomWhenPurchaserContactsSellerAfterPayment() {
+        ListingChatInfo listing = new ListingChatInfo(LISTING_ID, SELLER_ID, BUYER_ID, "PAID");
+        ChatRoom room = room(100L);
+        when(listingReader.findById(LISTING_ID)).thenReturn(Optional.of(listing));
+        when(chatRoomRepository.findByListingIdAndBuyerIdAndSellerId(LISTING_ID, BUYER_ID, SELLER_ID))
+                .thenReturn(Optional.empty());
+        when(creator.create(LISTING_ID, BUYER_ID, SELLER_ID)).thenReturn(room);
+
+        ChatRoomCreateResult result = service.createOrGet(LISTING_ID, BUYER_ID);
+
+        assertThat(result.created()).isTrue();
+        assertThat(result.response().roomId()).isEqualTo(100L);
+    }
+
+    @Test
+    void rejectsThirdPartyContactingSellerAboutSomeoneElsesPurchase() {
+        Long actualBuyerId = BUYER_ID + 1;
+        ListingChatInfo listing = new ListingChatInfo(LISTING_ID, SELLER_ID, actualBuyerId, "PAID");
+        when(listingReader.findById(LISTING_ID)).thenReturn(Optional.of(listing));
+        when(chatRoomRepository.findByListingIdAndBuyerIdAndSellerId(LISTING_ID, BUYER_ID, SELLER_ID))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.createOrGet(LISTING_ID, BUYER_ID))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.CHAT_ROOM_CREATION_NOT_ALLOWED));
+        verifyNoInteractions(creator);
+    }
+
+    @Test
+    void rejectsListingInStatusOutsideCreatableAndPostPurchaseSet() {
+        ListingChatInfo listing = new ListingChatInfo(LISTING_ID, SELLER_ID, BUYER_ID, "CANCELLED");
+        when(listingReader.findById(LISTING_ID)).thenReturn(Optional.of(listing));
+        when(chatRoomRepository.findByListingIdAndBuyerIdAndSellerId(LISTING_ID, BUYER_ID, SELLER_ID))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.createOrGet(LISTING_ID, BUYER_ID))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.CHAT_ROOM_CREATION_NOT_ALLOWED));
         verifyNoInteractions(creator);
     }
 

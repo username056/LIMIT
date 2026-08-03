@@ -364,16 +364,42 @@ public class Listing extends BaseTimeEntity {
         this.paidAt = now;
     }
 
-    /** 결제 완료된 매물을 검수 단계로 전환한다. */
-    public void markInspecting() {
-        requireStatus(ListingStatus.PAID, ErrorCode.LISTING_NOT_PAID);
-        this.status = ListingStatus.INSPECTING;
+    /**
+     * 같은 구매자가 결제창을 다시 열 때(명시적 재시도든, 상품 페이지에서 다시 구매하기를 눌러 기존
+     * 예약을 이어받든) 예약 유예 시간을 지금부터 다시 계산해 늘려준다. 예약 주체가 다르면(다른
+     * 구매자 소유) 거부한다 — 이 매물의 예약을 남의 요청으로 늘릴 수는 없다.
+     */
+    public void renewReservationForBuyer(Long buyerId, LocalDateTime reservedUntil) {
+        requireStatus(ListingStatus.RESERVED, ErrorCode.LISTING_NOT_RESERVED);
+        if (!buyerId.equals(this.buyerId)) {
+            throw new BusinessException(ErrorCode.LISTING_RESERVATION_MISMATCH);
+        }
+        this.reservedUntil = reservedUntil;
     }
 
-    public void confirm() {
+    /**
+     * 결제 완료 즉시 검수 단계로 전환한다. 이 서비스에는 판매자의 별도 "전달완료" 액션이 없어서,
+     * 결제 확정 시점을 handedOverAt으로 기록하고 그 시점 기준으로 자동 구매확정 기한
+     * (autoConfirmAt)을 함께 계산해 저장한다.
+     */
+    public void enterInspection(LocalDateTime handedOverAt, LocalDateTime autoConfirmAt) {
+        requireStatus(ListingStatus.PAID, ErrorCode.LISTING_NOT_PAID);
+        this.status = ListingStatus.INSPECTING;
+        this.handedOverAt = handedOverAt;
+        this.autoConfirmAt = autoConfirmAt;
+    }
+
+    /**
+     * 검수 단계의 매물을 구매확정으로 전환한다. buyerId가 주어지면(구매자 본인 요청) 예약 주체와
+     * 일치하는지 검증하고, null이면(자동 구매확정 스케줄러가 기한 경과로 호출) 검증 없이 진행한다.
+     */
+    public void confirm(Long buyerId, LocalDateTime now) {
         requireStatus(ListingStatus.INSPECTING, ErrorCode.LISTING_NOT_INSPECTING);
+        if (buyerId != null && !buyerId.equals(this.buyerId)) {
+            throw new BusinessException(ErrorCode.LISTING_RESERVATION_MISMATCH);
+        }
         this.status = ListingStatus.CONFIRMED;
-        this.confirmedAt = LocalDateTime.now();
+        this.confirmedAt = now;
     }
 
     public void settle() {

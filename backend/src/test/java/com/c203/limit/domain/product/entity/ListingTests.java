@@ -193,10 +193,50 @@ class ListingTests {
     }
 
     @Test
-    void markInspectingRequiresPaidListing() {
+    void renewReservationForBuyerExtendsReservedUntilForSameBuyer() {
+        Listing listing = onSaleListing();
+        listing.reserve(2L, RESERVED_UNTIL);
+        LocalDateTime renewedUntil = RESERVED_UNTIL.plusMinutes(10);
+
+        listing.renewReservationForBuyer(2L, renewedUntil);
+
+        assertThat(listing.getStatus()).isEqualTo(ListingStatus.RESERVED);
+        assertThat(listing.getReservedUntil()).isEqualTo(renewedUntil);
+    }
+
+    @Test
+    void renewReservationForBuyerRequiresReservedListing() {
         Listing listing = onSaleListing();
 
-        assertThatThrownBy(listing::markInspecting)
+        assertThatThrownBy(() -> listing.renewReservationForBuyer(2L, RESERVED_UNTIL))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.LISTING_NOT_RESERVED));
+    }
+
+    @Test
+    void renewReservationForBuyerRejectsMismatchedBuyer() {
+        Listing listing = onSaleListing();
+        listing.reserve(2L, RESERVED_UNTIL);
+
+        assertThatThrownBy(() -> listing.renewReservationForBuyer(3L, RESERVED_UNTIL.plusMinutes(10)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.LISTING_RESERVATION_MISMATCH));
+        assertThat(listing.getReservedUntil()).isEqualTo(RESERVED_UNTIL);
+    }
+
+    @Test
+    void enterInspectionRequiresPaidListingAndRecordsHandoverAndAutoConfirmDeadline() {
+        Listing listing = onSaleListing();
+        LocalDateTime handedOverAt = RESERVED_UNTIL;
+        LocalDateTime autoConfirmAt = handedOverAt.plusDays(7);
+
+        assertThatThrownBy(() -> listing.enterInspection(handedOverAt, autoConfirmAt))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         exception ->
@@ -205,9 +245,11 @@ class ListingTests {
 
         listing.reserve(2L, RESERVED_UNTIL);
         listing.markPaid(2L, RESERVED_UNTIL.minusMinutes(1));
-        listing.markInspecting();
+        listing.enterInspection(handedOverAt, autoConfirmAt);
 
         assertThat(listing.getStatus()).isEqualTo(ListingStatus.INSPECTING);
+        assertThat(listing.getHandedOverAt()).isEqualTo(handedOverAt);
+        assertThat(listing.getAutoConfirmAt()).isEqualTo(autoConfirmAt);
     }
 
     @Test
@@ -216,18 +258,47 @@ class ListingTests {
         listing.reserve(2L, RESERVED_UNTIL);
         listing.markPaid(2L, RESERVED_UNTIL.minusMinutes(1));
 
-        assertThatThrownBy(listing::confirm)
+        LocalDateTime confirmedAt = RESERVED_UNTIL.plusDays(1);
+        assertThatThrownBy(() -> listing.confirm(2L, confirmedAt))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         exception ->
                                 assertThat(exception.getErrorCode())
                                         .isEqualTo(ErrorCode.LISTING_NOT_INSPECTING));
 
-        listing.markInspecting();
-        listing.confirm();
+        listing.enterInspection(RESERVED_UNTIL, RESERVED_UNTIL.plusDays(7));
+        listing.confirm(2L, confirmedAt);
 
         assertThat(listing.getStatus()).isEqualTo(ListingStatus.CONFIRMED);
-        assertThat(listing.getConfirmedAt()).isNotNull();
+        assertThat(listing.getConfirmedAt()).isEqualTo(confirmedAt);
+    }
+
+    @Test
+    void confirmRejectsMismatchedBuyer() {
+        Listing listing = onSaleListing();
+        listing.reserve(2L, RESERVED_UNTIL);
+        listing.markPaid(2L, RESERVED_UNTIL.minusMinutes(1));
+        listing.enterInspection(RESERVED_UNTIL, RESERVED_UNTIL.plusDays(7));
+
+        assertThatThrownBy(() -> listing.confirm(3L, RESERVED_UNTIL.plusDays(1)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.LISTING_RESERVATION_MISMATCH));
+        assertThat(listing.getStatus()).isEqualTo(ListingStatus.INSPECTING);
+    }
+
+    @Test
+    void confirmAllowsNullBuyerIdForAutoConfirm() {
+        Listing listing = onSaleListing();
+        listing.reserve(2L, RESERVED_UNTIL);
+        listing.markPaid(2L, RESERVED_UNTIL.minusMinutes(1));
+        listing.enterInspection(RESERVED_UNTIL, RESERVED_UNTIL.plusDays(7));
+
+        listing.confirm(null, RESERVED_UNTIL.plusDays(1));
+
+        assertThat(listing.getStatus()).isEqualTo(ListingStatus.CONFIRMED);
     }
 
     @Test
@@ -235,7 +306,7 @@ class ListingTests {
         Listing listing = onSaleListing();
         listing.reserve(2L, RESERVED_UNTIL);
         listing.markPaid(2L, RESERVED_UNTIL.minusMinutes(1));
-        listing.markInspecting();
+        listing.enterInspection(RESERVED_UNTIL, RESERVED_UNTIL.plusDays(7));
 
         assertThatThrownBy(listing::settle)
                 .isInstanceOfSatisfying(
@@ -244,7 +315,7 @@ class ListingTests {
                                 assertThat(exception.getErrorCode())
                                         .isEqualTo(ErrorCode.LISTING_NOT_CONFIRMED));
 
-        listing.confirm();
+        listing.confirm(2L, RESERVED_UNTIL.plusDays(1));
         listing.settle();
 
         assertThat(listing.getStatus()).isEqualTo(ListingStatus.SETTLED);

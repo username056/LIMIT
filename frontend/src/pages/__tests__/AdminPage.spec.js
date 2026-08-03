@@ -6,10 +6,14 @@ import {
   getAdminAccounts,
   getAdminActionLog,
   getAdminActionLogs,
+  getAdminDeviceModel,
+  getAdminDeviceModels,
   getAdminMembers,
   getChecklistResearches,
   getDeviceModelRequests,
   retryChecklistResearch,
+  researchAdminDeviceModel,
+  updateAdminDeviceModel,
   updateAdminActionLog,
   updateDeviceModelRequest,
 } from '../../api/admin'
@@ -25,6 +29,8 @@ vi.mock('../../api/admin', () => ({
   getAdminActionLogs: vi.fn(),
   getAdminMember: vi.fn(),
   getAdminMembers: vi.fn(),
+  getAdminDeviceModel: vi.fn(),
+  getAdminDeviceModels: vi.fn(),
   getChecklistResearches: vi.fn(),
   getDeviceModelRequests: vi.fn(),
   getMemberRestrictions: vi.fn(),
@@ -33,8 +39,10 @@ vi.mock('../../api/admin', () => ({
   rejectDeviceModelRequest: vi.fn(),
   releaseMemberRestriction: vi.fn(),
   retryChecklistResearch: vi.fn(),
+  researchAdminDeviceModel: vi.fn(),
   updateAdminAccount: vi.fn(),
   updateAdminActionLog: vi.fn(),
+  updateAdminDeviceModel: vi.fn(),
   updateDeviceModelRequest: vi.fn(),
 }))
 
@@ -58,6 +66,7 @@ describe('AdminPage', () => {
     getAdminMembers.mockResolvedValue(emptyPage)
     getAdminActionLogs.mockResolvedValue(emptyPage)
     getAdminAccounts.mockResolvedValue(emptyPage)
+    getAdminDeviceModels.mockResolvedValue([])
     getDeviceModelRequests.mockResolvedValue([])
     getDeviceCategories.mockResolvedValue([
       { categoryId: 10, name: '스마트폰' },
@@ -105,7 +114,7 @@ describe('AdminPage', () => {
     ))
     retryChecklistResearch.mockResolvedValue(pendingResearch)
     setAuthSession({
-      accessToken: 'admin-token',
+      accessToken: 'tk',
       admin: { name: '관리자', roles: ['SUPER_ADMIN'] },
     })
 
@@ -138,7 +147,68 @@ describe('AdminPage', () => {
     expect(wrapper.text()).toContain('관리자 검토 대기')
   })
 
-  it('신규 모델 요청의 오타를 수정한 뒤 승인할 수 있게 표시한다', async () => {
+  it('모델 상세에서 기본 항목과 AI 항목을 나누고 수정값으로 재조사한다', async () => {
+    const summary = {
+      modelId: 202,
+      categoryId: 10,
+      categoryName: '스마트폰',
+      manufacturer: 'Samsung',
+      modelName: 'Galaxy Book4',
+      modelCode: 'NT960',
+      osFamily: 'ANDROID',
+      reviewStatus: 'PENDING_REVIEW',
+      sourceType: 'USER_REPORT',
+      latestResearchStatus: 'FAILED',
+      latestResearchVersion: 1,
+    }
+    const detail = {
+      ...summary,
+      baseChecklistItems: [{ itemCode: 'EXT-001', name: '외관 확인', guide: '외관을 촬영하세요.' }],
+      latestResearch: {
+        researchId: 501,
+        researchVersion: 1,
+        status: 'FAILED',
+        suggestions: [],
+        failureMessage: '카테고리와 모델 정보가 일치하지 않습니다.',
+      },
+    }
+    getAdminDeviceModels.mockResolvedValue([summary])
+    getAdminDeviceModel.mockResolvedValue(detail)
+    updateAdminDeviceModel.mockResolvedValue({ ...detail, categoryId: 20, reviewStatus: 'VERIFIED' })
+    researchAdminDeviceModel.mockResolvedValue({ researchId: 502, status: 'PENDING_REVIEW' })
+    setAuthSession({
+      accessToken: 'tk',
+      admin: { name: '관리자', roles: ['SUPER_ADMIN'] },
+    })
+
+    const wrapper = mount(AdminPage, {
+      global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } },
+    })
+    await flushPromises()
+    await wrapper.findAll('button').find((button) => button.text() === '모델 관리').trigger('click')
+    await flushPromises()
+    await wrapper.findAll('button').find((button) => button.text().includes('Galaxy Book4')).trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('필수 기본 체크리스트')
+    expect(wrapper.text()).toContain('AI 추가 조사 항목')
+    expect(wrapper.text()).toContain('카테고리와 모델 정보가 일치하지 않습니다.')
+
+    await wrapper.get('select[aria-label="관리 모델 카테고리"]').setValue('20')
+    await wrapper.get('select[aria-label="관리 모델 운영체제"]').setValue('WINDOWS')
+    await wrapper.findAll('button')
+      .find((button) => button.text() === '수정값으로 모델 재조사')
+      .trigger('click')
+    await flushPromises()
+
+    expect(updateAdminDeviceModel).toHaveBeenCalledWith(202, expect.objectContaining({
+      categoryId: 20,
+      osFamily: 'WINDOWS',
+    }))
+    expect(researchAdminDeviceModel).toHaveBeenCalledWith(202)
+  })
+
+  it('즉시 등록된 신규 모델의 오타를 수정한 뒤 사후 검토할 수 있게 표시한다', async () => {
     const request = {
       requestId: 91,
       categoryId: 10,
@@ -160,7 +230,7 @@ describe('AdminPage', () => {
     getDeviceModelRequests.mockResolvedValue([request])
     updateDeviceModelRequest.mockResolvedValue(updated)
     setAuthSession({
-      accessToken: 'admin-token',
+      accessToken: 'tk',
       admin: { name: '관리자', roles: ['SUPER_ADMIN'] },
     })
 
@@ -192,7 +262,7 @@ describe('AdminPage', () => {
     })
     expect(wrapper.text()).toContain('Samsung Galaxy S25')
     expect(wrapper.text()).toContain('노트북')
-    expect(wrapper.text()).toContain('모델 등록 승인')
+    expect(wrapper.text()).toContain('사후 검토 완료')
   })
 
   it('작업명을 눌러 로그 상세를 조회하고 사유를 수정한다', async () => {
@@ -220,7 +290,7 @@ describe('AdminPage', () => {
     getAdminActionLog.mockResolvedValue(detail)
     updateAdminActionLog.mockResolvedValue(updated)
     setAuthSession({
-      accessToken: 'admin-token',
+      accessToken: 'tk',
       admin: { name: '관리자', roles: ['SUPER_ADMIN'] },
     })
 

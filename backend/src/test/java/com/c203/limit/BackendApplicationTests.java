@@ -146,6 +146,9 @@ class BackendApplicationTests {
             paymentReservationExpirationService;
 
     @MockitoBean
+    com.c203.limit.domain.payment.repository.ListingOrderSummaryReader listingOrderSummaryReader;
+
+    @MockitoBean
     com.c203.limit.domain.payment.repository.PaymentRepository paymentRepository;
 
     @MockitoBean
@@ -181,6 +184,9 @@ class BackendApplicationTests {
 
     @MockitoBean
     com.c203.limit.domain.product.service.DeviceModelRequestService deviceModelRequestService;
+
+    @MockitoBean
+    com.c203.limit.domain.product.service.DeviceModelManagementService deviceModelManagementService;
 
     @Test
     void contextLoads() {

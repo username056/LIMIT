@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import MyPageLayout from '../layouts/MyPageLayout.vue'
 import PageHeader from '../components/PageHeader.vue'
@@ -8,6 +8,7 @@ import BaseBadge from '../components/BaseBadge.vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseCard from '../components/BaseCard.vue'
 import { createOrGetChatRoom } from '../api/chat'
+import { listOrders } from '../api/orders'
 
 const router = useRouter()
 const activeTab = ref('전체')
@@ -37,35 +38,69 @@ const RETURN_REASONS = [
   '검증 자료와 실물이 다릅니다.',
 ]
 
-// TODO(주문 API 연동): 아직 '내 주문 목록' 엔드포인트가 없어 예시 데이터로 둡니다.
-// PaymentApi에는 결제 생성과 결제 단건 조회만 있고 구매자 기준 목록 조회가 없습니다.
-// 목록 API가 생기면 orders를 응답으로 교체하고, 취소·반품 제출도 실제 요청으로 바꾸세요.
-// 응답에는 productId(문의로 채팅방을 열 때 필요)와 thumbnailUrl(대표 이미지)이 있어야 합니다.
-// 둘 다 ProductSummaryResponse가 이미 담고 있는 값입니다.
-const orders = ref([
-  {
-    name: '갤럭시 S24 Ultra 256GB 자급제',
-    date: '2026.07.28',
-    id: '#OR20260728-001',
-    productId: 7,
-    thumbnailUrl: '',
-    price: '1,050,000',
-    status: '결제 완료',
-    progress: '판매자와 거래 일정 조율 중',
+// 결제 상태(paymentStatus)만으로는 화면에 보여줄 한글 라벨을 정할 수 없어 매핑한다.
+// 취소 요청/반품 접수는 아직 서버에 별도 상태가 없어(환불 도메인 미연동), 실제로는
+// submitRequest()가 로컬에서만 상태를 바꾼다 — 새로고침하면 서버 값(REFUND_REQUESTED 등)
+// 대신 이 매핑으로 되돌아간다. 환불 API가 연동되면 이 부분을 실제 상태로 교체해야 한다.
+function resolveStatusLabel(paymentStatus) {
+  if (paymentStatus === 'APPROVED') return '결제 완료'
+  if (paymentStatus === 'REFUND_REQUESTED') return '취소 요청'
+  return '취소/환불'
+}
+
+function resolveProgressText(order, dateLabel) {
+  if (order.paymentStatus === 'APPROVED') {
+    if (order.listingStatus === 'INSPECTING') return '검수가 진행 중입니다.'
+    if (order.listingStatus === 'CONFIRMED' || order.listingStatus === 'SETTLED') {
+      return '구매확정이 완료되었습니다.'
+    }
+    return '판매자가 상품을 준비하고 있습니다.'
+  }
+  if (order.paymentStatus === 'REFUND_REQUESTED') return '환불 요청이 접수되어 처리 중입니다.'
+  if (order.paymentStatus === 'REFUNDED') return `${dateLabel} 환불 완료`
+  return `${dateLabel} 결제 취소`
+}
+
+function formatDate(isoString) {
+  if (!isoString) return ''
+  return isoString.slice(0, 10).replaceAll('-', '.')
+}
+
+function mapOrder(order) {
+  const dateLabel = formatDate(order.approvedAt || order.requestedAt)
+  const status = resolveStatusLabel(order.paymentStatus)
+  return {
+    name: order.productName || '삭제된 상품',
+    date: dateLabel,
+    id: `#ORDER-${order.paymentId}`,
+    productId: order.listingId,
+    thumbnailUrl: order.thumbnailUrl || '',
+    price: Number(order.price).toLocaleString('ko-KR'),
+    status,
+    progress: resolveProgressText(order, dateLabel),
     requestNote: '',
-  },
-  {
-    name: '갤럭시 북4 프로 512GB',
-    date: '2026.07.20',
-    id: '#OR20260720-004',
-    productId: 7,
-    thumbnailUrl: '',
-    price: '1,890,000',
-    status: '취소/환불',
-    progress: '2026.07.21 결제 취소',
-    requestNote: '',
-  },
-])
+    paymentStatus: order.paymentStatus,
+  }
+}
+
+const orders = ref([])
+const isLoading = ref(true)
+const loadError = ref('')
+
+async function loadOrders() {
+  isLoading.value = true
+  loadError.value = ''
+  try {
+    const response = await listOrders()
+    orders.value = response.map(mapOrder)
+  } catch (error) {
+    loadError.value = error.message || '주문 내역을 불러오지 못했습니다.'
+  } finally {
+    isLoading.value = false
+  }
+}
+
+onMounted(loadOrders)
 
 const visibleOrders = computed(() => {
   const group = TAB_STATUS_GROUPS[activeTab.value]
@@ -189,7 +224,34 @@ function submitRequest() {
       {{ chatError }}
     </p>
 
-    <ul class="space-y-3">
+    <BaseCard
+      v-if="isLoading"
+      class="py-14 text-center"
+    >
+      <p
+        class="text-sm text-text-sub"
+        aria-live="polite"
+      >
+        주문 내역을 불러오는 중...
+      </p>
+    </BaseCard>
+
+    <BaseCard
+      v-else-if="loadError"
+      class="py-14 text-center"
+    >
+      <p
+        role="alert"
+        class="text-sm text-red-700"
+      >
+        {{ loadError }}
+      </p>
+    </BaseCard>
+
+    <ul
+      v-else
+      class="space-y-3"
+    >
       <li
         v-for="order in visibleOrders"
         :key="order.id"
@@ -243,7 +305,7 @@ function submitRequest() {
     </ul>
 
     <BaseCard
-      v-if="!visibleOrders.length"
+      v-if="!isLoading && !loadError && !visibleOrders.length"
       class="py-14 text-center"
     >
       <p class="font-semibold text-text-main">

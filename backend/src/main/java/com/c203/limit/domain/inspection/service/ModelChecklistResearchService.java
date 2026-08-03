@@ -89,40 +89,24 @@ public class ModelChecklistResearchService {
         return researches.stream().map(this::response).toList();
     }
 
+    @Transactional(readOnly = true)
+    public ChecklistResearchResponse latest(Long modelId) {
+        return researchRepository
+                .findFirstByDeviceModelIdOrderByResearchVersionDesc(modelId)
+                .map(this::response)
+                .orElse(null);
+    }
+
     @Transactional
     public ChecklistResearchResponse approve(
             Long researchId, Long adminId, Set<String> approvedFeatureCodes, String note) {
         ModelChecklistResearch research = pendingResearch(researchId);
-        Category model = activeModel(research.getCategoryId());
+        Category model = activeModel(research.getDeviceModelId());
         ChecklistSupplementResult supplement = readSupplement(research);
         List<ChecklistSuggestion> validSuggestions =
                 validSuggestions(model.getDeviceType(), supplement.suggestions());
         Set<String> approvedCodes = approvedCodes(validSuggestions, approvedFeatureCodes);
-        List<GeneratedChecklistItem> items = approvedItems(model, approvedCodes);
-
-        int nextVersion = templateRepository
-                        .findFirstByCategoryIdAndStatusOrderByVersionDesc(
-                                model.getId(), ChecklistTemplateStatus.PUBLISHED)
-                        .map(template -> template.getVersion() + 1)
-                        .orElse(1);
-        ChecklistTemplate template =
-                templateRepository.saveAndFlush(
-                        ChecklistTemplate.createDraft(model.getId(), nextVersion));
-        templateItemRepository.saveAllAndFlush(items.stream()
-                .map(item -> ChecklistTemplateItem.createGenerated(
-                        template,
-                        item.itemCode(),
-                        item.name(),
-                        item.purpose(),
-                        item.guide(),
-                        item.evidenceType(),
-                        item.automationType(),
-                        item.parserType(),
-                        item.required(),
-                        item.displayOrder()))
-                .toList());
-        template.publish();
-        research.approve(adminId, template.getId(), note);
+        research.approve(adminId, null, note);
         actionLogRepository.save(AdminActionLog.of(
                 adminId,
                 "CHECKLIST_RESEARCH_APPROVE",
@@ -130,10 +114,9 @@ public class ModelChecklistResearchService {
                 researchId,
                 note));
         log.info(
-                "checklist research approved: researchId={}, modelId={}, templateId={}, approvedFeatureCount={}",
+                "checklist research reviewed: researchId={}, modelId={}, reviewedFeatureCount={}",
                 researchId,
                 model.getId(),
-                template.getId(),
                 approvedCodes.size());
         return response(research);
     }
@@ -153,8 +136,18 @@ public class ModelChecklistResearchService {
     }
 
     public ChecklistResearchResponse retry(Long researchId, Long adminId) {
+        ModelChecklistResearch failed = researchRepository
+                .findById(researchId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.CHECKLIST_RESEARCH_NOT_FOUND));
+        if (failed.getStatus() != ModelChecklistResearchStatus.FAILED) {
+            throw new BusinessException(ErrorCode.CHECKLIST_RESEARCH_STATE_CONFLICT);
+        }
+        return researchModel(failed.getDeviceModelId(), adminId);
+    }
+
+    public ChecklistResearchResponse researchModel(Long modelId, Long adminId) {
         RetryTarget target = Objects.requireNonNull(
-                transactionTemplate.execute(status -> beginRetry(researchId, adminId)));
+                transactionTemplate.execute(status -> beginResearch(modelId, adminId)));
 
         ChecklistSupplementResult supplement;
         try {
@@ -165,42 +158,41 @@ public class ModelChecklistResearchService {
 
         ChecklistSupplementResult retryResult = supplement;
         return Objects.requireNonNull(
-                transactionTemplate.execute(status -> finishRetry(researchId, retryResult)));
+                transactionTemplate.execute(
+                        status -> finishResearch(target.researchId(), retryResult)));
     }
 
-    private RetryTarget beginRetry(Long researchId, Long adminId) {
-        ModelChecklistResearch research = researchRepository
-                .findByIdForUpdate(researchId)
-                .orElseThrow(() ->
-                        new BusinessException(ErrorCode.CHECKLIST_RESEARCH_NOT_FOUND));
-        if (research.getStatus() != ModelChecklistResearchStatus.FAILED) {
-            throw new BusinessException(ErrorCode.CHECKLIST_RESEARCH_STATE_CONFLICT);
-        }
-        Category model = activeModel(research.getCategoryId());
-        research.retry();
-        researchRepository.saveAndFlush(research);
+    private RetryTarget beginResearch(Long modelId, Long adminId) {
+        Category model = activeModel(modelId);
+        int nextVersion = researchRepository
+                        .findFirstByDeviceModelIdOrderByResearchVersionDesc(modelId)
+                        .map(research -> research.getResearchVersion() + 1)
+                        .orElse(1);
+        ChecklistGenerationContext context = new ChecklistGenerationContext(
+                model.getId(),
+                model.getDeviceType(),
+                model.getManufacturer(),
+                model.getName(),
+                model.getModelCode(),
+                model.getOsFamily(),
+                Set.of());
+        ModelChecklistResearch research = researchRepository.saveAndFlush(
+                ModelChecklistResearch.start(modelId, nextVersion, writeContext(context)));
         actionLogRepository.save(AdminActionLog.of(
                 adminId,
                 "CHECKLIST_RESEARCH_RETRY",
                 "MODEL_CHECKLIST_RESEARCH",
-                researchId,
-                "AI 조사 재시도"));
+                research.getId(),
+                "모델 AI 재조사"));
         log.info(
-                "checklist research retry started: researchId={}, modelId={}",
-                researchId,
-                model.getId());
-        return new RetryTarget(
-                new ChecklistGenerationContext(
-                        model.getId(),
-                        model.getDeviceType(),
-                        model.getManufacturer(),
-                        model.getName(),
-                        model.getModelCode(),
-                        model.getOsFamily(),
-                        Set.of()));
+                "checklist research started: researchId={}, modelId={}, version={}",
+                research.getId(),
+                modelId,
+                nextVersion);
+        return new RetryTarget(research.getId(), context);
     }
 
-    private ChecklistResearchResponse finishRetry(
+    private ChecklistResearchResponse finishResearch(
             Long researchId, ChecklistSupplementResult supplement) {
         ModelChecklistResearch research = researchRepository
                 .findByIdForUpdate(researchId)
@@ -326,7 +318,7 @@ public class ModelChecklistResearchService {
 
     private ChecklistResearchResponse response(ModelChecklistResearch research) {
         Category model = categoryRepository
-                .findById(research.getCategoryId())
+                .findById(research.getDeviceModelId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.DEVICE_MODEL_NOT_FOUND));
         ChecklistSupplementResult supplement = research.getResultJson() == null
                 ? ChecklistSupplementResult.unavailable()
@@ -369,7 +361,15 @@ public class ModelChecklistResearchService {
         }
     }
 
-    private record RetryTarget(ChecklistGenerationContext context) {}
+    private String writeContext(ChecklistGenerationContext context) {
+        try {
+            return objectMapper.writeValueAsString(context);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("failed to serialize checklist research input", exception);
+        }
+    }
+
+    private record RetryTarget(Long researchId, ChecklistGenerationContext context) {}
 
     private boolean isSafeSource(String sourceUrl) {
         if (sourceUrl == null || sourceUrl.isBlank()) {

@@ -54,6 +54,12 @@ public class DeviceModelRequest {
     @Column(name = "resolved_category_id")
     private Long resolvedCategoryId;
 
+    @Column(name = "resolved_model_id")
+    private Long resolvedModelId;
+
+    @Column(name = "provisioned_at")
+    private LocalDateTime provisionedAt;
+
     @Column(name = "reviewed_by_admin_id")
     private Long reviewedByAdminId;
 
@@ -85,8 +91,17 @@ public class DeviceModelRequest {
         this.status = DeviceModelRequestStatus.APPROVED;
         this.reviewedByAdminId = adminId;
         this.resolvedCategoryId = categoryId;
+        this.resolvedModelId = categoryId;
         this.reviewNote = trimToNull(note);
         this.updatedAt = LocalDateTime.now();
+    }
+
+    public void provision(Long modelId) {
+        requirePending();
+        this.resolvedCategoryId = modelId;
+        this.resolvedModelId = modelId;
+        this.provisionedAt = LocalDateTime.now();
+        this.updatedAt = this.provisionedAt;
     }
 
     public void updateDetails(
