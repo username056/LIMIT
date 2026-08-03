@@ -252,6 +252,25 @@ class RtcCallServiceTests {
     }
 
     @Test
+    void rejectsJoinBeforeScheduledAt() {
+        LocalDateTime scheduledAt = LocalDateTime.now().plusMinutes(10);
+        CallAppointment appointment =
+                appointment(1L, AppointmentStatus.ACCEPTED, scheduledAt);
+        RtcSession session =
+                RtcSession.waiting(
+                        1L, 2L, 3L, 4L, 5L, scheduledAt.plusMinutes(30));
+        when(sessionRepository.findById(10L)).thenReturn(Optional.of(session));
+        when(appointmentRepository.findById(1L)).thenReturn(Optional.of(appointment));
+
+        assertThatThrownBy(() -> service.join(10L, 4L))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.RTC_INVALID_STATE));
+    }
+
+    @Test
     void rejectsDuplicateChecklistItemsBeforeSavingEndResult() {
         RtcSession session =
                 RtcSession.waiting(

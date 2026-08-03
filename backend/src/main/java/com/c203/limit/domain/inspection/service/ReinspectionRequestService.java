@@ -121,8 +121,10 @@ public class ReinspectionRequestService {
     }
 
     @Transactional(readOnly = true)
-    public List<ReinspectionRequestResponse> findForSeller(Long sellerId) {
-        return requestRepository.findBySellerIdOrderByRequestedAtDesc(sellerId).stream()
+    public List<ReinspectionRequestResponse> findForMember(Long memberId) {
+        return requestRepository
+                .findBySellerIdOrBuyerIdOrderByRequestedAtDesc(memberId, memberId)
+                .stream()
                 .map(request -> ReinspectionRequestResponse.from(
                         request,
                         requestItemRepository.findByReinspectionRequestIdOrderByDisplayOrderAsc(
