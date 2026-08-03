@@ -2094,7 +2094,8 @@ onMounted(async () => {
                     '대표'를 눌러 대표 이미지를 바꿀 수 있습니다.
                   </p>
                 </div>
-                <label class="cursor-pointer rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white">
+                <!-- 다른 주요 버튼(BaseButton primary)과 같은 그라데이션·번짐을 씁니다. -->
+                <label class="btn-glow inline-flex cursor-pointer items-center justify-center rounded-md bg-primary-gradient px-4 py-2 text-sm font-semibold text-white shadow-elevated transition-all hover:brightness-110">
                   {{ listingImageBusy ? '업로드 중…' : '이미지 추가' }}
                   <input
                     type="file"
