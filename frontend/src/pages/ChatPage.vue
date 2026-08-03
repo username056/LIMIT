@@ -97,10 +97,11 @@ const selectedRoom = computed(
 )
 
 /*
-  고른 대화를 알아보게 하는 조건. 세 곳(바탕색·왼쪽 띠·사진)이 같이 씁니다.
+  고른 대화를 알아보게 하는 조건. 바탕색과 사진이 같이 씁니다.
   ---------------------------------------------------------------------------
-  예전 바탕색(bg-accent/60)은 흰색과 거의 구분되지 않아, 왼쪽 띠 2px만으로
-  어느 대화를 보고 있는지 알아내야 했습니다. #F5F7FF로 한 단계만 올립니다.
+  예전에는 왼쪽에 2px 파란 띠를 세웠습니다. 바탕색(bg-accent/60)이 흰색과 거의
+  구분되지 않아 띠에 의지했던 것인데, 바탕을 #F5F7FF로 올린 뒤에는 띠가 한 칸만
+  왼쪽이 두꺼워 보이게 만들 뿐이었습니다. 바탕색만으로 충분합니다.
 */
 function isSelectedRoom(room) {
   return String(selectedRoomId.value) === String(room.roomId)
@@ -182,8 +183,8 @@ function formatTime(isoString) {
               v-for="room in rooms"
               :key="room.roomId"
               :to="{ name: 'chat', params: { roomId: room.roomId } }"
-              class="group relative flex items-center gap-3 border-l-2 px-4 py-2.5 transition-colors"
-              :class="isSelectedRoom(room) ? 'border-primary bg-[#F5F7FF]' : 'border-transparent hover:bg-slate-50'"
+              class="group relative flex items-center gap-3 px-4 py-2.5 transition-colors"
+              :class="isSelectedRoom(room) ? 'bg-[#F5F7FF]' : 'hover:bg-slate-50'"
             >
               <ChatAvatar
                 :src="room.listingThumbnailUrl"
