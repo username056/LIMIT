@@ -31,6 +31,91 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 class DeviceModelRequestServiceTests {
     @Test
+    void createImmediatelyProvisionsModelAndPublishedBaseTemplate() {
+        CategoryRepository categories = mock(CategoryRepository.class);
+        DeviceModelRequestRepository requests = mock(DeviceModelRequestRepository.class);
+        ChecklistTemplateRepository templates = mock(ChecklistTemplateRepository.class);
+        ChecklistTemplateItemRepository templateItems =
+                mock(ChecklistTemplateItemRepository.class);
+        AdminActionLogRepository logs = mock(AdminActionLogRepository.class);
+        DeviceCatalogRegistrar catalogRegistrar = mock(DeviceCatalogRegistrar.class);
+        DeviceModelRequestService service = new DeviceModelRequestService(
+                categories, requests, templates, templateItems, logs, catalogRegistrar);
+
+        Category parent = Category.createTopLevel("스마트폰", DeviceType.SMARTPHONE, 1);
+        ReflectionTestUtils.setField(parent, "id", 1L);
+        Category sourceModel = Category.createLeaf(
+                parent,
+                "Galaxy S24",
+                DeviceType.SMARTPHONE,
+                "Samsung",
+                OsFamily.ANDROID,
+                "SM-S921N",
+                List.of(256),
+                1);
+        ReflectionTestUtils.setField(sourceModel, "id", 101L);
+        ChecklistTemplate sourceTemplate = ChecklistTemplate.createDraft(101L, 1);
+        ReflectionTestUtils.setField(sourceTemplate, "id", 301L);
+        sourceTemplate.publish();
+        ChecklistTemplateItem sourceItem = ChecklistTemplateItem.create(
+                sourceTemplate,
+                "EXT-001",
+                "외관",
+                "외관 확인",
+                "기기를 촬영하세요.",
+                EvidenceType.PHOTO,
+                AutomationType.NONE,
+                true,
+                1);
+
+        when(categories.findById(1L)).thenReturn(Optional.of(parent));
+        when(requests.existsByParentCategoryIdAndManufacturerIgnoreCaseAndModelNameIgnoreCaseAndStatus(
+                        1L, "Samsung", "Galaxy S25", com.c203.limit.domain.product.entity.DeviceModelRequestStatus.PENDING))
+                .thenReturn(false);
+        when(requests.saveAndFlush(any(DeviceModelRequest.class)))
+                .thenAnswer(invocation -> {
+                    DeviceModelRequest request = invocation.getArgument(0);
+                    ReflectionTestUtils.setField(request, "id", 501L);
+                    return request;
+                });
+        when(categories.findByParentIdOrderByDisplayOrderAsc(1L))
+                .thenReturn(List.of(sourceModel));
+        when(categories.saveAndFlush(any(Category.class)))
+                .thenAnswer(invocation -> {
+                    Category model = invocation.getArgument(0);
+                    ReflectionTestUtils.setField(model, "id", 102L);
+                    return model;
+                });
+        when(categories.findByParentIdAndIsActiveTrueOrderByDisplayOrderAsc(1L))
+                .thenReturn(List.of(sourceModel));
+        when(templates.findFirstByCategoryIdAndStatusOrderByVersionAsc(
+                        101L, ChecklistTemplateStatus.PUBLISHED))
+                .thenReturn(Optional.of(sourceTemplate));
+        when(templateItems.findByChecklistTemplateIdOrderByDisplayOrderAsc(301L))
+                .thenReturn(List.of(sourceItem));
+        when(templates.saveAndFlush(any(ChecklistTemplate.class)))
+                .thenAnswer(invocation -> {
+                    ChecklistTemplate target = invocation.getArgument(0);
+                    ReflectionTestUtils.setField(target, "id", 302L);
+                    return target;
+                });
+
+        var result = service.create(
+                7L,
+                new com.c203.limit.domain.product.dto.request.CreateDeviceModelRequest(
+                        1L,
+                        "Samsung",
+                        "Galaxy S25",
+                        "SM-S931N",
+                        OsFamily.ANDROID));
+
+        assertThat(result.status()).isEqualTo("PENDING");
+        assertThat(result.resolvedModelId()).isEqualTo(102L);
+        verify(catalogRegistrar).registerReported(any(Category.class), org.mockito.ArgumentMatchers.eq(7L));
+        verify(templateItems).saveAllAndFlush(any());
+    }
+
+    @Test
     void adminCannotMovePendingRequestToUnknownCategory() {
         CategoryRepository categories = mock(CategoryRepository.class);
         DeviceModelRequestRepository requests = mock(DeviceModelRequestRepository.class);
@@ -108,7 +193,7 @@ class DeviceModelRequestServiceTests {
     }
 
     @Test
-    void approvalCreatesCatalogModelAndPublishedTemplate() {
+    void reviewCompletesAlreadyProvisionedModel() {
         CategoryRepository categories = mock(CategoryRepository.class);
         DeviceModelRequestRepository requests = mock(DeviceModelRequestRepository.class);
         ChecklistTemplateRepository templates = mock(ChecklistTemplateRepository.class);
@@ -135,49 +220,15 @@ class DeviceModelRequestServiceTests {
         DeviceModelRequest request =
                 DeviceModelRequest.create(7L, 1L, "Samsung", "Galaxy S25", null, OsFamily.ANDROID);
         ReflectionTestUtils.setField(request, "id", 501L);
-        ChecklistTemplate sourceTemplate = ChecklistTemplate.createDraft(101L, 1);
-        ReflectionTestUtils.setField(sourceTemplate, "id", 301L);
-        sourceTemplate.publish();
-        ChecklistTemplateItem sourceItem = ChecklistTemplateItem.create(
-                sourceTemplate,
-                "EXT-001",
-                "외관",
-                "외관 확인",
-                "기기를 촬영하세요.",
-                EvidenceType.PHOTO,
-                AutomationType.NONE,
-                true,
-                1);
+        request.provision(102L);
 
         when(requests.findByIdForUpdate(501L)).thenReturn(Optional.of(request));
-        when(categories.findById(1L)).thenReturn(Optional.of(parent));
-        when(categories.findByParentIdOrderByDisplayOrderAsc(1L))
-                .thenReturn(List.of(sourceModel));
-        when(categories.findByParentIdAndIsActiveTrueOrderByDisplayOrderAsc(1L))
-                .thenReturn(List.of(sourceModel));
-        when(templates.findFirstByCategoryIdAndStatusOrderByVersionAsc(
-                        101L, ChecklistTemplateStatus.PUBLISHED))
-                .thenReturn(Optional.of(sourceTemplate));
-        when(templateItems.findByChecklistTemplateIdOrderByDisplayOrderAsc(301L))
-                .thenReturn(List.of(sourceItem));
-        when(categories.saveAndFlush(any(Category.class)))
-                .thenAnswer(invocation -> {
-                    Category model = invocation.getArgument(0);
-                    ReflectionTestUtils.setField(model, "id", 102L);
-                    return model;
-                });
-        when(templates.saveAndFlush(any(ChecklistTemplate.class)))
-                .thenAnswer(invocation -> {
-                    ChecklistTemplate template = invocation.getArgument(0);
-                    ReflectionTestUtils.setField(template, "id", 302L);
-                    return template;
-                });
 
         var result = service.approve(501L, 9L, "공식 모델 확인");
 
         assertThat(result.status()).isEqualTo("APPROVED");
         assertThat(result.resolvedCategoryId()).isEqualTo(102L);
-        verify(templateItems).saveAllAndFlush(any());
+        verify(catalogRegistrar).completeReview(102L, 9L, "공식 모델 확인");
         verify(logs).save(any());
     }
 }

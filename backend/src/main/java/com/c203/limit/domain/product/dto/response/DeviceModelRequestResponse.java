@@ -14,6 +14,7 @@ public record DeviceModelRequestResponse(
         LocalDateTime createdAt,
         Long requestedByMemberId,
         Long resolvedCategoryId,
+        Long resolvedModelId,
         Long reviewedByAdminId,
         String reviewNote,
         LocalDateTime updatedAt) {
@@ -30,6 +31,7 @@ public record DeviceModelRequestResponse(
                 request.getCreatedAt(),
                 request.getRequestedByMemberId(),
                 request.getResolvedCategoryId(),
+                request.getResolvedModelId(),
                 request.getReviewedByAdminId(),
                 request.getReviewNote(),
                 request.getUpdatedAt());

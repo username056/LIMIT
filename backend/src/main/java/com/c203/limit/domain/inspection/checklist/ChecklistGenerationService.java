@@ -31,8 +31,6 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class ChecklistGenerationService {
-    private static final int RESEARCH_VERSION = 1;
-
     private final CategoryRepository categoryRepository;
     private final ChecklistTemplateRepository templateRepository;
     private final ChecklistTemplateItemRepository templateItemRepository;
@@ -73,7 +71,7 @@ public class ChecklistGenerationService {
                 model.getOsFamily(),
                 confirmedFeatures);
         ModelChecklistResearch research = findOrResearch(model, context);
-        return generatePolicyOnly(
+        return generatePreview(
                 context, baseChecklist(model, context.confirmedFeatures()), research);
     }
 
@@ -88,10 +86,35 @@ public class ChecklistGenerationService {
                 model.getModelCode(),
                 model.getOsFamily(),
                 confirmedFeatures);
-        if (!context.confirmedFeatures().isEmpty()) {
+        if (context.confirmedFeatures().isEmpty()) return Optional.empty();
+
+        ModelChecklistResearch research = findOrResearch(model, context);
+        ChecklistSupplementResult supplement = usableSupplement(research);
+        List<ChecklistSuggestion> suggestions =
+                validSuggestions(context.deviceType(), supplement.suggestions());
+        Set<String> suggestedCodes = suggestions.stream()
+                .map(ChecklistSuggestion::featureCode)
+                .map(code -> code.trim().toUpperCase(Locale.ROOT))
+                .collect(java.util.stream.Collectors.toSet());
+        if (!suggestedCodes.containsAll(context.confirmedFeatures())) {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
         }
-        return Optional.empty();
+        BaseChecklist checklist = baseChecklist(model, context.confirmedFeatures());
+        return Optional.of(new GeneratedChecklist(
+                context.deviceModelId(),
+                context.manufacturer(),
+                context.modelName(),
+                context.osFamily(),
+                checklist.templateVersion(),
+                true,
+                checklist.items(),
+                suggestions.stream()
+                        .filter(suggestion -> context.confirmedFeatures().contains(
+                                suggestion.featureCode().trim().toUpperCase(Locale.ROOT)))
+                        .toList(),
+                List.of(),
+                research.getId(),
+                research.getStatus().name()));
     }
 
     public GeneratedChecklist generateCustom(
@@ -206,30 +229,52 @@ public class ChecklistGenerationService {
                 null);
     }
 
-    private GeneratedChecklist generatePolicyOnly(
+    private GeneratedChecklist generatePreview(
             ChecklistGenerationContext context,
             BaseChecklist baseChecklist,
             ModelChecklistResearch research) {
+        ChecklistSupplementResult supplement = usableSupplement(research);
+        List<ChecklistSuggestion> suggestions =
+                validSuggestions(context.deviceType(), supplement.suggestions());
         return new GeneratedChecklist(
                 context.deviceModelId(),
                 context.manufacturer(),
                 context.modelName(),
                 context.osFamily(),
                 baseChecklist.templateVersion(),
-                research != null
-                        && research.getStatus() == ModelChecklistResearchStatus.APPROVED,
+                false,
                 baseChecklist.items(),
-                List.of(),
-                List.of(),
+                suggestions,
+                supplement.reviewCandidates().stream()
+                        .filter(value -> value != null && !value.isBlank())
+                        .map(String::trim)
+                        .filter(value -> !featureCatalog.supports(context.deviceType(), value))
+                        .distinct()
+                        .limit(DeviceChecklistFeatureCatalog.MAX_ADDITIONAL_ITEMS)
+                        .toList(),
                 research == null ? null : research.getId(),
                 research == null ? null : research.getStatus().name());
     }
 
+    private ChecklistSupplementResult usableSupplement(ModelChecklistResearch research) {
+        if (research == null
+                || research.getResultJson() == null
+                || (research.getStatus() != ModelChecklistResearchStatus.PENDING_REVIEW
+                        && research.getStatus() != ModelChecklistResearchStatus.APPROVED)) {
+            return ChecklistSupplementResult.unavailable();
+        }
+        try {
+            return objectMapper.readValue(
+                    research.getResultJson(), ChecklistSupplementResult.class);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("failed to deserialize checklist research", exception);
+        }
+    }
+
     private ModelChecklistResearch findOrResearch(
             Category model, ChecklistGenerationContext context) {
-        Optional<ModelChecklistResearch> existing =
-                researchRepository.findByCategoryIdAndResearchVersion(
-                        model.getId(), RESEARCH_VERSION);
+        Optional<ModelChecklistResearch> existing = researchRepository
+                .findFirstByDeviceModelIdOrderByResearchVersionDesc(model.getId());
         if (existing.isPresent()) {
             return existing.get();
         }
@@ -237,10 +282,10 @@ public class ChecklistGenerationService {
         ModelChecklistResearch research;
         try {
             research = researchRepository.saveAndFlush(
-                    ModelChecklistResearch.start(model.getId(), RESEARCH_VERSION));
+                    ModelChecklistResearch.start(model.getId(), 1, writeContext(context)));
         } catch (DataIntegrityViolationException exception) {
             return researchRepository
-                    .findByCategoryIdAndResearchVersion(model.getId(), RESEARCH_VERSION)
+                    .findFirstByDeviceModelIdOrderByResearchVersionDesc(model.getId())
                     .orElseThrow(() -> exception);
         }
 
@@ -257,6 +302,14 @@ public class ChecklistGenerationService {
         }
         research.complete(writeSupplement(supplement));
         return researchRepository.saveAndFlush(research);
+    }
+
+    private String writeContext(ChecklistGenerationContext context) {
+        try {
+            return objectMapper.writeValueAsString(context);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("failed to serialize checklist research input", exception);
+        }
     }
 
     private String writeSupplement(ChecklistSupplementResult supplement) {

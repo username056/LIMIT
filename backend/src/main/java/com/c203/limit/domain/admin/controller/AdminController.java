@@ -17,6 +17,8 @@ import com.c203.limit.domain.inspection.enums.ModelChecklistResearchStatus;
 import com.c203.limit.domain.inspection.service.ModelChecklistResearchService;
 import com.c203.limit.domain.payment.service.PaymentService;
 import com.c203.limit.domain.product.entity.DeviceModelRequestStatus;
+import com.c203.limit.domain.product.entity.DeviceModelReviewStatus;
+import com.c203.limit.domain.product.service.DeviceModelManagementService;
 import com.c203.limit.domain.product.service.DeviceModelRequestService;
 import com.c203.limit.global.response.ApiResponse;
 import com.c203.limit.global.security.CurrentUser;
@@ -34,6 +36,7 @@ public class AdminController implements AdminApi {
     private final AdminAccountManagementService adminAccountManagementService;
     private final ModelChecklistResearchService checklistResearchService;
     private final DeviceModelRequestService deviceModelRequestService;
+    private final DeviceModelManagementService deviceModelManagementService;
     private final PaymentService paymentService;
     private final CurrentUser currentUser;
     private final AuthCookieService authCookieService;
@@ -162,6 +165,32 @@ public class AdminController implements AdminApi {
     public ResponseEntity<?> retryChecklistResearch(Long researchId) {
         return ResponseEntity.ok(
                 ApiResponse.ok(checklistResearchService.retry(researchId, currentUser.adminId())));
+    }
+
+    @Override
+    public ResponseEntity<?> listAdminDeviceModels(DeviceModelReviewStatus reviewStatus) {
+        return ResponseEntity.ok(ApiResponse.ok(deviceModelManagementService.list(reviewStatus)));
+    }
+
+    @Override
+    public ResponseEntity<?> getAdminDeviceModel(Long modelId) {
+        return ResponseEntity.ok(ApiResponse.ok(deviceModelManagementService.detail(modelId)));
+    }
+
+    @Override
+    public ResponseEntity<?> updateAdminDeviceModel(
+            Long modelId, UpdateDeviceModelRequest request) {
+        return ResponseEntity.ok(
+                ApiResponse.ok(
+                        deviceModelManagementService.update(
+                                modelId, currentUser.adminId(), request)));
+    }
+
+    @Override
+    public ResponseEntity<?> researchAdminDeviceModel(Long modelId) {
+        return ResponseEntity.ok(
+                ApiResponse.ok(
+                        checklistResearchService.researchModel(modelId, currentUser.adminId())));
     }
 
     @Override

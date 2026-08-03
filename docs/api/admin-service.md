@@ -21,6 +21,10 @@
 | `GET` | `/api/v1/admin/accounts` | `SUPER_ADMIN` | 관리자 계정 목록 |
 | `POST` | `/api/v1/admin/accounts` | `SUPER_ADMIN` | 관리자 계정 생성 |
 | `PATCH` | `/api/v1/admin/accounts/{adminId}` | `SUPER_ADMIN` | 관리자 권한·상태 변경 |
+| `GET` | `/api/v1/admin/device-models` | 관리자 | 모델 목록·사후 검토 상태 조회 |
+| `GET` | `/api/v1/admin/device-models/{modelId}` | 관리자 | 모델 정보와 기본/AI 체크리스트 상세 조회 |
+| `PATCH` | `/api/v1/admin/device-models/{modelId}` | 관리자 | 모델 정보 수정 완료 |
+| `POST` | `/api/v1/admin/device-models/{modelId}/researches` | 관리자 | 현재 모델 정보로 새 버전 AI 재조사 |
 
 마지막 활성 `SUPER_ADMIN`을 강등하거나 정지하는 요청은 거절한다.
 

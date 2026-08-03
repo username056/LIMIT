@@ -24,8 +24,8 @@ public class ModelChecklistResearch {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "category_id", nullable = false)
-    private Long categoryId;
+    @Column(name = "device_model_id", nullable = false)
+    private Long deviceModelId;
 
     @Column(name = "research_version", nullable = false)
     private int researchVersion;
@@ -33,6 +33,9 @@ public class ModelChecklistResearch {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private ModelChecklistResearchStatus status;
+
+    @Column(name = "input_snapshot_json", columnDefinition = "LONGTEXT")
+    private String inputSnapshotJson;
 
     @Column(name = "result_json", columnDefinition = "LONGTEXT")
     private String resultJson;
@@ -52,14 +55,20 @@ public class ModelChecklistResearch {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    public static ModelChecklistResearch start(Long categoryId, int researchVersion) {
+    public static ModelChecklistResearch start(
+            Long deviceModelId, int researchVersion, String inputSnapshotJson) {
         ModelChecklistResearch research = new ModelChecklistResearch();
-        research.categoryId = categoryId;
+        research.deviceModelId = deviceModelId;
         research.researchVersion = researchVersion;
         research.status = ModelChecklistResearchStatus.PROCESSING;
+        research.inputSnapshotJson = inputSnapshotJson;
         research.createdAt = LocalDateTime.now();
         research.updatedAt = research.createdAt;
         return research;
+    }
+
+    public static ModelChecklistResearch start(Long deviceModelId, int researchVersion) {
+        return start(deviceModelId, researchVersion, null);
     }
 
     public void complete(String resultJson) {

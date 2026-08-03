@@ -227,6 +227,9 @@ class ProductMockControllerTests {
     @MockitoBean
     com.c203.limit.domain.product.service.DeviceModelRequestService deviceModelRequestService;
 
+    @MockitoBean
+    com.c203.limit.domain.product.service.DeviceModelManagementService deviceModelManagementService;
+
     @Autowired
     MockMvc mockMvc;
 
