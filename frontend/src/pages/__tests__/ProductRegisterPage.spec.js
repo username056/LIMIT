@@ -1093,6 +1093,93 @@ describe('ProductRegisterPage', () => {
       expect(wrapper.text()).toContain('파일 업로드')
     })
 
+    // 필수 항목 + checklistGuideImages.js에 등록된 카테고리·itemCode 조합이면
+    // 서버 guide 문구 대신 프론트에 하드코딩해 둔 사진·설명이 뜹니다.
+    it('필수 항목이고 카테고리·itemCode가 등록돼 있으면 지정된 사진과 설명을 보여준다', async () => {
+      getDeviceCategories.mockResolvedValueOnce([{ categoryId: 10, name: 'Windows 노트북' }])
+      getProductChecklist.mockResolvedValue([
+        {
+          checklistItemId: 7001,
+          itemCode: 'EXT-001',
+          name: '전면·후면·측면 외관',
+          evidenceType: 'PHOTO',
+          isRequired: true,
+          status: 'PENDING',
+          guide: '서버가 내려준 원본 가이드 문구',
+        },
+      ])
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await goToCaptureStep(wrapper)
+
+      expect(wrapper.find('[role="dialog"][aria-label="촬영 가이드"]').exists()).toBe(false)
+
+      await wrapper.find('button[aria-label="전면·후면·측면 외관 촬영 가이드 보기"]').trigger('click')
+
+      const modal = wrapper.find('[role="dialog"][aria-label="촬영 가이드"]')
+      expect(modal.exists()).toBe(true)
+      expect(modal.text()).toContain('외관 손상 여부 확인')
+      expect(modal.text()).toContain('사면 테두리가 모두 잘 보이도록')
+      expect(modal.text()).not.toContain('서버가 내려준 원본 가이드 문구')
+      expect(modal.find('img').attributes('src')).toBeTruthy()
+
+      await modal.find('button[aria-label="닫기"]').trigger('click')
+      expect(wrapper.find('[role="dialog"][aria-label="촬영 가이드"]').exists()).toBe(false)
+    })
+
+    // 필수 항목이어도 카테고리·itemCode 조합이 아직 등록 안 됐으면(플레이스홀더 미작성)
+    // 서버 guide 문구 + evidenceType에 맞는 범용 이미지로 대체합니다.
+    it('필수 항목이어도 등록되지 않은 조합이면 서버 문구와 범용 이미지를 보여준다', async () => {
+      getProductChecklist.mockResolvedValue([
+        {
+          checklistItemId: 7009,
+          itemCode: 'CUSTOM-999',
+          name: '커스텀 확인 항목',
+          evidenceType: 'PHOTO',
+          isRequired: true,
+          status: 'PENDING',
+          guide: '커스텀 항목 촬영 가이드입니다.',
+        },
+      ])
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await goToCaptureStep(wrapper)
+
+      await wrapper.find('button[aria-label="커스텀 확인 항목 촬영 가이드 보기"]').trigger('click')
+
+      const modal = wrapper.find('[role="dialog"][aria-label="촬영 가이드"]')
+      expect(modal.find('img').attributes('src')).toBeTruthy()
+      expect(modal.text()).toContain('커스텀 항목 촬영 가이드입니다.')
+    })
+
+    // 비필수 항목은 카테고리·itemCode가 등록돼 있어도 항상 서버 문구를 그대로 씁니다.
+    it('비필수 항목은 등록된 조합이 있어도 무시하고 서버 문구를 그대로 보여준다', async () => {
+      getDeviceCategories.mockResolvedValueOnce([{ categoryId: 10, name: 'Windows 노트북' }])
+      getProductChecklist.mockResolvedValue([
+        {
+          checklistItemId: 7011,
+          itemCode: 'EXT-001',
+          name: '전면·후면·측면 외관',
+          evidenceType: 'PHOTO',
+          isRequired: false,
+          status: 'PENDING',
+          guide: '비필수 항목의 서버 기본 가이드 문구',
+        },
+      ])
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await goToCaptureStep(wrapper)
+
+      await wrapper.find('button[aria-label="전면·후면·측면 외관 촬영 가이드 보기"]').trigger('click')
+
+      const modal = wrapper.find('[role="dialog"][aria-label="촬영 가이드"]')
+      expect(modal.text()).toContain('비필수 항목의 서버 기본 가이드 문구')
+      expect(modal.text()).not.toContain('사면 테두리가 모두 잘 보이도록')
+    })
+
     // 영상 녹화는 지원하지 않습니다. 촬영 버튼을 보여주면 눌러도 할 수 있는 게 없습니다.
     // 할 수 없는 일을 안내하면 사용자는 없는 버튼을 찾아 헤맵니다.
     it('영상 항목의 버튼 문구에는 촬영을 넣지 않는다', async () => {
