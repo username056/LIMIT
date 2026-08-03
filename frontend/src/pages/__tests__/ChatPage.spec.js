@@ -104,12 +104,14 @@ describe('ChatPage', () => {
     expect(wrapper.text()).toContain('대화를 시작해 보세요.')
   })
 
-  it('고른 대화에만 옅은 파란 바탕과 왼쪽 띠를 준다', async () => {
+  it('고른 대화만 옅은 파란 바탕으로 구분한다', async () => {
     const wrapper = mountPage()
     await flushPromises()
 
     // 지금은 아무 방도 고르지 않은 상태(useRoute의 params가 비어 있음)입니다.
-    expect(wrapper.get('a').classes()).toContain('border-transparent')
+    // 왼쪽 2px 띠는 없앴습니다. 한 칸만 왼쪽이 두꺼워 보였습니다.
+    expect(wrapper.get('a').classes()).toContain('hover:bg-slate-50')
     expect(wrapper.get('a').classes()).not.toContain('bg-[#F5F7FF]')
+    expect(wrapper.get('a').classes().some((name) => name.startsWith('border-'))).toBe(false)
   })
 })
