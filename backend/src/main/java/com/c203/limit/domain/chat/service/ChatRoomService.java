@@ -305,6 +305,7 @@ public class ChatRoomService {
                 context == null ? null : context.counterpartNickname(),
                 context == null ? null : context.listingTitle(),
                 context == null ? null : context.listingThumbnailUrl(),
+                context == null ? null : context.lastMessagePreview(),
                 row.getStatus().name(),
                 row.getLastMessageId(), row.getLastMessageSeq(), row.getLastMessageAt(),
                 unreadCount, counterpartLastReadSeq, row.getCreatedAt());

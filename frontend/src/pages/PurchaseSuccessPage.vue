@@ -5,6 +5,7 @@ import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseCard from '../components/BaseCard.vue'
 import BaseButton from '../components/BaseButton.vue'
 import { confirmPayment } from '../api/payment'
+import { getProduct } from '../api/products'
 
 // 서버가 일시적 오류로 보고 재시도를 허용하는 코드만 "다시 승인 시도"를 보여준다(같은 결제 재confirm).
 const RETRYABLE_ERROR_CODES = new Set(['PAY011'])
@@ -20,10 +21,25 @@ const isConfirming = ref(true)
 const confirmError = ref('')
 const confirmErrorCode = ref('')
 const confirmParams = ref(null)
+const product = ref(null)
+const thumbnailUrl = computed(() => product.value?.thumbnailUrl || '')
 
 const address = computed(() => route.query.address || '-')
-const productName = computed(() => route.query.productName || '-')
-const manufacturer = computed(() => route.query.manufacturer || '')
+
+/*
+  상품 표시는 조회한 값을 먼저 쓰고, 없으면 주소에 실려 온 값으로 버팁니다.
+  ---------------------------------------------------------------------------
+  이름과 제조사는 successUrl 쿼리로 넘어오지만 모델명은 없습니다. 상세·목록과
+  같은 "제조사 · 모델 / 판매글 이름" 순서로 보여 주려면 모델명이 필요해서
+  상품을 한 번 조회합니다. 조회가 실패해도 쿼리 값으로 이름과 제조사는 남습니다.
+*/
+const productName = computed(() => product.value?.name || route.query.productName || '-')
+const manufacturer = computed(
+  () => product.value?.device?.manufacturer || route.query.manufacturer || '',
+)
+const deviceLine = computed(() => [manufacturer.value, product.value?.device?.model]
+  .filter(Boolean)
+  .join(' · '))
 const isRetryableError = computed(() => RETRYABLE_ERROR_CODES.has(confirmErrorCode.value))
 const isTerminalRejectedError = computed(() => TERMINAL_REJECTED_ERROR_CODES.has(confirmErrorCode.value))
 
@@ -58,6 +74,21 @@ onMounted(async () => {
 
   confirmParams.value = { paymentId, paymentKey, orderId, amount: Number(amount) }
   await attemptConfirm()
+
+  /*
+    사진과 모델명을 위해 상품을 한 번 조회합니다.
+    -------------------------------------------------------------------------
+    사진 URL까지 successUrl에 담으면 주소가 길어지고 CDN 주소가 그대로
+    노출됩니다. 승인 뒤에 한 번 더 물어보는 편이 낫습니다.
+
+    실패해도 쿼리로 받은 이름·제조사가 남고 사진 자리는 그라데이션 네모로
+    돌아갈 뿐이라, 결제 결과와는 무관합니다.
+  */
+  try {
+    product.value = await getProduct(route.params.productId)
+  } catch {
+    product.value = null
+  }
 })
 </script>
 
@@ -149,13 +180,26 @@ onMounted(async () => {
           :to="{ name: 'product-detail', params: { productId: route.params.productId } }"
           class="group mt-6 flex items-center gap-3 rounded-md bg-accent p-4 transition hover:brightness-95"
         >
-          <div class="h-14 w-14 shrink-0 rounded-md bg-primary-gradient" />
-          <div>
-            <p class="text-sm font-bold text-text-main group-hover:text-primary group-hover:underline">
-              {{ productName }}
+          <img
+            v-if="thumbnailUrl"
+            :src="thumbnailUrl"
+            :alt="productName"
+            class="h-14 w-14 shrink-0 rounded-md object-cover"
+          >
+          <div
+            v-else
+            class="h-14 w-14 shrink-0 rounded-md bg-primary-gradient"
+          />
+          <!-- 순서는 상품 상세·결제하기와 같습니다. 제조사·모델 위, 판매글 이름 아래. -->
+          <div class="min-w-0">
+            <p
+              v-if="deviceLine"
+              class="truncate text-xs font-semibold text-primary"
+            >
+              {{ deviceLine }}
             </p>
-            <p class="mt-1 text-xs text-text-sub">
-              {{ manufacturer }}
+            <p class="mt-1 truncate text-sm font-bold text-text-main group-hover:text-primary group-hover:underline">
+              {{ productName }}
             </p>
           </div>
         </RouterLink>

@@ -19,6 +19,7 @@ import { getProductDiagnosisSummary } from '../api/inspection'
 import { getSellerProfile } from '../api/seller'
 import { getAccessToken, getSessionMember } from '../auth/session'
 import { canSellerMarkSold, canSellerReopen, isSoldOut } from '../utils/productStatus'
+import { formatStorage } from '../utils/storage'
 
 const route = useRoute()
 const router = useRouter()
@@ -569,7 +570,7 @@ onMounted(async () => {
                     저장 용량
                   </dt>
                   <dd class="mt-1 font-semibold text-text-main">
-                    {{ product.device?.storageGb ? `${product.device.storageGb}GB` : '미입력' }}
+                    {{ formatStorage(product.device?.storageGb) || '미입력' }}
                   </dd>
                 </div>
               </dl>
@@ -638,11 +639,16 @@ onMounted(async () => {
         <!-- 중단: 설명은 테두리 없이 두되 한 줄이 너무 길지 않게 폭을 제한합니다. -->
         <div class="mt-8 max-w-3xl">
           <section>
-            <h2 class="font-bold text-text-main">
+            <!--
+              판매자가 직접 쓴 글이라 이 화면에서 가장 오래 읽는 부분입니다.
+              옆 사양표와 같은 크기로 두면 훑어보는 값과 읽는 글이 구분되지 않아,
+              한 단계씩 키우고 줄 간격도 함께 넓혔습니다.
+            -->
+            <h2 class="text-lg font-bold text-text-main">
               상품 설명
             </h2>
             <p
-              class="mt-3 whitespace-pre-wrap text-sm leading-6 text-text-sub"
+              class="mt-3 whitespace-pre-wrap text-base leading-7 text-text-sub"
               :class="isDescriptionExpanded ? '' : 'line-clamp-4'"
             >
               {{ product.description || '판매자가 등록한 상세 설명이 없습니다.' }}
@@ -650,7 +656,7 @@ onMounted(async () => {
             <button
               v-if="isDescriptionLong"
               type="button"
-              class="mt-2 text-xs font-semibold text-primary hover:underline"
+              class="mt-2 text-sm font-semibold text-primary hover:underline"
               @click="isDescriptionExpanded = !isDescriptionExpanded"
             >
               {{ isDescriptionExpanded ? '접기' : '더 보기' }}

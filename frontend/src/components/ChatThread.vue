@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import ChatAvatar from './ChatAvatar.vue'
 import { getChatMediaBlob, getChatMessages, uploadChatMedia } from '../api/chat'
 import { createChatSocket } from '../api/chatSocket'
 import { getMyReinspectionRequests, getProduct, getProductChecklist } from '../api/products'
@@ -405,6 +406,10 @@ const latestAppointment = computed(
 const checkedChecklistCount = computed(
   () => checklistItems.value.filter((item) => isCheckedChecklistItem(item)).length,
 )
+const isChecklistComplete = computed(
+  () => checklistItems.value.length > 0
+    && checkedChecklistCount.value === checklistItems.value.length,
+)
 
 watch(
   () => props.room.roomId,
@@ -553,6 +558,41 @@ function formatAppointmentTime(isoString) {
   }).format(new Date(isoString))
 }
 
+// 아래 한 줄 요약에는 연도까지 넣지 않습니다. 좁은 자리라 날짜와 시각만 남깁니다.
+function formatAppointmentTimeShort(isoString) {
+  if (!isoString) return '시간 미정'
+  return new Intl.DateTimeFormat('ko-KR', {
+    month: 'long',
+    day: 'numeric',
+    weekday: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(isoString))
+}
+
+/*
+  잇달아 온 말에는 시각을 한 번만 적습니다.
+  ---------------------------------------------------------------------------
+  말풍선마다 아래에 시각을 달면 한 줄짜리 말에도 19px이 더 붙습니다. 같은 사람이
+  같은 분에 세 번 말하면 같은 시각이 세 번 적히면서 화면에서 대화 한 개 분량이
+  사라집니다. 묶음의 마지막에만 적습니다.
+
+  보내는 중이거나 읽음 표시가 붙는 말은 그 자체가 알림이라 언제나 적습니다.
+*/
+function sentAtMinute(isoString) {
+  return isoString ? String(isoString).slice(0, 16) : ''
+}
+
+function shouldShowMessageTime(message, index) {
+  if (message.isPending) return true
+
+  const next = messages.value[index + 1]
+  if (!next) return true
+  if (next.senderId !== message.senderId) return true
+  if (next.type === 'SYSTEM' || message.type === 'SYSTEM') return true
+  return sentAtMinute(next.sentAt) !== sentAtMinute(message.sentAt)
+}
+
 function remainingSessionTime(expiresAt) {
   if (!expiresAt) return null
   const remainingSeconds = Math.max(
@@ -566,8 +606,21 @@ function remainingSessionTime(expiresAt) {
   return `${minutes}분 ${seconds}초`
 }
 
+/*
+  약속 잡기 팝업도 Esc로 닫습니다.
+  ---------------------------------------------------------------------------
+  사진 확대 쪽 처리와 합치지 않고 따로 둡니다. 사진 확대가 위에 떠 있으면
+  그쪽이 먼저 닫혀야 하므로, 여기서는 사진이 닫혀 있을 때만 반응합니다.
+*/
+function handleCallFormKeydown({ key: pressed }) {
+  if (pressed !== 'Escape') return
+  if (expandedImage.value) return
+  isCallFormOpen.value = false
+}
+
 onMounted(() => {
   window.addEventListener('keydown', handleImageDialogKeydown)
+  window.addEventListener('keydown', handleCallFormKeydown)
 })
 
 onBeforeUnmount(() => {
@@ -582,93 +635,117 @@ onBeforeUnmount(() => {
   chatSocket?.close()
   mediaObjectUrls.forEach((url) => URL.revokeObjectURL(url))
   window.removeEventListener('keydown', handleImageDialogKeydown)
+  window.removeEventListener('keydown', handleCallFormKeydown)
 })
 </script>
 
 <template>
   <div class="flex h-full min-w-0 min-h-[520px] flex-col bg-surface lg:min-h-0">
-    <div class="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
-      <div class="flex items-center gap-3">
-        <RouterLink
-          to="/chat"
-          aria-label="채팅 목록으로"
-          class="text-text-sub hover:text-primary"
+    <!--
+      상대 이름과 상품 정보를 한 줄로 합쳤습니다.
+      -------------------------------------------------------------------------
+      예전에는 이름 줄(53px)과 상품 줄(65px)이 따로 쌓여 대화가 시작되기 전에
+      118px을 썼습니다. 둘 다 처음 한 번 확인하면 되는 정보인데, 화면 위쪽을
+      계속 차지하는 값이었습니다. 이름을 위, 상품과 값을 아래에 두어 60px로
+      접었습니다. 상대 이름은 크기를 그대로 두고 상품 줄만 한 단계 낮춥니다.
+    -->
+    <!--
+      높이는 왼쪽 목록 한 칸과 같은 64px입니다(사진 40 + 위아래 12).
+      여기만 60px이면 목록의 첫 칸 아래 선과 이 머리말 아래 선이 4px 어긋나
+      두 칸이 이어지지 않고 삐뚤어 보입니다. 한쪽을 바꾸면 다른 쪽도 맞춰 주세요.
+    -->
+    <div class="flex items-center gap-3 border-b border-border px-5 py-3">
+      <RouterLink
+        to="/chat"
+        aria-label="채팅 목록으로"
+        class="shrink-0 text-text-sub hover:text-primary"
+      >
+        <svg
+          class="h-5 w-5"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          aria-hidden="true"
         >
-          <svg
-            class="h-5 w-5"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            aria-hidden="true"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M15 19l-7-7 7-7"
-            />
-          </svg>
-        </RouterLink>
-        <p class="text-sm font-bold text-text-main">
-          {{ room.counterpartNickname || `회원 #${room.counterpartId}` }}
-        </p>
-      </div>
-    </div>
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M15 19l-7-7 7-7"
+          />
+        </svg>
+      </RouterLink>
 
-    <div
-      v-if="product"
-      class="flex items-center gap-3 border-b border-border px-5 py-3"
-    >
-      <img
-        v-if="room.listingThumbnailUrl"
+      <ChatAvatar
         :src="room.listingThumbnailUrl"
         :alt="room.listingTitle || product?.name || '상품 이미지'"
-        class="h-10 w-10 shrink-0 rounded-md object-cover"
-      >
-      <div
-        v-else
-        class="h-10 w-10 shrink-0 rounded-md bg-primary-gradient"
       />
+
       <div class="min-w-0 flex-1">
         <p class="truncate text-sm font-bold text-text-main">
-          {{ room.listingTitle || product.name }}
+          {{ room.counterpartNickname || `회원 #${room.counterpartId}` }}
         </p>
-        <p class="truncate text-xs text-text-sub">
-          ₩{{ Number(product.price).toLocaleString('ko-KR') }}
+        <p class="mt-0.5 truncate text-[13px] text-text-sub">
+          {{ room.listingTitle || product?.name || `상품 #${room.listingId}` }}
+          <template v-if="product">
+            · ₩{{ Number(product.price).toLocaleString('ko-KR') }}
+          </template>
         </p>
       </div>
-      <RouterLink
-        :to="{ name: 'product-detail', params: { productId: room.listingId } }"
-        class="whitespace-nowrap text-xs font-semibold text-primary hover:text-primary-dark"
-      >
-        상품 보기
-      </RouterLink>
+
+      <!--
+        오른쪽 글자 버튼 둘.
+        -----------------------------------------------------------------------
+        체크리스트 여닫는 줄이 따로 한 층(41px)을 차지하고 있었습니다. 접혀
+        있을 때도 그 줄은 남아 있어서, 안 펼친 사람에게는 41px이 이름표 값으로만
+        쓰였습니다. 여기로 올려 두면 펼칠 때만 자리를 씁니다.
+      -->
+      <div class="flex shrink-0 items-center gap-2.5 whitespace-nowrap text-xs font-semibold">
+        <RouterLink
+          :to="{ name: 'product-detail', params: { productId: room.listingId } }"
+          class="text-primary hover:text-primary-dark"
+        >
+          상품 보러가기
+        </RouterLink>
+
+        <template v-if="checklistItems.length">
+          <span
+            class="h-3 w-px bg-border"
+            aria-hidden="true"
+          />
+          <button
+            type="button"
+            class="inline-flex items-center gap-1.5 text-primary hover:text-primary-dark"
+            :aria-expanded="isChecklistOpen"
+            @click="isChecklistOpen = !isChecklistOpen"
+          >
+            검증 체크리스트 {{ isChecklistOpen ? '접기' : '펼치기' }}
+            <!--
+              진행 상황은 알약으로 감쌉니다. 글자로만 두면 버튼 이름의 일부처럼
+              읽혀서, 몇 개가 남았는지가 눈에 걸리지 않습니다.
+              다 끝났으면 초록으로 바꿔 펼치지 않고도 알 수 있게 합니다.
+            -->
+            <span
+              class="rounded-pill px-2 py-0.5 text-[11px] font-bold"
+              :class="isChecklistComplete
+                ? 'bg-[#e9f7ee] text-[#15803d]'
+                : 'bg-accent text-primary-dark'"
+            >
+              {{ checkedChecklistCount }}/{{ checklistItems.length }}
+            </span>
+          </button>
+        </template>
+      </div>
     </div>
 
     <!-- 이 상품의 검증 체크리스트. 기기 모델마다 항목이 달라 상품별 스냅샷을 그대로 보여줍니다.
-         채팅 영역을 좁히지 않도록 접어두고, 펼쳐도 4개 정도만 보이고 나머지는 스크롤합니다. -->
+         펼쳐도 4개 정도만 보이고 나머지는 스크롤해서, 대화 영역을 많이 밀지 않습니다. -->
     <div
-      v-if="checklistItems.length"
-      class="border-b border-border px-5 py-2"
+      v-if="checklistItems.length && isChecklistOpen"
+      class="border-b border-border px-5 py-2.5"
     >
-      <button
-        type="button"
-        class="flex w-full items-center justify-between gap-2 py-1 text-left"
-        :aria-expanded="isChecklistOpen"
-        @click="isChecklistOpen = !isChecklistOpen"
-      >
-        <span class="text-xs font-bold text-text-main">
-          검증 체크리스트
-          <span class="ml-1 font-semibold text-primary">
-            {{ checkedChecklistCount }} / {{ checklistItems.length }}
-          </span>
-        </span>
-        <span class="text-xs text-text-sub">{{ isChecklistOpen ? '접기' : '펼치기' }}</span>
-      </button>
-
       <ul
-        v-if="isChecklistOpen"
-        class="mt-1 max-h-40 space-y-1.5 overflow-y-auto pr-1 pb-1"
+        class="max-h-40 space-y-1.5 overflow-y-auto pr-1"
       >
         <li
           v-for="item in checklistItems"
@@ -698,7 +775,7 @@ onBeforeUnmount(() => {
 
     <div
       ref="messageList"
-      class="flex-1 space-y-3 overflow-y-auto px-5 py-5"
+      class="flex-1 space-y-3 overflow-y-auto px-5 py-4"
     >
       <p
         v-if="isLoadingMessages"
@@ -727,7 +804,7 @@ onBeforeUnmount(() => {
         class="flex flex-col gap-3"
       >
         <div
-          v-for="message in messages"
+          v-for="(message, messageIndex) in messages"
           :key="message.messageId"
           :data-message-sequence="message.roomSequence"
           :data-testid="message.isPending ? 'pending-message' : undefined"
@@ -744,7 +821,7 @@ onBeforeUnmount(() => {
                 ? 'w-full max-w-none bg-transparent p-0 text-text-main'
                 : 'bg-transparent p-0 text-text-main'
               : message.senderId === myMemberId
-                ? 'bg-primary-deep text-white'
+                ? 'bubble-mine text-white'
                 : 'bg-bg text-text-main'"
           >
             <template v-if="message.type === 'SYSTEM' && message.reinspection">
@@ -876,7 +953,7 @@ onBeforeUnmount(() => {
             </template>
           </div>
           <span
-            v-if="!isAppointmentNotification(message)"
+            v-if="!isAppointmentNotification(message) && shouldShowMessageTime(message, messageIndex)"
             class="mt-1 text-[11px] text-text-sub"
           >
             {{ formatTime(message.sentAt) }}
@@ -897,7 +974,7 @@ onBeforeUnmount(() => {
           v-if="latestAppointment"
           :key="`appointment-${latestAppointment.callId}`"
           data-testid="appointment-card"
-          class="mx-auto w-full max-w-sm rounded-xl bg-white p-4 shadow-sm"
+          class="mx-auto w-full max-w-sm rounded-xl bg-white p-3.5 shadow-sm"
           :class="latestAppointment.status === 'ACCEPTED' ? 'border-2 border-primary' : 'border border-primary'"
           :style="{ order: appointmentTimelineOrder() }"
         >
@@ -927,17 +1004,18 @@ onBeforeUnmount(() => {
               {{ latestAppointment.status === 'ACCEPTED' ? '실시간 화상 검증 일정 확정' : '실시간 화상 검증 일정 제안' }}
             </p>
           </div>
-          <div class="mt-3 rounded-lg bg-bg px-3 py-3">
-            <p class="text-xs text-text-sub">
-              {{ latestAppointment.status === 'ACCEPTED' ? '확정된 일정' : '제안 시간' }}
-            </p>
-            <p class="mt-1 text-sm font-bold text-text-main">
+          <!--
+            안쪽 회색 상자를 없앴습니다. 카드 안에 상자를 또 두면 위아래 24px이
+            테두리 값으로만 쓰이는데, 그만큼이 대화 한 줄입니다.
+          -->
+          <div class="mt-2">
+            <p class="text-sm font-bold text-text-main">
               {{ formatAppointmentTime(latestAppointment.scheduledAt) }}
             </p>
             <p
               v-if="appointmentRemainingTime(latestAppointment)"
               data-testid="appointment-expiration"
-              class="mt-2 inline-flex rounded-full bg-accent px-2.5 py-1 text-xs font-bold text-primary-dark"
+              class="mt-1.5 inline-flex rounded-full bg-accent px-2.5 py-1 text-xs font-bold text-primary-dark"
             >
               약속 만료까지 {{ appointmentRemainingTime(latestAppointment) }}
             </p>
@@ -986,89 +1064,26 @@ onBeforeUnmount(() => {
       </TransitionGroup>
     </div>
 
-    <div class="border-t border-border p-4">
-      <div class="mb-3">
-        <div class="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            class="inline-flex items-center gap-2 rounded-lg border border-primary px-3 py-2 text-sm font-semibold text-primary hover:bg-accent"
-            @click="isCallFormOpen = !isCallFormOpen"
-          >
-            <svg
-              class="h-4 w-4"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              aria-hidden="true"
-            >
-              <rect
-                x="3"
-                y="5"
-                width="18"
-                height="16"
-                rx="2"
-              />
-              <path d="M16 3v4M8 3v4M3 10h18" />
-            </svg>
-            실시간 검증 일정 잡기
-          </button>
-          <p class="text-xs text-text-sub">
-            * 상호 조율 하에 라이브 WebRTC 성능 테스트 시간대를 제안해보세요.
-          </p>
-        </div>
+    <!--
+      입력 줄.
+      -------------------------------------------------------------------------
+      사진·달력·입력칸·전송이 모두 40px 한 줄입니다. 예전에는 버튼이 44px,
+      입력칸이 42px이라 2px 어긋나 줄이 헐거워 보였습니다. 위아래 여백도
+      16 → 12px으로 줄여 이 영역이 77 → 65px이 되었습니다.
 
-        <form
-          v-if="isCallFormOpen"
-          class="mt-3 grid gap-3 rounded-xl border border-primary bg-white p-4 sm:grid-cols-2"
-          @submit.prevent="requestCallAppointment"
-        >
-          <label class="grid gap-1 text-xs font-semibold text-text-main">
-            제안 시간
-            <input
-              v-model="callScheduledAt"
-              type="datetime-local"
-              required
-              class="rounded-md border border-border bg-surface px-3 py-2 text-sm font-normal"
-            >
-          </label>
-          <label class="grid gap-1 text-xs font-semibold text-text-main">
-            메모
-            <input
-              v-model="callMemo"
-              type="text"
-              maxlength="500"
-              placeholder="확인할 내용을 입력하세요."
-              class="rounded-md border border-border bg-surface px-3 py-2 text-sm font-normal"
-            >
-          </label>
-          <div class="flex justify-end gap-2 sm:col-span-2">
-            <button
-              type="button"
-              class="rounded-md border border-border px-4 py-2 text-sm font-semibold text-text-sub"
-              @click="isCallFormOpen = false"
-            >
-              닫기
-            </button>
-            <button
-              type="submit"
-              :disabled="isRequestingCall"
-              class="rounded-md bg-primary-gradient px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-            >
-              {{ isRequestingCall ? '요청 중…' : '일정 제안하기' }}
-            </button>
-          </div>
-        </form>
-        <p
-          v-if="callMessage"
-          role="status"
-          class="mt-2 text-xs text-text-sub"
-        >
-          {{ callMessage }}
-        </p>
-      </div>
+      40px 아래로는 내리지 않았습니다. 좁은 화면에서 손가락으로 누르기 어려워집니다.
+    -->
+    <div class="border-t border-border px-4 py-3">
+      <p
+        v-if="callMessage"
+        role="status"
+        class="mb-2 text-xs text-text-sub"
+      >
+        {{ callMessage }}
+      </p>
+
       <form
-        class="flex gap-2"
+        class="flex items-center gap-2"
         @submit.prevent="sendMessage"
       >
         <input
@@ -1083,7 +1098,7 @@ onBeforeUnmount(() => {
           :disabled="socketStatus !== 'connected' || isUploading"
           :aria-label="isUploading ? '사진 또는 영상 업로드 중' : '사진 또는 영상 첨부'"
           :title="isUploading ? '업로드 중' : '사진 또는 영상 첨부'"
-          class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border text-text-sub transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+          class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border text-text-sub transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
           @click="openMediaPicker"
         >
           <svg
@@ -1113,19 +1128,145 @@ onBeforeUnmount(() => {
             />
           </svg>
         </button>
+
+        <!--
+          약속 잡기를 사진 옆 달력 버튼으로 옮겼습니다.
+          -----------------------------------------------------------------------
+          예전에는 입력줄 위에 큰 버튼과 안내 문장이 한 줄을 차지했고, 약속을
+          잡은 뒤에도 그대로 남아 있었습니다. 사진 첨부와 성격이 같은 '무언가를
+          더하는' 동작이라 같은 자리에 둡니다. 이름은 호버 때만 띄웁니다.
+
+          약속이 이미 있으면 오른쪽 위에 점을 찍어 알립니다. 한 줄 요약을
+          없앤 자리를 이 점이 대신합니다.
+        -->
+        <div class="group relative shrink-0">
+          <button
+            type="button"
+            :aria-label="latestAppointment ? '실시간 검증 약속 변경' : '실시간 검증 약속 잡기'"
+            class="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border text-text-sub transition-colors hover:border-primary hover:text-primary"
+            :class="latestAppointment ? 'border-primary text-primary' : ''"
+            @click="isCallFormOpen = true"
+          >
+            <svg
+              class="h-5 w-5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              aria-hidden="true"
+            >
+              <rect
+                x="3"
+                y="5"
+                width="18"
+                height="16"
+                rx="2"
+              />
+              <path
+                stroke-linecap="round"
+                d="M16 3v4M8 3v4M3 10h18"
+              />
+            </svg>
+            <span
+              v-if="latestAppointment"
+              class="absolute right-1 top-1 h-2 w-2 rounded-full bg-primary-gradient"
+              aria-hidden="true"
+            />
+          </button>
+
+          <!-- 이름표. 마우스를 올릴 때만 버튼 위로 떠오릅니다. -->
+          <span
+            role="tooltip"
+            class="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md bg-text-main px-2.5 py-1.5 text-xs font-semibold text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+          >
+            {{ latestAppointment ? '실시간 검증 약속 변경' : '실시간 검증 약속 잡기' }}
+          </span>
+        </div>
+
         <input
           v-model="messageInput"
           type="text"
           placeholder="메시지를 입력하세요..."
-          class="w-full min-w-0 rounded-md border border-border bg-surface px-4 py-2.5 text-sm text-text-main outline-none focus:border-primary"
+          class="h-10 w-full min-w-0 rounded-md border border-border bg-surface px-4 text-sm text-text-main outline-none focus:border-primary"
         >
+        <!-- 다른 주요 버튼과 같은 번짐(btn-glow)·그림자를 얹어 톤을 맞췄습니다. -->
         <button
           type="submit"
           :disabled="socketStatus !== 'connected'"
-          class="whitespace-nowrap rounded-md bg-primary-gradient px-4 py-2.5 text-sm font-semibold text-white transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:brightness-100"
+          class="btn-glow h-10 shrink-0 whitespace-nowrap rounded-md bg-primary-gradient px-4 text-sm font-semibold text-white shadow-elevated transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:brightness-100"
         >
           전송
         </button>
+      </form>
+    </div>
+
+    <!--
+      약속 잡기 팝업.
+      -------------------------------------------------------------------------
+      예전에는 입력줄 위에 폼이 펼쳐져 대화창을 위로 밀어 올렸습니다. 대화를
+      읽다가 약속을 잡으면 보고 있던 말이 화면에서 밀려 나갔습니다.
+      띄워 두면 대화 높이는 그대로입니다.
+    -->
+    <div
+      v-if="isCallFormOpen"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="call-form-title"
+      class="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 p-4"
+      @click.self="isCallFormOpen = false"
+    >
+      <form
+        class="w-full max-w-md rounded-lg bg-surface p-6 shadow-elevated"
+        @submit.prevent="requestCallAppointment"
+      >
+        <h2
+          id="call-form-title"
+          class="text-lg font-bold text-text-main"
+        >
+          {{ latestAppointment ? '실시간 검증 약속 변경' : '실시간 검증 약속 잡기' }}
+        </h2>
+        <p class="mt-1.5 text-sm text-text-sub">
+          상호 조율 하에 라이브 WebRTC 성능 테스트 시간대를 제안해 보세요.
+        </p>
+
+        <div class="mt-5 grid gap-4">
+          <label class="grid gap-1.5 text-xs font-semibold text-text-main">
+            제안 시간
+            <input
+              v-model="callScheduledAt"
+              type="datetime-local"
+              required
+              class="rounded-md border border-border bg-surface px-3 py-2.5 text-sm font-normal outline-none focus:border-primary"
+            >
+          </label>
+          <label class="grid gap-1.5 text-xs font-semibold text-text-main">
+            메모
+            <input
+              v-model="callMemo"
+              type="text"
+              maxlength="500"
+              placeholder="확인할 내용을 입력하세요."
+              class="rounded-md border border-border bg-surface px-3 py-2.5 text-sm font-normal outline-none focus:border-primary"
+            >
+          </label>
+        </div>
+
+        <div class="mt-6 flex justify-end gap-2">
+          <button
+            type="button"
+            class="rounded-md border border-border px-4 py-2.5 text-sm font-semibold text-text-sub hover:border-primary hover:text-primary"
+            @click="isCallFormOpen = false"
+          >
+            닫기
+          </button>
+          <button
+            type="submit"
+            :disabled="isRequestingCall"
+            class="btn-glow rounded-md bg-primary-gradient px-4 py-2.5 text-sm font-semibold text-white shadow-elevated transition-all hover:brightness-110 disabled:opacity-60"
+          >
+            {{ isRequestingCall ? '요청 중…' : '일정 제안하기' }}
+          </button>
+        </div>
       </form>
     </div>
 
@@ -1162,5 +1303,19 @@ onBeforeUnmount(() => {
 .msg-enter-from {
   opacity: 0;
   transform: translateY(8px);
+}
+
+/*
+  내가 보낸 말풍선.
+  ---------------------------------------------------------------------------
+  단색(#6366F1)에서 그라데이션으로 바꿨습니다. 다만 서비스 그라데이션
+  (#6366F1 → #93C5FD)을 그대로 쓰면 오른쪽 끝이 밝은 하늘색이라 흰 글자
+  대비가 1.7:1까지 떨어져 글이 안 읽힙니다.
+
+  그래서 밝은 쪽이 아니라 어두운 쪽(#4338CA)으로 흐르게 뒀습니다. 같은 남색
+  계열이라 헤더·버튼과 톤이 맞고, 흰 글자 대비는 4.5:1 밑으로 내려가지 않습니다.
+*/
+.bubble-mine {
+  background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
 }
 </style>

@@ -50,6 +50,7 @@ import {
 } from '../utils/camera'
 import { MAX_PRICE_DIGITS, formatPriceDigits, toPriceDigits } from '../utils/priceInput'
 import { guideContentFor, guideImageFor } from '../utils/checklistGuideImages'
+import { formatStorage } from '../utils/storage'
 
 const WIZARD_STEPS = [
   { number: 1, label: '기기 등록' },
@@ -81,9 +82,7 @@ const DEFAULT_TRADE_REGION = '협의'
 // 실제로 많이 쓰이는 용량만 골라 두고, 해당하지 않으면 직접 입력으로 넘어갑니다.
 const STORAGE_OPTIONS = [16, 32, 64, 128, 256, 512, 1024]
 
-function storageOptionLabel(gb) {
-  return gb >= 1024 ? `${gb / 1024}TB` : `${gb}GB`
-}
+const storageOptionLabel = formatStorage
 
 // 기종별 초기화 가이드 API/데이터가 아직 준비되지 않아(handover_guide 테이블 미생성),
 // 조회 실패 시 OS 계열별 일반 초기화 안내로 대체합니다. 모델별 가이드가 생기면 이 대체 로직은 제거하세요.
@@ -319,6 +318,12 @@ const listingImages = ref([])
 const listingImageBusy = ref(false)
 const listingImageProgress = ref(0)
 let listingImageInFlight = 0
+
+// 파일 입력은 label 안에 숨겨 둡니다. label에는 :disabled가 안 걸리므로,
+// 못 누르는 상태를 라벨 쪽에도 따로 알려 줘야 버튼이 눌리는 것처럼 보이지 않습니다.
+const listingImageAddDisabled = computed(
+  () => listingImageBusy.value || listingImages.value.length >= 10,
+)
 
 // 대표 이미지는 고르는 즉시 서버에 올립니다. presigned URL이 productId 기준이라 상품이 없으면
 // 올릴 수 없어서, 상품이 아직 없을 때는 초안을 먼저 만든 뒤 업로드합니다.
@@ -2119,14 +2124,18 @@ onMounted(async () => {
                     '대표'를 눌러 대표 이미지를 바꿀 수 있습니다.
                   </p>
                 </div>
-                <label class="cursor-pointer rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white">
+                <!-- 다른 주요 버튼(BaseButton primary)과 같은 그라데이션·번짐을 씁니다. -->
+                <label
+                  class="btn-glow inline-flex cursor-pointer items-center justify-center rounded-md bg-primary-gradient px-4 py-2 text-sm font-semibold text-white shadow-elevated transition-all hover:brightness-110"
+                  :class="listingImageAddDisabled ? 'pointer-events-none opacity-55' : ''"
+                >
                   {{ listingImageBusy ? '업로드 중…' : '이미지 추가' }}
                   <input
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
                     multiple
                     class="sr-only"
-                    :disabled="listingImageBusy || listingImages.length >= 10"
+                    :disabled="listingImageAddDisabled"
                     @change="onListingImageInput"
                   >
                 </label>
