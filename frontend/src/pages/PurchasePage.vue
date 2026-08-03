@@ -49,10 +49,17 @@ const defaultAddressError = ref('')
 const checkoutError = ref('')
 const isSubmitting = ref(false)
 
-const receiverName = ref('김싸피')
-const receiverPhone = ref('010-1234-5678')
-const address = ref({ zonecode: '', address: '광주광역시 광산구 하남산단 6번로 107', addressDetail: '광주 2반' })
-const deliveryMemo = ref('문 앞에 놓아주세요.')
+/*
+  배송지는 비워 두고 시작합니다.
+  ---------------------------------------------------------------------------
+  예전에는 '김싸피'·'010-1234-5678'·'광주광역시 …'가 값으로 박혀 있었습니다.
+  화면에서는 예시처럼 보이지만 실제로는 입력된 값이라, 지우지 않고 결제하면
+  남의 이름과 주소로 주문이 들어갑니다. 예시는 placeholder로 옮겼습니다.
+*/
+const receiverName = ref('')
+const receiverPhone = ref('')
+const address = ref({ zonecode: '', address: '', addressDetail: '' })
+const deliveryMemo = ref('')
 
 function goToLogin() {
   router.push({ name: 'login', query: { redirect: route.fullPath } })
@@ -254,10 +261,14 @@ async function submitPayment() {
               <BaseInput
                 v-model="receiverName"
                 label="수령인 이름"
+                placeholder="김싸피"
               />
               <BaseInput
                 v-model="receiverPhone"
                 label="연락처"
+                type="tel"
+                autocomplete="tel"
+                placeholder="010-1234-5678"
               />
             </div>
 
@@ -273,6 +284,7 @@ async function submitPayment() {
               <BaseInput
                 v-model="deliveryMemo"
                 label="배송 메모"
+                placeholder="문 앞에 놓아주세요."
               />
             </div>
           </BaseCard>

@@ -45,6 +45,27 @@ function mountPage() {
   })
 }
 
+/*
+  배송지를 채웁니다.
+  ---------------------------------------------------------------------------
+  예전에는 '김싸피'·'010-1234-5678'·주소가 값으로 박혀 있어서, 아무것도 입력하지
+  않아도 결제가 진행됐습니다. 그래서 이 테스트들도 배송지를 채우지 않고 있었는데,
+  실제 사용자는 빈 화면에서 시작하므로 그 경로를 검증하지 못하고 있었습니다.
+*/
+async function fillShippingInfo(wrapper) {
+  const [name, phone] = wrapper.findAll('input[type="text"], input[type="tel"]')
+  await name.setValue('김구매')
+  await phone.setValue('010-0000-0000')
+
+  // 주소는 우편번호 검색으로만 채워지므로(읽기 전용) 컴포넌트에 직접 넘깁니다.
+  await wrapper.findComponent({ name: 'BaseAddressInput' }).vm.$emit('update:modelValue', {
+    zonecode: '12345',
+    address: '서울시 강남구 테헤란로 123',
+    addressDetail: '4층',
+  })
+  await flushPromises()
+}
+
 describe('PurchasePage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -78,6 +99,8 @@ describe('PurchasePage', () => {
     const wrapper = mountPage()
     await flushPromises()
 
+    await fillShippingInfo(wrapper)
+
     const payButton = wrapper.findAll('button').find((button) => button.text().includes('결제하기'))
     await payButton.trigger('click')
     await flushPromises()
@@ -101,6 +124,8 @@ describe('PurchasePage', () => {
     const wrapper = mountPage()
     await flushPromises()
 
+    await fillShippingInfo(wrapper)
+
     const payButton = wrapper.findAll('button').find((button) => button.text().includes('결제하기'))
     await payButton.trigger('click')
     await flushPromises()
@@ -121,6 +146,8 @@ describe('PurchasePage', () => {
 
     const wrapper = mountPage()
     await flushPromises()
+
+    await fillShippingInfo(wrapper)
 
     const payButton = wrapper.findAll('button').find((button) => button.text().includes('결제하기'))
     await payButton.trigger('click')
@@ -149,6 +176,8 @@ describe('PurchasePage', () => {
 
     const tossPayButton = wrapper.findAll('button').find((button) => button.text() === '토스페이')
     await tossPayButton.trigger('click')
+    await fillShippingInfo(wrapper)
+
     const payButton = wrapper.findAll('button').find((button) => button.text().includes('결제하기'))
     await payButton.trigger('click')
     await flushPromises()
@@ -181,6 +210,7 @@ describe('PurchasePage', () => {
 
     const wrapper = mountPage()
     await flushPromises()
+    await fillShippingInfo(wrapper)
     await (wrapper.findAll('button').find((button) => button.text().includes('결제하기'))).trigger('click')
     await flushPromises()
 
@@ -196,6 +226,7 @@ describe('PurchasePage', () => {
 
     const wrapper = mountPage()
     await flushPromises()
+    await fillShippingInfo(wrapper)
     await (wrapper.findAll('button').find((button) => button.text().includes('결제하기'))).trigger('click')
     await flushPromises()
 
@@ -211,6 +242,7 @@ describe('PurchasePage', () => {
 
     const wrapper = mountPage()
     await flushPromises()
+    await fillShippingInfo(wrapper)
     await (wrapper.findAll('button').find((button) => button.text().includes('결제하기'))).trigger('click')
     await flushPromises()
 
@@ -226,6 +258,7 @@ describe('PurchasePage', () => {
 
     const wrapper = mountPage()
     await flushPromises()
+    await fillShippingInfo(wrapper)
     await (wrapper.findAll('button').find((button) => button.text().includes('결제하기'))).trigger('click')
     await flushPromises()
 
@@ -241,6 +274,7 @@ describe('PurchasePage', () => {
 
     const wrapper = mountPage()
     await flushPromises()
+    await fillShippingInfo(wrapper)
     await (wrapper.findAll('button').find((button) => button.text().includes('결제하기'))).trigger('click')
     await flushPromises()
 
@@ -257,6 +291,7 @@ describe('PurchasePage', () => {
 
     const wrapper = mountPage()
     await flushPromises()
+    await fillShippingInfo(wrapper)
     await (wrapper.findAll('button').find((button) => button.text().includes('결제하기'))).trigger('click')
     await flushPromises()
 
