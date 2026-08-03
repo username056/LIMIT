@@ -3,6 +3,7 @@ package com.c203.limit.domain.inspection.controller;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -31,6 +32,17 @@ class ReinspectionRequestControllerTests {
         mockMvc = MockMvcBuilders.standaloneSetup(
                         new ReinspectionRequestController(service, currentUser))
                 .build();
+    }
+
+    @Test
+    void getsReinspectionRequestsForCurrentMember() throws Exception {
+        when(currentUser.memberId()).thenReturn(30L);
+        when(service.findForMember(30L)).thenReturn(List.of(response("REQUESTED", null)));
+
+        mockMvc.perform(get("/api/v1/members/me/reinspection-requests"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].requestKey").value("request-key"))
+                .andExpect(jsonPath("$.data[0].status").value("REQUESTED"));
     }
 
     @Test

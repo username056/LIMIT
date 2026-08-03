@@ -20,7 +20,8 @@ public interface ReinspectionRequestApi {
 
     @Operation(
             operationId = "reinspectionList",
-            summary = "판매자 재검수 요청 목록",
+            summary = "내 재검수 요청 목록",
+            description = "판매자이거나 요청 구매자인 재검수 요청을 최신순으로 조회합니다.",
             security = @SecurityRequirement(name = "bearerAuth"))
     @GetMapping("/api/v1/members/me/reinspection-requests")
     ResponseEntity<ApiResponse<List<ReinspectionRequestResponse>>> getMine();
