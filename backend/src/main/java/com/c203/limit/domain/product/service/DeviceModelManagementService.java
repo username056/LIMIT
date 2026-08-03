@@ -25,11 +25,16 @@ import com.c203.limit.domain.product.repository.DeviceModelRequestRepository;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class DeviceModelManagementService {
+
+    private static final Logger log =
+            LoggerFactory.getLogger(DeviceModelManagementService.class);
 
     private final DeviceModelRepository modelRepository;
     private final DeviceModelRequestRepository requestRepository;
@@ -116,6 +121,10 @@ public class DeviceModelManagementService {
         if (report != null) {
             requestService.update(report.getId(), adminId, update);
             requestService.approve(report.getId(), adminId, "관리자 모델 정보 수정 완료");
+            log.info(
+                    "reported device model review completed: modelId={}, adminId={}",
+                    modelId,
+                    adminId);
             return detail(modelId);
         }
 
@@ -153,6 +162,11 @@ public class DeviceModelManagementService {
                 "DEVICE_MODEL",
                 modelId,
                 "관리자 모델 정보 수정 완료"));
+        log.info(
+                "device model update completed: modelId={}, categoryId={}, adminId={}",
+                modelId,
+                parent.getId(),
+                adminId);
         return detail(modelId);
     }
 
