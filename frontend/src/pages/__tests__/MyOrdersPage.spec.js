@@ -102,24 +102,26 @@ describe('MyOrdersPage', () => {
     expect(wrapper.text()).toContain('주문 내역을 불러오지 못했습니다.')
   })
 
-  it('결제 완료 주문은 거래 취소를 요청하면 상태 뱃지가 바뀐다', async () => {
+  // 취소/반품 API가 아직 없으므로(환불 도메인 미연동) 버튼 대신 준비 중 안내만 보여준다 —
+  // 예전에는 로컬에서만 "접수됨"으로 위장해 새로고침하면 사라지는 문제가 있었다.
+  it('결제 완료 주문에서는 거래 취소·반품 버튼 대신 준비 중 안내를 보여준다', async () => {
     const wrapper = await mountLoadedPage()
     await openOrderDetail(wrapper, '갤럭시 S24 Ultra')
 
-    await buttonByText(wrapper, '거래 취소 요청').trigger('click')
-    expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
-
-    // 사유를 고르지 않으면 접수되지 않습니다.
-    await buttonByText(wrapper, '신청하기').trigger('click')
-    expect(wrapper.text()).toContain('사유를 선택해 주세요.')
-
-    await wrapper.findAll('input[type="radio"]')[0].setValue(true)
-    await buttonByText(wrapper, '신청하기').trigger('click')
-
+    expect(buttonByText(wrapper, '거래 취소 요청')).toBeUndefined()
+    expect(buttonByText(wrapper, '반품 신청')).toBeUndefined()
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
-    expect(wrapper.text()).toContain('거래 취소 요청을 접수했습니다.')
-    expect(wrapper.text()).toContain('취소 요청 접수 · 판매자 확인 대기')
+    expect(wrapper.text()).toContain('거래 취소·반품 신청은 아직 준비 중입니다.')
+  })
 
+  it('환불 요청 상태의 주문은 실제 백엔드 상태로 접수 중임을 보여준다', async () => {
+    listOrders.mockResolvedValue([{ ...ORDERS_FIXTURE[0], paymentStatus: 'REFUND_REQUESTED' }])
+
+    const wrapper = await mountLoadedPage()
+    await openOrderDetail(wrapper, '갤럭시 S24 Ultra')
+
+    expect(wrapper.text()).toContain('취소 요청')
+    expect(wrapper.text()).toContain('환불 요청이 접수되어 판매자 확인을 기다리는 중입니다.')
     const badge = wrapper.findAll('[data-variant]').find((node) => node.text() === '취소 요청')
     expect(badge.attributes('data-variant')).toBe('danger')
   })
@@ -134,21 +136,6 @@ describe('MyOrdersPage', () => {
 
     await openOrderDetail(wrapper, '갤럭시 S24 Ultra')
     expect(wrapper.text()).toContain('진행 상태')
-  })
-
-  it('결제 완료 주문에서는 취소와 반품을 모두 신청할 수 있다', async () => {
-    const wrapper = await mountLoadedPage()
-    await openOrderDetail(wrapper, '갤럭시 S24 Ultra')
-
-    expect(buttonByText(wrapper, '반품 신청')).toBeTruthy()
-    expect(buttonByText(wrapper, '거래 취소 요청')).toBeTruthy()
-
-    await buttonByText(wrapper, '반품 신청').trigger('click')
-    await wrapper.findAll('input[type="radio"]')[0].setValue(true)
-    await buttonByText(wrapper, '신청하기').trigger('click')
-
-    expect(wrapper.text()).toContain('반품 신청을 접수했습니다.')
-    expect(wrapper.text()).toContain('반품 신청 접수 · 판매자 확인 대기')
   })
 
   // 대표 이미지는 그 상품의 썸네일이라 주문 내역에서도 필요합니다.

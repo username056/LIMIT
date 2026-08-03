@@ -114,6 +114,10 @@ public class Category {
         this.isActive = false;
     }
 
+    public void activate() {
+        this.isActive = true;
+    }
+
     public void updateLeaf(
             Category parent,
             String name,

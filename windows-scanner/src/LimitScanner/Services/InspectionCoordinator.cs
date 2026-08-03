@@ -17,15 +17,17 @@ public sealed class InspectionCoordinator(
         var session = await apiClient.PairAsync(pairingCode, cancellationToken);
         using var workspace = new InspectionWorkspace();
 
-        progress.Report("Windows 시스템 정보를 수집하고 있습니다.");
-        var dxdiagPath = await dxDiagCollector.CollectAsync(
+        progress.Report("시스템 정보와 배터리 정보를 동시에 수집하고 있습니다.");
+        var dxdiagTask = dxDiagCollector.CollectAsync(
             workspace.DirectoryPath,
             cancellationToken);
+        var batteryReportTask = batteryReportCollector.CollectAsync(
+            workspace.DirectoryPath,
+            cancellationToken);
+        await Task.WhenAll(new Task[] { dxdiagTask, batteryReportTask });
 
-        progress.Report("배터리 정보를 수집하고 있습니다.");
-        var batteryReportPath = await batteryReportCollector.CollectAsync(
-            workspace.DirectoryPath,
-            cancellationToken);
+        var dxdiagPath = await dxdiagTask;
+        var batteryReportPath = await batteryReportTask;
 
         progress.Report("진단 결과를 업로드하고 있습니다.");
         await apiClient.UploadDiagnosticAsync(

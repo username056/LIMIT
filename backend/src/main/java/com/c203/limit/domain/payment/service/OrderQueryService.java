@@ -10,8 +10,10 @@ import com.c203.limit.domain.product.storage.MediaUrlResolver;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -29,6 +31,17 @@ public class OrderQueryService {
     private static final Logger log = LoggerFactory.getLogger(OrderQueryService.class);
     private static final ZoneId ORDER_TIME_ZONE = ZoneId.of("Asia/Seoul");
 
+    /**
+     * 주문 내역에 노출할 결제 상태. 승인 전 취소·이탈(REQUESTED/CANCELLED/EXPIRED)과 승인 거절
+     * (FAILED)은 "주문"이 아니라서 뺀다 — 실제 돈이 오간(APPROVED) 이후의 흐름만 주문/환불 내역
+     * 대상이다.
+     */
+    private static final Set<PaymentStatus> ORDER_HISTORY_STATUSES = EnumSet.of(
+            PaymentStatus.APPROVED,
+            PaymentStatus.REFUND_REQUESTED,
+            PaymentStatus.REFUND_PENDING,
+            PaymentStatus.REFUNDED);
+
     private final PaymentRepository paymentRepository;
     private final ListingOrderSummaryReader listingOrderSummaryReader;
     private final MediaUrlResolver mediaUrlResolver;
@@ -45,8 +58,8 @@ public class OrderQueryService {
     @Transactional(readOnly = true)
     public List<OrderSummaryResponse> listOrders(Long buyerId) {
         List<Payment> payments =
-                paymentRepository.findByBuyer_IdAndStatusNotOrderByRequestedAtDesc(
-                        buyerId, PaymentStatus.REQUESTED);
+                paymentRepository.findByBuyer_IdAndStatusInOrderByRequestedAtDesc(
+                        buyerId, ORDER_HISTORY_STATUSES);
         if (payments.isEmpty()) {
             return List.of();
         }
