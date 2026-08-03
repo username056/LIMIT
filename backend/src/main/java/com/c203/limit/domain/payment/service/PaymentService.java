@@ -259,8 +259,15 @@ public class PaymentService {
      * <p>이미 CANCELLED·EXPIRED인 결제는 사용자가 취소 버튼을 여러 번 누르거나 재접속해도 오류 없이
      * 같은 결과를 그대로 반환한다(멱등). APPROVED·FAILED는 이 API로 되돌릴 수 없는 진행된 결제라
      * 거부한다 — 승인된 결제는 환불 흐름으로 유도해야 한다.
+     *
+     * <p>confirmAttemptedAt이 찍혀 있으면(서버가 Toss confirm을 불렀지만 응답을 못 받은 애매한
+     * 상태) status만 보고 바로 취소·예약해제하지 않는다 — Toss가 실제로는 이미 승인했을 수 있어,
+     * 그대로 취소하면 돈은 빠져나갔는데 매물만 재판매되는 사고로 이어진다. {@link
+     * PaymentReservationExpirationService}가 만료 전에 거치는 것과 같은 reconcile 절차를 먼저
+     * 거치고, 실제로 승인된 것으로 복구되면 취소를 거부한다. 이 과정에서 Toss 호출이 끼어들므로
+     * 트랜잭션 밖에서 실행하고, 실제 취소 반영만 별도 트랜잭션({@link #cancelInTransaction})으로
+     * 분리한다.
      */
-    @Transactional
     public PaymentResponse cancel(Long buyerId, Long paymentId) {
         Payment payment = paymentRepository
                 .findById(paymentId)
@@ -275,15 +282,48 @@ public class PaymentService {
             throw new BusinessException(ErrorCode.PAYMENT_NOT_CANCELLABLE);
         }
 
-        payment.cancel(CANCEL_REASON);
-        listingService.cancelReservation(payment.getListingId(), buyerId, CANCEL_REASON);
+        if (payment.getConfirmAttemptedAt() != null) {
+            PaymentReconcileResponse reconciled = reconcile(paymentId);
+            if (reconciled.getOutcome() == PaymentReconcileOutcome.RECOVERED) {
+                log.info(
+                        "payment cancel rejected: recovered as approved via reconcile before cancel, "
+                                + "paymentId={}, buyerId={}",
+                        paymentId,
+                        buyerId);
+                throw new BusinessException(ErrorCode.PAYMENT_NOT_CANCELLABLE);
+            }
+        }
 
-        log.info(
-                "payment cancelled: paymentId={}, listingId={}, buyerId={}",
-                payment.getId(),
-                payment.getListingId(),
-                buyerId);
-        return PaymentResponse.from(payment);
+        return cancelInTransaction(buyerId, paymentId);
+    }
+
+    /**
+     * 실제 취소 반영만 담당하는 별도 트랜잭션이다. confirmAttemptedAt이 있는 건은 {@link #cancel}이
+     * 앞서 트랜잭션 밖에서 reconcile을 거치고 오는데, 그사이 스케줄러가 먼저 만료시켰을 수 있어
+     * 상태를 여기서 다시 한번 확인한다.
+     */
+    private PaymentResponse cancelInTransaction(Long buyerId, Long paymentId) {
+        return transactionTemplate.execute(status -> {
+            Payment payment = paymentRepository
+                    .findById(paymentId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.PAYMENT_NOT_FOUND));
+            if (payment.getStatus() == PaymentStatus.CANCELLED || payment.getStatus() == PaymentStatus.EXPIRED) {
+                return PaymentResponse.from(payment);
+            }
+            if (payment.getStatus() != PaymentStatus.REQUESTED) {
+                throw new BusinessException(ErrorCode.PAYMENT_NOT_CANCELLABLE);
+            }
+
+            payment.cancel(CANCEL_REASON);
+            listingService.cancelReservation(payment.getListingId(), buyerId, CANCEL_REASON);
+
+            log.info(
+                    "payment cancelled: paymentId={}, listingId={}, buyerId={}",
+                    payment.getId(),
+                    payment.getListingId(),
+                    buyerId);
+            return PaymentResponse.from(payment);
+        });
     }
 
     /**
