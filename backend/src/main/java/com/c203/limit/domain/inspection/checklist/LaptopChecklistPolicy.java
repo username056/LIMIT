@@ -133,7 +133,7 @@ public class LaptopChecklistPolicy {
                     "DXDIAG"));
             definitions.add(ocrRequired(
                     "LAP-SCR-013",
-                    "설정 정보 화면",
+                    "기기 정보 화면",
                     "설정 화면에 표시되는 모델명, CPU, RAM, GPU, 저장용량, OS 버전을 확인합니다.",
                     "설정 > 시스템 > 정보(또는 실행에서 msinfo32) 화면을 캡처해 등록하세요."));
         } else {
