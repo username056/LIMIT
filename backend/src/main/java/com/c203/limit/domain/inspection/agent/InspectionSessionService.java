@@ -28,6 +28,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.HexFormat;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -85,7 +86,7 @@ public class InspectionSessionService {
     @Transactional
     public SessionStatusResponse status(Long sellerId, String sessionKey) {
         InspectionSession session = requireSession(sessionKey);
-        if (!session.getSellerId().equals(sellerId)) {
+        if (!Objects.equals(session.getSellerId(), sellerId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         expireIfNeeded(session);
@@ -132,6 +133,9 @@ public class InspectionSessionService {
             String uploadId,
             String parserType) {
         InspectionSession session = authorize(authorization, sessionKey);
+        if (session.getStatus() != InspectionSessionStatus.UPLOADING) {
+            throw new BusinessException(ErrorCode.INSPECTION_SESSION_INVALID_STATE);
+        }
         ListingChecklistItem target = requireTarget(session.getListingId(), parserType);
         EvidenceResponse evidence = evidenceUploadService.complete(
                 session.getSellerId(),

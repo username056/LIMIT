@@ -99,6 +99,32 @@ class InspectionSessionServiceTests {
                                         .isEqualTo(ErrorCode.INSPECTION_PAIRING_INVALID));
     }
 
+    @Test
+    void completedSessionCannotCompleteAnotherUpload() {
+        var created = service.create(10L, 1001L);
+        InspectionSession stored = captureCreatedSession(created.sessionKey());
+        when(sessionRepository
+                        .findFirstByPairingCodeHashAndStatusAndExpiresAtAfterOrderByCreatedAtDesc(
+                                any(byte[].class),
+                                eq(InspectionSessionStatus.CREATED),
+                                any()))
+                .thenReturn(Optional.of(stored));
+        when(sessionRepository.findById(created.sessionKey())).thenReturn(Optional.of(stored));
+
+        var paired = service.pair(created.pairingCode(), "0.1.0");
+        stored.complete(java.time.LocalDateTime.parse("2026-08-03T01:01:00"));
+
+        assertThatThrownBy(() -> service.completeUpload(
+                        "Bearer " + paired.agentToken(),
+                        created.sessionKey(),
+                        "upload-id",
+                        "DXDIAG"))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INSPECTION_SESSION_INVALID_STATE));
+    }
+
     private InspectionSession captureCreatedSession(String sessionKey) {
         var captor = org.mockito.ArgumentCaptor.forClass(InspectionSession.class);
         org.mockito.Mockito.verify(sessionRepository).save(captor.capture());
