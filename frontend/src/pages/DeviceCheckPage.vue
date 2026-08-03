@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
+import PageHeader from '../components/PageHeader.vue'
 import BaseCard from '../components/BaseCard.vue'
 import BaseButton from '../components/BaseButton.vue'
 import { getProductChecklist, getProductDraftProgress, updateProductDraftProgress } from '../api/products'
@@ -174,277 +175,283 @@ onBeforeUnmount(() => {
 
 <template>
   <DefaultLayout>
-    <div class="mx-auto max-w-2xl px-6 py-12">
-      <h1 class="text-xl font-bold text-text-main">
-        장치 실동작 점검
-      </h1>
-      <p class="mt-2 text-sm text-text-sub">
-        카메라·마이크·키보드 등이 실제로 동작하는지 이 화면에서 바로 확인합니다.
-      </p>
+    <!--
+      점검 항목은 좁게 읽는 편이 낫지만, 바깥 틀은 다른 화면과 같은 값을 씁니다.
+      그래야 제목이 시작하는 자리가 어디서나 같습니다. 좁히는 건 안쪽에서 합니다.
+    -->
+    <div class="page-shell">
+      <PageHeader
+        eyebrow="DEVICE CHECK"
+        title="장치 실동작 점검"
+        description="카메라·마이크·키보드 등이 실제로 동작하는지 이 화면에서 바로 확인합니다."
+      />
 
-      <BaseCard
-        v-if="loading"
-        class="mt-6 p-8 text-center text-text-sub"
-      >
-        불러오는 중...
-      </BaseCard>
-      <BaseCard
-        v-else-if="loadError"
-        class="mt-6 p-8 text-center text-red-600"
-      >
-        {{ loadError }}
-      </BaseCard>
-
-      <BaseCard
-        v-else-if="finished"
-        class="mt-6 p-8"
-      >
-        <p class="text-text-main">
-          점검이 끝났습니다. 결과를 저장하고 돌아갈까요?
-        </p>
-        <p
-          v-if="saveError"
-          class="mt-2 text-sm text-red-600"
+      <!-- 점검 항목은 한 줄이 길면 읽기 어렵습니다. 안쪽만 좁게 둡니다. -->
+      <div class="max-w-2xl">
+        <BaseCard
+          v-if="loading"
+          class="mt-6 p-8 text-center text-text-sub"
         >
-          {{ saveError }}
-        </p>
-        <div class="mt-6 flex gap-3">
-          <BaseButton
-            :disabled="saving"
-            @click="save"
-          >
-            저장하고 돌아가기
-          </BaseButton>
-          <BaseButton
-            variant="outline"
-            :to="{ name: 'seller-product-edit', params: { productId } }"
-          >
-            건너뛰기
-          </BaseButton>
-        </div>
-      </BaseCard>
-
-      <BaseCard
-        v-else
-        class="mt-6 p-8"
-      >
-        <p class="text-sm text-text-sub">
-          {{ stepIndex + 1 }} / {{ items.length }}
-        </p>
-        <h2 class="mt-1 text-lg font-semibold text-text-main">
-          {{ currentLabel }}
-        </h2>
-
-        <!-- 카메라 -->
-        <div
-          v-if="currentItem.checkKind === 'CAMERA'"
-          class="mt-4"
+          불러오는 중...
+        </BaseCard>
+        <BaseCard
+          v-else-if="loadError"
+          class="mt-6 p-8 text-center text-red-600"
         >
-          <video
-            ref="videoEl"
-            class="w-full rounded-md bg-black"
-            muted
-            playsinline
-          />
-          <p class="mt-3 text-sm text-text-sub">
-            {{ camera.detail.value }}
-          </p>
-          <div class="mt-4 flex gap-3">
-            <BaseButton
-              v-if="camera.status.value === 'idle'"
-              @click="runCurrent"
-            >
-              점검 시작
-            </BaseButton>
-            <BaseButton
-              v-else-if="camera.status.value === 'failed'"
-              variant="outline"
-              @click="retryCurrent"
-            >
-              다시 시도
-            </BaseButton>
-            <BaseButton
-              v-if="camera.status.value === 'passed' || camera.status.value === 'failed'"
-              @click="next"
-            >
-              다음
-            </BaseButton>
-          </div>
-        </div>
+          {{ loadError }}
+        </BaseCard>
 
-        <!-- 마이크 -->
-        <div
-          v-else-if="currentItem.checkKind === 'MIC'"
-          class="mt-4"
+        <BaseCard
+          v-else-if="finished"
+          class="mt-6 p-8"
         >
-          <p class="text-sm text-text-sub">
-            마이크에 대고 말해 주세요. (입력 레벨: {{ mic.level.value }})
+          <p class="text-text-main">
+            점검이 끝났습니다. 결과를 저장하고 돌아갈까요?
           </p>
           <p
-            v-if="mic.detail.value"
+            v-if="saveError"
             class="mt-2 text-sm text-red-600"
           >
-            {{ mic.detail.value }}
+            {{ saveError }}
           </p>
-          <div class="mt-4 flex gap-3">
+          <div class="mt-6 flex gap-3">
             <BaseButton
-              v-if="mic.status.value === 'idle'"
-              @click="runCurrent"
+              :disabled="saving"
+              @click="save"
             >
-              점검 시작
+              저장하고 돌아가기
             </BaseButton>
             <BaseButton
-              v-else-if="mic.status.value === 'failed'"
               variant="outline"
-              @click="retryCurrent"
+              :to="{ name: 'seller-product-edit', params: { productId } }"
             >
-              다시 시도
-            </BaseButton>
-            <BaseButton
-              v-if="mic.status.value === 'passed' || mic.status.value === 'failed'"
-              @click="next"
-            >
-              다음
+              건너뛰기
             </BaseButton>
           </div>
-        </div>
+        </BaseCard>
 
-        <!-- 스피커 -->
-        <div
-          v-else-if="currentItem.checkKind === 'SPEAKER'"
-          class="mt-4"
+        <BaseCard
+          v-else
+          class="mt-6 p-8"
         >
           <p class="text-sm text-text-sub">
-            테스트음이 재생됩니다. 소리가 들렸는지 확인해 주세요.
+            {{ stepIndex + 1 }} / {{ items.length }}
           </p>
-          <div class="mt-4 flex gap-3">
-            <BaseButton
-              v-if="speaker.status.value === 'idle'"
-              @click="runCurrent"
-            >
-              테스트음 재생
-            </BaseButton>
-            <template v-else-if="speaker.status.value === 'awaitingConfirmation'">
-              <BaseButton @click="confirmSpeakerHeard(true)">
-                들렸어요
+          <h2 class="mt-1 text-lg font-semibold text-text-main">
+            {{ currentLabel }}
+          </h2>
+
+          <!-- 카메라 -->
+          <div
+            v-if="currentItem.checkKind === 'CAMERA'"
+            class="mt-4"
+          >
+            <video
+              ref="videoEl"
+              class="w-full rounded-md bg-black"
+              muted
+              playsinline
+            />
+            <p class="mt-3 text-sm text-text-sub">
+              {{ camera.detail.value }}
+            </p>
+            <div class="mt-4 flex gap-3">
+              <BaseButton
+                v-if="camera.status.value === 'idle'"
+                @click="runCurrent"
+              >
+                점검 시작
               </BaseButton>
               <BaseButton
+                v-else-if="camera.status.value === 'failed'"
                 variant="outline"
-                @click="confirmSpeakerHeard(false)"
+                @click="retryCurrent"
               >
-                안 들렸어요
+                다시 시도
               </BaseButton>
-            </template>
-            <BaseButton
-              v-if="speaker.status.value === 'passed' || speaker.status.value === 'failed'"
-              @click="next"
-            >
-              다음
-            </BaseButton>
+              <BaseButton
+                v-if="camera.status.value === 'passed' || camera.status.value === 'failed'"
+                @click="next"
+              >
+                다음
+              </BaseButton>
+            </div>
           </div>
-        </div>
 
-        <!-- 키보드 / 숫자패드 -->
-        <div
-          v-else-if="currentItem.checkKind === 'KEYBOARD' || currentItem.checkKind === 'NUMPAD'"
-          class="mt-4"
-        >
-          <p
-            v-if="!keyboard"
-            class="text-sm text-text-sub"
+          <!-- 마이크 -->
+          <div
+            v-else-if="currentItem.checkKind === 'MIC'"
+            class="mt-4"
           >
-            시작을 누르고 표시되는 키를 차례로 눌러 주세요.
-          </p>
+            <p class="text-sm text-text-sub">
+              마이크에 대고 말해 주세요. (입력 레벨: {{ mic.level.value }})
+            </p>
+            <p
+              v-if="mic.detail.value"
+              class="mt-2 text-sm text-red-600"
+            >
+              {{ mic.detail.value }}
+            </p>
+            <div class="mt-4 flex gap-3">
+              <BaseButton
+                v-if="mic.status.value === 'idle'"
+                @click="runCurrent"
+              >
+                점검 시작
+              </BaseButton>
+              <BaseButton
+                v-else-if="mic.status.value === 'failed'"
+                variant="outline"
+                @click="retryCurrent"
+              >
+                다시 시도
+              </BaseButton>
+              <BaseButton
+                v-if="mic.status.value === 'passed' || mic.status.value === 'failed'"
+                @click="next"
+              >
+                다음
+              </BaseButton>
+            </div>
+          </div>
+
+          <!-- 스피커 -->
+          <div
+            v-else-if="currentItem.checkKind === 'SPEAKER'"
+            class="mt-4"
+          >
+            <p class="text-sm text-text-sub">
+              테스트음이 재생됩니다. 소리가 들렸는지 확인해 주세요.
+            </p>
+            <div class="mt-4 flex gap-3">
+              <BaseButton
+                v-if="speaker.status.value === 'idle'"
+                @click="runCurrent"
+              >
+                테스트음 재생
+              </BaseButton>
+              <template v-else-if="speaker.status.value === 'awaitingConfirmation'">
+                <BaseButton @click="confirmSpeakerHeard(true)">
+                  들렸어요
+                </BaseButton>
+                <BaseButton
+                  variant="outline"
+                  @click="confirmSpeakerHeard(false)"
+                >
+                  안 들렸어요
+                </BaseButton>
+              </template>
+              <BaseButton
+                v-if="speaker.status.value === 'passed' || speaker.status.value === 'failed'"
+                @click="next"
+              >
+                다음
+              </BaseButton>
+            </div>
+          </div>
+
+          <!-- 키보드 / 숫자패드 -->
+          <div
+            v-else-if="currentItem.checkKind === 'KEYBOARD' || currentItem.checkKind === 'NUMPAD'"
+            class="mt-4"
+          >
+            <p
+              v-if="!keyboard"
+              class="text-sm text-text-sub"
+            >
+              시작을 누르고 표시되는 키를 차례로 눌러 주세요.
+            </p>
+            <div
+              v-else
+              class="space-y-2"
+            >
+              <div
+                v-for="(row, rowIndex) in keyboard.rows"
+                :key="rowIndex"
+                class="flex flex-wrap gap-1"
+              >
+                <span
+                  v-for="code in row"
+                  :key="code"
+                  class="rounded border px-2 py-1 text-xs"
+                  :class="keyboard.pressed.has(code) ? 'border-primary bg-primary-gradient text-white' : 'border-border text-text-sub'"
+                >
+                  {{ code }}
+                </span>
+              </div>
+              <p class="text-sm text-text-sub">
+                {{ keyboard.pressedCount.value }} / {{ keyboard.total }}
+              </p>
+            </div>
+            <p
+              v-if="keyboardMissing.length"
+              class="mt-2 text-sm text-amber-600"
+            >
+              응답 없음: {{ keyboardMissing.join(', ') }}
+            </p>
+            <div class="mt-4 flex gap-3">
+              <BaseButton
+                v-if="!keyboard"
+                @click="runCurrent"
+              >
+                점검 시작
+              </BaseButton>
+              <BaseButton
+                v-else-if="keyboard.status.value !== 'passed' && keyboard.status.value !== 'passedWithMissing'"
+                @click="finishKeyboard"
+              >
+                완료
+              </BaseButton>
+              <BaseButton
+                v-else
+                @click="next"
+              >
+                다음
+              </BaseButton>
+            </div>
+          </div>
+
+          <!-- 마우스/트랙패드, 터치스크린, 스타일러스 -->
           <div
             v-else
-            class="space-y-2"
+            class="mt-4"
           >
             <div
-              v-for="(row, rowIndex) in keyboard.rows"
-              :key="rowIndex"
-              class="flex flex-wrap gap-1"
+              ref="pointerAreaEl"
+              class="flex h-40 items-center justify-center rounded-md border border-dashed border-border text-sm text-text-sub"
             >
-              <span
-                v-for="code in row"
-                :key="code"
-                class="rounded border px-2 py-1 text-xs"
-                :class="keyboard.pressed.has(code) ? 'border-primary bg-primary-gradient text-white' : 'border-border text-text-sub'"
-              >
-                {{ code }}
-              </span>
+              여기에서 클릭·드래그·스크롤(또는 터치·펜)을 해보세요.
             </div>
-            <p class="text-sm text-text-sub">
-              {{ keyboard.pressedCount.value }} / {{ keyboard.total }}
-            </p>
+            <div class="mt-4 flex gap-3">
+              <BaseButton
+                v-if="!pointer"
+                @click="runCurrent"
+              >
+                점검 시작
+              </BaseButton>
+              <BaseButton
+                v-else-if="pointer.status.value === 'listening'"
+                @click="finishPointer"
+              >
+                완료
+              </BaseButton>
+              <BaseButton
+                v-else-if="pointer.status.value === 'failed'"
+                variant="outline"
+                @click="retryCurrent"
+              >
+                다시 시도
+              </BaseButton>
+              <BaseButton
+                v-if="pointer && pointer.status.value === 'passed'"
+                @click="next"
+              >
+                다음
+              </BaseButton>
+            </div>
           </div>
-          <p
-            v-if="keyboardMissing.length"
-            class="mt-2 text-sm text-amber-600"
-          >
-            응답 없음: {{ keyboardMissing.join(', ') }}
-          </p>
-          <div class="mt-4 flex gap-3">
-            <BaseButton
-              v-if="!keyboard"
-              @click="runCurrent"
-            >
-              점검 시작
-            </BaseButton>
-            <BaseButton
-              v-else-if="keyboard.status.value !== 'passed' && keyboard.status.value !== 'passedWithMissing'"
-              @click="finishKeyboard"
-            >
-              완료
-            </BaseButton>
-            <BaseButton
-              v-else
-              @click="next"
-            >
-              다음
-            </BaseButton>
-          </div>
-        </div>
-
-        <!-- 마우스/트랙패드, 터치스크린, 스타일러스 -->
-        <div
-          v-else
-          class="mt-4"
-        >
-          <div
-            ref="pointerAreaEl"
-            class="flex h-40 items-center justify-center rounded-md border border-dashed border-border text-sm text-text-sub"
-          >
-            여기에서 클릭·드래그·스크롤(또는 터치·펜)을 해보세요.
-          </div>
-          <div class="mt-4 flex gap-3">
-            <BaseButton
-              v-if="!pointer"
-              @click="runCurrent"
-            >
-              점검 시작
-            </BaseButton>
-            <BaseButton
-              v-else-if="pointer.status.value === 'listening'"
-              @click="finishPointer"
-            >
-              완료
-            </BaseButton>
-            <BaseButton
-              v-else-if="pointer.status.value === 'failed'"
-              variant="outline"
-              @click="retryCurrent"
-            >
-              다시 시도
-            </BaseButton>
-            <BaseButton
-              v-if="pointer && pointer.status.value === 'passed'"
-              @click="next"
-            >
-              다음
-            </BaseButton>
-          </div>
-        </div>
-      </BaseCard>
+        </BaseCard>
+      </div>
     </div>
   </DefaultLayout>
 </template>

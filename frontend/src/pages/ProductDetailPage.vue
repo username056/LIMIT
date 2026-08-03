@@ -353,7 +353,7 @@ onMounted(async () => {
 
 <template>
   <DefaultLayout>
-    <main class="mx-auto max-w-[1120px] px-4 py-8 sm:px-6 lg:px-10 lg:py-12">
+    <main class="page-shell">
       <nav
         class="mb-6 flex items-center gap-2 text-xs text-text-sub"
         aria-label="현재 위치"
@@ -406,7 +406,7 @@ onMounted(async () => {
 
       <div
         v-else-if="!product"
-        class="rounded-lg border border-border bg-surface px-6 py-20 text-center"
+        class="card-soft rounded-lg bg-surface px-6 py-20 text-center"
       >
         <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-600">
           !
@@ -528,7 +528,7 @@ onMounted(async () => {
               <RouterLink
                 v-if="sellerProfile"
                 :to="{ name: 'seller-profile', params: { sellerId: sellerProfile.sellerId } }"
-                class="mt-6 flex items-center gap-3 rounded-lg border border-border bg-surface p-3 transition hover:border-primary/50 hover:shadow-card"
+                class="card-soft card-soft--hover mt-6 flex items-center gap-3 rounded-lg bg-surface p-3"
               >
                 <span
                   class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-gradient text-sm font-bold text-white"
@@ -660,7 +660,7 @@ onMounted(async () => {
 
         <!-- 하단: 검증 자료와 인식된 사양을 나란히 두어 세로 길이를 줄입니다. -->
         <div class="mt-10 grid items-start gap-8 lg:grid-cols-2">
-          <section class="rounded-lg border border-border bg-surface p-5 sm:p-6">
+          <section class="card-soft rounded-lg bg-surface p-5 sm:p-6">
             <div class="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p class="text-xs font-semibold text-primary">
@@ -813,7 +813,7 @@ onMounted(async () => {
                별개로, 실제로 인식된 사양 값 자체를 필드 단위로 보여줍니다. -->
           <div
             v-if="diagnosisSummaryItems.length"
-            class="rounded-lg border border-border bg-surface p-5 sm:p-6"
+            class="card-soft rounded-lg bg-surface p-5 sm:p-6"
           >
             <!-- 옆 검증 카드와 같은 3단 머리글(작은 파란 라벨 → 굵은 제목 → 설명)로 맞춥니다. -->
             <div class="flex flex-wrap items-start justify-between gap-4">

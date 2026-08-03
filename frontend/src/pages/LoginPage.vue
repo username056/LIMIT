@@ -86,6 +86,7 @@ const providers = [
 <template>
   <DefaultLayout>
     <AuthShell
+      eyebrow="LOG IN"
       title="로그인"
       description="이메일 또는 자주 사용하는 소셜 계정으로 안전하게 시작하세요."
     >

@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import MyPageLayout from '../layouts/MyPageLayout.vue'
+import PageHeader from '../components/PageHeader.vue'
 import BaseBadge from '../components/BaseBadge.vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseCard from '../components/BaseCard.vue'
@@ -315,21 +316,15 @@ onMounted(() => {
 
 <template>
   <MyPageLayout>
-    <div class="mb-6">
-      <p class="text-[13px] font-semibold text-primary">
-        MY PAGE
-      </p>
-      <h1 class="mt-2 text-2xl font-bold text-text-main">
-        내 정보
-      </h1>
-      <p class="mt-2 text-sm text-text-sub">
-        로그인한 회원에게만 표시되는 페이지입니다.
-      </p>
-    </div>
+    <PageHeader
+      eyebrow="MY PAGE"
+      title="내 정보"
+      description="로그인한 회원에게만 표시되는 페이지입니다."
+    />
 
     <p
       v-if="isLoading"
-      class="rounded-lg border border-border bg-surface p-10 text-center text-sm text-text-sub"
+      class="card-soft rounded-lg bg-surface p-10 text-center text-sm text-text-sub"
     >
       회원 정보를 불러오고 있습니다...
     </p>
@@ -354,377 +349,395 @@ onMounted(() => {
     </BaseCard>
 
     <template v-else-if="profile">
-      <section class="mb-6 grid gap-4 sm:grid-cols-3">
-        <BaseCard
-          v-for="stat in stats"
-          :key="stat.label"
-        >
-          <p class="text-[13px] font-semibold text-text-sub">
-            {{ stat.label }}
-          </p>
-          <p class="mt-3 text-2xl font-bold text-text-main">
-            {{ stat.value }}
-          </p>
-        </BaseCard>
-      </section>
+      <!--
+        내용을 상자 여러 개로 늘어놓지 않고 한 판 안에 담습니다. 구분은 가로선으로만 합니다.
+        카드 안에 또 카드를 넣으면 테두리가 겹쳐 답답해집니다.
+      -->
+      <BaseCard
+        :padded="false"
+        class="mb-6 divide-y divide-border"
+      >
+        <section class="p-6">
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div class="flex items-center gap-4">
+              <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary-gradient text-lg font-bold text-white">
+                {{ profile.nickname?.charAt(0) || '?' }}
+              </div>
+              <div>
+                <h2 class="text-lg font-bold text-text-main">
+                  {{ profile.nickname }}
+                </h2>
+                <p class="text-sm text-text-sub">
+                  {{ profile.email }}
+                </p>
+              </div>
+            </div>
+            <BaseButton
+              variant="outline"
+              class="px-4 py-1.5 text-[13px]"
+              @click="openProfileEdit"
+            >
+              수정
+            </BaseButton>
+          </div>
 
-      <BaseCard class="mb-6">
-        <div class="flex flex-wrap items-start justify-between gap-4">
-          <div class="flex items-center gap-4">
-            <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary-gradient text-lg font-bold text-white">
-              {{ profile.nickname?.charAt(0) || '?' }}
+          <h3 class="mt-6 text-sm font-bold text-text-main">
+            프로필 상세 정보
+          </h3>
+          <!-- 회색 판을 깔지 않습니다. 카드 안에 또 상자가 생겨 겹쳐 보입니다. -->
+          <dl class="mt-4 grid gap-x-8 gap-y-5 text-sm sm:grid-cols-2">
+            <div>
+              <dt class="text-[13px] text-text-sub">
+                닉네임
+              </dt>
+              <dd class="mt-1 font-semibold text-text-main">
+                {{ profile.nickname }}
+              </dd>
             </div>
             <div>
-              <h2 class="text-lg font-bold text-text-main">
-                {{ profile.nickname }}
-              </h2>
-              <p class="text-sm text-text-sub">
-                {{ profile.email }}
-              </p>
+              <dt class="text-[13px] text-text-sub">
+                연락처
+              </dt>
+              <dd class="mt-1 font-semibold text-text-main">
+                {{ profile.phone || '등록되지 않음' }}
+              </dd>
             </div>
-          </div>
-          <BaseButton
-            variant="outline"
-            class="px-4 py-1.5 text-[13px]"
-            @click="openProfileEdit"
-          >
-            수정
-          </BaseButton>
-        </div>
+            <div>
+              <dt class="text-[13px] text-text-sub">
+                이메일 주소
+              </dt>
+              <dd class="mt-1 break-all font-semibold text-text-main">
+                {{ profile.email }}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-[13px] text-text-sub">
+                가입 날짜
+              </dt>
+              <dd class="mt-1 font-semibold text-text-main">
+                {{ formatDate(profile.createdAt) }}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-[13px] text-text-sub">
+                계정 역할
+              </dt>
+              <dd class="mt-1 font-semibold text-text-main">
+                {{ profile.roles?.join(', ') || 'MEMBER' }}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-[13px] text-text-sub">
+                판매자 상태
+              </dt>
+              <dd class="mt-1 font-semibold text-text-main">
+                {{ sellerStatusLabel }}
+              </dd>
+            </div>
+          </dl>
 
-        <h3 class="mt-6 text-sm font-bold text-text-main">
-          프로필 상세 정보
-        </h3>
-        <dl class="mt-4 grid gap-4 rounded-lg bg-bg p-5 text-sm sm:grid-cols-2">
-          <div>
-            <dt class="text-[13px] text-text-sub">
-              닉네임
-            </dt>
-            <dd class="mt-1 font-semibold text-text-main">
-              {{ profile.nickname }}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-[13px] text-text-sub">
-              연락처
-            </dt>
-            <dd class="mt-1 font-semibold text-text-main">
-              {{ profile.phone || '등록되지 않음' }}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-[13px] text-text-sub">
-              이메일 주소
-            </dt>
-            <dd class="mt-1 break-all font-semibold text-text-main">
-              {{ profile.email }}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-[13px] text-text-sub">
-              가입 날짜
-            </dt>
-            <dd class="mt-1 font-semibold text-text-main">
-              {{ formatDate(profile.createdAt) }}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-[13px] text-text-sub">
-              계정 역할
-            </dt>
-            <dd class="mt-1 font-semibold text-text-main">
-              {{ profile.roles?.join(', ') || 'MEMBER' }}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-[13px] text-text-sub">
-              판매자 상태
-            </dt>
-            <dd class="mt-1 font-semibold text-text-main">
-              {{ sellerStatusLabel }}
-            </dd>
-          </div>
-        </dl>
-
-        <p
-          v-if="profileMessage"
-          class="mt-4 rounded-md bg-accent px-4 py-3 text-sm text-primary"
-          role="status"
-        >
-          {{ profileMessage }}
-        </p>
-
-        <form
-          v-if="isEditingProfile"
-          class="mt-6 space-y-4 border-t border-border pt-6"
-          @submit.prevent="saveProfile"
-        >
-          <BaseInput
-            v-model="profileForm.nickname"
-            label="닉네임"
-            required
-            placeholder="2~20자"
-          />
-          <BaseInput
-            v-model="profileForm.phone"
-            label="새 휴대전화 번호 (선택)"
-            type="tel"
-            autocomplete="tel"
-            :placeholder="profile.phone || '01012345678'"
-          />
           <p
-            v-if="errorMessage"
-            class="rounded-md bg-red-50 px-4 py-3 text-sm text-red-600"
-            role="alert"
+            v-if="profileMessage"
+            class="mt-4 rounded-md bg-accent px-4 py-3 text-sm text-primary"
+            role="status"
           >
-            {{ errorMessage }}
+            {{ profileMessage }}
           </p>
-          <div class="flex gap-3">
-            <BaseButton
-              type="submit"
-              :disabled="isSaving"
+
+          <form
+            v-if="isEditingProfile"
+            class="mt-6 space-y-4 border-t border-border pt-6"
+            @submit.prevent="saveProfile"
+          >
+            <BaseInput
+              v-model="profileForm.nickname"
+              label="닉네임"
+              required
+              placeholder="2~20자"
+            />
+            <BaseInput
+              v-model="profileForm.phone"
+              label="새 휴대전화 번호 (선택)"
+              type="tel"
+              autocomplete="tel"
+              :placeholder="profile.phone || '01012345678'"
+            />
+            <p
+              v-if="errorMessage"
+              class="rounded-md bg-red-50 px-4 py-3 text-sm text-red-600"
+              role="alert"
             >
-              {{ isSaving ? '저장 중...' : '변경 사항 저장' }}
-            </BaseButton>
+              {{ errorMessage }}
+            </p>
+            <div class="flex gap-3">
+              <BaseButton
+                type="submit"
+                :disabled="isSaving"
+              >
+                {{ isSaving ? '저장 중...' : '변경 사항 저장' }}
+              </BaseButton>
+              <BaseButton
+                type="button"
+                variant="outline"
+                @click="isEditingProfile = false"
+              >
+                취소
+              </BaseButton>
+            </div>
+          </form>
+        </section>
+        <!-- 숫자 셋은 테두리 없이 나란히만 둡니다. -->
+        <section class="grid gap-4 p-6 sm:grid-cols-3">
+          <div
+            v-for="stat in stats"
+            :key="stat.label"
+          >
+            <p class="text-[13px] font-semibold text-text-sub">
+              {{ stat.label }}
+            </p>
+            <p class="mt-2 text-2xl font-bold text-text-main">
+              {{ stat.value }}
+            </p>
+          </div>
+        </section>
+
+
+        <section
+          id="address-section"
+          class="p-6"
+        >
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-bold text-text-main">
+              배송지 주소 관리
+            </h2>
             <BaseButton
-              type="button"
               variant="outline"
-              @click="isEditingProfile = false"
+              class="px-3 py-1.5 text-[13px]"
+              @click="openAddressForm()"
             >
-              취소
+              + 새 배송지 등록
             </BaseButton>
           </div>
-        </form>
-      </BaseCard>
 
-      <BaseCard
-        id="address-section"
-        class="mb-6"
-      >
-        <div class="flex items-center justify-between">
+          <p
+            v-if="!addressBook.length"
+            class="mt-4 rounded-md bg-bg px-4 py-4 text-sm text-text-sub"
+          >
+            등록된 배송지가 없습니다.
+          </p>
+
+          <!--
+            배송지 하나하나에 테두리를 두르면 카드 안에 또 상자가 늘어섭니다.
+            여러 건이 나열되는 자리라 구분은 필요하니, 선 대신 옅은 바탕으로만 나눕니다.
+          -->
+          <ul
+            v-else
+            class="mt-4 space-y-3"
+          >
+            <li
+              v-for="address in addressBook"
+              :key="address.id"
+              class="rounded-lg bg-bg p-4"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <p class="flex items-center gap-2 text-sm font-bold text-text-main">
+                    {{ address.label }}
+                    <BaseBadge v-if="address.isDefault">
+                      기본
+                    </BaseBadge>
+                  </p>
+                  <p class="mt-1 text-sm text-text-sub">
+                    {{ address.address }}
+                  </p>
+                  <p class="mt-1 text-[13px] text-text-sub">
+                    수령인: {{ address.receiverName }} · {{ address.receiverPhone }}
+                  </p>
+                </div>
+                <div class="flex shrink-0 gap-3 text-[13px] font-semibold">
+                  <button
+                    type="button"
+                    class="text-text-sub hover:text-primary"
+                    @click="openAddressForm(address)"
+                  >
+                    수정
+                  </button>
+                  <button
+                    type="button"
+                    class="text-red-600 hover:text-red-700"
+                    @click="deleteAddress(address.id)"
+                  >
+                    삭제
+                  </button>
+                </div>
+              </div>
+            </li>
+          </ul>
+
+          <form
+            v-if="isAddressFormOpen"
+            class="mt-5 space-y-4 border-t border-border pt-5"
+            @submit.prevent="saveAddress"
+          >
+            <div class="grid gap-4 sm:grid-cols-2">
+              <BaseInput
+                v-model="addressForm.label"
+                label="배송지 이름"
+                required
+                placeholder="우리집, 회사 등"
+              />
+              <BaseInput
+                v-model="addressForm.receiverName"
+                label="수령인"
+                required
+              />
+              <BaseInput
+                v-model="addressForm.receiverPhone"
+                label="수령인 연락처"
+                type="tel"
+                required
+                placeholder="01012345678"
+              />
+            </div>
+            <BaseAddressInput
+              v-model="addressForm.address"
+              label="주소"
+              required
+            />
+            <label class="flex items-center gap-2 text-sm text-text-sub">
+              <input
+                v-model="addressForm.isDefault"
+                type="checkbox"
+                class="h-4 w-4 rounded border-border"
+              >
+              기본 배송지로 설정
+            </label>
+            <div class="flex gap-3">
+              <BaseButton type="submit">
+                저장
+              </BaseButton>
+              <BaseButton
+                type="button"
+                variant="outline"
+                @click="isAddressFormOpen = false"
+              >
+                취소
+              </BaseButton>
+            </div>
+          </form>
+        </section>
+
+        <section
+          id="notification-section"
+          class="p-6"
+        >
           <h2 class="text-lg font-bold text-text-main">
-            배송지 주소 관리
+            실시간 알림 및 마케팅 설정
           </h2>
-          <BaseButton
-            variant="outline"
-            class="px-3 py-1.5 text-[13px]"
-            @click="openAddressForm()"
-          >
-            + 새 배송지 등록
-          </BaseButton>
-        </div>
-
-        <p
-          v-if="!addressBook.length"
-          class="mt-4 rounded-md bg-bg px-4 py-4 text-sm text-text-sub"
-        >
-          등록된 배송지가 없습니다.
-        </p>
-
-        <ul
-          v-else
-          class="mt-4 space-y-3"
-        >
-          <li
-            v-for="address in addressBook"
-            :key="address.id"
-            class="rounded-lg border border-border p-4"
-          >
-            <div class="flex items-start justify-between gap-3">
+          <!-- 한 소제목 아래 묶인 항목들이라 사이에 선을 긋지 않습니다. 간격으로만 나눕니다. -->
+          <ul class="mt-5 space-y-5">
+            <li
+              v-for="item in notificationItems"
+              :key="item.key"
+              class="flex items-center justify-between gap-4"
+            >
               <div>
-                <p class="flex items-center gap-2 text-sm font-bold text-text-main">
-                  {{ address.label }}
-                  <BaseBadge v-if="address.isDefault">
-                    기본
-                  </BaseBadge>
-                </p>
-                <p class="mt-1 text-sm text-text-sub">
-                  {{ address.address }}
+                <p class="text-sm font-bold text-text-main">
+                  {{ item.label }}
                 </p>
                 <p class="mt-1 text-[13px] text-text-sub">
-                  수령인: {{ address.receiverName }} · {{ address.receiverPhone }}
+                  {{ item.description }}
                 </p>
               </div>
-              <div class="flex shrink-0 gap-3 text-[13px] font-semibold">
-                <button
-                  type="button"
-                  class="text-text-sub hover:text-primary"
-                  @click="openAddressForm(address)"
-                >
-                  수정
-                </button>
-                <button
-                  type="button"
-                  class="text-red-600 hover:text-red-700"
-                  @click="deleteAddress(address.id)"
-                >
-                  삭제
-                </button>
-              </div>
-            </div>
-          </li>
-        </ul>
+              <BaseToggle v-model="notificationSettings[item.key]" />
+            </li>
+          </ul>
+        </section>
 
-        <form
-          v-if="isAddressFormOpen"
-          class="mt-5 space-y-4 border-t border-border pt-5"
-          @submit.prevent="saveAddress"
-        >
-          <div class="grid gap-4 sm:grid-cols-2">
-            <BaseInput
-              v-model="addressForm.label"
-              label="배송지 이름"
-              required
-              placeholder="우리집, 회사 등"
-            />
-            <BaseInput
-              v-model="addressForm.receiverName"
-              label="수령인"
-              required
-            />
-            <BaseInput
-              v-model="addressForm.receiverPhone"
-              label="수령인 연락처"
-              type="tel"
-              required
-              placeholder="01012345678"
-            />
-          </div>
-          <BaseAddressInput
-            v-model="addressForm.address"
-            label="주소"
-            required
-          />
-          <label class="flex items-center gap-2 text-sm text-text-sub">
-            <input
-              v-model="addressForm.isDefault"
-              type="checkbox"
-              class="h-4 w-4 rounded border-border"
-            >
-            기본 배송지로 설정
-          </label>
-          <div class="flex gap-3">
-            <BaseButton type="submit">
-              저장
-            </BaseButton>
-            <BaseButton
-              type="button"
-              variant="outline"
-              @click="isAddressFormOpen = false"
-            >
-              취소
-            </BaseButton>
-          </div>
-        </form>
-      </BaseCard>
-
-      <BaseCard
-        id="notification-section"
-        class="mb-6"
-      >
-        <h2 class="text-lg font-bold text-text-main">
-          실시간 알림 및 마케팅 설정
-        </h2>
-        <ul class="mt-5 divide-y divide-border">
-          <li
-            v-for="item in notificationItems"
-            :key="item.key"
-            class="flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0"
+        <section class="p-6">
+          <h2 class="text-lg font-bold text-text-main">
+            소셜 계정 관리
+          </h2>
+          <p class="mt-2 text-[13px] leading-5 text-text-sub">
+            로그인 수단을 연결하거나 더 이상 사용하지 않는 연결을 안전하게 해제할 수 있습니다.
+          </p>
+          <p
+            v-if="socialMessage"
+            class="mt-4 rounded-md bg-green-50 px-4 py-3 text-sm text-green-700"
+            role="status"
           >
-            <div>
-              <p class="text-sm font-bold text-text-main">
-                {{ item.label }}
-              </p>
-              <p class="mt-1 text-[13px] text-text-sub">
-                {{ item.description }}
-              </p>
-            </div>
-            <BaseToggle v-model="notificationSettings[item.key]" />
-          </li>
-        </ul>
-      </BaseCard>
-
-      <BaseCard class="mb-6">
-        <h2 class="text-lg font-bold text-text-main">
-          소셜 계정 관리
-        </h2>
-        <p class="mt-2 text-[13px] leading-5 text-text-sub">
-          로그인 수단을 연결하거나 더 이상 사용하지 않는 연결을 안전하게 해제할 수 있습니다.
-        </p>
-        <p
-          v-if="socialMessage"
-          class="mt-4 rounded-md bg-green-50 px-4 py-3 text-sm text-green-700"
-          role="status"
-        >
-          {{ socialMessage }}
-        </p>
-        <p
-          v-if="socialErrorMessage"
-          class="mt-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-600"
-          role="alert"
-        >
-          {{ socialErrorMessage }}
-        </p>
-        <p
-          v-if="isSocialLoading"
-          class="mt-4 text-sm text-text-sub"
-        >
-          연결 정보를 불러오고 있습니다...
-        </p>
-        <div
-          v-else
-          class="mt-4 divide-y divide-border"
-        >
+            {{ socialMessage }}
+          </p>
+          <p
+            v-if="socialErrorMessage"
+            class="mt-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-600"
+            role="alert"
+          >
+            {{ socialErrorMessage }}
+          </p>
+          <p
+            v-if="isSocialLoading"
+            class="mt-4 text-sm text-text-sub"
+          >
+            연결 정보를 불러오고 있습니다...
+          </p>
           <div
-            v-for="provider in socialProviders"
-            :key="provider.id"
-            class="flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0"
+            v-else
+            class="mt-4 space-y-5"
           >
-            <div>
-              <p class="text-sm font-bold text-text-main">
-                {{ provider.label }}
-              </p>
-              <p class="mt-1 text-[13px] text-text-sub">
-                {{ socialAccountFor(provider.id)?.providerEmail || '연결되지 않음' }}
-              </p>
+            <div
+              v-for="provider in socialProviders"
+              :key="provider.id"
+              class="flex items-center justify-between gap-4"
+            >
+              <div>
+                <p class="text-sm font-bold text-text-main">
+                  {{ provider.label }}
+                </p>
+                <p class="mt-1 text-[13px] text-text-sub">
+                  {{ socialAccountFor(provider.id)?.providerEmail || '연결되지 않음' }}
+                </p>
+              </div>
+              <BaseButton
+                v-if="socialAccountFor(provider.id)"
+                variant="outline"
+                class="px-4 py-1.5 text-[13px]"
+                :disabled="Boolean(activeSocialProvider)"
+                @click="unlinkSocialAccountFor(socialAccountFor(provider.id))"
+              >
+                연결 해제
+              </BaseButton>
+              <BaseButton
+                v-else
+                class="px-4 py-1.5 text-[13px]"
+                :disabled="Boolean(activeSocialProvider)"
+                @click="linkSocialAccount(provider.id)"
+              >
+                {{ activeSocialProvider === provider.id ? '연결 중...' : '연결' }}
+              </BaseButton>
             </div>
-            <BaseButton
-              v-if="socialAccountFor(provider.id)"
-              variant="outline"
-              class="px-4 py-1.5 text-[13px]"
-              :disabled="Boolean(activeSocialProvider)"
-              @click="unlinkSocialAccountFor(socialAccountFor(provider.id))"
-            >
-              연결 해제
-            </BaseButton>
-            <BaseButton
-              v-else
-              class="px-4 py-1.5 text-[13px]"
-              :disabled="Boolean(activeSocialProvider)"
-              @click="linkSocialAccount(provider.id)"
-            >
-              {{ activeSocialProvider === provider.id ? '연결 중...' : '연결' }}
-            </BaseButton>
           </div>
-        </div>
-      </BaseCard>
+        </section>
 
-      <div class="flex flex-wrap gap-4 text-[13px] font-semibold text-text-sub">
-        <button
-          type="button"
-          class="hover:text-primary"
-          @click="isPasswordSectionOpen = !isPasswordSectionOpen"
-        >
-          비밀번호 변경
-        </button>
-        <button
-          type="button"
-          class="text-red-600 hover:text-red-700"
-          @click="openWithdrawalConfirm"
-        >
-          서비스 회원 탈퇴
-        </button>
-      </div>
+        <section class="p-6">
+          <div class="flex flex-wrap gap-4 text-[13px] font-semibold text-text-sub">
+            <button
+              type="button"
+              class="hover:text-primary"
+              @click="isPasswordSectionOpen = !isPasswordSectionOpen"
+            >
+              비밀번호 변경
+            </button>
+            <button
+              type="button"
+              class="text-red-600 hover:text-red-700"
+              @click="openWithdrawalConfirm"
+            >
+              서비스 회원 탈퇴
+            </button>
+          </div>
+        </section>
+      </BaseCard>
 
       <div
         v-if="withdrawalStep"

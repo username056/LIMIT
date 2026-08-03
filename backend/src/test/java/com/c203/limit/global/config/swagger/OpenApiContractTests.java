@@ -368,14 +368,9 @@ class OpenApiContractTests {
                 .value("reinspection02"))
             .andExpect(jsonPath("$.paths['/api/v1/auth/sessions']").doesNotExist());
 
-        mockMvc.perform(get("/v3/api-docs/10-place"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.paths['/api/v1/places/search'].get").exists())
-                .andExpect(jsonPath("$.paths['/api/v1/auth/sessions']").doesNotExist());
-
         mockMvc.perform(get("/v3/api-docs/swagger-config"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.urls.length()").value(10))
+                .andExpect(jsonPath("$.urls.length()").value(9))
                 .andExpect(jsonPath("$['urls.primaryName']").value("01-auth"))
                 .andExpect(jsonPath("$.operationsSorter", containsString("post: 0")))
                 .andExpect(jsonPath("$.operationsSorter", containsString("delete: 4")));

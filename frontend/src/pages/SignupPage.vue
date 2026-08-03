@@ -81,6 +81,7 @@ async function submit() {
 <template>
   <DefaultLayout>
     <AuthShell
+      eyebrow="SIGN UP"
       width="lg"
       title="회원가입"
       description="필요한 정보만 입력하고 LIMIT의 안전한 중고거래를 시작하세요."

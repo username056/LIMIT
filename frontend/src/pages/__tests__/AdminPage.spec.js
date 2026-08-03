@@ -19,8 +19,6 @@ import {
 } from '../../api/admin'
 import { getDeviceCategories } from '../../api/products'
 
-const mockAdminAccessToken = ['admin', 'token'].join('-')
-
 vi.mock('../../api/admin', () => ({
   approveChecklistResearch: vi.fn(),
   approveDeviceModelRequest: vi.fn(),
@@ -116,7 +114,7 @@ describe('AdminPage', () => {
     ))
     retryChecklistResearch.mockResolvedValue(pendingResearch)
     setAuthSession({
-      accessToken: mockAdminAccessToken,
+      accessToken: 'tk',
       admin: { name: '관리자', roles: ['SUPER_ADMIN'] },
     })
 
@@ -179,7 +177,7 @@ describe('AdminPage', () => {
     updateAdminDeviceModel.mockResolvedValue({ ...detail, categoryId: 20, reviewStatus: 'VERIFIED' })
     researchAdminDeviceModel.mockResolvedValue({ researchId: 502, status: 'PENDING_REVIEW' })
     setAuthSession({
-      accessToken: mockAdminAccessToken,
+      accessToken: 'tk',
       admin: { name: '관리자', roles: ['SUPER_ADMIN'] },
     })
 
@@ -232,7 +230,7 @@ describe('AdminPage', () => {
     getDeviceModelRequests.mockResolvedValue([request])
     updateDeviceModelRequest.mockResolvedValue(updated)
     setAuthSession({
-      accessToken: mockAdminAccessToken,
+      accessToken: 'tk',
       admin: { name: '관리자', roles: ['SUPER_ADMIN'] },
     })
 
@@ -292,7 +290,7 @@ describe('AdminPage', () => {
     getAdminActionLog.mockResolvedValue(detail)
     updateAdminActionLog.mockResolvedValue(updated)
     setAuthSession({
-      accessToken: mockAdminAccessToken,
+      accessToken: 'tk',
       admin: { name: '관리자', roles: ['SUPER_ADMIN'] },
     })
 

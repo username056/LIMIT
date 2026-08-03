@@ -1,190 +1,238 @@
-# Limit
+# <img src="docs/images/파비콘.png" alt="L1MIT" width="96">
 
-한정판 상품의 드롭·경매·대기열·주문·결제를 지원하는 Vue 3 + Spring Boot 모노레포입니다.
 
-## 구성
 
-- `frontend/`: Vue 3, Vite, Vitest
-- `backend/`: Java 21, Spring Boot, JPA, MongoDB, Redis
-- `infra/`: Docker Compose, Nginx, 모니터링, Terraform
-- `docs/`: API 계약, ADR, 운영 Runbook
-- `scripts/`: CI, 빌드, 배포, 점검 스크립트
+중고 전자기기를 살 때 가장 불안한 건 "이거 진짜 멀쩡한가"입니다. L1MIT은 그 확인을 거래 전에 끝내는 중고 거래 서비스입니다.
 
-백엔드는 `com.c203.limit.domain.<domain>` 아래에 도메인별 `controller`, `service`, `domain`, `repository`, `dto` 계층을 둡니다. 공통 API·설정·응답·예외·로깅은 `global`에서 관리합니다.
+- **판매자**는 기기를 등록하면서 상태 체크리스트를 하나씩 통과하고, 항목마다 사진·영상 증거를 남깁니다.
+- **구매자**는 그 검수 결과를 보고, 필요하면 판매자와 영상통화로 기기를 직접 확인한 뒤 결제합니다.
+- **결제 대금**은 구매자가 물건을 받고 확정할 때까지 보관되며, 문제가 있으면 재검수와 환불로 이어집니다.
 
-## 요구 환경
 
-- Java 21
-- Node.js 22.12 이상 권장
-- Docker Desktop과 Docker Compose
+## 💻 Tech Stacks
 
-Gradle Wrapper가 포함되어 있어 Gradle을 별도로 설치할 필요는 없습니다.
+| 구분 | 기술 |
+| --- | --- |
+| Backend | Java 21, Spring Boot 4.0.7, Spring Data JPA, Spring Data MongoDB, Spring Data Redis, Spring Security, Spring WebSocket, Flyway, springdoc-openapi 3.0.3, AWS SDK for Java v2 (S3) |
+| Frontend | Vue 3.4, Vite 5, Vue Router 4, Tailwind CSS 3.4, Chart.js, ffmpeg.wasm, Sentry |
+| Data | MySQL 8.4, MongoDB 8.0, Redis 7.4 |
+| Media / RTC | S3 presigned upload, CloudFront, coturn(TURN), WebSocket 시그널링 |
+| Infrastructure | 단일 EC2, Docker Compose, Nginx, Blue-Green, Terraform(dns·frontend·operations), Cloudflare |
+| Observability | Prometheus 3.4, Loki 3.5, Grafana 12, Alertmanager, Grafana Alloy, node-exporter, cAdvisor, mysqld/mongodb/redis/nginx exporter |
+| CI/CD | GitLab CI, Spotless, JaCoCo, SonarQube, OWASP Dependency-Check, Trivy 컨테이너 스캔, Secret 스캔 |
+| Test | JUnit 5, Spring Boot Test, Testcontainers 2.0.5, Vitest, Vue Test Utils |
 
-## 최초 설정
+## 🏗️ System Architecture
 
-저장소를 처음 클론했다면 한 번만 실행합니다.
+![시스템 아키텍처](docs/images/다이어그램.svg)
+
+도메인 경계는 애플리케이션 패키지로 분리하고 플랫폼 책임은 컨테이너로 넘긴 모듈러 모놀리식 구조입니다. 단일 EC2 위에서 Blue-Green 무중단 배포와 관측 스택을 함께 운영합니다.
+
+### 1. 트래픽 제어 및 보안 (Traffic & Security)
+
+- **Cloudflare & SSL**: 도메인(`l1mit.shop`) 연결과 HTTPS 보안 통신, CDN 캐싱, 비정상 트래픽 필터링을 담당합니다.
+- **Nginx**: 리버스 프록시로 동작하며 Blue와 Green 중 현재 활성 슬롯으로 요청을 라우팅합니다.
+- **Spring Security & JWT**: 모든 API의 인증·인가를 단일 필터 체인에서 검증합니다.
+- **coturn**: 화상 검수의 영상·음성을 애플리케이션 서버를 거치지 않고 릴레이합니다.
+
+### 2. 배포 및 운영 자동화 (Delivery & Operations)
+
+- **GitLab CI**: `guard → test → quality → package → deploy → verify` 6단계로 검증과 배포를 조정합니다.
+- **Blue-Green Deployment**: 유휴 색상을 먼저 띄우고 readiness와 스모크 테스트를 통과한 뒤에만 트래픽을 넘깁니다. 실패하면 기존 색상이 계속 요청을 처리합니다.
+- **Docker Compose**: 애플리케이션·데이터·관측 컨테이너를 하나의 정의로 묶어 로컬과 운영에 같은 구성을 사용합니다.
+- **Terraform**: DNS, 프론트 배포 버킷, 운영 리소스를 코드로 관리합니다.
+- **Flyway**: DB 스키마 변경을 버전으로 남기고 애플리케이션 시작 시 실제 스키마와 대조합니다.
+
+### 3. 도메인 레이어 (Domain Layer)
+
+| Domain | Description |
+| --- | --- |
+| Product | 상품 등록·검색·찜·조회수, 기기 카탈로그 기반 모델·색상·용량 선택 |
+| Inspection | AI 체크리스트 생성, 항목별 증거 업로드와 이력, 재검수 요청 |
+| RTC / Call | WebRTC 시그널링과 화상 검수 통화 기록 |
+| Chat | WebSocket 기반 구매자–판매자 실시간 문의 |
+| Payment / Refund / Settlement | 결제 승인·취소·재시도, PG 대사 복구, 환불, 판매자 정산 |
+| Auth / Member / Seller | 소셜 로그인과 이메일 인증, 회원 정보, 판매자 전환 |
+| Admin | 기기 모델 승인 요청 처리와 운영 도구 |
+
+각 도메인은 `com.c203.limit.domain.<domain>` 아래에 자신의 `controller`, `service`, `entity`, `repository`, `dto`를 두고, 도메인끼리는 Entity를 직접 공유하지 않고 Service·ID·이벤트로 연결합니다. 공통 응답·예외·설정·보안·로깅은 `global`이 맡습니다.
+
+### 4. 데이터 저장 및 외부 연동 (Persistence & Integration)
+
+- **MySQL**: 상품·주문·회원처럼 정합성이 중요한 영속 데이터를 저장합니다.
+- **MongoDB**: 채팅 메시지처럼 스키마가 유연해야 하는 데이터를 담당합니다.
+- **Redis**: 리프레시 토큰, 이메일 인증 코드, 캐시를 처리합니다.
+- **S3 & CloudFront**: presigned URL로 이미지·영상을 올리고 프론트 정적 산출물을 배포합니다.
+- **외부 API**: AI 체크리스트 생성, CLOVA OCR, 결제 PG, SMTP 메일 발송을 연동합니다.
+
+### 5. 관측 및 알림 (Observability)
+
+- **Prometheus**: 애플리케이션·호스트·컨테이너·DB 메트릭을 주기적으로 수집합니다.
+- **Loki & Alloy**: 컨테이너 표준 출력 로그를 모아 저장하고 질의할 수 있게 합니다.
+- **Grafana**: 메트릭과 로그를 한 화면에서 조회하는 대시보드를 제공합니다.
+- **Alertmanager**: 임계치를 넘으면 담당자에게 메일로 알립니다.
+- **Sentry**: 브라우저에서 발생한 프론트엔드 오류를 수집합니다.
+
+## 🗂️ ERD
+
+<img src="docs/images/erd.png" alt="ERD" width="100%">
+
+상품·검수·거래·결제를 잇는 핵심 테이블 관계입니다. 스키마 변경 이력은 `backend/src/main/resources/db/migration`의 Flyway 마이그레이션에 남습니다.
+
+## 🚀 CI/CD Pipeline
+
+![CI/CD 파이프라인](docs/images/파이프라인.png)
+
+> 코드 품질 유지와 무중단 배포를 위해 **AI 코드 리뷰**, **정적 분석**, **취약점 스캔**이 포함된 `guard → test → quality → package → deploy → verify` 6단계 자동화 파이프라인을 운영합니다.
+
+### 1. 지속적 통합 (Continuous Integration)
+
+- **Secret Guard**: 커밋에 토큰·키·인증서가 섞여 있으면 이후 단계를 실행하지 않고 즉시 차단.
+- **Change Detection**: `backend/**`, `frontend/**`, `infra/**` 변경 경로를 계산해 필요한 잡만 실행하여 파이프라인 시간 단축.
+- **Unit & Integration Test**: 단위 테스트 후 Testcontainers로 실제 MySQL·MongoDB를 띄워 통합 검증. `core`/`support` 두 shard로 나눠 병렬 실행.
+- **Frontend Lint & Build**: ESLint, Vitest, 프로덕션 빌드까지 확인.
+
+### 2. 코드 품질 검증 (Code Quality)
+
+- **PR-Agent (AI Review)**: MR diff를 AI가 분석해 자동 코드 리뷰 코멘트를 남기고 품질을 사전 점검.
+- **SonarQube (Static Analysis)**: 버그, 취약점, 코드 스멜 탐지를 통한 기술 부채 최소화.
+- **JaCoCo**: 테스트 커버리지 측정과 리포트 게시.
+- **OWASP Dependency-Check**: 의존성 CVE 점검, CVSS 7.0 이상이면 빌드 실패.
+- **OpenAPI Contract**: API 스펙과 실제 컨트롤러 계약의 불일치 검사.
+
+### 3. 이미지 빌드 및 스캔 (Package)
+
+- **Image Build**: 백엔드 컨테이너 이미지를 빌드해 registry에 푸시.
+- **Trivy Container Scan**: HIGH·CRITICAL 취약점이 발견되면 배포 전 파이프라인 중단.
+- **Immutable Digest**: 태그가 아닌 digest로 고정해 배포 버전 추적성과 롤백 근거 확보.
+
+### 4. 배포 및 검증 (Deploy & Verification)
+
+- **Blue-Green Deployment**: 유휴 색상에 새 버전을 먼저 띄우고 readiness를 확인.
+- **Health Check & Smoke Test**: 배포 직후 서비스 상태를 확인해 통과한 경우에만 Nginx upstream을 전환.
+- **Auto Rollback**: 실패 시 기존 색상을 그대로 유지하거나 이전 digest로 복구.
+- **Frontend Deploy**: S3 동기화와 CloudFront 캐시 무효화를 수행하고, 실패하면 롤백 잡으로 되돌림.
+
+파이프라인 로직은 YAML이 아니라 `scripts/`의 셸 스크립트에 두고, 스크립트 자체도 `*.test.sh`로 회귀 검증합니다.
+
+## ✨ 주요 기능 (Key Features)
+
+> 각 칸의 `<img ...>` 주석을 해제하고 `docs/images/`에 같은 이름의 이미지를 넣으면 화면이 표시됩니다.
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <!-- <img src="docs/images/feature-auth.png" alt="회원·인증" width="100%"> -->
+      <h3>회원·인증</h3>
+      이메일 가입과 인증 메일 발송, Google·Kakao·NAVER 소셜 로그인, JWT 재발급, 구매자에서 판매자로의 전환을 지원합니다.
+    </td>
+    <td width="50%" valign="top">
+      <!-- <img src="docs/images/feature-product.png" alt="상품 등록과 탐색" width="100%"> -->
+      <h3>상품 등록과 탐색</h3>
+      4단계 임시저장 등록, 기기 카탈로그 기반 모델·색상·용량 선택, 이미지와 영상의 presigned 업로드, 조건 검색과 정렬, 찜, 조회수를 제공합니다.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <!-- <img src="docs/images/feature-inspection.png" alt="검수" width="100%"> -->
+      <h3>검수</h3>
+      기기와 노트북별 AI 체크리스트를 자동 생성하고, 항목마다 증거 자료를 업로드해 이력으로 남깁니다. 필수 항목 검증과 재검수 요청 흐름을 포함합니다.
+    </td>
+    <td width="50%" valign="top">
+      <!-- <img src="docs/images/feature-rtc.png" alt="화상 검수" width="100%"> -->
+      <h3>화상 검수</h3>
+      WebRTC 기반 실시간 통화로 구매자가 기기 상태를 직접 확인합니다. TURN 릴레이와 통화 기록을 지원합니다.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <!-- <img src="docs/images/feature-chat.png" alt="채팅" width="100%"> -->
+      <h3>채팅</h3>
+      구매자와 판매자 사이의 실시간 문의를 WebSocket으로 주고받고 메시지는 MongoDB에 저장합니다.
+    </td>
+    <td width="50%" valign="top">
+      <!-- <img src="docs/images/feature-listing-status.png" alt="거래 상태 관리" width="100%"> -->
+      <h3>거래 상태 관리</h3>
+      <code>DRAFT → ON_SALE → RESERVED → PAID → INSPECTING → CONFIRMED</code> 상태 전이를 이력과 함께 기록하고, 예약 만료와 자동 구매확정을 스케줄러로 처리합니다.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <!-- <img src="docs/images/feature-payment.png" alt="결제·정산" width="100%"> -->
+      <h3>결제·정산</h3>
+      결제 승인·취소·재시도, PG 대사 기반 복구, 환불, 판매자 정산을 처리합니다.
+    </td>
+    <td width="50%" valign="top">
+      <!-- <img src="docs/images/feature-admin.png" alt="운영·관리자" width="100%"> -->
+      <h3>운영·관리자</h3>
+      관리자 콘솔에서 기기 모델 승인 요청을 처리하고, 알림 메일 발송과 백업·복구 드릴을 운영합니다.
+    </td>
+  </tr>
+</table>
+
+## 🧪 Validation & Evidence
+
+- 백엔드 검증은 `test`(단위) / `integrationTest`(Testcontainers) / `infrastructureTest`(외부 엔진 스모크) 세 단계로 분리했습니다.
+- 상품 목록 조회의 N+1을 `@EntityGraph` + 일괄 집계로 해소해 쿼리 402회 → 4회로 줄인 기록을 `docs/api/product.md`에 남겼습니다.
+- 조회수 비동기 처리의 트레이드오프(유실 허용 범위와 후속 과제)는 `docs/adr/0005-product-view-count.md`에 명시했습니다.
+- 배포 스크립트는 `scripts/rollback-blue-green.test.sh`, `scripts/sync-deploy-files.test.sh` 등으로 회귀 검증합니다.
+- 백업과 알림 경로는 `scripts/restore-backup-drill.sh`, `scripts/test-alertmanager-notification.sh`로 실제 복구·발송을 확인합니다.
+- 실행할 수 없는 검증은 성공으로 간주하지 않고 사유와 남은 위험을 PR에 함께 보고합니다.
+
+## 🛠️ Local Development
+
+Docker Desktop만 켜져 있으면 스크립트 한 줄로 실행됩니다. 환경 파일 생성, 컨테이너 기동, Swagger·Grafana 열기까지 스크립트가 처리합니다.
 
 ```powershell
-git config core.hooksPath .githooks
+.\scripts\open-platform-tools.ps1     # 백엔드 + MySQL·MongoDB·Redis + 모니터링
+cd frontend; npm ci; npm run dev      # 프론트
 ```
 
-이 설정 없이는 `.githooks/`(pre-commit Secret 검사, commit-msg 컨벤션 검사, pre-push lint/test/build)가 켜지지 않습니다. AI Hook(`.claude/settings.json`, `.codex/hooks.json`)과는 별개로 로컬 git 설정에서 직접 켜야 합니다. 자세한 내용은 [AI 활용 가이드](가이드.md#4-hook-사용법)를 참고합니다.
+| 대상 | 주소 |
+| --- | --- |
+| 프론트 | `http://localhost:5173` |
+| Swagger | `http://localhost:18080/swagger-ui.html` |
+| Grafana | `http://localhost:3000` |
 
-## 로컬 실행
+종료는 `docker compose -p limit-local down`입니다.
 
-### 전체 인프라와 백엔드
+### 검증
 
 ```powershell
-.\scripts\open-platform-tools.ps1
+cd frontend; npm run lint; npm run test; npm run build
+cd backend;  .\gradlew.bat test; .\gradlew.bat integrationTest; .\gradlew.bat bootJar
 ```
 
-`infra/.env.local`을 자동 생성하고 Docker Desktop과 컨테이너를 띄운 뒤 Swagger·Grafana를 브라우저로 엽니다. 다른 파일을 쓰려면 `-EnvFile`로 지정합니다. 운영용 `infra/.env`와 로컬 설정을 분리하며 두 파일 모두 Git에서 제외됩니다.
+## 📁 Repository Structure
 
-- Backend: `http://localhost:18080`
-- Swagger: `http://localhost:18080/swagger-ui.html`
-- Grafana: `http://localhost:3000`
-
-### 프론트엔드
-
-```powershell
-cd frontend
-npm ci
-npm run dev
 ```
-
-Frontend는 `http://localhost:5173`에서 실행되며 `/api` 요청을 로컬 백엔드로 프록시합니다.
-
-- 새 페이지: `frontend/src/pages/`에 컴포넌트를 추가하고 `frontend/src/router/index.js`에 경로를 등록합니다.
-- 공용 컴포넌트: `frontend/src/components/`(Base*)와 레이아웃(`frontend/src/layouts/`)을 우선 사용합니다.
-- API 호출: 컴포넌트에서 직접 호출하지 않고 `frontend/src/api/`의 클라이언트를 거칩니다.
-
-## API 계약
-
-- API prefix: `/api/v1`
-- 성공 응답: `{ "data": ..., "meta": null }`, 실패 응답: `{ "error": { "code", "message", "fieldErrors" }, "traceId" }`
-
-상세 계약은 [API 문서](docs/api/README.md)를 확인합니다.
-
-## 검증
-
-```powershell
-cd frontend
-npm run lint
-npm run test
-npm run build
+limit/
+├── backend/                    Spring Boot 애플리케이션
+│   └── src/
+│       ├── main/java/com/c203/limit/
+│       │   ├── domain/         admin, auth, call, chat, inspection, member,
+│       │   │                   payment, place, product, refund, rtc, seller, settlement
+│       │   └── global/         api, config, exception, logging, response, security, storage
+│       ├── main/resources/db/migration/   Flyway 마이그레이션
+│       ├── test/               단위·슬라이스 테스트
+│       └── integrationTest/    Testcontainers 통합 테스트
+├── frontend/                   Vue 3 스토어프론트
+│   └── src/                    api, components, composables, layouts, pages, router, utils
+├── infra/
+│   ├── compose.yml             공통 데이터 계층
+│   ├── compose.local.yml       로컬 오버레이
+│   ├── compose.prod.yml        Blue/Green, coturn, 모니터링 스택
+│   ├── nginx/                  리버스 프록시와 Blue-Green upstream
+│   ├── monitoring/             Prometheus, Loki, Grafana, Alertmanager, Alloy 설정
+│   └── terraform/              dns, frontend, operations
+├── scripts/                    빌드·배포·롤백·백업·점검 스크립트와 그 테스트
+├── docs/
+│   ├── api/                    API 계약과 OpenAPI
+│   ├── adr/                    아키텍처 결정 기록
+│   ├── db/                     스키마
+│   ├── images/                 README용 스크린샷·다이어그램
+│   ├── integration/            외부 연동·데이터 Runbook
+│   ├── legal/                  약관·개인정보 근거
+│   └── runbook/                운영 절차
+└── .gitlab-ci.yml              6단계 파이프라인
 ```
-
-```powershell
-cd backend
-.\gradlew.bat test
-.\gradlew.bat integrationTest
-.\gradlew.bat bootJar
-```
-
-GitLab CI가 Secret 검사, 테스트, JaCoCo, SonarQube, 이미지 빌드와 배포 단계를 수행합니다.
-
-## 문서
-
-- [API 계약](docs/api/README.md)
-- [모노레포 ADR](docs/adr/0001-monorepo.md)
-- [배포 아키텍처 ADR](docs/adr/0002-single-ec2-blue-green.md)
-- [운영 Runbook](docs/runbook/deployment.md)
-- [테스트 계정 BaseInit 가이드](docs/integration/base-init-data.md)
-- [프로젝트 작업 규칙](AGENTS.md)
-
-## 팀원 로컬 테스트 설정
-
-실제 비밀번호와 OAuth·SMTP Secret은 Git에 올리지 않는다. 백엔드용 `infra/.env.local`과 프론트용 `frontend/.env.local`은 모두 `.gitignore` 대상이다.
-
-프론트 배포 전에는 `frontend/.env.example`의 `VITE_LEGAL_*` 값을 실제 운영자·책임자·주소·문의처·사업자 정보로 채워야 한다. 약관과 개인정보 처리방침의 법적 근거 및 외부 서비스 확인 목록은 [약관·개인정보 문서 작성 근거](docs/legal/legal-content-basis.md)를 참고한다.
-
-DB 스키마는 Flyway가 백엔드 시작 시 적용하고 Hibernate가 `ddl-auto=validate`로 검증한다. 운영 DB 최초 전환 절차는 [Flyway DB 스키마 Runbook](docs/integration/database-schema-runbook.md)을 따른다.
-
-### 1. 백엔드 환경 파일 준비
-
-저장소 루트에서 아래 스크립트를 처음 실행하면 누락된 `infra/.env.local`과 로컬용 비밀값을 자동 생성하고 Docker 인프라와 백엔드를 실행한다.
-
-```powershell
-.\scripts\open-platform-tools.ps1
-```
-
-소셜 로그인이나 실제 이메일 발송을 테스트하려면 생성된 `infra/.env.local`에 필요한 공급자만 활성화하고 발급받은 값을 채운다.
-
-```env
-EMAIL_VERIFICATION_DELIVERY_ENABLED=true
-FRONTEND_EMAIL_VERIFICATION_URL=http://localhost:5173/verify-email
-MAIL_HOST=smtp.gmail.com
-MAIL_PORT=587
-MAIL_USERNAME=
-MAIL_PASSWORD=
-MAIL_FROM=
-
-GOOGLE_OAUTH_ENABLED=true
-GOOGLE_OAUTH_CLIENT_ID=
-GOOGLE_OAUTH_CLIENT_SECRET=
-GOOGLE_OAUTH_REDIRECT_URIS=http://localhost:5173/auth/callback/google
-
-KAKAO_OAUTH_ENABLED=true
-KAKAO_OAUTH_CLIENT_ID=
-KAKAO_OAUTH_CLIENT_SECRET=
-KAKAO_OAUTH_REDIRECT_URIS=http://localhost:5173/auth/callback/kakao
-
-NAVER_OAUTH_ENABLED=true
-NAVER_OAUTH_CLIENT_ID=
-NAVER_OAUTH_CLIENT_SECRET=
-NAVER_OAUTH_REDIRECT_URIS=http://localhost:5173/auth/callback/naver
-```
-
-각 공급자 콘솔에도 사용하는 로컬 Callback URL을 위 값과 정확히 동일하게 등록한다. 변수명은 단수형 `*_OAUTH_REDIRECT_URI`가 아니라 복수형 `*_OAUTH_REDIRECT_URIS`이며, 값을 바꾼 뒤에는 다음 명령으로 백엔드 컨테이너를 다시 생성한다.
-
-```powershell
-docker compose --env-file infra/.env.local -p limit-local -f infra/compose.yml -f infra/compose.local.yml up -d --build backend
-```
-
-Gmail SMTP는 일반 계정 비밀번호가 아닌 앱 비밀번호를 사용하고, `MAIL_FROM`에는 해당 계정 또는 Gmail에서 발송이 허용된 별칭을 입력한다. 메일 발송이 필요하지 않으면 `EMAIL_VERIFICATION_DELIVERY_ENABLED=false`로 둔다.
-
-### 2. 프론트 환경 파일 준비
-
-`frontend/.env.example`을 `frontend/.env.local`로 복사한다. Vite 환경변수는 브라우저에 공개되므로 OAuth Client Secret이나 SMTP 비밀번호를 넣으면 안 된다.
-
-```env
-VITE_API_BASE_URL=/api/v1
-VITE_OAUTH_REDIRECT_BASE_URL=http://localhost:5173
-VITE_TERMS_OF_SERVICE_URL=/terms/service
-VITE_PRIVACY_POLICY_URL=/terms/privacy
-VITE_LEGAL_OPERATOR_NAME=L1MIT 운영팀
-VITE_LEGAL_REPRESENTATIVE=
-VITE_LEGAL_ADDRESS=
-VITE_LEGAL_CONTACT_EMAIL=privacy@l1mit.shop
-VITE_LEGAL_BUSINESS_NUMBER=
-VITE_LEGAL_EFFECTIVE_DATE=2026-07-22
-```
-
-배포 빌드에서는 CI/CD 변수 또는 Git에서 제외된 `frontend/.env.production.local`에 다음처럼 운영 origin을 사용한다. Vite 값은 빌드 시 정적으로 포함되므로 서버의 `infra/.env`만 수정해서는 프론트 값이 바뀌지 않으며, 변경 후 프론트 이미지를 다시 빌드·배포해야 한다.
-
-```env
-VITE_API_BASE_URL=/api/v1
-VITE_OAUTH_REDIRECT_BASE_URL=https://l1mit.shop
-VITE_TERMS_OF_SERVICE_URL=/terms/service
-VITE_PRIVACY_POLICY_URL=/terms/privacy
-```
-
-운영 EC2의 `infra/.env`에는 백엔드가 검증할 Callback URL을 `https://l1mit.shop/auth/callback/google`처럼 공급자별 전체 경로로 넣고, Google·Kakao·NAVER 개발자 콘솔에도 정확히 같은 URL을 등록한다. `/auth/callback/`까지만 넣거나 세 공급자가 같은 Callback URL을 공유하면 안 된다.
-
-이후 프론트를 실행한다.
-
-```powershell
-cd frontend
-npm ci
-npm run dev
-```
-
-- 프론트: `http://localhost:5173`
-- Swagger: `http://localhost:18080/swagger-ui.html`
-- API Health: `http://localhost:18080/health`
-
-### 3. 선택적 테스트 계정 생성
-
-회원·관리자 테스트 계정이 필요하면 [BaseInit 가이드](docs/integration/base-init-data.md)에 따라 `infra/.env.local`에 값을 넣고 백엔드를 한 번 실행한다. 계정 생성을 확인한 뒤 `BASE_INIT_ENABLED=false`와 `INITIAL_ADMIN_ENABLED=false`로 반드시 되돌린다.
-
-상세 OAuth 설정과 공급자별 확인 항목은 [소셜 로그인 설정 가이드](docs/integration/social-login-setup.md)를 참고한다.
