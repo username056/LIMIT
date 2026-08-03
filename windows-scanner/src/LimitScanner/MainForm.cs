@@ -21,8 +21,8 @@ public sealed class MainForm : Form
         Text = "Limit Windows 자동 검사";
         AutoScaleMode = AutoScaleMode.Dpi;
         Font = new Font("Segoe UI", 10F);
-        ClientSize = new Size(760, 600);
-        MinimumSize = new Size(700, 560);
+        ClientSize = new Size(860, 700);
+        MinimumSize = new Size(800, 660);
         FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = true;
         StartPosition = FormStartPosition.CenterScreen;
@@ -38,7 +38,7 @@ public sealed class MainForm : Form
         var description = new Label
         {
             AutoSize = true,
-            MaximumSize = new Size(650, 0),
+            MaximumSize = new Size(750, 0),
             Font = new Font(Font.FontFamily, 10F),
             Text = "CPU, RAM, GPU, 사운드 장치와 배터리 상태를 수집합니다. "
                 + "비밀번호, 개인 파일, 브라우저 기록과 Windows 제품 키는 수집하지 않습니다.",
@@ -60,9 +60,9 @@ public sealed class MainForm : Form
         startButton.AutoSize = true;
         startButton.Padding = new Padding(18, 8, 18, 8);
         startButton.Margin = new Padding(3, 0, 3, 18);
-        progressBar.Width = 650;
+        progressBar.Width = 750;
         progressBar.Margin = new Padding(3, 0, 3, 14);
-        statusLabel.MaximumSize = new Size(650, 0);
+        statusLabel.MaximumSize = new Size(750, 0);
         statusLabel.Margin = new Padding(3, 0, 3, 3);
         pairingCodeTextBox.TextChanged += (_, _) => UpdateStartButton();
         consentCheckBox.CheckedChanged += (_, _) => UpdateStartButton();
