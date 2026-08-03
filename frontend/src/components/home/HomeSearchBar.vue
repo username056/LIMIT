@@ -94,17 +94,18 @@ function submit() {
   border-radius: var(--radius-pill);
   box-shadow: 0 10px 30px rgb(15 23 42 / 5%);
   backdrop-filter: blur(20px);
-  transition: border-color 0.2s var(--home-ease);
 }
 
 /*
-  커서를 올렸다고 반응하지는 않습니다. 가만히 있는 편이 깔끔합니다.
-  다만 키보드로 옮겨 왔을 때는 어디에 와 있는지 보여야 하므로, 포커스에는 남깁니다.
-  input의 기본 외곽선을 껐기 때문에 이게 없으면 표시가 아예 사라집니다.
+  커서를 올려도, 눌러도 테두리는 그대로입니다.
+  ---------------------------------------------------------------------------
+  예전에는 :focus-within으로 테두리를 진하게 했습니다. 키보드로 왔을 때만
+  표시하려고 :has(:focus-visible)로 좁혀 봤지만, 텍스트 입력칸은 마우스로 눌러도
+  :focus-visible이 걸립니다(브라우저가 곧 타이핑할 자리로 보고 일부러 그럽니다).
+  그래서 조건으로는 가릴 수 없어 표시 자체를 뺐습니다.
+
+  지금 어디에 있는지는 깜빡이는 커서가 알려 줍니다. 입력칸은 그것으로 충분합니다.
 */
-.search:focus-within {
-  border-color: rgb(99 102 241 / 45%);
-}
 
 .search__icon {
   display: flex;

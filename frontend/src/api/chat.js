@@ -8,6 +8,7 @@ import { apiClient } from './client'
  * @property {string|null} counterpartNickname
  * @property {string|null} listingTitle
  * @property {string|null} listingThumbnailUrl
+ * @property {string|null} lastMessagePreview 마지막 메시지 한 줄. 사진·영상은 "사진을 보냈습니다."
  * @property {string} status
  * @property {number|null} lastMessageId
  * @property {number} lastMessageSequence

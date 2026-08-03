@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import PurchaseSuccessPage from '../PurchaseSuccessPage.vue'
 import { confirmPayment } from '../../api/payment'
+import { getProduct } from '../../api/products'
 
 const routeQuery = {
   paymentId: '500',
@@ -17,6 +18,7 @@ vi.mock('vue-router', () => ({
   useRoute: () => ({ params: { productId: '1001' }, query: routeQuery }),
 }))
 vi.mock('../../api/payment', () => ({ confirmPayment: vi.fn() }))
+vi.mock('../../api/products', () => ({ getProduct: vi.fn() }))
 
 const layoutStub = { template: '<main><slot /></main>' }
 const buttonStub = {
@@ -43,6 +45,11 @@ function mountPage() {
 describe('PurchaseSuccessPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    getProduct.mockResolvedValue({
+      name: 'Galaxy S24',
+      thumbnailUrl: 'https://cdn.example.test/1001.jpg',
+      device: { manufacturer: 'Samsung', model: 'Galaxy Book4' },
+    })
   })
 
   it('결제 승인에 성공하면 결과를 보여준다', async () => {
@@ -58,7 +65,20 @@ describe('PurchaseSuccessPage', () => {
     })
     expect(wrapper.text()).toContain('구매에 성공하셨습니다')
     expect(wrapper.text()).toContain('Galaxy S24')
-    expect(wrapper.text()).toContain('Samsung')
+    // 상세·결제하기와 같은 "제조사 · 모델" 한 줄입니다.
+    expect(wrapper.text()).toContain('Samsung · Galaxy Book4')
+    expect(wrapper.get('img').attributes('src')).toBe('https://cdn.example.test/1001.jpg')
+  })
+
+  it('상품 사진을 못 받아도 결제 결과는 그대로 보여준다', async () => {
+    confirmPayment.mockResolvedValue({ paymentId: 500, approvedAmount: 650000 })
+    getProduct.mockRejectedValue(new Error('상품 조회 실패'))
+
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('구매에 성공하셨습니다')
+    expect(wrapper.find('img').exists()).toBe(false)
   })
 
   it('일시적 오류(PAY011)면 같은 결제로 다시 승인을 시도할 수 있다', async () => {

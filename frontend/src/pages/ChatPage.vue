@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import PageHeader from '../components/PageHeader.vue'
 import BaseCard from '../components/BaseCard.vue'
+import ChatAvatar from '../components/ChatAvatar.vue'
 import ChatThread from '../components/ChatThread.vue'
 import { getChatRooms, leaveChatRoom } from '../api/chat'
 import { createChatListSocket } from '../api/chatSocket'
@@ -95,6 +96,16 @@ const selectedRoom = computed(
   () => rooms.value.find((room) => String(room.roomId) === String(selectedRoomId.value)) || null,
 )
 
+/*
+  고른 대화를 알아보게 하는 조건. 세 곳(바탕색·왼쪽 띠·사진)이 같이 씁니다.
+  ---------------------------------------------------------------------------
+  예전 바탕색(bg-accent/60)은 흰색과 거의 구분되지 않아, 왼쪽 띠 2px만으로
+  어느 대화를 보고 있는지 알아내야 했습니다. #F5F7FF로 한 단계만 올립니다.
+*/
+function isSelectedRoom(room) {
+  return String(selectedRoomId.value) === String(room.roomId)
+}
+
 function formatTime(isoString) {
   if (!isoString) return '대화 없음'
   return new Date(isoString).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -104,19 +115,21 @@ function formatTime(isoString) {
 <template>
   <DefaultLayout>
     <!--
-      폭·좌우 여백·위 여백은 index.css의 .page-shell과 같은 값입니다. 여기만 클래스를 못 쓰는
+      폭과 좌우 여백은 index.css의 .page-shell과 같은 값입니다. 여기만 클래스를 못 쓰는
       이유는 화면 높이를 꽉 채워야 해서(lg:h-[calc(...)]) 자체 컨테이너가 필요하기 때문입니다.
 
-      아래 여백만 .page-shell(48px)보다 작은 32px입니다. 위가 어긋나면 제목 위치가 다른
-      화면과 달라 보이지만, 아래는 대화창이 쓸 높이라 줄이는 편이 낫습니다.
-      .page-shell의 폭이나 위 여백을 바꾸면 이 값도 같이 맞춰 주세요.
+      위아래 여백은 .page-shell(48px)보다 작습니다. 이 화면에 온 사람은 머리말이 아니라
+      대화를 읽으러 왔고, 위에서 덜어 낸 픽셀은 그대로 대화 목록 높이가 됩니다.
+      .page-shell의 폭을 바꾸면 이 값도 같이 맞춰 주세요.
     -->
-    <div class="mx-auto flex w-full max-w-[1080px] flex-col px-4 py-8 sm:px-6 lg:h-[calc(100dvh-72px)] lg:min-h-0 lg:px-10 lg:pb-8 lg:pt-12">
+    <div class="mx-auto flex w-full max-w-[1080px] flex-col px-4 py-6 sm:px-6 lg:h-[calc(100dvh-72px)] lg:min-h-0 lg:px-10 lg:pb-2 lg:pt-5">
       <!--
         페이지 이름은 다른 화면과 같이 맨 위에 둡니다. 예전에는 왼쪽 목록 카드 안에
         들어 있어서, 채팅만 제목이 화면 구석에 박혀 있는 꼴이었습니다.
+        글자 크기는 그대로 두고 사이 여백만 좁힌 dense를 씁니다.
       -->
       <PageHeader
+        dense
         eyebrow="CHAT"
         title="채팅"
         description="상품에 대해 판매자와 직접 이야기하고, 실시간 확인 일정을 잡아 보세요."
@@ -124,16 +137,20 @@ function formatTime(isoString) {
 
       <!-- 대화 영역. 머리말이 쓰고 남은 높이를 전부 차지합니다. -->
       <!-- 상품 등록과 같이 테두리 없이 흰 판만 얹습니다. -->
-      <div class="grid min-h-[560px] grid-cols-1 overflow-hidden rounded-lg bg-surface shadow-card lg:min-h-0 lg:flex-1 lg:grid-cols-[340px_minmax(0,1fr)]">
+      <!-- 목록은 이름과 상품명만 읽으면 되니 좁혀 두고, 대화가 넓게 씁니다. -->
+      <div class="grid min-h-[560px] grid-cols-1 overflow-hidden rounded-lg bg-surface shadow-card lg:min-h-0 lg:flex-1 lg:grid-cols-[300px_minmax(0,1fr)]">
         <BaseCard
           :padded="false"
           class="rounded-none border-0 border-b shadow-none lg:flex lg:min-h-0 lg:flex-col lg:border-b-0 lg:border-r lg:border-r-slate-100"
         >
-          <!-- 페이지 이름은 위 머리말이 맡았으니, 여기는 이 칸이 무엇인지만 알립니다. -->
-          <h2 class="border-b border-border px-5 py-4 text-base font-bold text-text-main">
-            대화 목록
-          </h2>
+          <!--
+            '대화 목록' 이름표는 두지 않고 첫 대화가 바로 보이게 합니다.
+            위에 페이지 이름이 '채팅'이라고 적혀 있어 이 칸이 목록임은 보면 압니다.
 
+            선이 어긋나지 않는 이유: 대화 한 칸과 오른쪽 머리말이 둘 다 64px입니다
+            (사진 40 + 위아래 12). 한쪽 높이를 바꾸면 다른 쪽도 같이 맞춰 주세요.
+            그러지 않으면 가운데 구분선이 어긋나 두 칸이 이어지지 않아 보입니다.
+          -->
           <p
             v-if="isLoading"
             class="px-5 py-16 text-center text-sm text-text-sub"
@@ -152,58 +169,78 @@ function formatTime(isoString) {
             v-else-if="rooms.length"
             class="divide-y divide-border lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
           >
+            <!--
+              한 칸은 이름·상품명·마지막 메시지 세 줄입니다.
+              -----------------------------------------------------------------
+              시각은 이름과 같은 줄 오른쪽에 붙여 줄 수를 아꼈습니다. 예전에는
+              시각이 따로 한 줄을 써서 한 칸이 112px이었습니다.
+
+              오른쪽 대화창 머리말(64px)보다 이 칸이 높습니다. 두 칸의 첫 선이
+              어긋나 보이지만, 마지막 메시지를 보여 주려면 줄이 하나 더 필요합니다.
+            -->
             <RouterLink
               v-for="room in rooms"
               :key="room.roomId"
               :to="{ name: 'chat', params: { roomId: room.roomId } }"
-              class="group block border-l-2 p-4 transition-colors"
-              :class="String(selectedRoomId) === String(room.roomId) ? 'border-primary bg-accent/60' : 'border-transparent hover:bg-slate-50'"
+              class="group relative flex items-center gap-3 border-l-2 px-4 py-2.5 transition-colors"
+              :class="isSelectedRoom(room) ? 'border-primary bg-[#F5F7FF]' : 'border-transparent hover:bg-slate-50'"
             >
-              <div class="flex items-center justify-between gap-2">
-                <div class="flex min-w-0 items-center gap-3">
-                  <img
-                    v-if="room.listingThumbnailUrl"
-                    :src="room.listingThumbnailUrl"
-                    :alt="room.listingTitle || '상품 이미지'"
-                    class="h-10 w-10 shrink-0 rounded-md object-cover"
-                  >
-                  <div
-                    v-else
-                    class="h-10 w-10 shrink-0 rounded-md bg-primary-gradient"
-                  />
+              <ChatAvatar
+                :src="room.listingThumbnailUrl"
+                :alt="room.listingTitle || '상품 이미지'"
+                :vivid="isSelectedRoom(room)"
+              />
+
+              <div class="min-w-0 flex-1">
+                <!-- 오른쪽 여백은 위에 뜨는 삭제 버튼 자리입니다. -->
+                <div class="flex items-center gap-2 pr-6">
                   <span class="truncate text-sm font-bold text-text-main">
                     {{ room.counterpartNickname || `회원 #${room.counterpartId}` }}
                   </span>
-                </div>
-                <div class="flex shrink-0 items-center gap-2">
                   <span
                     v-if="room.unreadCount"
                     :aria-label="`읽지 않은 메시지 ${room.unreadCount}개`"
-                    class="unread-badge flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-bold text-white"
+                    class="unread-badge flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full px-1 text-[11px] font-bold text-white"
                   >
                     {{ room.unreadCount }}
                   </span>
-                  <!--
-                    삭제 버튼은 마우스를 올렸을 때만 드러냅니다. 목록에 늘 ×가 떠 있으면
-                    지우는 일이 대화를 여는 일만큼 눈에 띄어 잘못 누르기 쉽습니다.
-                    키보드로 옮겨 다닐 때는 호버가 없으므로 포커스에도 함께 나타납니다.
-                  -->
-                  <button
-                    type="button"
-                    aria-label="채팅방 삭제"
-                    class="rounded px-1 text-sm text-text-sub opacity-0 transition-opacity hover:bg-red-50 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100"
-                    @click.prevent.stop="removeRoom(room.roomId)"
-                  >
-                    ×
-                  </button>
+                </div>
+                <!--
+                  상품명은 작게 위로, 마지막 메시지가 본문 자리를 가져갑니다.
+                  --------------------------------------------------------------
+                  예전에는 두 번째 줄이 상품명이었습니다. 서버 응답에 마지막 메시지
+                  본문이 없었기 때문인데, 목록을 훑는 사람이 알고 싶은 것은 "무슨
+                  물건인가"보다 "무슨 말이 왔는가"입니다.
+
+                  시각은 아래 줄 오른쪽에 둡니다. 위 오른쪽은 삭제 버튼 자리라,
+                  둘을 같은 자리에 두면 호버할 때마다 날짜가 가려집니다.
+                -->
+                <p class="mt-0.5 truncate text-[11px] text-[#98a1b0]">
+                  {{ room.listingTitle || `상품 #${room.listingId}` }}
+                </p>
+                <div class="mt-0.5 flex items-baseline gap-2">
+                  <p class="min-w-0 flex-1 truncate text-[13px] text-text-sub">
+                    {{ room.lastMessagePreview || '대화를 시작해 보세요.' }}
+                  </p>
+                  <span class="shrink-0 text-xs text-text-sub">
+                    {{ formatTime(room.lastMessageAt) }}
+                  </span>
                 </div>
               </div>
-              <p class="mt-1 truncate text-xs font-semibold text-text-sub">
-                {{ room.listingTitle || `상품 #${room.listingId}` }}
-              </p>
-              <p class="mt-1 text-xs text-text-sub">
-                {{ formatTime(room.lastMessageAt) }}
-              </p>
+
+              <!--
+                삭제 버튼은 마우스를 올렸을 때만 드러냅니다. 목록에 늘 ×가 떠 있으면
+                지우는 일이 대화를 여는 일만큼 눈에 띄어 잘못 누르기 쉽습니다.
+                키보드로 옮겨 다닐 때는 호버가 없으므로 포커스에도 함께 나타납니다.
+              -->
+              <button
+                type="button"
+                aria-label="채팅방 삭제"
+                class="absolute right-3 top-2 rounded px-1 text-sm leading-none text-text-sub opacity-0 transition-opacity hover:bg-red-50 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100"
+                @click.prevent.stop="removeRoom(room.roomId)"
+              >
+                ×
+              </button>
             </RouterLink>
           </div>
 

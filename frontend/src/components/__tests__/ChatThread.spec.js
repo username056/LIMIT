@@ -107,6 +107,85 @@ describe('ChatThread', () => {
     expect(wrapper.text()).not.toContain('연결 확인 중')
   })
 
+  it('같은 사람이 같은 분에 잇달아 보낸 말에는 시각을 한 번만 적는다', async () => {
+    getChatMessages.mockResolvedValue({
+      content: [
+        {
+          messageId: 3,
+          roomSequence: 4,
+          senderId: 1,
+          clientMessageId: 'message-3',
+          type: 'TEXT',
+          content: '세 번째',
+          sentAt: '2026-07-28T10:00:40',
+          media: [],
+        },
+        {
+          messageId: 2,
+          roomSequence: 3,
+          senderId: 1,
+          clientMessageId: 'message-2',
+          type: 'TEXT',
+          content: '두 번째',
+          sentAt: '2026-07-28T10:00:20',
+          media: [],
+        },
+        {
+          messageId: 1,
+          roomSequence: 2,
+          senderId: 2,
+          clientMessageId: 'message-1',
+          type: 'TEXT',
+          content: '첫 번째',
+          sentAt: '2026-07-28T10:00:00',
+          media: [],
+        },
+      ],
+    })
+
+    const wrapper = mountThread()
+    await flushPromises()
+
+    // 셋 다 10:00인데, 보낸 사람이 바뀌는 지점과 묶음의 끝에만 시각이 붙습니다.
+    // 상대방 1건 + 내 묶음 1건 = 2개.
+    const times = wrapper.findAll('.text-\\[11px\\]').filter((node) => node.text().includes('10:00'))
+    expect(times).toHaveLength(2)
+  })
+
+  it('약속 잡기는 입력줄의 달력 버튼이 맡고, 팝업으로 열린다', async () => {
+    const wrapper = mountThread()
+    await flushPromises()
+
+    // 대화창을 밀어 올리던 큰 버튼과 안내 문장은 없앴습니다.
+    expect(wrapper.text()).not.toContain('실시간 검증 일정 잡기')
+    expect(wrapper.text()).not.toContain('상호 조율 하에 라이브 WebRTC 성능 테스트 시간대를 제안해보세요')
+    expect(wrapper.find('input[type="datetime-local"]').exists()).toBe(false)
+
+    const calendar = wrapper.get('button[aria-label="실시간 검증 약속 잡기"]')
+    await calendar.trigger('click')
+
+    const dialog = wrapper.get('[role="dialog"][aria-labelledby="call-form-title"]')
+    expect(dialog.exists()).toBe(true)
+    expect(wrapper.find('input[type="datetime-local"]').exists()).toBe(true)
+  })
+
+  it('약속이 있으면 달력 버튼이 변경으로 바뀌고 표시가 붙는다', async () => {
+    getMyRtcCalls.mockResolvedValue([{
+      callId: 40,
+      chatRoomId: 10,
+      status: 'ACCEPTED',
+      scheduledAt: localDateTimeMinutesFromNow(60),
+      incoming: false,
+    }])
+
+    const wrapper = mountThread()
+    await flushPromises()
+
+    // 한 줄 요약을 없앤 자리를 버튼 위의 점이 대신합니다.
+    expect(wrapper.find('button[aria-label="실시간 검증 약속 변경"]').exists()).toBe(true)
+    expect(wrapper.find('button[aria-label="실시간 검증 약속 잡기"]').exists()).toBe(false)
+  })
+
   it('opens an image preview and closes it with Escape', async () => {
     getChatMediaBlob.mockResolvedValue(new Blob(['image'], { type: 'image/png' }))
     getChatMessages.mockResolvedValue({
@@ -225,10 +304,11 @@ describe('ChatThread', () => {
     expect(getProductChecklist).toHaveBeenCalledWith(1)
     // 기본은 접힌 상태라 항목이 보이지 않습니다.
     expect(wrapper.text()).toContain('검증 체크리스트')
-    expect(wrapper.text()).toContain('1 / 2')
+    expect(wrapper.text()).toContain('1/2')
     expect(wrapper.text()).not.toContain('전면·후면·측면 외관')
 
-    await wrapper.findAll('button').find((button) => button.text().includes('펼치기')).trigger('click')
+    // 여닫는 버튼은 '상품 보기' 옆 머리말 줄에 있습니다.
+    await wrapper.findAll('button').find((button) => button.text().includes('검증 체크리스트')).trigger('click')
 
     expect(wrapper.text()).toContain('전면·후면·측면 외관')
     expect(wrapper.text()).toContain('화면 밝기')
@@ -271,7 +351,7 @@ describe('ChatThread', () => {
     const wrapper = mountThread()
     await flushPromises()
 
-    await wrapper.findAll('button').find((button) => button.text().includes('실시간 검증 일정 잡기')).trigger('click')
+    await wrapper.get('button[aria-label="실시간 검증 약속 잡기"]').trigger('click')
     await wrapper.get('input[type="datetime-local"]').setValue(scheduledAt)
     await wrapper.get('input[placeholder="확인할 내용을 입력하세요."]').setValue('배터리 확인')
     await wrapper.find('form:has(input[type="datetime-local"])').trigger('submit')
