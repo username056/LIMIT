@@ -1,6 +1,7 @@
 using LimitScanner.Api;
 using LimitScanner.Collectors;
 using LimitScanner.Services;
+using System.Reflection;
 
 namespace LimitScanner;
 
@@ -14,7 +15,11 @@ internal static class Program
         var baseUrl = Environment.GetEnvironmentVariable("LIMIT_API_BASE_URL");
         if (string.IsNullOrWhiteSpace(baseUrl))
         {
-            baseUrl = "http://localhost:8080/";
+            baseUrl = Assembly.GetExecutingAssembly()
+                .GetCustomAttributes<AssemblyMetadataAttribute>()
+                .First(attribute => attribute.Key == "LimitApiBaseUrl")
+                .Value
+                ?? throw new InvalidOperationException("Limit API 주소가 설정되지 않았습니다.");
         }
 
         var commandRunner = new CommandRunner();

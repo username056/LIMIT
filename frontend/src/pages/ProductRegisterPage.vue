@@ -213,7 +213,7 @@ const windowsInspection = ref(null)
 const windowsInspectionBusy = ref(false)
 const windowsInspectionError = ref('')
 let windowsInspectionTimer = null
-const windowsScannerUrl = import.meta.env.VITE_WINDOWS_SCANNER_URL || ''
+const windowsScannerUrl = import.meta.env.VITE_WINDOWS_SCANNER_URL || '/downloads/LimitScanner.exe'
 const activeCaptureItemId = ref(null)
 // captureState[checklistItemId] = { media: [...], busy: '' | 'optimizing' | 'uploading', progress: 0..100 }
 const captureState = reactive({})
@@ -2197,7 +2197,6 @@ onMounted(async () => {
                     {{ windowsInspectionBusy ? '코드 발급 중…' : '연결 코드 발급' }}
                   </button>
                   <a
-                    v-if="windowsScannerUrl"
                     :href="windowsScannerUrl"
                     class="rounded-md border border-primary px-4 py-2 text-sm font-bold text-primary"
                     download

@@ -19,8 +19,10 @@ public sealed class MainForm : Form
     {
         this.coordinator = coordinator;
         Text = "Limit Windows 자동 검사";
-        ClientSize = new Size(600, 500);
-        MinimumSize = new Size(560, 460);
+        AutoScaleMode = AutoScaleMode.Dpi;
+        Font = new Font("Segoe UI", 10F);
+        ClientSize = new Size(860, 700);
+        MinimumSize = new Size(800, 660);
         FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = true;
         StartPosition = FormStartPosition.CenterScreen;
@@ -29,20 +31,39 @@ public sealed class MainForm : Form
         var title = new Label
         {
             AutoSize = true,
-            Font = new Font(Font, FontStyle.Bold),
-            Text = "Limit Windows 자동 검사"
+            Font = new Font(Font.FontFamily, 16F, FontStyle.Bold),
+            Text = "Limit Windows 자동 검사",
+            Margin = new Padding(3, 3, 3, 14)
         };
         var description = new Label
         {
             AutoSize = true,
-            MaximumSize = new Size(460, 0),
+            MaximumSize = new Size(750, 0),
+            Font = new Font(Font.FontFamily, 10F),
             Text = "CPU, RAM, GPU, 사운드 장치와 배터리 상태를 수집합니다. "
-                + "비밀번호, 개인 파일, 브라우저 기록과 Windows 제품 키는 수집하지 않습니다."
+                + "비밀번호, 개인 파일, 브라우저 기록과 Windows 제품 키는 수집하지 않습니다.",
+            Margin = new Padding(3, 0, 3, 18)
+        };
+        var pairingCodeLabel = new Label
+        {
+            AutoSize = true,
+            Text = "연결 코드",
+            Margin = new Padding(3, 0, 3, 8)
         };
 
-        pairingCodeTextBox.Font = new Font(Font.FontFamily, 18);
+        pairingCodeTextBox.Font = new Font(Font.FontFamily, 20F);
         pairingCodeTextBox.TextAlign = HorizontalAlignment.Center;
-        pairingCodeTextBox.Width = 180;
+        pairingCodeTextBox.Width = 230;
+        pairingCodeTextBox.Height = 52;
+        pairingCodeTextBox.Margin = new Padding(3, 0, 3, 16);
+        consentCheckBox.Margin = new Padding(3, 0, 3, 16);
+        startButton.AutoSize = true;
+        startButton.Padding = new Padding(18, 8, 18, 8);
+        startButton.Margin = new Padding(3, 0, 3, 18);
+        progressBar.Width = 750;
+        progressBar.Margin = new Padding(3, 0, 3, 14);
+        statusLabel.MaximumSize = new Size(750, 0);
+        statusLabel.Margin = new Padding(3, 0, 3, 3);
         pairingCodeTextBox.TextChanged += (_, _) => UpdateStartButton();
         consentCheckBox.CheckedChanged += (_, _) => UpdateStartButton();
         startButton.Click += StartButton_Click;
@@ -51,13 +72,13 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.TopDown,
-            Padding = new Padding(25),
+            Padding = new Padding(36),
             WrapContents = false,
             AutoScroll = true
         };
         layout.Controls.Add(title);
         layout.Controls.Add(description);
-        layout.Controls.Add(new Label { AutoSize = true, Text = "연결 코드" });
+        layout.Controls.Add(pairingCodeLabel);
         layout.Controls.Add(pairingCodeTextBox);
         layout.Controls.Add(consentCheckBox);
         layout.Controls.Add(startButton);
@@ -92,9 +113,29 @@ public sealed class MainForm : Form
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
         }
+        catch (HttpRequestException)
+        {
+            statusLabel.Text = "서버에 연결하지 못했습니다. 백엔드 실행 상태와 연결 코드를 확인해 주세요.";
+        }
+        catch (TaskCanceledException)
+        {
+            statusLabel.Text = "검사 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.";
+        }
+        catch (TimeoutException)
+        {
+            statusLabel.Text = "Windows 시스템 정보 수집 시간이 초과되었습니다. 다시 시도해 주세요.";
+        }
+        catch (InvalidOperationException)
+        {
+            statusLabel.Text = "Windows 시스템 정보를 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+        }
+        catch (IOException)
+        {
+            statusLabel.Text = "검사 결과 파일을 처리하지 못했습니다. 저장 공간을 확인해 주세요.";
+        }
         catch (Exception)
         {
-            statusLabel.Text = "검사를 완료하지 못했습니다. 코드를 확인하고 다시 시도해 주세요.";
+            statusLabel.Text = "검사를 완료하지 못했습니다. 연결 코드를 확인하고 다시 시도해 주세요.";
         }
         finally
         {
