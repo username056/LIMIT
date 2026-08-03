@@ -11,5 +11,6 @@ public interface ReinspectionRequestRepository extends JpaRepository<Reinspectio
 
     long countByChatRoomIdAndStatus(Long chatRoomId, ReinspectionStatus status);
 
-    List<ReinspectionRequest> findBySellerIdOrderByRequestedAtDesc(Long sellerId);
+    List<ReinspectionRequest> findBySellerIdOrBuyerIdOrderByRequestedAtDesc(
+            Long sellerId, Long buyerId);
 }
