@@ -19,6 +19,7 @@ import { getProductDiagnosisSummary } from '../api/inspection'
 import { getSellerProfile } from '../api/seller'
 import { getAccessToken, getSessionMember } from '../auth/session'
 import { canSellerMarkSold, canSellerReopen, isSoldOut } from '../utils/productStatus'
+import { formatStorage } from '../utils/storage'
 
 const route = useRoute()
 const router = useRouter()
@@ -569,7 +570,7 @@ onMounted(async () => {
                     저장 용량
                   </dt>
                   <dd class="mt-1 font-semibold text-text-main">
-                    {{ product.device?.storageGb ? `${product.device.storageGb}GB` : '미입력' }}
+                    {{ formatStorage(product.device?.storageGb) || '미입력' }}
                   </dd>
                 </div>
               </dl>

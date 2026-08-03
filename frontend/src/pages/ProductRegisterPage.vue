@@ -50,6 +50,7 @@ import {
 } from '../utils/camera'
 import { MAX_PRICE_DIGITS, formatPriceDigits, toPriceDigits } from '../utils/priceInput'
 import { guideContentFor, guideImageFor } from '../utils/checklistGuideImages'
+import { formatStorage } from '../utils/storage'
 
 const WIZARD_STEPS = [
   { number: 1, label: '기기 등록' },
@@ -81,9 +82,7 @@ const DEFAULT_TRADE_REGION = '협의'
 // 실제로 많이 쓰이는 용량만 골라 두고, 해당하지 않으면 직접 입력으로 넘어갑니다.
 const STORAGE_OPTIONS = [16, 32, 64, 128, 256, 512, 1024]
 
-function storageOptionLabel(gb) {
-  return gb >= 1024 ? `${gb / 1024}TB` : `${gb}GB`
-}
+const storageOptionLabel = formatStorage
 
 // 기종별 초기화 가이드 API/데이터가 아직 준비되지 않아(handover_guide 테이블 미생성),
 // 조회 실패 시 OS 계열별 일반 초기화 안내로 대체합니다. 모델별 가이드가 생기면 이 대체 로직은 제거하세요.
