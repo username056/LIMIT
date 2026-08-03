@@ -5,6 +5,8 @@ import com.c203.limit.domain.inspection.agent.InspectionSessionDtos.CreateAgentU
 import com.c203.limit.domain.inspection.agent.InspectionSessionDtos.PairResponse;
 import com.c203.limit.domain.inspection.agent.InspectionSessionDtos.SessionResponse;
 import com.c203.limit.domain.inspection.agent.InspectionSessionDtos.SessionStatusResponse;
+import com.c203.limit.domain.inspection.agent.InspectionSessionDtos.SubmitTestResultRequest;
+import com.c203.limit.domain.inspection.agent.InspectionSessionDtos.TestResultResponse;
 import com.c203.limit.domain.inspection.entity.ListingChecklistItem;
 import com.c203.limit.domain.inspection.enums.AutomationType;
 import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
@@ -27,6 +29,7 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
@@ -158,6 +161,43 @@ public class InspectionSessionService {
         }
         session.complete(now());
         return statusResponse(session);
+    }
+
+    /**
+     * TODO(다음 세션): inspection_session_test_result 저장, UNIQUE(session_id, client_result_id)
+     * 멱등성, UNIQUE(session_id, test_type, attempt_no) + TransactionTemplate 기반 재시도,
+     * ListingChecklistItem.applyDeviceCheckResult() 연동을 구현한다. 지금은 세션 상태만 검증하고
+     * 요청을 그대로 echo하는 스텁이다(결과 미저장, attemptNo 항상 1, rawDataSaved 항상 false).
+     */
+    @Transactional
+    public TestResultResponse submitTestResult(
+            String authorization, String sessionKey, SubmitTestResultRequest request) {
+        InspectionSession session = authorize(authorization, sessionKey);
+        if (session.getStatus() != InspectionSessionStatus.PAIRED
+                && session.getStatus() != InspectionSessionStatus.UPLOADING) {
+            throw new BusinessException(ErrorCode.INSPECTION_SESSION_INVALID_STATE);
+        }
+        return new TestResultResponse(
+                request.clientResultId(),
+                request.testType(),
+                request.measurementStatus(),
+                request.userResult(),
+                request.measuredValues(),
+                1,
+                false,
+                request.testedAt(),
+                offset(now()),
+                request.errorCode());
+    }
+
+    /** TODO(다음 세션): inspection_session_test_result에서 실제 이력을 조회한다. 지금은 빈 목록만 반환한다. */
+    @Transactional(readOnly = true)
+    public List<TestResultResponse> listTestResults(Long sellerId, String sessionKey) {
+        InspectionSession session = requireSession(sessionKey);
+        if (!Objects.equals(session.getSellerId(), sellerId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        return List.of();
     }
 
     private InspectionSession authorize(String authorization, String sessionKey) {

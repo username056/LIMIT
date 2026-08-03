@@ -41,7 +41,7 @@ import jakarta.validation.Valid;
 @Tag(name = "03. 상품", description = "중고 전자기기 상품 CRUD와 거래 상태 API")
 public interface ProductApi {
 
-    @Operation(operationId = "product01", summary = "상품 등록", description = "ACTIVE 판매자만 상품 초안을 생성할 수 있습니다. 판매자가 확인한 모델별 기능이 있으면 기본 체크리스트에 추가해 스냅샷으로 고정하고, 선택 기능이 없는 비노트북 기기는 최신 게시 템플릿을 고정합니다.", security = @SecurityRequirement(name = "bearerAuth"))
+    @Operation(operationId = "product01", summary = "상품 등록", description = "ACTIVE 판매자만 상품 초안을 생성할 수 있습니다. 모든 모델은 최신 게시 체크리스트를 기본으로 고정하며, 판매자가 확인한 모델별 기능만 추가해 매물 스냅샷으로 저장합니다.", security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "상품 초안 생성 성공", content = @Content(schema = @Schema(implementation = ProductCreatedApiResponse.class))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "VALIDATION_FAILED"),

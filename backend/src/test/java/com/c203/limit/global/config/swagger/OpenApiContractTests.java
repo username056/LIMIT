@@ -287,7 +287,14 @@ class OpenApiContractTests {
                 .andExpect(jsonPath("$.components.schemas.PaymentResponse").exists())
                 .andExpect(
                         jsonPath("$.paths['/api/v1/payments'].post.responses['409'].description")
-                                .value(containsString("PAYMENT_REQUEST_CONFLICT")));
+                                .value(containsString("PAYMENT_REQUEST_CONFLICT")))
+                .andExpect(jsonPath(
+                                "$.paths['/api/v1/inspection-agent/sessions/{sessionKey}/test-results'].post")
+                        .exists())
+                .andExpect(jsonPath(
+                                "$.paths['/api/v1/inspection-sessions/{sessionKey}/test-results'].get")
+                        .exists())
+                .andExpect(jsonPath("$.components.schemas.SubmitTestResultRequest").exists());
     }
 
     @Test
@@ -372,6 +379,10 @@ class OpenApiContractTests {
                 .value("diagnosisValue01"))
             .andExpect(jsonPath("$.paths['/api/v1/inspections/products/{productId}/diagnosis-summary'].get.operationId")
                 .value("productDiagnosisSummary01"))
+            .andExpect(jsonPath("$.paths['/api/v1/members/me/reinspection-requests'].get.operationId")
+                .value("reinspectionList"))
+            .andExpect(jsonPath("$.paths['/api/v1/members/me/reinspection-requests'].get.summary")
+                .value("내 재검수 요청 목록"))
             .andExpect(jsonPath("$.paths['/api/v1/listings/{listingId}/reinspection-requests'].post.operationId")
                 .value("reinspection01"))
             .andExpect(jsonPath("$.paths['/api/v1/reinspection-requests/{requestKey}/complete'].post.operationId")

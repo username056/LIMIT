@@ -333,6 +333,7 @@ describe('ProductRegisterPage', () => {
         checkGuide: '카메라 앱을 실행해 영상 출력 상태를 확인하세요.',
         sourceUrl: 'https://www.samsung.com/example',
         sourceTitle: 'Galaxy Book 공식 사양',
+        evidenceType: 'SELLER_CONFIRMATION',
       }],
       reviewCandidates: ['FINGERPRINT'],
     })
@@ -359,6 +360,51 @@ describe('ProductRegisterPage', () => {
     }))
   })
 
+  it('기본 항목과 선택한 AI 항목을 촬영·업로드와 직접 확인으로 나눠 같은 수로 표시한다', async () => {
+    generateChecklist.mockResolvedValue({
+      deviceModelId: 101,
+      manufacturer: 'Samsung',
+      modelName: 'Galaxy Book',
+      osFamily: 'WINDOWS',
+      aiApplied: true,
+      items: templateItems.map((item) => ({ ...item, required: item.isRequired })),
+      aiSuggestions: [{
+        featureCode: 'PORTS',
+        featureName: '외부 포트',
+        evidenceStatus: 'VERIFIED',
+        reason: '공식 사양에서 외부 포트를 확인했습니다.',
+        checkGuide: '외부 장치를 연결해 인식 상태를 확인하세요.',
+        sourceUrl: 'https://www.samsung.com/example',
+        sourceTitle: 'Galaxy Book 공식 사양',
+        evidenceType: 'VIDEO',
+      }],
+      reviewCandidates: [],
+    })
+    getProductChecklist.mockResolvedValue([
+      { checklistItemId: 7001, itemCode: 'EXT-001', name: '전면·후면·측면 외관', evidenceType: 'PHOTO', isRequired: true, status: 'PENDING' },
+      { checklistItemId: 7002, itemCode: 'PRV-004', name: '계정 제거 및 초기화', evidenceType: 'SELLER_CONFIRMATION', isRequired: true, status: 'PENDING' },
+      { checklistItemId: 7003, itemCode: 'LAP-FTR-PORT', name: '외부 포트', evidenceType: 'VIDEO', isRequired: true, status: 'PENDING' },
+    ])
+
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await fillDeviceStep(wrapper)
+
+    expect(wrapper.text()).toContain('기본 2개 + AI 선택 0개 = 전체 2개')
+    expect(wrapper.text()).toContain('촬영·업로드 1개 · 직접 확인 1개')
+
+    await wrapper.get('input[type="checkbox"][value="PORTS"]').setValue(true)
+
+    expect(wrapper.text()).toContain('기본 2개 + AI 선택 1개 = 전체 3개')
+    expect(wrapper.text()).toContain('촬영·업로드 2개 · 직접 확인 1개')
+
+    await buttonByText(wrapper, '다음 단계').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('촬영·업로드 항목 2개')
+    expect(wrapper.text()).toContain('현재 진행률: 2개 중 0개 등록 완료')
+  })
+
   it('스마트폰 모델도 관리자 검토 전 AI 후보를 판매자에게 노출한다', async () => {
     getDeviceCategories.mockResolvedValue([{ categoryId: 10, name: '스마트폰' }])
     getDeviceModels.mockResolvedValue([{
@@ -382,6 +428,7 @@ describe('ProductRegisterPage', () => {
         checkGuide: '호환 충전기로 충전 상태를 확인하세요.',
         sourceUrl: 'https://www.samsung.com/example',
         sourceTitle: 'Galaxy S24 공식 사양',
+        evidenceType: 'VIDEO',
       }],
       reviewCandidates: [],
     })

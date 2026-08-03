@@ -23,7 +23,7 @@ public class ReinspectionRequestController implements ReinspectionRequestApi {
 
     @Override
     public ResponseEntity<ApiResponse<List<ReinspectionRequestResponse>>> getMine() {
-        return ResponseEntity.ok(ApiResponse.ok(service.findForSeller(currentUser.memberId())));
+        return ResponseEntity.ok(ApiResponse.ok(service.findForMember(currentUser.memberId())));
     }
 
     @Override
