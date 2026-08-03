@@ -115,6 +115,9 @@ class AdminAuthorizationTests {
     @MockitoBean OcrResultRepository ocrResultRepository;
     @MockitoBean ListingOwnerReader listingOwnerReader;
     @MockitoBean ListingChecklistItemRepository listingChecklistItemRepository;
+
+    @MockitoBean
+    com.c203.limit.domain.inspection.agent.InspectionSessionRepository inspectionSessionRepository;
     @MockitoBean ReinspectionRequestRepository reinspectionRequestRepository;
     @MockitoBean ReinspectionRequestItemRepository reinspectionRequestItemRepository;
     @MockitoBean DxdiagResultRepository dxdiagResultRepository;

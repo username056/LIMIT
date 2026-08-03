@@ -38,6 +38,7 @@ import {
   parseBatteryReport,
   parseDxdiag,
 } from '../api/inspection'
+import { createInspectionSession, getInspectionSession } from '../api/inspectionSessions'
 import { compressImage, compressVideo } from '../utils/mediaOptimize'
 import {
   cameraErrorMessage,
@@ -207,6 +208,11 @@ const checklistLoadingStageIndex = ref(0)
 const checklistLoadingDotCount = ref(1)
 let checklistLoadingTimer = null
 const checklistItems = ref([])
+const windowsInspection = ref(null)
+const windowsInspectionBusy = ref(false)
+const windowsInspectionError = ref('')
+let windowsInspectionTimer = null
+const windowsScannerUrl = import.meta.env.VITE_WINDOWS_SCANNER_URL || ''
 const activeCaptureItemId = ref(null)
 // captureState[checklistItemId] = { media: [...], busy: '' | 'optimizing' | 'uploading', progress: 0..100 }
 const captureState = reactive({})
@@ -251,6 +257,57 @@ function allDiagnosisFieldNamesFor(item) {
   if (item.automationType === 'FILE_PARSE' && item.parserType === 'BATTERY_REPORT') return BATTERY_REPORT_FIELD_NAMES
   if (item.automationType === 'FILE_PARSE' && item.parserType === 'DXDIAG') return DXDIAG_FIELD_NAMES
   return []
+}
+
+function stopWindowsInspectionPolling() {
+  if (windowsInspectionTimer) window.clearInterval(windowsInspectionTimer)
+  windowsInspectionTimer = null
+}
+
+async function refreshAutomatedDiagnoses() {
+  if (!currentProductId.value) return
+  checklistItems.value = await getProductChecklist(currentProductId.value)
+  await Promise.allSettled(checklistItems.value
+    .filter((item) => item.automationType === 'FILE_PARSE')
+    .map((item) => refreshDiagnosis(item)))
+}
+
+function beginWindowsInspectionPolling(sessionKey) {
+  stopWindowsInspectionPolling()
+  windowsInspectionTimer = window.setInterval(async () => {
+    try {
+      const session = await getInspectionSession(sessionKey)
+      windowsInspection.value = { ...windowsInspection.value, ...session }
+      if (session.status === 'COMPLETED') {
+        stopWindowsInspectionPolling()
+        await refreshAutomatedDiagnoses()
+        notice.value = 'Windows 자동 검사 결과가 체크리스트에 반영되었습니다.'
+      } else if (['FAILED', 'EXPIRED'].includes(session.status)) {
+        stopWindowsInspectionPolling()
+        windowsInspectionError.value = session.status === 'EXPIRED'
+          ? '연결 코드가 만료됐습니다. 새 코드를 발급해 주세요.'
+          : 'Windows 자동 검사를 완료하지 못했습니다.'
+      }
+    } catch (error) {
+      stopWindowsInspectionPolling()
+      windowsInspectionError.value = error.message || '자동 검사 상태를 확인하지 못했습니다.'
+    }
+  }, 2000)
+}
+
+async function startWindowsInspection() {
+  if (!currentProductId.value || windowsInspectionBusy.value) return
+  windowsInspectionBusy.value = true
+  windowsInspectionError.value = ''
+  stopWindowsInspectionPolling()
+  try {
+    windowsInspection.value = await createInspectionSession(currentProductId.value)
+    beginWindowsInspectionPolling(windowsInspection.value.sessionKey)
+  } catch (error) {
+    windowsInspectionError.value = error.message || 'Windows 자동 검사를 시작하지 못했습니다.'
+  } finally {
+    windowsInspectionBusy.value = false
+  }
 }
 
 const mediaPreview = ref(null)
@@ -1469,6 +1526,7 @@ async function startEdit(productId) {
 
 onBeforeUnmount(() => {
   stopChecklistLoading()
+  stopWindowsInspectionPolling()
   modelRequestId += 1
 })
 
@@ -2056,6 +2114,62 @@ onMounted(async () => {
               <p class="mt-1 text-sm text-text-sub">
                 구매자가 믿고 살 수 있도록 {{ mediaChecklistItems.length }}가지 필수 항목의 실물 사진을 등록하세요.
               </p>
+
+              <section
+                v-if="checklistItems.some((item) => item.automationType === 'FILE_PARSE')"
+                class="mt-4 rounded-lg border border-primary/30 bg-accent p-4"
+                aria-labelledby="windows-inspection-title"
+              >
+                <h3
+                  id="windows-inspection-title"
+                  class="text-sm font-bold text-text-main"
+                >
+                  Windows 자동 검사
+                </h3>
+                <p class="mt-1 text-xs leading-5 text-text-sub">
+                  Limit 진단 프로그램으로 CPU·RAM·GPU와 배터리 정보를 자동으로 채울 수 있습니다.
+                  비밀번호와 개인 파일은 수집하지 않습니다.
+                </p>
+                <div class="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    class="rounded-md bg-primary-gradient px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                    :disabled="windowsInspectionBusy"
+                    @click="startWindowsInspection"
+                  >
+                    {{ windowsInspectionBusy ? '코드 발급 중…' : '연결 코드 발급' }}
+                  </button>
+                  <a
+                    v-if="windowsScannerUrl"
+                    :href="windowsScannerUrl"
+                    class="rounded-md border border-primary px-4 py-2 text-sm font-bold text-primary"
+                    download
+                  >
+                    진단 프로그램 다운로드
+                  </a>
+                </div>
+                <div
+                  v-if="windowsInspection"
+                  class="mt-3 rounded-md bg-surface p-3"
+                >
+                  <p class="text-xs text-text-sub">
+                    진단 프로그램에 아래 코드를 입력해 주세요.
+                  </p>
+                  <p class="mt-1 font-mono text-3xl font-bold tracking-[0.35em] text-primary-dark">
+                    {{ windowsInspection.pairingCode || '연결됨' }}
+                  </p>
+                  <p class="mt-2 text-xs font-semibold text-text-sub">
+                    상태: {{ windowsInspection.status }}
+                  </p>
+                </div>
+                <p
+                  v-if="windowsInspectionError"
+                  class="mt-3 text-xs font-semibold text-red-700"
+                  role="alert"
+                >
+                  {{ windowsInspectionError }}
+                </p>
+              </section>
 
               <p class="mt-4 rounded-md bg-accent px-4 py-3 text-sm font-semibold text-primary-dark">
                 현재 진행률: {{ mediaChecklistItems.length }}개 중 {{ capturedMediaCount }}개 촬영 완료

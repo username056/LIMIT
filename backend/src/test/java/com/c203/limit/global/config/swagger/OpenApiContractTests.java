@@ -185,6 +185,9 @@ class OpenApiContractTests {
     ListingChecklistItemRepository listingChecklistItemRepository;
 
     @MockitoBean
+    com.c203.limit.domain.inspection.agent.InspectionSessionRepository inspectionSessionRepository;
+
+    @MockitoBean
     ReinspectionRequestRepository reinspectionRequestRepository;
 
     @MockitoBean
