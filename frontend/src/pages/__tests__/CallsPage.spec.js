@@ -2,11 +2,12 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CallsPage from '../CallsPage.vue'
 import { getChatRooms } from '../../api/chat'
-import { cancelRtcCall, getMyRtcCalls, getRtcSession, updateRtcCall } from '../../api/rtc'
+import { cancelRtcCall, getMyRtcCalls, getRtcSession, respondRtcCall, updateRtcCall } from '../../api/rtc'
 import { getMyReinspectionRequests, getProduct, getProductImages } from '../../api/products'
 
+const routerPush = vi.fn()
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: routerPush }),
 }))
 vi.mock('../../auth/session', () => ({
   useAuthSession: () => ({ value: { member: { memberId: 1 } } }),
@@ -102,18 +103,25 @@ describe('CallsPage', () => {
         status: 'ACCEPTED',
         scheduledAt: '2020-01-01T00:00:00',
       },
+      {
+        ...outgoingCall,
+        callId: 26,
+        chatRoomId: 7,
+        status: 'PROPOSED',
+        scheduledAt: '2020-01-01T00:00:00',
+      },
     ])
 
     const wrapper = mountPage()
     await flushPromises()
 
     expect(wrapper.text()).toContain('갤럭시 테스트 상품')
-    expect(wrapper.text()).toContain('전체 목록 (6)')
+    expect(wrapper.text()).toContain('전체 목록 (7)')
     expect(wrapper.text()).toContain('대기 (1)')
     expect(wrapper.text()).toContain('진행 중 (1)')
     expect(wrapper.text()).toContain('완료 (1)')
-    expect(wrapper.text()).toContain('종료 (3)')
-    expect(wrapper.findAll('[data-testid="rtc-request-card"]')).toHaveLength(6)
+    expect(wrapper.text()).toContain('종료 (4)')
+    expect(wrapper.findAll('[data-testid="rtc-request-card"]')).toHaveLength(7)
     expect(wrapper.get('[data-testid="rtc-request-card"]').classes()).toContain('request-card')
 
     await wrapper.findAll('button').find((button) => button.text() === '대기 (1)').trigger('click')
@@ -129,11 +137,11 @@ describe('CallsPage', () => {
     await wrapper.findAll('button').find((button) => button.text() === '완료 (1)').trigger('click')
 
     expect(wrapper.findAll('[data-testid="rtc-request-card"]')).toHaveLength(1)
-    expect(wrapper.text()).toContain('확인 완료')
+    expect(wrapper.text()).toContain('검수 완료')
 
-    await wrapper.findAll('button').find((button) => button.text() === '종료 (3)').trigger('click')
+    await wrapper.findAll('button').find((button) => button.text() === '종료 (4)').trigger('click')
 
-    expect(wrapper.findAll('[data-testid="rtc-request-card"]')).toHaveLength(3)
+    expect(wrapper.findAll('[data-testid="rtc-request-card"]')).toHaveLength(4)
     expect(wrapper.text()).toContain('거절됨')
     expect(wrapper.text()).toContain('취소됨')
     expect(wrapper.text()).toContain('세션 만료')
@@ -147,7 +155,25 @@ describe('CallsPage', () => {
 
     expect(wrapper.text()).toContain('상대 회원')
     expect(wrapper.text()).toContain(futureScheduledDateLabel)
+    expect(wrapper.text()).toContain('시작까지')
+    expect(wrapper.text()).not.toContain('만료까지')
+    expect(wrapper.findAll('button').some((button) => button.text() === '화상 입장')).toBe(false)
+  })
+
+  it('예정 시각부터 만료 카운트다운과 화상 입장 버튼을 표시한다', async () => {
+    getMyRtcCalls.mockResolvedValue([{
+      ...outgoingCall,
+      status: 'ACCEPTED',
+      scheduledAt: new Date(Date.now() - 1000).toISOString(),
+      rtcSessionId: 31,
+    }])
+
+    const wrapper = mountPage()
+    await flushPromises()
+
     expect(wrapper.text()).toContain('만료까지')
+    expect(wrapper.text()).not.toContain('시작까지')
+    expect(wrapper.findAll('button').some((button) => button.text() === '화상 입장')).toBe(true)
   })
 
   it('기존 요청의 자동 생성 상태 확인 메모를 표시하지 않는다', async () => {
@@ -181,7 +207,7 @@ describe('CallsPage', () => {
 
     expect(getRtcSession).toHaveBeenCalledWith(31)
     expect(wrapper.text()).toContain('채팅 상대방')
-    expect(wrapper.text()).toContain('만료까지')
+    expect(wrapper.text()).toContain('시작까지')
   })
 
   it('채팅방 썸네일이 없으면 상품 대표 이미지를 상품 카드에 매핑한다', async () => {
@@ -270,7 +296,7 @@ describe('CallsPage', () => {
     const wrapper = mountPage()
     await flushPromises()
 
-    expect(wrapper.text()).toContain('구매 희망자가 보낸 화상 확인 및 재촬영 요청을 확인할 수 있습니다.')
+    expect(wrapper.text()).toContain('구매 희망자가 보낸 화상 검수 및 재촬영 요청을 살펴볼 수 있습니다.')
     await wrapper.findAll('button').find((button) => button.text() === '재촬영 요청').trigger('click')
     expect(wrapper.text()).not.toContain('실시간 검수 전 특정 부위에 대한 재검수를 요청한 내역입니다.')
   })
@@ -297,6 +323,56 @@ describe('CallsPage', () => {
 
     expect(wrapper.text()).not.toContain('시간 만료')
     expect(wrapper.text()).toContain('갤럭시 테스트 상품')
+  })
+
+  it('응답 대기 중 예정 시각에서 30분이 지나면 종료로 분류하고 응답 버튼을 숨긴다', async () => {
+    getMyRtcCalls.mockResolvedValue([{
+      ...outgoingCall,
+      chatRoomId: 7,
+      status: 'PROPOSED',
+      incoming: true,
+      scheduledAt: '2020-01-01T00:00:00',
+    }])
+
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('대기 (0)')
+    expect(wrapper.text()).toContain('종료 (1)')
+    expect(wrapper.text()).toContain('세션 만료')
+    expect(wrapper.text()).not.toContain('응답 대기')
+    expect(wrapper.findAll('button').some((button) => button.text() === '수락하기')).toBe(false)
+    expect(wrapper.findAll('button').some((button) => button.text() === '거절')).toBe(false)
+  })
+
+  it('요청을 수락해도 통화 화면으로 자동 이동하지 않는다', async () => {
+    getMyRtcCalls
+      .mockResolvedValueOnce([{
+        ...outgoingCall,
+        status: 'PROPOSED',
+        incoming: true,
+        scheduledAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      }])
+      .mockResolvedValueOnce([{
+        ...outgoingCall,
+        status: 'ACCEPTED',
+        incoming: true,
+        rtcSessionId: 31,
+      }])
+    respondRtcCall.mockResolvedValue({
+      ...outgoingCall,
+      status: 'ACCEPTED',
+      rtcSessionId: 31,
+    })
+
+    const wrapper = mountPage()
+    await flushPromises()
+    await wrapper.findAll('button').find((button) => button.text() === '수락하기').trigger('click')
+    await flushPromises()
+
+    expect(respondRtcCall).toHaveBeenCalledWith(20, true, null)
+    expect(getMyRtcCalls).toHaveBeenCalledTimes(2)
+    expect(routerPush).not.toHaveBeenCalled()
   })
 
   it('보낸 통화 약속의 시간과 메모를 변경한다', async () => {

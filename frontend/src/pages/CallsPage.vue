@@ -19,7 +19,7 @@ import { getMyReinspectionRequests, getProduct, getProductImages } from '../api/
 const router = useRouter()
 const session = useAuthSession()
 const myMemberId = computed(() => session.value?.member?.memberId ?? null)
-const activeTab = ref('실시간 확인')
+const activeTab = ref('실시간 검수')
 
 const calls = ref([])
 const isLoading = ref(true)
@@ -84,7 +84,7 @@ async function load() {
       }
     }))
   } catch (error) {
-    errorMessage.value = error.message || '영상 확인 요청을 불러오지 못했습니다.'
+    errorMessage.value = error.message || '영상 검수 요청을 불러오지 못했습니다.'
   } finally {
     isLoading.value = false
   }
@@ -93,11 +93,8 @@ async function load() {
 async function respond(call, accepted) {
   pendingCallId.value = call.callId
   try {
-    const updated = await respondRtcCall(call.callId, accepted, accepted ? null : '요청 거절')
+    await respondRtcCall(call.callId, accepted, accepted ? null : '요청 거절')
     await load()
-    if (accepted && updated.rtcSessionId) {
-      await router.push({ name: 'rtc-call', params: { callId: call.callId } })
-    }
   } catch (error) {
     errorMessage.value = error.message || '요청을 처리하지 못했습니다.'
   } finally {
@@ -217,13 +214,25 @@ function isSessionExpired(call) {
   return expiresAt ? expiresAt.getTime() <= now.value : false
 }
 
+function hasSessionStarted(call) {
+  return call.scheduledAt && new Date(call.scheduledAt).getTime() <= now.value
+}
+
+function sessionCountdownLabel(call) {
+  if (!call.scheduledAt) return null
+  if (!hasSessionStarted(call)) return `시작까지 ${remainingTime(call.scheduledAt)}`
+  const expiresAt = callExpirationAt(call)
+  if (!expiresAt) return null
+  return isSessionExpired(call) ? '세션 만료' : `만료까지 ${remainingTime(expiresAt)}`
+}
+
 function callExpirationAt(call) {
-  if (!call.scheduledAt || !['ACCEPTED', 'COMPLETED'].includes(call.status)) return null
+  if (!call.scheduledAt || !['PROPOSED', 'ACCEPTED', 'COMPLETED'].includes(call.status)) return null
   return new Date(new Date(call.scheduledAt).getTime() + 30 * 60 * 1000)
 }
 
 function isCallPending(call) {
-  return call.status === 'PROPOSED'
+  return call.status === 'PROPOSED' && !isSessionExpired(call)
 }
 
 function isCallInProgress(call) {
@@ -236,7 +245,7 @@ function isCallCompleted(call) {
 
 function isCallEnded(call) {
   return ['REJECTED', 'CANCELED'].includes(call.status)
-    || (call.status === 'ACCEPTED' && isSessionExpired(call))
+    || (['PROPOSED', 'ACCEPTED'].includes(call.status) && isSessionExpired(call))
 }
 
 const callFilter = ref('전체 목록')
@@ -269,10 +278,10 @@ function callTone(call) {
 }
 
 function callStatusLabel(call) {
-  if (isCallCompleted(call)) return '확인 완료'
+  if (isCallCompleted(call)) return '검수 완료'
   if (call.status === 'REJECTED') return '거절됨'
   if (call.status === 'CANCELED') return '취소됨'
-  if (call.status === 'ACCEPTED' && isSessionExpired(call)) return null
+  if (isSessionExpired(call)) return null
   if (call.status === 'ACCEPTED') return '일정 확정'
   return call.incoming ? '응답 대기' : '상대 응답 대기'
 }
@@ -336,17 +345,17 @@ function remainingTime(expiresAt) {
     <main class="page-shell">
       <PageHeader
         eyebrow="LIVE VERIFICATION"
-        title="1:1 실시간 확인"
-        description="구매 희망자가 보낸 화상 확인 및 재촬영 요청을 확인할 수 있습니다."
+        title="1:1 실시간 검수"
+        description="구매 희망자가 보낸 화상 검수 및 재촬영 요청을 살펴볼 수 있습니다."
       />
 
       <BaseTabs
         v-model="activeTab"
-        :tabs="['실시간 확인', '재촬영 요청']"
+        :tabs="['실시간 검수', '재촬영 요청']"
         class="mt-6 mb-6"
       />
 
-      <template v-if="activeTab === '실시간 확인'">
+      <template v-if="activeTab === '실시간 검수'">
         <p
           v-if="errorMessage"
           role="alert"
@@ -426,20 +435,18 @@ function remainingTime(expiresAt) {
                     <span
                       class="request-kind"
                       :class="`request-kind--${callTone(call)}`"
-                    >실시간 확인</span>
+                    >실시간 검수</span>
                     <span
                       v-if="callStatusLabel(call)"
                       class="request-pill"
                       :class="`request-pill--${callTone(call)}`"
                     >{{ callStatusLabel(call) }}</span>
                     <span
-                      v-if="callExpirationAt(call)"
+                      v-if="sessionCountdownLabel(call)"
                       class="request-pill"
                       :class="isSessionExpired(call) ? 'request-pill--expired' : 'request-pill--timer'"
                     >
-                      {{ isSessionExpired(call)
-                        ? '세션 만료'
-                        : `만료까지 ${remainingTime(callExpirationAt(call))}` }}
+                      {{ sessionCountdownLabel(call) }}
                     </span>
                   </p>
                   <h2 class="request-card__name">
@@ -461,7 +468,7 @@ function remainingTime(expiresAt) {
 
               <div class="request-card__actions">
                 <div class="request-card__primary-actions">
-                  <template v-if="call.status === 'PROPOSED' && call.incoming">
+                  <template v-if="call.status === 'PROPOSED' && call.incoming && !isSessionExpired(call)">
                     <BaseButton @click="respond(call, true)">
                       수락하기
                     </BaseButton>
@@ -472,7 +479,7 @@ function remainingTime(expiresAt) {
                       거절
                     </BaseButton>
                   </template>
-                  <template v-if="call.status === 'PROPOSED' && !call.incoming">
+                  <template v-if="call.status === 'PROPOSED' && !call.incoming && !isSessionExpired(call)">
                     <BaseButton
                       variant="outline"
                       @click="startEdit(call)"
@@ -481,14 +488,14 @@ function remainingTime(expiresAt) {
                     </BaseButton>
                   </template>
                   <BaseButton
-                    v-if="call.rtcSessionId && call.status === 'ACCEPTED' && !isSessionExpired(call)"
+                    v-if="call.rtcSessionId && call.status === 'ACCEPTED' && hasSessionStarted(call) && !isSessionExpired(call)"
                     @click="router.push({ name: 'rtc-call', params: { callId: call.callId } })"
                   >
                     화상 입장
                   </BaseButton>
                 </div>
                 <button
-                  v-if="call.status === 'PROPOSED' && !call.incoming"
+                  v-if="call.status === 'PROPOSED' && !call.incoming && !isSessionExpired(call)"
                   type="button"
                   class="request-link request-link--danger"
                   @click="startCancel(call)"
@@ -558,7 +565,7 @@ function remainingTime(expiresAt) {
                     type="submit"
                     :disabled="pendingCallId === call.callId"
                   >
-                    취소 확인
+                    취소하기
                   </BaseButton>
                 </div>
               </form>
@@ -576,7 +583,7 @@ function remainingTime(expiresAt) {
               처리할 요청이 없습니다.
             </p>
             <p class="request-empty__description">
-              구매 희망자가 화상 확인을 요청하면 여기에 표시됩니다.
+              구매 희망자가 화상 검수를 요청하면 여기에 표시됩니다.
             </p>
           </div>
         </template>
@@ -699,7 +706,6 @@ function remainingTime(expiresAt) {
               </BaseButton>
               <BaseButton
                 v-else
-                variant="outline"
                 :to="{ name: 'product-detail', params: { productId: item.productId } }"
               >
                 촬영 완료본 보기
