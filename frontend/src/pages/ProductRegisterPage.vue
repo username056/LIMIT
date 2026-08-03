@@ -49,6 +49,7 @@ import {
   stopCameraStream,
 } from '../utils/camera'
 import { MAX_PRICE_DIGITS, formatPriceDigits, toPriceDigits } from '../utils/priceInput'
+import { guideContentFor, guideImageFor } from '../utils/checklistGuideImages'
 
 const WIZARD_STEPS = [
   { number: 1, label: '기기 등록' },
@@ -215,6 +216,7 @@ const windowsInspectionError = ref('')
 let windowsInspectionTimer = null
 const windowsScannerUrl = import.meta.env.VITE_WINDOWS_SCANNER_URL || '/downloads/LimitScanner.exe'
 const activeCaptureItemId = ref(null)
+const guideModalItem = ref(null)
 // captureState[checklistItemId] = { media: [...], busy: '' | 'optimizing' | 'uploading', progress: 0..100 }
 const captureState = reactive({})
 const confirmState = reactive({})
@@ -415,6 +417,22 @@ const modelGroups = computed(() => {
 const supportsGeneratedChecklist = computed(
   () => Boolean(selectedModel.value),
 )
+const selectedAiSuggestions = computed(() => {
+  const selectedCodes = new Set(confirmedFeatures.value)
+  return (checklistGeneration.value?.aiSuggestions || [])
+    .filter((suggestion) => selectedCodes.has(suggestion.featureCode))
+})
+const previewChecklistItems = computed(
+  () => [...templateItems.value, ...selectedAiSuggestions.value],
+)
+const previewMediaItemCount = computed(
+  () => previewChecklistItems.value
+    .filter((item) => item.evidenceType !== 'SELLER_CONFIRMATION').length,
+)
+const previewConfirmationItemCount = computed(
+  () => previewChecklistItems.value
+    .filter((item) => item.evidenceType === 'SELLER_CONFIRMATION').length,
+)
 const mediaChecklistItems = computed(
   () => checklistItems.value.filter((item) => item.evidenceType !== 'SELLER_CONFIRMATION'),
 )
@@ -465,6 +483,30 @@ function templateFor(itemCode) {
 
 function guideFor(item) {
   return item?.guide || templateFor(item?.itemCode)?.guide || ''
+}
+
+function openGuideModal(item) {
+  guideModalItem.value = item
+}
+
+function closeGuideModal() {
+  guideModalItem.value = null
+}
+
+// 카테고리(상위 기기 분류) 이름입니다. checklistGuideImages.js의 카테고리 키와
+// 정확히 같은 문자열이어야 필수 항목 안내가 매칭됩니다.
+const selectedCategoryName = computed(
+  () => categories.value.find((item) => String(item.categoryId) === String(form.categoryId))?.name || null
+)
+
+// 모달 전용 문구입니다. isRequired가 true고 checklistGuideImages.js에 이 카테고리·항목이
+// 등록돼 있을 때만 이 값을 쓰고, 그 외에는 서버가 내려준 guide 문구로 채웁니다.
+function guidePurposeFor(item) {
+  return guideContentFor(item, selectedCategoryName.value)?.purpose || ''
+}
+
+function guideStepsFor(item) {
+  return guideContentFor(item, selectedCategoryName.value)?.guide || guideFor(item)
 }
 
 // 자동 생성 체크리스트는 required, 기존 템플릿은 isRequired를 씁니다.
@@ -1851,7 +1893,13 @@ onMounted(async () => {
                   <p class="mt-1 text-xs text-text-sub">
                     {{ checklistGeneration.manufacturer }} {{ checklistGeneration.modelName }}
                     · {{ checklistGeneration.osFamily }}
-                    · {{ templateItems.length }}개 항목
+                  </p>
+                  <p class="mt-2 text-sm font-semibold text-text-main">
+                    기본 {{ templateItems.length }}개 + AI 선택 {{ selectedAiSuggestions.length }}개
+                    = 전체 {{ previewChecklistItems.length }}개
+                  </p>
+                  <p class="mt-1 text-xs text-text-sub">
+                    촬영·업로드 {{ previewMediaItemCount }}개 · 직접 확인 {{ previewConfirmationItemCount }}개
                   </p>
                 </div>
                 <BaseBadge
@@ -1926,6 +1974,9 @@ onMounted(async () => {
                       <strong class="text-sm text-text-main">
                         {{ suggestion.featureName || suggestion.featureCode }}
                       </strong>
+                      <span class="ml-2 rounded-pill bg-white px-2 py-0.5 text-[10px] font-bold text-primary-dark">
+                        {{ evidenceTypeLabel(suggestion.evidenceType) }}
+                      </span>
                       <span class="mt-1 block text-xs leading-5 text-text-sub">
                         {{ suggestion.checkGuide || suggestion.reason }}
                       </span>
@@ -2169,7 +2220,8 @@ onMounted(async () => {
                 검수용 기기 촬영
               </h2>
               <p class="mt-1 text-sm text-text-sub">
-                구매자가 믿고 살 수 있도록 {{ mediaChecklistItems.length }}가지 필수 항목의 실물 사진을 등록하세요.
+                구매자가 확인할 수 있도록 촬영·업로드 항목 {{ mediaChecklistItems.length }}개에
+                사진·영상·진단파일을 등록하세요.
               </p>
 
               <section
@@ -2228,7 +2280,7 @@ onMounted(async () => {
               </section>
 
               <p class="mt-4 rounded-md bg-accent px-4 py-3 text-sm font-semibold text-primary-dark">
-                현재 진행률: {{ mediaChecklistItems.length }}개 중 {{ capturedMediaCount }}개 촬영 완료
+                현재 진행률: {{ mediaChecklistItems.length }}개 중 {{ capturedMediaCount }}개 등록 완료
               </p>
 
               <!-- 항목이 많으면 화면이 길어져서 6개 정도만 보이고 나머지는 스크롤로 봅니다. -->
@@ -2237,13 +2289,15 @@ onMounted(async () => {
                   v-for="item in mediaChecklistItems"
                   :key="item.checklistItemId"
                 >
-                  <button
-                    type="button"
-                    class="w-full rounded-lg border p-4 text-left transition-colors"
+                  <div
+                    role="button"
+                    tabindex="0"
+                    class="w-full cursor-pointer rounded-lg border p-4 text-left transition-colors"
                     :class="activeCaptureItemId === item.checklistItemId
                       ? 'border-primary bg-accent'
                       : 'border-border hover:border-primary'"
                     @click="activeCaptureItemId = item.checklistItemId"
+                    @keydown.enter="activeCaptureItemId = item.checklistItemId"
                   >
                     <div class="flex items-center justify-between gap-3">
                       <div>
@@ -2273,6 +2327,15 @@ onMounted(async () => {
                             v-if="isReinspectionItem(item)"
                             class="rounded-pill bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-600"
                           >재검수</span>
+                          <!-- 목록 선택과 별개로, 이 버튼만 눌러야 촬영 가이드 모달이 뜨도록 stop으로 막습니다. -->
+                          <button
+                            type="button"
+                            class="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border border-primary text-[9px] font-bold text-primary transition hover:bg-accent"
+                            :aria-label="`${item.name} 촬영 가이드 보기`"
+                            @click.stop="openGuideModal(item)"
+                          >
+                            i
+                          </button>
                         </p>
                         <p class="mt-1 text-xs text-text-sub">
                           {{ guideFor(item) }}
@@ -2291,7 +2354,7 @@ onMounted(async () => {
                         <template v-else>미촬영</template>
                       </span>
                     </div>
-                  </button>
+                  </div>
                 </li>
                 <li
                   v-if="!mediaChecklistItems.length"
@@ -2747,7 +2810,7 @@ onMounted(async () => {
               </div>
               <div>
                 <dt class="text-xs text-text-sub">
-                  촬영 완료
+                  촬영·업로드 완료
                 </dt><dd class="mt-1 font-semibold text-text-main">
                   {{ capturedMediaCount }} / {{ mediaChecklistItems.length }}
                 </dd>
@@ -2928,6 +2991,70 @@ onMounted(async () => {
               확인
             </BaseButton>
           </div>
+        </div>
+      </div>
+
+      <!-- 체크리스트 항목 촬영 가이드 모달 -->
+      <div
+        v-if="guideModalItem"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+        role="dialog"
+        aria-modal="true"
+        aria-label="촬영 가이드"
+        @click.self="closeGuideModal"
+      >
+        <div class="w-full max-w-md rounded-lg bg-surface p-5 shadow-elevated">
+          <div class="flex items-start justify-between gap-3">
+            <h2 class="text-base font-bold text-text-main">
+              {{ guideModalItem.name }}
+            </h2>
+            <button
+              type="button"
+              class="shrink-0 text-text-sub transition hover:text-text-main"
+              aria-label="닫기"
+              @click="closeGuideModal"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div class="mt-4 flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg border border-border bg-bg">
+            <img
+              v-if="guideImageFor(guideModalItem, selectedCategoryName)"
+              :src="guideImageFor(guideModalItem, selectedCategoryName)"
+              :alt="`${guideModalItem.name} 촬영 예시`"
+              class="h-full w-full object-contain"
+            >
+            <p
+              v-else
+              class="px-6 text-center text-sm text-text-sub"
+            >
+              예시 이미지가 준비되지 않았습니다.
+            </p>
+          </div>
+
+          <div class="mt-4 space-y-2">
+            <p
+              v-if="guidePurposeFor(guideModalItem)"
+              class="text-sm text-text-main"
+            >
+              {{ guidePurposeFor(guideModalItem) }}
+            </p>
+            <p
+              v-if="guideStepsFor(guideModalItem)"
+              class="rounded-md bg-accent px-3 py-2 text-sm text-primary-dark"
+            >
+              {{ guideStepsFor(guideModalItem) }}
+            </p>
+          </div>
+
+          <BaseButton
+            type="button"
+            class="mt-5 w-full"
+            @click="closeGuideModal"
+          >
+            확인했어요
+          </BaseButton>
         </div>
       </div>
     </main>

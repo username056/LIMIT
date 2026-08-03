@@ -16,4 +16,6 @@ public interface DeviceVariantRepository extends JpaRepository<DeviceVariant, Lo
     Optional<DeviceVariant> findByModelIdAndVariantKey(Long modelId, String variantKey);
 
     boolean existsByModelIdAndIsActiveTrue(Long modelId);
+
+    long countByModelId(Long modelId);
 }

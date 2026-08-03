@@ -249,6 +249,16 @@ class OpenApiContractTests {
                 .andExpect(jsonPath(
                                 "$.paths['/api/v1/admin/device-models/{modelId}/researches']")
                         .exists())
+                .andExpect(jsonPath(
+                                "$.paths['/api/v1/admin/device-models/{modelId}/status'].patch")
+                        .exists())
+                .andExpect(jsonPath(
+                                "$.paths['/api/v1/admin/device-models/{modelId}/products'].get")
+                        .exists())
+                .andExpect(jsonPath(
+                                "$.paths['/api/v1/admin/device-models/{modelId}/products/{productId}/materials'].get")
+                        .exists())
+                .andExpect(jsonPath("$.components.schemas.UpdateDeviceModelStatusRequest").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/admin/me/password']").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/auth/password-reset-requests']").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/auth/password-resets']").exists())
@@ -277,7 +287,14 @@ class OpenApiContractTests {
                 .andExpect(jsonPath("$.components.schemas.PaymentResponse").exists())
                 .andExpect(
                         jsonPath("$.paths['/api/v1/payments'].post.responses['409'].description")
-                                .value(containsString("PAYMENT_REQUEST_CONFLICT")));
+                                .value(containsString("PAYMENT_REQUEST_CONFLICT")))
+                .andExpect(jsonPath(
+                                "$.paths['/api/v1/inspection-agent/sessions/{sessionKey}/test-results'].post")
+                        .exists())
+                .andExpect(jsonPath(
+                                "$.paths['/api/v1/inspection-sessions/{sessionKey}/test-results'].get")
+                        .exists())
+                .andExpect(jsonPath("$.components.schemas.SubmitTestResultRequest").exists());
     }
 
     @Test

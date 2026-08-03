@@ -16,5 +16,6 @@ public record AdminDeviceModelSummaryResponse(
         Long reportedByMemberId,
         String latestResearchStatus,
         Integer latestResearchVersion,
+        long relatedProductCount,
         LocalDateTime createdAt,
         LocalDateTime updatedAt) {}

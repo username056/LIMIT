@@ -19,7 +19,12 @@ public record AdminDeviceModelDetailResponse(
         Long reviewedByAdminId,
         LocalDateTime reviewedAt,
         String reviewNote,
+        LocalDateTime disabledAt,
+        Long disabledByAdminId,
+        String disableReason,
+        Long replacementModelId,
         List<ChecklistTemplateItemResponse> baseChecklistItems,
         ChecklistResearchResponse latestResearch,
+        AdminDeviceModelImpactResponse impact,
         LocalDateTime createdAt,
         LocalDateTime updatedAt) {}

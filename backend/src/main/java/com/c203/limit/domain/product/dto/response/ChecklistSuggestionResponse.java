@@ -13,7 +13,11 @@ public record ChecklistSuggestionResponse(
         String reason,
         String checkGuide,
         String sourceUrl,
-        String sourceTitle) {
+        String sourceTitle,
+        @Schema(
+                        description = "선택 시 생성되는 항목의 증빙 유형",
+                        allowableValues = {"PHOTO", "VIDEO", "DIAGNOSTIC_FILE", "SELLER_CONFIRMATION"})
+                String evidenceType) {
 
     public static ChecklistSuggestionResponse from(ChecklistSuggestion suggestion) {
         return new ChecklistSuggestionResponse(
@@ -23,6 +27,7 @@ public record ChecklistSuggestionResponse(
                 suggestion.reason(),
                 suggestion.checkGuide(),
                 suggestion.sourceUrl(),
-                suggestion.sourceTitle());
+                suggestion.sourceTitle(),
+                suggestion.evidenceType().name());
     }
 }

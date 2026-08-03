@@ -8,11 +8,19 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface DeviceModelRepository extends JpaRepository<DeviceModel, Long> {
+public interface DeviceModelRepository
+        extends JpaRepository<DeviceModel, Long>, JpaSpecificationExecutor<DeviceModel> {
+
+    @Override
+    @EntityGraph(attributePaths = {"category", "manufacturer"})
+    Page<DeviceModel> findAll(
+            org.springframework.data.jpa.domain.Specification<DeviceModel> specification,
+            Pageable pageable);
 
     @EntityGraph(attributePaths = {"category", "manufacturer"})
     Optional<DeviceModel> findWithCatalogById(Long modelId);

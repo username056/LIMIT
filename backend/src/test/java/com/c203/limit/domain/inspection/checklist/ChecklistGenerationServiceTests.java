@@ -135,18 +135,24 @@ class ChecklistGenerationServiceTests {
     void createsSellerSnapshotFromSelectedLaptopAiFeature() throws Exception {
         when(categoryRepository.findById(201L))
                 .thenReturn(Optional.of(laptop(OsFamily.WINDOWS)));
+        stubPublishedTemplate(201L);
         ModelChecklistResearch research = ModelChecklistResearch.start(201L, 1);
-        research.complete(new ObjectMapper().writeValueAsString(new ChecklistSupplementResult(
-                true,
-                List.of(new ChecklistSuggestion(
-                        "CAMERA",
-                        "내장 카메라",
-                        ChecklistEvidenceStatus.VERIFIED,
-                        "공식 사양",
-                        "카메라 앱에서 확인하세요.",
-                        "https://www.samsung.com/sec/support/model/NT960/",
-                        "Samsung support")),
-                List.of())));
+        // 기존 조사 JSON에는 evidenceType이 없으므로 배포 후에도 서버 정책으로 보강돼야 한다.
+        research.complete("""
+                {
+                  "available": true,
+                  "suggestions": [{
+                    "featureCode": "CAMERA",
+                    "featureName": "내장 카메라",
+                    "evidenceStatus": "VERIFIED",
+                    "reason": "공식 사양",
+                    "checkGuide": "카메라 앱에서 확인하세요.",
+                    "sourceUrl": "https://www.samsung.com/sec/support/model/NT960/",
+                    "sourceTitle": "Samsung support"
+                  }],
+                  "reviewCandidates": []
+                }
+                """);
         when(researchRepository.findFirstByDeviceModelIdOrderByResearchVersionDesc(201L))
                 .thenReturn(Optional.of(research));
 
@@ -155,8 +161,16 @@ class ChecklistGenerationServiceTests {
                 .orElseThrow();
 
         assertThat(result.aiApplied()).isTrue();
-        assertThat(result.items()).extracting(GeneratedChecklistItem::featureCode)
-                .contains("CAMERA");
+        assertThat(result.items())
+                .extracting(GeneratedChecklistItem::itemCode)
+                .containsExactly("EXT-001", "LAP-FTR-CAM");
+        assertThat(result.items())
+                .extracting(GeneratedChecklistItem::featureCode)
+                .containsExactly(null, "CAMERA");
+        assertThat(result.aiSuggestions())
+                .singleElement()
+                .extracting(ChecklistSuggestion::evidenceType)
+                .isEqualTo(EvidenceType.SELLER_CONFIRMATION);
         verifyNoInteractions(supplementClient);
     }
 

@@ -4,6 +4,15 @@ function pageQuery(page = 0, size = 20) {
   return `?page=${page}&size=${size}`
 }
 
+function query(params = {}) {
+  const search = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') search.set(key, String(value))
+  })
+  const suffix = search.toString()
+  return suffix ? `?${suffix}` : ''
+}
+
 export function loginAdmin(email, password) {
   return apiClient.post('/admin/sessions', { email, password })
 }
@@ -68,9 +77,8 @@ export function retryChecklistResearch(researchId) {
   return apiClient.post(`/admin/checklist-researches/${researchId}/retry`)
 }
 
-export function getAdminDeviceModels(reviewStatus) {
-  const suffix = reviewStatus ? `?reviewStatus=${encodeURIComponent(reviewStatus)}` : ''
-  return apiClient.get(`/admin/device-models${suffix}`)
+export function getAdminDeviceModels(params = {}) {
+  return apiClient.get(`/admin/device-models${query(params)}`)
 }
 
 export function getAdminDeviceModel(modelId) {
@@ -79,6 +87,22 @@ export function getAdminDeviceModel(modelId) {
 
 export function updateAdminDeviceModel(modelId, payload) {
   return apiClient.patch(`/admin/device-models/${modelId}`, payload)
+}
+
+export function updateAdminDeviceModelStatus(modelId, payload) {
+  return apiClient.patch(`/admin/device-models/${modelId}/status`, payload)
+}
+
+export function getAdminDeviceModelProducts(modelId, params = {}) {
+  return apiClient.get(`/admin/device-models/${modelId}/products${query(params)}`)
+}
+
+export function getAdminDeviceModelResearches(modelId, params = {}) {
+  return apiClient.get(`/admin/device-models/${modelId}/researches${query(params)}`)
+}
+
+export function getAdminDeviceModelProductMaterials(modelId, productId) {
+  return apiClient.get(`/admin/device-models/${modelId}/products/${productId}/materials`)
 }
 
 export function researchAdminDeviceModel(modelId) {

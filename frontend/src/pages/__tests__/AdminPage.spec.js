@@ -7,6 +7,9 @@ import {
   getAdminActionLog,
   getAdminActionLogs,
   getAdminDeviceModel,
+  getAdminDeviceModelProductMaterials,
+  getAdminDeviceModelProducts,
+  getAdminDeviceModelResearches,
   getAdminDeviceModels,
   getAdminMembers,
   getChecklistResearches,
@@ -14,6 +17,7 @@ import {
   retryChecklistResearch,
   researchAdminDeviceModel,
   updateAdminDeviceModel,
+  updateAdminDeviceModelStatus,
   updateAdminActionLog,
   updateDeviceModelRequest,
 } from '../../api/admin'
@@ -30,6 +34,9 @@ vi.mock('../../api/admin', () => ({
   getAdminMember: vi.fn(),
   getAdminMembers: vi.fn(),
   getAdminDeviceModel: vi.fn(),
+  getAdminDeviceModelProductMaterials: vi.fn(),
+  getAdminDeviceModelProducts: vi.fn(),
+  getAdminDeviceModelResearches: vi.fn(),
   getAdminDeviceModels: vi.fn(),
   getChecklistResearches: vi.fn(),
   getDeviceModelRequests: vi.fn(),
@@ -43,6 +50,7 @@ vi.mock('../../api/admin', () => ({
   updateAdminAccount: vi.fn(),
   updateAdminActionLog: vi.fn(),
   updateAdminDeviceModel: vi.fn(),
+  updateAdminDeviceModelStatus: vi.fn(),
   updateDeviceModelRequest: vi.fn(),
 }))
 
@@ -66,7 +74,11 @@ describe('AdminPage', () => {
     getAdminMembers.mockResolvedValue(emptyPage)
     getAdminActionLogs.mockResolvedValue(emptyPage)
     getAdminAccounts.mockResolvedValue(emptyPage)
-    getAdminDeviceModels.mockResolvedValue([])
+    getAdminDeviceModels.mockResolvedValue({ ...emptyPage, size: 20 })
+    getAdminDeviceModelProducts.mockResolvedValue({ ...emptyPage, size: 10 })
+    getAdminDeviceModelResearches.mockResolvedValue({ ...emptyPage, size: 10 })
+    getAdminDeviceModelProductMaterials.mockResolvedValue({ images: [], checklistItems: [] })
+    updateAdminDeviceModelStatus.mockResolvedValue(null)
     getDeviceModelRequests.mockResolvedValue([])
     getDeviceCategories.mockResolvedValue([
       { categoryId: 10, name: '스마트폰' },
@@ -160,6 +172,8 @@ describe('AdminPage', () => {
       sourceType: 'USER_REPORT',
       latestResearchStatus: 'FAILED',
       latestResearchVersion: 1,
+      relatedProductCount: 2,
+      isActive: true,
     }
     const detail = {
       ...summary,
@@ -171,8 +185,20 @@ describe('AdminPage', () => {
         suggestions: [],
         failureMessage: '카테고리와 모델 정보가 일치하지 않습니다.',
       },
+      impact: {
+        productCount: 2,
+        productStatusCounts: { ON_SALE: 1 },
+        researchCount: 1,
+        variantCount: 3,
+      },
     }
-    getAdminDeviceModels.mockResolvedValue([summary])
+    getAdminDeviceModels.mockResolvedValue({
+      ...emptyPage,
+      content: [summary],
+      size: 20,
+      totalElements: 1,
+      totalPages: 1,
+    })
     getAdminDeviceModel.mockResolvedValue(detail)
     updateAdminDeviceModel.mockResolvedValue({ ...detail, categoryId: 20, reviewStatus: 'VERIFIED' })
     researchAdminDeviceModel.mockResolvedValue({ researchId: 502, status: 'PENDING_REVIEW' })
@@ -191,11 +217,11 @@ describe('AdminPage', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('필수 기본 체크리스트')
-    expect(wrapper.text()).toContain('AI 추가 조사 항목')
+    expect(wrapper.text()).toContain('최신 AI 조사 항목')
     expect(wrapper.text()).toContain('카테고리와 모델 정보가 일치하지 않습니다.')
 
-    await wrapper.get('select[aria-label="관리 모델 카테고리"]').setValue('20')
-    await wrapper.get('select[aria-label="관리 모델 운영체제"]').setValue('WINDOWS')
+    await wrapper.get('select[aria-label="관리자 모델 카테고리"]').setValue('20')
+    await wrapper.get('select[aria-label="관리자 모델 운영체제"]').setValue('WINDOWS')
     await wrapper.findAll('button')
       .find((button) => button.text() === '수정값으로 모델 재조사')
       .trigger('click')

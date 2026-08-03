@@ -2,13 +2,18 @@ package com.c203.limit.domain.product.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.c203.limit.domain.inspection.entity.ModelChecklistResearch;
+import com.c203.limit.domain.inspection.enums.ModelChecklistResearchStatus;
+import com.c203.limit.domain.inspection.repository.ModelChecklistResearchRepository;
 import com.c203.limit.domain.product.entity.Manufacturer;
 import com.c203.limit.testsupport.AbstractMySqlIntegrationTest;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 카탈로그 이관 마이그레이션(V20260812~V20260814)이 실제 MySQL에서 의도대로 도는지 검증한다.
@@ -27,6 +32,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class DeviceCatalogMigrationIntegrationTests extends AbstractMySqlIntegrationTest {
 
     @Autowired JdbcTemplate jdbcTemplate;
+    @Autowired ModelChecklistResearchRepository researchRepository;
 
     @Test
     void createsCatalogTables() {
@@ -160,6 +166,46 @@ class DeviceCatalogMigrationIntegrationTests extends AbstractMySqlIntegrationTes
         assertThat(columnExists("listing", "connectivity")).isTrue();
     }
 
+    @Test
+    void addsReversibleModelDeactivationAuditAndSearchIndexes() {
+        assertThat(columnExists("device_model", "disabled_at")).isTrue();
+        assertThat(columnExists("device_model", "disabled_by_admin_id")).isTrue();
+        assertThat(columnExists("device_model", "disable_reason")).isTrue();
+        assertThat(columnExists("device_model", "replacement_model_id")).isTrue();
+        assertThat(indexExists("listing", "idx_listing_model_updated")).isTrue();
+        assertThat(indexExists("listing", "idx_listing_model_created")).isTrue();
+        assertThat(indexExists("model_checklist_research", "idx_model_research_model_updated"))
+                .isTrue();
+    }
+
+    @Test
+    @Transactional
+    void readsOnlyTheLatestResearchSummaryForEachModel() {
+        Long modelId = jdbcTemplate.queryForObject(
+                "SELECT MIN(model_id) FROM device_model", Long.class);
+        Integer nextVersion = jdbcTemplate.queryForObject(
+                "SELECT COALESCE(MAX(research_version), 0) + 1 "
+                        + "FROM model_checklist_research WHERE device_model_id = ?",
+                Integer.class,
+                modelId);
+        ModelChecklistResearch previous =
+                ModelChecklistResearch.start(modelId, nextVersion, "{}");
+        previous.complete("{}");
+        researchRepository.saveAndFlush(previous);
+        ModelChecklistResearch latest =
+                ModelChecklistResearch.start(modelId, nextVersion + 1, "{}");
+        latest.fail("{}");
+        researchRepository.saveAndFlush(latest);
+
+        var summaries = researchRepository.findLatestSummaries(Set.of(modelId));
+
+        assertThat(summaries).singleElement().satisfies(summary -> {
+            assertThat(summary.getDeviceModelId()).isEqualTo(modelId);
+            assertThat(summary.getResearchVersion()).isEqualTo(nextVersion + 1);
+            assertThat(summary.getStatus()).isEqualTo(ModelChecklistResearchStatus.FAILED);
+        });
+    }
+
     /** 기존 매물의 카탈로그 참조가 남김없이 backfill돼야 한다. */
     @Test
     void backfillsDeviceModelIdForExistingListings() {
@@ -195,6 +241,17 @@ class DeviceCatalogMigrationIntegrationTests extends AbstractMySqlIntegrationTes
                                 + tableName
                                 + "' AND column_name = '"
                                 + columnName
+                                + "'")
+                == 1;
+    }
+
+    private boolean indexExists(String tableName, String indexName) {
+        return count(
+                        "SELECT COUNT(DISTINCT index_name) FROM information_schema.statistics "
+                                + "WHERE table_schema = DATABASE() AND table_name = '"
+                                + tableName
+                                + "' AND index_name = '"
+                                + indexName
                                 + "'")
                 == 1;
     }

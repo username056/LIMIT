@@ -333,6 +333,7 @@ describe('ProductRegisterPage', () => {
         checkGuide: '카메라 앱을 실행해 영상 출력 상태를 확인하세요.',
         sourceUrl: 'https://www.samsung.com/example',
         sourceTitle: 'Galaxy Book 공식 사양',
+        evidenceType: 'SELLER_CONFIRMATION',
       }],
       reviewCandidates: ['FINGERPRINT'],
     })
@@ -359,6 +360,51 @@ describe('ProductRegisterPage', () => {
     }))
   })
 
+  it('기본 항목과 선택한 AI 항목을 촬영·업로드와 직접 확인으로 나눠 같은 수로 표시한다', async () => {
+    generateChecklist.mockResolvedValue({
+      deviceModelId: 101,
+      manufacturer: 'Samsung',
+      modelName: 'Galaxy Book',
+      osFamily: 'WINDOWS',
+      aiApplied: true,
+      items: templateItems.map((item) => ({ ...item, required: item.isRequired })),
+      aiSuggestions: [{
+        featureCode: 'PORTS',
+        featureName: '외부 포트',
+        evidenceStatus: 'VERIFIED',
+        reason: '공식 사양에서 외부 포트를 확인했습니다.',
+        checkGuide: '외부 장치를 연결해 인식 상태를 확인하세요.',
+        sourceUrl: 'https://www.samsung.com/example',
+        sourceTitle: 'Galaxy Book 공식 사양',
+        evidenceType: 'VIDEO',
+      }],
+      reviewCandidates: [],
+    })
+    getProductChecklist.mockResolvedValue([
+      { checklistItemId: 7001, itemCode: 'EXT-001', name: '전면·후면·측면 외관', evidenceType: 'PHOTO', isRequired: true, status: 'PENDING' },
+      { checklistItemId: 7002, itemCode: 'PRV-004', name: '계정 제거 및 초기화', evidenceType: 'SELLER_CONFIRMATION', isRequired: true, status: 'PENDING' },
+      { checklistItemId: 7003, itemCode: 'LAP-FTR-PORT', name: '외부 포트', evidenceType: 'VIDEO', isRequired: true, status: 'PENDING' },
+    ])
+
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await fillDeviceStep(wrapper)
+
+    expect(wrapper.text()).toContain('기본 2개 + AI 선택 0개 = 전체 2개')
+    expect(wrapper.text()).toContain('촬영·업로드 1개 · 직접 확인 1개')
+
+    await wrapper.get('input[type="checkbox"][value="PORTS"]').setValue(true)
+
+    expect(wrapper.text()).toContain('기본 2개 + AI 선택 1개 = 전체 3개')
+    expect(wrapper.text()).toContain('촬영·업로드 2개 · 직접 확인 1개')
+
+    await buttonByText(wrapper, '다음 단계').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('촬영·업로드 항목 2개')
+    expect(wrapper.text()).toContain('현재 진행률: 2개 중 0개 등록 완료')
+  })
+
   it('스마트폰 모델도 관리자 검토 전 AI 후보를 판매자에게 노출한다', async () => {
     getDeviceCategories.mockResolvedValue([{ categoryId: 10, name: '스마트폰' }])
     getDeviceModels.mockResolvedValue([{
@@ -382,6 +428,7 @@ describe('ProductRegisterPage', () => {
         checkGuide: '호환 충전기로 충전 상태를 확인하세요.',
         sourceUrl: 'https://www.samsung.com/example',
         sourceTitle: 'Galaxy S24 공식 사양',
+        evidenceType: 'VIDEO',
       }],
       reviewCandidates: [],
     })
@@ -1091,6 +1138,93 @@ describe('ProductRegisterPage', () => {
 
       expect(buttonByText(wrapper, '촬영하기')).toBeDefined()
       expect(wrapper.text()).toContain('파일 업로드')
+    })
+
+    // 필수 항목 + checklistGuideImages.js에 등록된 카테고리·itemCode 조합이면
+    // 서버 guide 문구 대신 프론트에 하드코딩해 둔 사진·설명이 뜹니다.
+    it('필수 항목이고 카테고리·itemCode가 등록돼 있으면 지정된 사진과 설명을 보여준다', async () => {
+      getDeviceCategories.mockResolvedValueOnce([{ categoryId: 10, name: 'Windows 노트북' }])
+      getProductChecklist.mockResolvedValue([
+        {
+          checklistItemId: 7001,
+          itemCode: 'EXT-001',
+          name: '전면·후면·측면 외관',
+          evidenceType: 'PHOTO',
+          isRequired: true,
+          status: 'PENDING',
+          guide: '서버가 내려준 원본 가이드 문구',
+        },
+      ])
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await goToCaptureStep(wrapper)
+
+      expect(wrapper.find('[role="dialog"][aria-label="촬영 가이드"]').exists()).toBe(false)
+
+      await wrapper.find('button[aria-label="전면·후면·측면 외관 촬영 가이드 보기"]').trigger('click')
+
+      const modal = wrapper.find('[role="dialog"][aria-label="촬영 가이드"]')
+      expect(modal.exists()).toBe(true)
+      expect(modal.text()).toContain('외관 손상 여부 확인')
+      expect(modal.text()).toContain('사면 테두리가 모두 잘 보이도록')
+      expect(modal.text()).not.toContain('서버가 내려준 원본 가이드 문구')
+      expect(modal.find('img').attributes('src')).toBeTruthy()
+
+      await modal.find('button[aria-label="닫기"]').trigger('click')
+      expect(wrapper.find('[role="dialog"][aria-label="촬영 가이드"]').exists()).toBe(false)
+    })
+
+    // 필수 항목이어도 카테고리·itemCode 조합이 아직 등록 안 됐으면(플레이스홀더 미작성)
+    // 서버 guide 문구 + evidenceType에 맞는 범용 이미지로 대체합니다.
+    it('필수 항목이어도 등록되지 않은 조합이면 서버 문구와 범용 이미지를 보여준다', async () => {
+      getProductChecklist.mockResolvedValue([
+        {
+          checklistItemId: 7009,
+          itemCode: 'CUSTOM-999',
+          name: '커스텀 확인 항목',
+          evidenceType: 'PHOTO',
+          isRequired: true,
+          status: 'PENDING',
+          guide: '커스텀 항목 촬영 가이드입니다.',
+        },
+      ])
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await goToCaptureStep(wrapper)
+
+      await wrapper.find('button[aria-label="커스텀 확인 항목 촬영 가이드 보기"]').trigger('click')
+
+      const modal = wrapper.find('[role="dialog"][aria-label="촬영 가이드"]')
+      expect(modal.find('img').attributes('src')).toBeTruthy()
+      expect(modal.text()).toContain('커스텀 항목 촬영 가이드입니다.')
+    })
+
+    // 비필수 항목은 카테고리·itemCode가 등록돼 있어도 항상 서버 문구를 그대로 씁니다.
+    it('비필수 항목은 등록된 조합이 있어도 무시하고 서버 문구를 그대로 보여준다', async () => {
+      getDeviceCategories.mockResolvedValueOnce([{ categoryId: 10, name: 'Windows 노트북' }])
+      getProductChecklist.mockResolvedValue([
+        {
+          checklistItemId: 7011,
+          itemCode: 'EXT-001',
+          name: '전면·후면·측면 외관',
+          evidenceType: 'PHOTO',
+          isRequired: false,
+          status: 'PENDING',
+          guide: '비필수 항목의 서버 기본 가이드 문구',
+        },
+      ])
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await goToCaptureStep(wrapper)
+
+      await wrapper.find('button[aria-label="전면·후면·측면 외관 촬영 가이드 보기"]').trigger('click')
+
+      const modal = wrapper.find('[role="dialog"][aria-label="촬영 가이드"]')
+      expect(modal.text()).toContain('비필수 항목의 서버 기본 가이드 문구')
+      expect(modal.text()).not.toContain('사면 테두리가 모두 잘 보이도록')
     })
 
     // 영상 녹화는 지원하지 않습니다. 촬영 버튼을 보여주면 눌러도 할 수 있는 게 없습니다.

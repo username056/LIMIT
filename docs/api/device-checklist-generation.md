@@ -63,6 +63,8 @@ ACTIVE 판매자만 호출할 수 있다.
 - `featureName`: 사용자에게 표시할 한국어 기능명
 - `reason`: 공식 자료를 근거로 후보를 선정한 이유
 - `checkGuide`: 판매자가 실제 기기에서 기능을 확인할 방법
+- `evidenceType`: 선택 시 생성될 항목 유형. `PHOTO`, `VIDEO`, `DIAGNOSTIC_FILE`,
+  `SELLER_CONFIRMATION` 중 하나이며 판매 화면의 촬영·업로드/직접 확인 개수 계산에 사용한다.
 - `evidenceStatus`: `VERIFIED`, `LIKELY`, `UNKNOWN`, `CONFLICTED`
 - `sourceUrl`, `sourceTitle`: 확인한 공식 자료
 
