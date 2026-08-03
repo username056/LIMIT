@@ -43,6 +43,7 @@ SHA-256 해시만 저장하며 세션 상태 변경에는 JPA 낙관적 락을 �
 
 소스와 빌드 방법은 `windows-scanner/README.md`에 있다. 로컬 실행은
 `LIMIT_API_BASE_URL` 환경변수를 우선 사용하고, CI는 `WINDOWS_SCANNER_API_BASE_URL`을
-단일 EXE에 주입한다. 빌드된 파일은 프론트 배포 산출물의
+단일 EXE에 주입한다. 별도 변수가 없으면 `VITE_API_BASE_URL`의 `/api/v1` 접미사를
+제거한 API 루트 주소를 사용한다. 빌드된 파일은 프론트 배포 산출물의
 `/downloads/LimitScanner.exe`에 포함되며 `VITE_WINDOWS_SCANNER_URL`로 다른 CDN 주소를
 지정할 수도 있다.
