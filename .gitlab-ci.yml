@@ -148,6 +148,7 @@ variables:
   rules:
     - changes: &frontend_changes
         - frontend/**/*
+        - windows-scanner/**/*
         - scripts/ci-test.sh
         - scripts/deploy-frontend.sh
         - infra/terraform/frontend/**/*
@@ -371,9 +372,33 @@ frontend_test:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
       changes: *frontend_changes
 
-frontend_build:
+windows_scanner_build:
   stage: test
   needs: []
+  image: mcr.microsoft.com/dotnet/sdk:8.0.415
+  script:
+    - scanner_api_base_url="${WINDOWS_SCANNER_API_BASE_URL:-${VITE_API_BASE_URL:-http://localhost:18080/}}"
+    - scanner_api_base_url="${scanner_api_base_url%/api/v1}"
+    - scanner_api_base_url="${scanner_api_base_url%/}/"
+    - case "$scanner_api_base_url" in http://*|https://*) ;; *) echo "WINDOWS_SCANNER_API_BASE_URL must be an absolute HTTP(S) URL" >&2; exit 1 ;; esac
+    - dotnet publish windows-scanner/src/LimitScanner/LimitScanner.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false -p:LimitApiBaseUrl="$scanner_api_base_url" -o windows-scanner/artifacts
+    - test -s windows-scanner/artifacts/LimitScanner.exe
+  artifacts:
+    expire_in: 7 days
+    paths: [windows-scanner/artifacts/LimitScanner.exe]
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *frontend_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
+      changes: *frontend_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
+      changes: *frontend_changes
+
+frontend_build:
+  stage: test
+  needs:
+    - job: windows_scanner_build
+      artifacts: true
   image: node:24-alpine
   cache:
     key:
@@ -383,6 +408,8 @@ frontend_build:
     npm_config_cache: "$CI_PROJECT_DIR/frontend/.npm"
   script:
     - export VITE_SENTRY_RELEASE="${CI_COMMIT_SHA}"
+    - mkdir -p frontend/public/downloads
+    - cp windows-scanner/artifacts/LimitScanner.exe frontend/public/downloads/LimitScanner.exe
     - sh scripts/ci-test.sh frontend-build
   artifacts:
     expire_in: 7 days

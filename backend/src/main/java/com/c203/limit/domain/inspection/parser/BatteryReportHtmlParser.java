@@ -76,9 +76,15 @@ public class BatteryReportHtmlParser {
         if (design == null || fullCharge == null || design.compareTo(BigDecimal.ZERO) == 0) {
             return null;
         }
-        return fullCharge
+        if (fullCharge.compareTo(BigDecimal.ZERO) <= 0) {
+            return BigDecimal.ZERO.setScale(2);
+        }
+        BigDecimal calculatedRatio = fullCharge
                 .divide(design, 4, RoundingMode.HALF_UP)
                 .multiply(BigDecimal.valueOf(100))
                 .setScale(2, RoundingMode.HALF_UP);
+        return calculatedRatio
+                .max(BigDecimal.ZERO.setScale(2))
+                .min(BigDecimal.valueOf(100).setScale(2));
     }
 }

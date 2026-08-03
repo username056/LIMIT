@@ -15,7 +15,7 @@ public sealed class DxDiagCollector(CommandRunner commandRunner)
 
         await commandRunner.RunAsync(
             dxdiagPath,
-            $"/dontskip /t \"{outputPath}\"",
+            $"/t \"{outputPath}\"",
             TimeSpan.FromSeconds(60),
             cancellationToken);
 

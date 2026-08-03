@@ -68,6 +68,28 @@ class BatteryReportHtmlParserTests {
     }
 
     @Test
+    void capsCapacityRatioAtOneHundredWhenFullChargeExceedsDesignCapacity() {
+        DxdiagStyleHtml html =
+                new DxdiagStyleHtml(
+                        "SAMSUNG Electronics", "75,000 mWh", "75,675 mWh", "1");
+
+        BatteryReportParseResult result = parser.parse(bytes(html.toHtml()));
+
+        assertThat(result.capacityRatio()).isEqualByComparingTo("100.00");
+    }
+
+    @Test
+    void floorsCapacityRatioAtZeroWhenFullChargeCapacityIsZero() {
+        DxdiagStyleHtml html =
+                new DxdiagStyleHtml(
+                        "SAMSUNG Electronics", "75,000 mWh", "0 mWh", "1");
+
+        BatteryReportParseResult result = parser.parse(bytes(html.toHtml()));
+
+        assertThat(result.capacityRatio()).isEqualByComparingTo("0.00");
+    }
+
+    @Test
     void returnsAllNullWhenExpectedLabelsAreAbsent() {
         String html = "<html><body><p>no battery info here</p></body></html>";
 
