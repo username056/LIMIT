@@ -10,6 +10,7 @@ import com.c203.limit.domain.admin.dto.request.ReviewDeviceModelRequest;
 import com.c203.limit.domain.admin.dto.request.UpdateAdminAccountAccessRequest;
 import com.c203.limit.domain.admin.dto.request.UpdateAdminActionLogRequest;
 import com.c203.limit.domain.admin.dto.request.UpdateDeviceModelRequest;
+import com.c203.limit.domain.admin.dto.request.UpdateDeviceModelStatusRequest;
 import com.c203.limit.domain.admin.service.AdminAccountManagementService;
 import com.c203.limit.domain.admin.service.AdminService;
 import com.c203.limit.domain.auth.service.AuthCookieService;
@@ -168,8 +169,28 @@ public class AdminController implements AdminApi {
     }
 
     @Override
-    public ResponseEntity<?> listAdminDeviceModels(DeviceModelReviewStatus reviewStatus) {
-        return ResponseEntity.ok(ApiResponse.ok(deviceModelManagementService.list(reviewStatus)));
+    public ResponseEntity<?> listAdminDeviceModels(
+            String keyword,
+            Long categoryId,
+            Long manufacturerId,
+            Boolean isActive,
+            DeviceModelReviewStatus reviewStatus,
+            ModelChecklistResearchStatus researchStatus,
+            Integer page,
+            Integer size,
+            String sort) {
+        return ResponseEntity.ok(
+                ApiResponse.ok(
+                        deviceModelManagementService.list(
+                                keyword,
+                                categoryId,
+                                manufacturerId,
+                                isActive,
+                                reviewStatus,
+                                researchStatus,
+                                page,
+                                size,
+                                sort)));
     }
 
     @Override
@@ -184,6 +205,35 @@ public class AdminController implements AdminApi {
                 ApiResponse.ok(
                         deviceModelManagementService.update(
                                 modelId, currentUser.adminId(), request)));
+    }
+
+    @Override
+    public ResponseEntity<?> updateAdminDeviceModelStatus(
+            Long modelId, UpdateDeviceModelStatusRequest request) {
+        return ResponseEntity.ok(
+                ApiResponse.ok(
+                        deviceModelManagementService.updateStatus(
+                                modelId, currentUser.adminId(), request)));
+    }
+
+    @Override
+    public ResponseEntity<?> listAdminDeviceModelProducts(
+            Long modelId, Integer page, Integer size, String sort) {
+        return ResponseEntity.ok(
+                ApiResponse.ok(deviceModelManagementService.products(modelId, page, size, sort)));
+    }
+
+    @Override
+    public ResponseEntity<?> listAdminDeviceModelResearches(
+            Long modelId, Integer page, Integer size) {
+        return ResponseEntity.ok(
+                ApiResponse.ok(deviceModelManagementService.researches(modelId, page, size)));
+    }
+
+    @Override
+    public ResponseEntity<?> getAdminDeviceModelProductMaterials(Long modelId, Long productId) {
+        return ResponseEntity.ok(
+                ApiResponse.ok(deviceModelManagementService.materials(modelId, productId)));
     }
 
     @Override

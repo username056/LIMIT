@@ -6,6 +6,7 @@ import BaseButton from '../components/BaseButton.vue'
 import BaseCard from '../components/BaseCard.vue'
 import BaseInput from '../components/BaseInput.vue'
 import AdminShell from '../components/AdminShell.vue'
+import AdminDeviceModelManagement from '../components/admin/AdminDeviceModelManagement.vue'
 import {
   createAdminAccount,
   createMemberRestriction,
@@ -16,8 +17,6 @@ import {
   getAdminActionLogs,
   getAdminMember,
   getAdminMembers,
-  getAdminDeviceModel,
-  getAdminDeviceModels,
   getMemberRestrictions,
   getChecklistResearches,
   getDeviceModelRequests,
@@ -26,10 +25,8 @@ import {
   rejectDeviceModelRequest,
   releaseMemberRestriction,
   retryChecklistResearch,
-  researchAdminDeviceModel,
   updateAdminActionLog,
   updateAdminAccount,
-  updateAdminDeviceModel,
   updateDeviceModelRequest,
 } from '../api/admin'
 import { getDeviceCategories } from '../api/products'
@@ -51,18 +48,6 @@ const checklistResearchStatus = ref('PENDING_REVIEW')
 const retryingResearchId = ref(null)
 const deviceModelRequests = ref([])
 const deviceCategories = ref([])
-const adminDeviceModels = ref([])
-const selectedAdminDeviceModel = ref(null)
-const adminModelReviewFilter = ref('')
-const isSavingAdminModel = ref(false)
-const isResearchingAdminModel = ref(false)
-const adminModelForm = reactive({
-  categoryId: '',
-  manufacturer: '',
-  modelName: '',
-  modelCode: '',
-  osFamily: 'ANDROID',
-})
 const editingModelRequestId = ref(null)
 const isSavingModelRequest = ref(false)
 const modelRequestForm = reactive({
@@ -178,14 +163,6 @@ async function loadSection(section) {
       if (accountResult) accountsPage.value = accountResult
     } else if (section === 'members') {
       membersPage.value = await getAdminMembers(0, 20)
-    } else if (section === 'device-models') {
-      const [models, categories] = await Promise.all([
-        getAdminDeviceModels(adminModelReviewFilter.value || undefined),
-        getDeviceCategories({ activeOnly: true }),
-      ])
-      adminDeviceModels.value = models
-      deviceCategories.value = categories
-      selectedAdminDeviceModel.value = null
     } else if (section === 'checklist-researches') {
       checklistResearches.value = await getChecklistResearches(checklistResearchStatus.value)
     } else if (section === 'device-model-requests') {
@@ -206,93 +183,6 @@ async function loadSection(section) {
     showError(error, '관리자 데이터를 불러오지 못했습니다.')
   } finally {
     isLoading.value = false
-  }
-}
-
-function modelReviewLabel(status) {
-  if (status === 'PENDING_REVIEW') return '사후 검토 대기'
-  if (status === 'VERIFIED') return '검토 완료'
-  if (status === 'DISABLED') return '비활성'
-  return status
-}
-
-function modelReviewVariant(status) {
-  if (status === 'VERIFIED') return 'success'
-  if (status === 'DISABLED') return 'gray'
-  return 'primary'
-}
-
-async function selectAdminDeviceModel(modelId) {
-  isLoading.value = true
-  errorMessage.value = ''
-  successMessage.value = ''
-  try {
-    const detail = await getAdminDeviceModel(modelId)
-    selectedAdminDeviceModel.value = detail
-    Object.assign(adminModelForm, {
-      categoryId: detail.categoryId || '',
-      manufacturer: detail.manufacturer || '',
-      modelName: detail.modelName || '',
-      modelCode: detail.modelCode || '',
-      osFamily: detail.osFamily || 'ANDROID',
-    })
-  } catch (error) {
-    showError(error, '모델 상세 정보를 불러오지 못했습니다.')
-  } finally {
-    isLoading.value = false
-  }
-}
-
-async function saveAdminDeviceModel(showSuccess = true) {
-  const model = selectedAdminDeviceModel.value
-  if (!model || isSavingAdminModel.value) return false
-  if (
-    !adminModelForm.categoryId
-    || !adminModelForm.manufacturer.trim()
-    || !adminModelForm.modelName.trim()
-  ) {
-    errorMessage.value = '카테고리, 제조사와 모델명을 입력해 주세요.'
-    return false
-  }
-  isSavingAdminModel.value = true
-  errorMessage.value = ''
-  try {
-    const updated = await updateAdminDeviceModel(model.modelId, {
-      categoryId: Number(adminModelForm.categoryId),
-      manufacturer: adminModelForm.manufacturer.trim(),
-      modelName: adminModelForm.modelName.trim(),
-      modelCode: adminModelForm.modelCode.trim() || null,
-      osFamily: adminModelForm.osFamily,
-    })
-    selectedAdminDeviceModel.value = updated
-    adminDeviceModels.value = await getAdminDeviceModels(adminModelReviewFilter.value || undefined)
-    if (showSuccess) successMessage.value = '모델 수정과 사후 검토를 완료했습니다.'
-    return true
-  } catch (error) {
-    showError(error, '모델 정보를 수정하지 못했습니다.')
-    return false
-  } finally {
-    isSavingAdminModel.value = false
-  }
-}
-
-async function rerunAdminModelResearch() {
-  const model = selectedAdminDeviceModel.value
-  if (!model || isResearchingAdminModel.value) return
-  const saved = await saveAdminDeviceModel(false)
-  if (!saved) return
-  isResearchingAdminModel.value = true
-  errorMessage.value = ''
-  successMessage.value = ''
-  try {
-    await researchAdminDeviceModel(model.modelId)
-    await selectAdminDeviceModel(model.modelId)
-    adminDeviceModels.value = await getAdminDeviceModels(adminModelReviewFilter.value || undefined)
-    successMessage.value = '수정된 모델 정보로 새 버전의 AI 조사를 완료했습니다.'
-  } catch (error) {
-    showError(error, '모델 AI 재조사를 완료하지 못했습니다.')
-  } finally {
-    isResearchingAdminModel.value = false
   }
 }
 
@@ -896,232 +786,9 @@ onMounted(() => {
 
     <section
       v-else-if="activeSection === 'device-models'"
-      class="space-y-5"
     >
-      <BaseCard>
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 class="font-bold">
-              모델 관리
-            </h2>
-            <p class="mt-2 text-xs leading-5 text-text-sub">
-              사용자 등록 모델은 즉시 판매에 사용되고 이 화면에 사후 보고됩니다. 모델 정보를 수정한 뒤 같은 값으로 AI 재조사를 실행할 수 있습니다.
-            </p>
-          </div>
-          <select
-            v-model="adminModelReviewFilter"
-            aria-label="모델 검토 상태 필터"
-            class="rounded-md border border-border bg-white px-3 py-2 text-sm"
-            @change="loadSection('device-models')"
-          >
-            <option value="">
-              전체 모델
-            </option>
-            <option value="PENDING_REVIEW">
-              사후 검토 대기
-            </option>
-            <option value="VERIFIED">
-              검토 완료
-            </option>
-            <option value="DISABLED">
-              비활성
-            </option>
-          </select>
-        </div>
-      </BaseCard>
-
-      <div class="grid gap-5 xl:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.5fr)]">
-        <BaseCard>
-          <div class="space-y-2">
-            <button
-              v-for="model in adminDeviceModels"
-              :key="model.modelId"
-              type="button"
-              class="w-full rounded-md border p-3 text-left transition"
-              :class="selectedAdminDeviceModel?.modelId === model.modelId
-                ? 'border-primary bg-accent'
-                : 'border-border bg-bg hover:border-primary/50'"
-              @click="selectAdminDeviceModel(model.modelId)"
-            >
-              <div class="flex items-start justify-between gap-2">
-                <div class="min-w-0">
-                  <p class="truncate text-sm font-bold text-text-main">
-                    {{ model.manufacturer }} {{ model.modelName }}
-                  </p>
-                  <p class="mt-1 text-xs text-text-sub">
-                    {{ model.categoryName }} · {{ model.modelCode }}
-                  </p>
-                </div>
-                <BaseBadge :variant="modelReviewVariant(model.reviewStatus)">
-                  {{ modelReviewLabel(model.reviewStatus) }}
-                </BaseBadge>
-              </div>
-              <p class="mt-2 text-xs text-text-muted">
-                AI {{ model.latestResearchStatus || '미조사' }}
-                <template v-if="model.latestResearchVersion">
-                  · v{{ model.latestResearchVersion }}
-                </template>
-              </p>
-            </button>
-            <p
-              v-if="!adminDeviceModels.length"
-              class="py-8 text-center text-sm text-text-sub"
-            >
-              조건에 맞는 모델이 없습니다.
-            </p>
-          </div>
-        </BaseCard>
-
-        <BaseCard v-if="selectedAdminDeviceModel">
-          <div class="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p class="text-xs font-semibold text-primary">
-                모델 #{{ selectedAdminDeviceModel.modelId }} · {{ selectedAdminDeviceModel.sourceType }}
-              </p>
-              <h3 class="mt-1 text-lg font-bold">
-                {{ selectedAdminDeviceModel.manufacturer }} {{ selectedAdminDeviceModel.modelName }}
-              </h3>
-            </div>
-            <BaseBadge :variant="modelReviewVariant(selectedAdminDeviceModel.reviewStatus)">
-              {{ modelReviewLabel(selectedAdminDeviceModel.reviewStatus) }}
-            </BaseBadge>
-          </div>
-
-          <form
-            class="mt-5 grid gap-3 rounded-md border border-border bg-bg p-4 sm:grid-cols-2"
-            @submit.prevent="saveAdminDeviceModel()"
-          >
-            <label class="text-xs font-semibold sm:col-span-2">카테고리
-              <select
-                v-model="adminModelForm.categoryId"
-                required
-                aria-label="관리 모델 카테고리"
-                class="mt-2 w-full rounded-md border border-border bg-white px-3 py-2 text-sm font-normal"
-              >
-                <option
-                  v-for="category in deviceCategories"
-                  :key="category.categoryId"
-                  :value="category.categoryId"
-                >
-                  {{ category.name }}
-                </option>
-              </select>
-            </label>
-            <label class="text-xs font-semibold">제조사
-              <input
-                v-model="adminModelForm.manufacturer"
-                required
-                maxlength="50"
-                aria-label="관리 모델 제조사"
-                class="mt-2 w-full rounded-md border border-border bg-white px-3 py-2 text-sm font-normal"
-              >
-            </label>
-            <label class="text-xs font-semibold">모델명
-              <input
-                v-model="adminModelForm.modelName"
-                required
-                maxlength="100"
-                aria-label="관리 모델명"
-                class="mt-2 w-full rounded-md border border-border bg-white px-3 py-2 text-sm font-normal"
-              >
-            </label>
-            <label class="text-xs font-semibold">모델 코드
-              <input
-                v-model="adminModelForm.modelCode"
-                maxlength="50"
-                aria-label="관리 모델 코드"
-                class="mt-2 w-full rounded-md border border-border bg-white px-3 py-2 text-sm font-normal"
-              >
-            </label>
-            <label class="text-xs font-semibold">운영체제
-              <select
-                v-model="adminModelForm.osFamily"
-                aria-label="관리 모델 운영체제"
-                class="mt-2 w-full rounded-md border border-border bg-white px-3 py-2 text-sm font-normal"
-              >
-                <option value="ANDROID">Android</option>
-                <option value="IOS">iOS</option>
-                <option value="WINDOWS">Windows</option>
-                <option value="MACOS">macOS</option>
-                <option value="LINUX">Linux</option>
-              </select>
-            </label>
-            <div class="flex flex-wrap gap-2 sm:col-span-2">
-              <BaseButton
-                type="submit"
-                :disabled="isSavingAdminModel || isResearchingAdminModel"
-              >
-                {{ isSavingAdminModel ? '저장 중…' : '수정 완료' }}
-              </BaseButton>
-              <BaseButton
-                type="button"
-                variant="secondary"
-                :disabled="isSavingAdminModel || isResearchingAdminModel"
-                @click="rerunAdminModelResearch"
-              >
-                {{ isResearchingAdminModel ? '재조사 중…' : '수정값으로 모델 재조사' }}
-              </BaseButton>
-            </div>
-          </form>
-
-          <div class="mt-6 grid gap-5 lg:grid-cols-2">
-            <section>
-              <h4 class="text-sm font-bold">
-                필수 기본 체크리스트
-              </h4>
-              <ul class="mt-3 space-y-2">
-                <li
-                  v-for="item in selectedAdminDeviceModel.baseChecklistItems"
-                  :key="item.itemCode"
-                  class="rounded-md border border-border bg-bg px-3 py-2 text-xs"
-                >
-                  <strong>{{ item.name }}</strong>
-                  <p class="mt-1 text-text-sub">
-                    {{ item.guide }}
-                  </p>
-                </li>
-              </ul>
-            </section>
-            <section>
-              <h4 class="text-sm font-bold">
-                AI 추가 조사 항목
-              </h4>
-              <div
-                v-if="selectedAdminDeviceModel.latestResearch?.status === 'FAILED'"
-                class="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700"
-              >
-                {{ selectedAdminDeviceModel.latestResearch.failureMessage || 'AI 조사에 실패했습니다.' }}
-              </div>
-              <ul class="mt-3 space-y-2">
-                <li
-                  v-for="suggestion in selectedAdminDeviceModel.latestResearch?.suggestions || []"
-                  :key="suggestion.featureCode"
-                  class="rounded-md border border-primary/20 bg-accent/50 px-3 py-2 text-xs"
-                >
-                  <strong>{{ suggestion.featureName || suggestion.featureCode }}</strong>
-                  <p class="mt-1 text-text-sub">
-                    {{ suggestion.reason }}
-                  </p>
-                </li>
-              </ul>
-              <p
-                v-if="!selectedAdminDeviceModel.latestResearch"
-                class="mt-3 text-xs text-text-sub"
-              >
-                아직 AI 조사 이력이 없습니다. 모델 재조사를 실행할 수 있습니다.
-              </p>
-            </section>
-          </div>
-        </BaseCard>
-
-        <BaseCard v-else>
-          <p class="py-12 text-center text-sm text-text-sub">
-            왼쪽 목록에서 상세 조회할 모델을 선택해 주세요.
-          </p>
-        </BaseCard>
-      </div>
+      <AdminDeviceModelManagement />
     </section>
-
     <section
       v-else-if="activeSection === 'device-model-requests'"
       class="space-y-5"

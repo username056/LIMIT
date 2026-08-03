@@ -33,6 +33,33 @@ public interface ListingRepository
     @EntityGraph(attributePaths = "category")
     Page<Listing> findBySellerIdAndDeletedAtIsNull(Long sellerId, Pageable pageable);
 
+    @EntityGraph(attributePaths = {"category", "category.parent"})
+    Page<Listing> findByDeviceModelIdAndDeletedAtIsNull(Long deviceModelId, Pageable pageable);
+
+    long countByDeviceModelIdAndDeletedAtIsNull(Long deviceModelId);
+
+    @Query(
+            """
+            SELECT listing.deviceModelId AS deviceModelId, COUNT(listing.id) AS listingCount
+              FROM Listing listing
+             WHERE listing.deviceModelId IN :modelIds
+               AND listing.deletedAt IS NULL
+             GROUP BY listing.deviceModelId
+            """)
+    List<DeviceModelListingCountProjection> countByDeviceModelIds(
+            @Param("modelIds") List<Long> modelIds);
+
+    @Query(
+            """
+            SELECT listing.status AS status, COUNT(listing.id) AS listingCount
+              FROM Listing listing
+             WHERE listing.deviceModelId = :modelId
+               AND listing.deletedAt IS NULL
+             GROUP BY listing.status
+            """)
+    List<ListingStatusCountProjection> countStatusesByDeviceModelId(
+            @Param("modelId") Long modelId);
+
     /** 판매자 공개 프로필에 보여 줄 판매 중 상품 수. */
     long countBySellerIdAndStatusAndDeletedAtIsNull(Long sellerId, ListingStatus status);
 

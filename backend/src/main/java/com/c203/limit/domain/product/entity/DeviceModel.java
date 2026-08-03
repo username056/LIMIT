@@ -6,8 +6,6 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -95,6 +93,18 @@ public class DeviceModel extends BaseTimeEntity {
     @Column(name = "review_note", length = 500)
     private String reviewNote;
 
+    @Column(name = "disabled_at")
+    private LocalDateTime disabledAt;
+
+    @Column(name = "disabled_by_admin_id")
+    private Long disabledByAdminId;
+
+    @Column(name = "disable_reason", length = 500)
+    private String disableReason;
+
+    @Column(name = "replacement_model_id")
+    private Long replacementModelId;
+
     /**
      * @param id 대응하는 리프 {@code category.id}. 채번하지 않는 이유는 {@link #id} 주석 참고.
      */
@@ -175,6 +185,26 @@ public class DeviceModel extends BaseTimeEntity {
     public void deactivate() {
         this.isActive = false;
         this.reviewStatus = DeviceModelReviewStatus.DISABLED;
+    }
+
+    public void deactivate(Long adminId, String reason, Long replacementModelId) {
+        deactivate();
+        this.disabledAt = LocalDateTime.now();
+        this.disabledByAdminId = adminId;
+        this.disableReason = trimToNull(reason);
+        this.replacementModelId = replacementModelId;
+    }
+
+    public void activate(Long adminId, String note) {
+        this.isActive = true;
+        this.reviewStatus = DeviceModelReviewStatus.VERIFIED;
+        this.reviewedByAdminId = adminId;
+        this.reviewedAt = LocalDateTime.now();
+        this.reviewNote = trimToNull(note);
+        this.disabledAt = null;
+        this.disabledByAdminId = null;
+        this.disableReason = null;
+        this.replacementModelId = null;
     }
 
     public void updateCatalog(

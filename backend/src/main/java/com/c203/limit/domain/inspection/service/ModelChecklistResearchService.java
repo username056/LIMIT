@@ -25,19 +25,25 @@ import com.c203.limit.domain.product.entity.Category;
 import com.c203.limit.domain.product.repository.CategoryRepository;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
+import com.c203.limit.global.response.PageResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -95,6 +101,52 @@ public class ModelChecklistResearchService {
                 .findFirstByDeviceModelIdOrderByResearchVersionDesc(modelId)
                 .map(this::response)
                 .orElse(null);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<Long, LatestResearchSummary> latestSummaries(Set<Long> modelIds) {
+        if (modelIds == null || modelIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, LatestResearchSummary> summaries = new LinkedHashMap<>();
+        researchRepository.findLatestSummaries(modelIds).forEach(research -> summaries.put(
+                research.getDeviceModelId(),
+                new LatestResearchSummary(research.getStatus(), research.getResearchVersion())));
+        return Map.copyOf(summaries);
+    }
+
+    @Transactional(readOnly = true)
+    public Set<Long> modelIdsByLatestStatus(ModelChecklistResearchStatus status) {
+        if (status == null) {
+            return Set.of();
+        }
+        return Set.copyOf(researchRepository.findDeviceModelIdsByLatestStatus(status.name()));
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<ChecklistResearchResponse> history(
+            Long modelId, Integer page, Integer size) {
+        Category model = categoryRepository
+                .findById(modelId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.DEVICE_MODEL_NOT_FOUND));
+        Page<ModelChecklistResearch> result = researchRepository.findByDeviceModelId(
+                modelId,
+                PageRequest.of(
+                        page == null ? 0 : Math.max(0, page),
+                        size == null ? 20 : Math.min(100, Math.max(1, size)),
+                        Sort.by(Sort.Direction.DESC, "researchVersion")));
+        return new PageResponse<>(
+                result.stream().map(research -> response(research, model)).toList(),
+                result.getNumber(),
+                result.getSize(),
+                result.getTotalElements(),
+                result.getTotalPages(),
+                result.hasNext());
+    }
+
+    @Transactional(readOnly = true)
+    public long countByModelId(Long modelId) {
+        return researchRepository.countByDeviceModelId(modelId);
     }
 
     @Transactional
@@ -320,6 +372,11 @@ public class ModelChecklistResearchService {
         Category model = categoryRepository
                 .findById(research.getDeviceModelId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.DEVICE_MODEL_NOT_FOUND));
+        return response(research, model);
+    }
+
+    private ChecklistResearchResponse response(
+            ModelChecklistResearch research, Category model) {
         ChecklistSupplementResult supplement = research.getResultJson() == null
                 ? ChecklistSupplementResult.unavailable()
                 : readSupplement(research);
@@ -370,6 +427,9 @@ public class ModelChecklistResearchService {
     }
 
     private record RetryTarget(Long researchId, ChecklistGenerationContext context) {}
+
+    public record LatestResearchSummary(
+            ModelChecklistResearchStatus status, int researchVersion) {}
 
     private boolean isSafeSource(String sourceUrl) {
         if (sourceUrl == null || sourceUrl.isBlank()) {
