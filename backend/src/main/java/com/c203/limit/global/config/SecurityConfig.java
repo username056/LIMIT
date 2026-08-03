@@ -46,6 +46,7 @@ public class SecurityConfig {
                                                 "/api/v1/health",
                                                 "/api/v1/members",
                                                 "/api/v1/admin/sessions",
+                                                "/api/v1/inspection-agent/**",
                                                 "/ws/rtc",
                                                 "/actuator/health/**",
                                                 "/ws",

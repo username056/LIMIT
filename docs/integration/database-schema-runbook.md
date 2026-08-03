@@ -13,11 +13,16 @@ MySQL 스키마는 애플리케이션 시작 시 Flyway가 적용하고, Hiberna
 - `V20260723__create_product_checklist_tables.sql`: 상품·체크리스트·증거·재검수 스키마 추가
 - `V20260802__create_instant_seller_profiles.sql`: 즉시 판매자 등록 프로필과 기존 판매자 데이터 호환 이관
 - `V20260809__create_model_checklist_research.sql`: 모델별 AI 조사 상태·결과·승인 템플릿 연결 추가
+- `V20260817__create_inspection_session.sql`: Windows 자동 검사 일회용 연결 세션 추가
 - `V20260810__create_device_model_request.sql`: 판매자의 미등록 기기 모델 검토 요청 추가
+- `V20260816__support_immediate_model_checklist.sql`: 즉시 모델 등록, 사후 검토 상태와 버전형 AI 재조사 지원
+- `V20260818__extend_device_model_management.sql`: 모델 비활성화 감사 이력·대체 모델과 관리자 검색용 인덱스 추가
 
 `V20260721`은 기존 `member_role`, `user_sanction`, `user_account.member_type`을 삭제하지 않는다. 기존 `member_type` 값도 보존하며, 신규 회원 INSERT를 막지 않도록 해당 컬럼만 nullable/default 호환 상태로 바꾼다.
 
 이미 적용된 migration 파일은 수정하지 않는다. 추가 변경은 반드시 더 높은 버전의 새 파일로 작성한다.
+
+`V20260818` 이후 관리자 화면의 모델 삭제는 물리 삭제가 아니라 비활성화다. 기존 매물·판매 옵션·AI 조사 이력과 검수 증빙은 그대로 보존하고, 비활성 모델만 신규 판매 등록 검색에서 제외한다. 잘못 처리한 경우 관리자 화면에서 재활성화하며, 운영 DB에서 참조 행을 직접 삭제하지 않는다.
 
 ## 빈 DB 적용
 

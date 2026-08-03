@@ -115,6 +115,9 @@ class AdminAuthorizationTests {
     @MockitoBean OcrResultRepository ocrResultRepository;
     @MockitoBean ListingOwnerReader listingOwnerReader;
     @MockitoBean ListingChecklistItemRepository listingChecklistItemRepository;
+
+    @MockitoBean
+    com.c203.limit.domain.inspection.agent.InspectionSessionRepository inspectionSessionRepository;
     @MockitoBean ReinspectionRequestRepository reinspectionRequestRepository;
     @MockitoBean ReinspectionRequestItemRepository reinspectionRequestItemRepository;
     @MockitoBean DxdiagResultRepository dxdiagResultRepository;
@@ -125,6 +128,9 @@ class AdminAuthorizationTests {
             modelChecklistResearchService;
     @MockitoBean
     com.c203.limit.domain.product.service.DeviceModelRequestService deviceModelRequestService;
+
+    @MockitoBean
+    com.c203.limit.domain.product.service.DeviceModelManagementService deviceModelManagementService;
 
     @Test
     void publicHealthEndpointDoesNotRequireAuthentication() throws Exception {

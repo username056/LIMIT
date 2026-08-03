@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
+import PageHeader from '../components/PageHeader.vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseBadge from '../components/BaseBadge.vue'
 import {
@@ -38,6 +39,7 @@ import {
   parseBatteryReport,
   parseDxdiag,
 } from '../api/inspection'
+import { createInspectionSession, getInspectionSession } from '../api/inspectionSessions'
 import { compressImage, compressVideo } from '../utils/mediaOptimize'
 import {
   cameraErrorMessage,
@@ -208,6 +210,11 @@ const checklistLoadingStageIndex = ref(0)
 const checklistLoadingDotCount = ref(1)
 let checklistLoadingTimer = null
 const checklistItems = ref([])
+const windowsInspection = ref(null)
+const windowsInspectionBusy = ref(false)
+const windowsInspectionError = ref('')
+let windowsInspectionTimer = null
+const windowsScannerUrl = import.meta.env.VITE_WINDOWS_SCANNER_URL || '/downloads/LimitScanner.exe'
 const activeCaptureItemId = ref(null)
 const guideModalItem = ref(null)
 // captureState[checklistItemId] = { media: [...], busy: '' | 'optimizing' | 'uploading', progress: 0..100 }
@@ -253,6 +260,57 @@ function allDiagnosisFieldNamesFor(item) {
   if (item.automationType === 'FILE_PARSE' && item.parserType === 'BATTERY_REPORT') return BATTERY_REPORT_FIELD_NAMES
   if (item.automationType === 'FILE_PARSE' && item.parserType === 'DXDIAG') return DXDIAG_FIELD_NAMES
   return []
+}
+
+function stopWindowsInspectionPolling() {
+  if (windowsInspectionTimer) window.clearInterval(windowsInspectionTimer)
+  windowsInspectionTimer = null
+}
+
+async function refreshAutomatedDiagnoses() {
+  if (!currentProductId.value) return
+  checklistItems.value = await getProductChecklist(currentProductId.value)
+  await Promise.allSettled(checklistItems.value
+    .filter((item) => item.automationType === 'FILE_PARSE')
+    .map((item) => refreshDiagnosis(item)))
+}
+
+function beginWindowsInspectionPolling(sessionKey) {
+  stopWindowsInspectionPolling()
+  windowsInspectionTimer = window.setInterval(async () => {
+    try {
+      const session = await getInspectionSession(sessionKey)
+      windowsInspection.value = { ...windowsInspection.value, ...session }
+      if (session.status === 'COMPLETED') {
+        stopWindowsInspectionPolling()
+        await refreshAutomatedDiagnoses()
+        notice.value = 'Windows 자동 검사 결과가 체크리스트에 반영되었습니다.'
+      } else if (['FAILED', 'EXPIRED'].includes(session.status)) {
+        stopWindowsInspectionPolling()
+        windowsInspectionError.value = session.status === 'EXPIRED'
+          ? '연결 코드가 만료됐습니다. 새 코드를 발급해 주세요.'
+          : 'Windows 자동 검사를 완료하지 못했습니다.'
+      }
+    } catch (error) {
+      stopWindowsInspectionPolling()
+      windowsInspectionError.value = error.message || '자동 검사 상태를 확인하지 못했습니다.'
+    }
+  }, 2000)
+}
+
+async function startWindowsInspection() {
+  if (!currentProductId.value || windowsInspectionBusy.value) return
+  windowsInspectionBusy.value = true
+  windowsInspectionError.value = ''
+  stopWindowsInspectionPolling()
+  try {
+    windowsInspection.value = await createInspectionSession(currentProductId.value)
+    beginWindowsInspectionPolling(windowsInspection.value.sessionKey)
+  } catch (error) {
+    windowsInspectionError.value = error.message || 'Windows 자동 검사를 시작하지 못했습니다.'
+  } finally {
+    windowsInspectionBusy.value = false
+  }
 }
 
 const mediaPreview = ref(null)
@@ -698,13 +756,28 @@ async function submitModelRequest() {
   isRequestingModel.value = true
   errorMessage.value = ''
   try {
-    modelRequestResult.value = await requestDeviceModel({
+    const created = await requestDeviceModel({
       categoryId: Number(form.categoryId),
       manufacturer: customModel.manufacturer,
       modelName: customModel.modelName,
       modelCode: customModel.modelCode || null,
       osFamily: customModel.osFamily,
     })
+    modelRequestResult.value = created
+    const modelId = created.resolvedModelId || created.resolvedCategoryId
+    models.value = [{
+      deviceModelId: modelId,
+      manufacturerName: created.manufacturer,
+      categoryId: created.categoryId,
+      modelCode: created.modelCode,
+      modelName: created.modelName,
+      defaultOs: created.osFamily,
+      isActive: true,
+    }]
+    form.deviceModelId = modelId
+    isCustomModelInput.value = false
+    notice.value = '새 모델을 바로 사용할 수 있습니다. AI 추가 항목을 확인해 주세요.'
+    await loadTemplatePreview()
   } catch (error) {
     errorMessage.value = error.message || '모델 검토 요청을 등록하지 못했습니다.'
   } finally {
@@ -785,7 +858,7 @@ async function persistSaleInfo() {
       ...payload,
       categoryId: Number(form.categoryId),
       deviceModelId: Number(form.deviceModelId),
-      confirmedFeatures: [],
+      confirmedFeatures: confirmedFeatures.value,
     })
     productId = created.productId
     draftProductId.value = productId
@@ -1495,6 +1568,7 @@ async function startEdit(productId) {
 
 onBeforeUnmount(() => {
   stopChecklistLoading()
+  stopWindowsInspectionPolling()
   modelRequestId += 1
 })
 
@@ -1526,29 +1600,28 @@ onMounted(async () => {
 
 <template>
   <DefaultLayout>
-    <main class="mx-auto max-w-[1040px] px-4 py-8 sm:px-6 lg:px-10 lg:py-12">
-      <!-- 흰 배경 패널은 유지하고 테두리만 없애 페이지에 자연스럽게 얹힙니다. -->
-      <section class="mb-10 overflow-hidden rounded-lg bg-surface shadow-card">
-        <div class="flex flex-col gap-5 border-b border-border px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p class="text-xs font-bold uppercase tracking-[0.16em] text-primary">
-              SELL YOUR DEVICE
-            </p>
-            <h1 class="mt-1 text-2xl font-bold text-text-main">
-              {{ editingId ? '상품 수정' : '상품 등록' }}
-            </h1>
-            <p class="mt-1 text-sm text-text-sub">
-              기기 정보와 검증 체크리스트를 순서대로 완료하면 바로 판매가 시작됩니다. 중간에 나가야 하면 임시저장을 눌러 주세요.
-            </p>
-          </div>
+    <main class="page-shell">
+      <!--
+        머리말은 카드 밖으로 뺐습니다. 안에 넣으면 이 화면만 제목이 흰 판 안에서
+        시작해, 다른 화면과 제목 위치가 어긋나 보입니다.
+      -->
+      <PageHeader
+        eyebrow="ITEM REGISTER"
+        :title="editingId ? '상품 수정' : '상품 등록'"
+        description="기기 정보와 검증 체크리스트를 순서대로 완료하면 바로 판매가 시작됩니다. 중간에 나가야 하면 임시저장을 눌러 주세요."
+      >
+        <template #action>
           <RouterLink
             :to="{ name: 'seller-products' }"
             class="shrink-0 text-sm font-semibold text-primary hover:underline"
           >
             상품 관리로 이동
           </RouterLink>
-        </div>
+        </template>
+      </PageHeader>
 
+      <!-- 흰 배경 패널은 유지하고 테두리만 없애 페이지에 자연스럽게 얹힙니다. -->
+      <section class="mb-10 overflow-hidden rounded-lg bg-surface shadow-card">
         <div
           v-if="reinspectionRequest"
           class="border-b border-amber-200 bg-amber-50 px-6 py-4 text-sm text-amber-900"
@@ -1661,7 +1734,7 @@ onMounted(async () => {
                   v-else-if="form.categoryId"
                   class="mt-2 block text-xs font-normal text-text-muted"
                 >
-                  관리자 승인 모델은 이 목록에 즉시 추가됩니다. 제조사·모델명·모델 코드로 검색할 수 있습니다.
+                  등록된 모델은 이 목록에 즉시 추가됩니다. 제조사·모델명·모델 코드로 검색할 수 있습니다.
                 </span>
               </label>
             </div>
@@ -1756,7 +1829,7 @@ onMounted(async () => {
                   v-if="modelRequestResult"
                   class="mt-3 rounded-md bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-700"
                 >
-                  모델 요청이 등록되었습니다. 관리자 승인 후 모델 목록에서 선택해 상품을 등록할 수 있습니다.
+                  모델이 즉시 등록되었습니다. 관리자 검토와 관계없이 현재 판매 등록을 계속할 수 있습니다.
                 </p>
               </div>
             </div>
@@ -1813,8 +1886,8 @@ onMounted(async () => {
                     : checklistGeneration.aiApplied ? 'primary' : 'gray'"
                 >
                   {{
-                    checklistGeneration.researchStatus === 'PENDING_REVIEW'
-                      ? '관리자 검토 대기'
+                    checklistGeneration.aiSuggestions?.length
+                      ? 'AI 추가 항목 선택 가능'
                       : checklistGeneration.researchStatus === 'FAILED'
                         ? 'AI 조사 실패 · 기본 정책 적용'
                         : checklistGeneration.aiApplied
@@ -1827,8 +1900,8 @@ onMounted(async () => {
                 v-if="checklistGeneration.researchStatus === 'PENDING_REVIEW'"
                 class="mt-3 rounded-md bg-white/80 px-3 py-2 text-xs leading-5 text-text-sub"
               >
-                이 모델의 공식 자료 조사는 한 번만 수행되며 현재 관리자 검토 대기 중입니다.
-                승인 전까지는 검증된 기본 체크리스트를 사용합니다.
+                공식 자료 조사 결과는 관리자에게도 사후 보고됩니다.
+                아래 AI 추가 항목 중 실제 기기에 해당하는 항목만 선택해 주세요.
               </p>
               <p
                 v-else-if="checklistGeneration.researchStatus === 'FAILED'"
@@ -1839,7 +1912,7 @@ onMounted(async () => {
                 관리자가 실패 원인을 확인하고 재조사할 수 있으며 상품 등록은 그대로 진행할 수 있습니다.
               </p>
               <p
-                v-else-if="!checklistGeneration.aiApplied"
+                v-else-if="!checklistGeneration.aiSuggestions?.length && !checklistGeneration.aiApplied"
                 class="mt-3 rounded-md bg-white/80 px-3 py-2 text-xs leading-5 text-text-sub"
               >
                 AI 연결 없이 검증된 기기별 기본 정책으로 생성했습니다. 상품 등록은 그대로 진행할 수 있습니다.
@@ -1852,9 +1925,51 @@ onMounted(async () => {
               </p>
             </div>
 
+            <div
+              v-if="checklistGeneration?.aiSuggestions?.length"
+              class="mt-5 rounded-lg border border-primary/30 bg-white p-4"
+            >
+              <h3 class="text-sm font-bold text-text-main">
+                AI가 공식 자료에서 찾은 추가 항목
+              </h3>
+              <p class="mt-1 text-xs leading-5 text-text-sub">
+                기본 항목은 항상 적용됩니다. 아래 항목은 실제 기기에 해당하는 경우에만 선택해 주세요.
+              </p>
+              <ul class="mt-3 grid gap-3 sm:grid-cols-2">
+                <li
+                  v-for="suggestion in checklistGeneration.aiSuggestions"
+                  :key="suggestion.featureCode"
+                  class="rounded-md border border-border bg-bg p-3"
+                >
+                  <label class="flex cursor-pointer items-start gap-3">
+                    <input
+                      v-model="confirmedFeatures"
+                      type="checkbox"
+                      :value="suggestion.featureCode"
+                      class="mt-1 h-4 w-4 rounded border-border text-primary"
+                    >
+                    <span>
+                      <strong class="text-sm text-text-main">
+                        {{ suggestion.featureName || suggestion.featureCode }}
+                      </strong>
+                      <span class="mt-1 block text-xs leading-5 text-text-sub">
+                        {{ suggestion.checkGuide || suggestion.reason }}
+                      </span>
+                    </span>
+                  </label>
+                </li>
+              </ul>
+            </div>
+
+            <h3
+              v-if="templateItems.length"
+              class="mt-5 text-sm font-bold text-text-main"
+            >
+              필수 기본 체크리스트
+            </h3>
             <ul
               v-if="templateItems.length"
-              class="mt-5 grid gap-2 sm:grid-cols-2"
+              class="mt-2 grid gap-2 sm:grid-cols-2"
             >
               <li
                 v-for="item in templateItems"
@@ -2083,6 +2198,61 @@ onMounted(async () => {
                 구매자가 믿고 살 수 있도록 {{ mediaChecklistItems.length }}가지 필수 항목의 실물 사진을 등록하세요.
               </p>
 
+              <section
+                v-if="checklistItems.some((item) => item.automationType === 'FILE_PARSE')"
+                class="mt-4 rounded-lg border border-primary/30 bg-accent p-4"
+                aria-labelledby="windows-inspection-title"
+              >
+                <h3
+                  id="windows-inspection-title"
+                  class="text-sm font-bold text-text-main"
+                >
+                  Windows 자동 검사
+                </h3>
+                <p class="mt-1 text-xs leading-5 text-text-sub">
+                  Limit 진단 프로그램으로 CPU·RAM·GPU와 배터리 정보를 자동으로 채울 수 있습니다.
+                  비밀번호와 개인 파일은 수집하지 않습니다.
+                </p>
+                <div class="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    class="rounded-md bg-primary-gradient px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                    :disabled="windowsInspectionBusy"
+                    @click="startWindowsInspection"
+                  >
+                    {{ windowsInspectionBusy ? '코드 발급 중…' : '연결 코드 발급' }}
+                  </button>
+                  <a
+                    :href="windowsScannerUrl"
+                    class="rounded-md border border-primary px-4 py-2 text-sm font-bold text-primary"
+                    download
+                  >
+                    진단 프로그램 다운로드
+                  </a>
+                </div>
+                <div
+                  v-if="windowsInspection"
+                  class="mt-3 rounded-md bg-surface p-3"
+                >
+                  <p class="text-xs text-text-sub">
+                    진단 프로그램에 아래 코드를 입력해 주세요.
+                  </p>
+                  <p class="mt-1 font-mono text-3xl font-bold tracking-[0.35em] text-primary-dark">
+                    {{ windowsInspection.pairingCode || '연결됨' }}
+                  </p>
+                  <p class="mt-2 text-xs font-semibold text-text-sub">
+                    상태: {{ windowsInspection.status }}
+                  </p>
+                </div>
+                <p
+                  v-if="windowsInspectionError"
+                  class="mt-3 text-xs font-semibold text-red-700"
+                  role="alert"
+                >
+                  {{ windowsInspectionError }}
+                </p>
+              </section>
+
               <p class="mt-4 rounded-md bg-accent px-4 py-3 text-sm font-semibold text-primary-dark">
                 현재 진행률: {{ mediaChecklistItems.length }}개 중 {{ capturedMediaCount }}개 촬영 완료
               </p>
@@ -2169,7 +2339,7 @@ onMounted(async () => {
               </ul>
             </div>
 
-            <div class="rounded-lg border border-border bg-surface p-6">
+            <div class="card-soft rounded-lg bg-surface p-6">
               <h2 class="text-base font-bold text-text-main">
                 {{ activeCaptureItem ? `${activeCaptureItem.name} 촬영 프리뷰` : '촬영 프리뷰' }}
               </h2>

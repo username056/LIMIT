@@ -10,8 +10,10 @@ import com.c203.limit.domain.admin.dto.request.ReviewDeviceModelRequest;
 import com.c203.limit.domain.admin.dto.request.UpdateAdminAccountAccessRequest;
 import com.c203.limit.domain.admin.dto.request.UpdateAdminActionLogRequest;
 import com.c203.limit.domain.admin.dto.request.UpdateDeviceModelRequest;
+import com.c203.limit.domain.admin.dto.request.UpdateDeviceModelStatusRequest;
 import com.c203.limit.domain.inspection.enums.ModelChecklistResearchStatus;
 import com.c203.limit.domain.product.entity.DeviceModelRequestStatus;
+import com.c203.limit.domain.product.entity.DeviceModelReviewStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -107,7 +109,9 @@ public interface AdminApi {
     ResponseEntity<?> listChecklistResearches(
             @RequestParam(required = false) ModelChecklistResearchStatus status);
 
-    @Operation(summary = "모델 체크리스트 AI 조사 승인", security = @SecurityRequirement(name = "bearerAuth"))
+    @Operation(
+            summary = "모델 체크리스트 AI 조사 검토 완료",
+            security = @SecurityRequirement(name = "bearerAuth"))
     @PostMapping("/checklist-researches/{researchId}/approval")
     ResponseEntity<?> approveChecklistResearch(
             @PathVariable("researchId") Long researchId,
@@ -125,6 +129,59 @@ public interface AdminApi {
     @PostMapping("/checklist-researches/{researchId}/retry")
     ResponseEntity<?> retryChecklistResearch(@PathVariable("researchId") Long researchId);
 
+    @Operation(summary = "관리자 기기 모델 목록 조회", security = @SecurityRequirement(name = "bearerAuth"))
+    @GetMapping("/device-models")
+    ResponseEntity<?> listAdminDeviceModels(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) Long manufacturerId,
+            @RequestParam(required = false) Boolean isActive,
+            @RequestParam(required = false) DeviceModelReviewStatus reviewStatus,
+            @RequestParam(required = false) ModelChecklistResearchStatus researchStatus,
+            @RequestParam(defaultValue = "0") Integer page,
+            @RequestParam(defaultValue = "20") Integer size,
+            @RequestParam(defaultValue = "updatedAt,desc") String sort);
+
+    @Operation(summary = "관리자 기기 모델 상세 조회", security = @SecurityRequirement(name = "bearerAuth"))
+    @GetMapping("/device-models/{modelId}")
+    ResponseEntity<?> getAdminDeviceModel(@PathVariable("modelId") Long modelId);
+
+    @Operation(summary = "관리자 기기 모델 수정 완료", security = @SecurityRequirement(name = "bearerAuth"))
+    @PatchMapping("/device-models/{modelId}")
+    ResponseEntity<?> updateAdminDeviceModel(
+            @PathVariable("modelId") Long modelId,
+            @Valid @RequestBody UpdateDeviceModelRequest request);
+
+    @Operation(summary = "관리자 기기 모델 활성 상태 변경", security = @SecurityRequirement(name = "bearerAuth"))
+    @PatchMapping("/device-models/{modelId}/status")
+    ResponseEntity<?> updateAdminDeviceModelStatus(
+            @PathVariable("modelId") Long modelId,
+            @Valid @RequestBody UpdateDeviceModelStatusRequest request);
+
+    @Operation(summary = "관리자 기기 모델 연관 상품 조회", security = @SecurityRequirement(name = "bearerAuth"))
+    @GetMapping("/device-models/{modelId}/products")
+    ResponseEntity<?> listAdminDeviceModelProducts(
+            @PathVariable("modelId") Long modelId,
+            @RequestParam(defaultValue = "0") Integer page,
+            @RequestParam(defaultValue = "20") Integer size,
+            @RequestParam(defaultValue = "updatedAt,desc") String sort);
+
+    @Operation(summary = "관리자 기기 모델 조사 이력 조회", security = @SecurityRequirement(name = "bearerAuth"))
+    @GetMapping("/device-models/{modelId}/researches")
+    ResponseEntity<?> listAdminDeviceModelResearches(
+            @PathVariable("modelId") Long modelId,
+            @RequestParam(defaultValue = "0") Integer page,
+            @RequestParam(defaultValue = "20") Integer size);
+
+    @Operation(summary = "관리자 연관 상품 자료 조회", security = @SecurityRequirement(name = "bearerAuth"))
+    @GetMapping("/device-models/{modelId}/products/{productId}/materials")
+    ResponseEntity<?> getAdminDeviceModelProductMaterials(
+            @PathVariable("modelId") Long modelId, @PathVariable("productId") Long productId);
+
+    @Operation(summary = "관리자 기기 모델 AI 재조사", security = @SecurityRequirement(name = "bearerAuth"))
+    @PostMapping("/device-models/{modelId}/researches")
+    ResponseEntity<?> researchAdminDeviceModel(@PathVariable("modelId") Long modelId);
+
     @Operation(
             summary = "직접 입력 기기 모델 요청 목록 조회",
             security = @SecurityRequirement(name = "bearerAuth"))
@@ -138,7 +195,9 @@ public interface AdminApi {
             @PathVariable("requestId") Long requestId,
             @Valid @RequestBody UpdateDeviceModelRequest request);
 
-    @Operation(summary = "직접 입력 기기 모델 요청 승인", security = @SecurityRequirement(name = "bearerAuth"))
+    @Operation(
+            summary = "직접 입력 기기 모델 사후 검토 완료",
+            security = @SecurityRequirement(name = "bearerAuth"))
     @PostMapping("/device-model-requests/{requestId}/approval")
     ResponseEntity<?> approveDeviceModelRequest(
             @PathVariable("requestId") Long requestId,
@@ -152,8 +211,9 @@ public interface AdminApi {
 
     @Operation(
             summary = "결제 PG 대사(reconcile)",
-            description = "REQUESTED로 남은 결제를 Toss 실제 승인 여부로 재확인해 필요하면 로컬 상태를 "
-                    + "복구한다. confirm 응답을 받지 못해 승인 흔적이 없는 결제를 수동으로 복구할 때 사용한다.",
+            description =
+                    "REQUESTED로 남은 결제를 Toss 실제 승인 여부로 재확인해 필요하면 로컬 상태를 "
+                            + "복구한다. confirm 응답을 받지 못해 승인 흔적이 없는 결제를 수동으로 복구할 때 사용한다.",
             security = @SecurityRequirement(name = "bearerAuth"))
     @PostMapping("/payments/{paymentId}/reconcile")
     ResponseEntity<?> reconcilePayment(@PathVariable("paymentId") Long paymentId);

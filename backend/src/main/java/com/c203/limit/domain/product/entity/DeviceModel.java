@@ -6,13 +6,12 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.util.Locale;
+import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -74,6 +73,38 @@ public class DeviceModel extends BaseTimeEntity {
     @Column(name = "display_order", nullable = false)
     private int displayOrder;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "review_status", nullable = false, length = 30)
+    private DeviceModelReviewStatus reviewStatus;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "source_type", nullable = false, length = 30)
+    private DeviceModelSourceType sourceType;
+
+    @Column(name = "reported_by_member_id")
+    private Long reportedByMemberId;
+
+    @Column(name = "reviewed_by_admin_id")
+    private Long reviewedByAdminId;
+
+    @Column(name = "reviewed_at")
+    private LocalDateTime reviewedAt;
+
+    @Column(name = "review_note", length = 500)
+    private String reviewNote;
+
+    @Column(name = "disabled_at")
+    private LocalDateTime disabledAt;
+
+    @Column(name = "disabled_by_admin_id")
+    private Long disabledByAdminId;
+
+    @Column(name = "disable_reason", length = 500)
+    private String disableReason;
+
+    @Column(name = "replacement_model_id")
+    private Long replacementModelId;
+
     /**
      * @param id 대응하는 리프 {@code category.id}. 채번하지 않는 이유는 {@link #id} 주석 참고.
      */
@@ -105,6 +136,32 @@ public class DeviceModel extends BaseTimeEntity {
         model.releaseYear = releaseYear;
         model.isActive = true;
         model.displayOrder = displayOrder;
+        model.reviewStatus = DeviceModelReviewStatus.VERIFIED;
+        model.sourceType = DeviceModelSourceType.CATALOG;
+        return model;
+    }
+
+    public static DeviceModel createReported(
+            Long id,
+            DeviceCategory category,
+            Manufacturer manufacturer,
+            String modelName,
+            String modelCode,
+            OsFamily osFamily,
+            int displayOrder,
+            Long memberId) {
+        DeviceModel model = create(
+                id,
+                category,
+                manufacturer,
+                modelName,
+                modelCode,
+                osFamily,
+                null,
+                displayOrder);
+        model.reviewStatus = DeviceModelReviewStatus.PENDING_REVIEW;
+        model.sourceType = DeviceModelSourceType.USER_REPORT;
+        model.reportedByMemberId = memberId;
         return model;
     }
 
@@ -127,5 +184,57 @@ public class DeviceModel extends BaseTimeEntity {
 
     public void deactivate() {
         this.isActive = false;
+        this.reviewStatus = DeviceModelReviewStatus.DISABLED;
+    }
+
+    public void deactivate(Long adminId, String reason, Long replacementModelId) {
+        deactivate();
+        this.disabledAt = LocalDateTime.now();
+        this.disabledByAdminId = adminId;
+        this.disableReason = trimToNull(reason);
+        this.replacementModelId = replacementModelId;
+    }
+
+    public void activate(Long adminId, String note) {
+        this.isActive = true;
+        this.reviewStatus = DeviceModelReviewStatus.VERIFIED;
+        this.reviewedByAdminId = adminId;
+        this.reviewedAt = LocalDateTime.now();
+        this.reviewNote = trimToNull(note);
+        this.disabledAt = null;
+        this.disabledByAdminId = null;
+        this.disableReason = null;
+        this.replacementModelId = null;
+    }
+
+    public void updateCatalog(
+            DeviceCategory category,
+            Manufacturer manufacturer,
+            String modelName,
+            String modelCode,
+            OsFamily osFamily) {
+        if (category == null || modelName == null || modelName.isBlank()) {
+            throw new IllegalArgumentException("category and model name are required");
+        }
+        if (modelCode == null || modelCode.isBlank()) {
+            throw new IllegalArgumentException("model code is required");
+        }
+        this.category = category;
+        this.manufacturer = manufacturer;
+        this.modelName = modelName.trim();
+        this.normalizedModelName = normalizeModelName(modelName);
+        this.modelCode = modelCode.trim();
+        this.osFamily = osFamily;
+    }
+
+    public void completeReview(Long adminId, String note) {
+        this.reviewStatus = DeviceModelReviewStatus.VERIFIED;
+        this.reviewedByAdminId = adminId;
+        this.reviewedAt = LocalDateTime.now();
+        this.reviewNote = trimToNull(note);
+    }
+
+    private static String trimToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }

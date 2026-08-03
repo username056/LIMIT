@@ -113,4 +113,29 @@ public class Category {
     public void deactivate() {
         this.isActive = false;
     }
+
+    public void activate() {
+        this.isActive = true;
+    }
+
+    public void updateLeaf(
+            Category parent,
+            String name,
+            String manufacturer,
+            OsFamily osFamily,
+            String modelCode) {
+        if (parent == null || parent.getParent() != null || !parent.isActive()) {
+            throw new IllegalArgumentException("active top-level category is required");
+        }
+        if (name == null || name.isBlank() || manufacturer == null || manufacturer.isBlank()) {
+            throw new IllegalArgumentException("model name and manufacturer are required");
+        }
+        this.parent = parent;
+        this.name = name.trim();
+        this.deviceType = parent.getDeviceType();
+        this.manufacturer = manufacturer.trim();
+        this.manufacturerId = manufacturerId(manufacturer);
+        this.osFamily = osFamily;
+        this.modelCode = modelCode == null || modelCode.isBlank() ? this.modelCode : modelCode.trim();
+    }
 }

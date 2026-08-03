@@ -8,6 +8,7 @@ import BaseButton from '../components/BaseButton.vue'
 import BaseInput from '../components/BaseInput.vue'
 import BaseSelect from '../components/BaseSelect.vue'
 import MyPageLayout from '../layouts/MyPageLayout.vue'
+import PageHeader from '../components/PageHeader.vue'
 
 const router = useRouter()
 const isSubmitting = ref(false)
@@ -88,15 +89,14 @@ async function submitRegistration() {
 <template>
   <MyPageLayout>
     <section class="mx-auto max-w-2xl">
-      <h1 class="mb-2 text-2xl font-bold text-text-main">
-        판매자 등록
-      </h1>
-      <p class="mb-6 text-sm text-text-sub">
-        별도 심사 없이 등록이 완료되는 즉시 상품을 판매할 수 있습니다.
-      </p>
+      <PageHeader
+        eyebrow="SELLER REGISTER"
+        title="판매자 등록"
+        description="별도 심사 없이 등록이 완료되는 즉시 상품을 판매할 수 있습니다."
+      />
 
       <form
-        class="space-y-6 rounded-lg border border-border bg-surface p-6 shadow-card"
+        class="space-y-6 card-soft rounded-lg bg-surface p-6"
         @submit.prevent="submitRegistration"
       >
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">

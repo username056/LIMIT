@@ -184,7 +184,17 @@ describe('ProductRegisterPage', () => {
       requiredHeaders: { 'Content-Type': 'image/jpeg' },
     })
     getProductImages.mockResolvedValue([])
-    requestDeviceModel.mockResolvedValue({ requestId: 9001, status: 'PENDING' })
+    requestDeviceModel.mockResolvedValue({
+      requestId: 9001,
+      status: 'PENDING',
+      resolvedModelId: 202,
+      resolvedCategoryId: 202,
+      categoryId: 10,
+      manufacturer: 'LG',
+      modelName: 'gram Pro 17',
+      modelCode: '17Z90SP',
+      osFamily: 'ANDROID',
+    })
     getDeviceCategories.mockResolvedValue([{ categoryId: 10, name: '노트북' }])
     getDeviceModels.mockResolvedValue([{
       deviceModelId: 101,
@@ -241,6 +251,27 @@ describe('ProductRegisterPage', () => {
     expect(wrapper.text()).toContain('검수용 기기 촬영')
   })
 
+  it('Windows 검사기를 같은 웹 도메인의 기본 경로에서 내려받을 수 있다', async () => {
+    getProductChecklist.mockResolvedValue([{
+      checklistItemId: 7003,
+      itemCode: 'LAP-SCR-014',
+      name: 'Windows 시스템 정보',
+      evidenceType: 'DOCUMENT',
+      automationType: 'FILE_PARSE',
+      parserType: 'DXDIAG',
+      isRequired: true,
+      status: 'PENDING',
+    }])
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await goToCaptureStep(wrapper)
+
+    const downloadLink = wrapper.find('a[download]')
+    expect(downloadLink.exists()).toBe(true)
+    expect(downloadLink.attributes('href')).toBe('/downloads/LimitScanner.exe')
+    expect(downloadLink.text()).toContain('진단 프로그램 다운로드')
+  })
+
   it('AI 체크리스트 조사 중 진행률과 움직이는 점을 표시한다', async () => {
     let resolveChecklist
     generateChecklist.mockReturnValue(new Promise((resolve) => {
@@ -280,7 +311,7 @@ describe('ProductRegisterPage', () => {
     }
   })
 
-  it('Windows 모델은 승인된 자동 생성 체크리스트만 보여주고 판매자 기능 선택은 받지 않는다', async () => {
+  it('Windows 모델의 AI 추가 항목을 노출하고 판매자가 선택해 적용한다', async () => {
     getDeviceModels.mockResolvedValue([{
       deviceModelId: 101,
       manufacturerName: 'Samsung',
@@ -316,19 +347,19 @@ describe('ProductRegisterPage', () => {
     })
     expect(getChecklistTemplate).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('자동 생성 체크리스트')
-    expect(wrapper.text()).toContain('AI 공식자료 반영')
-    expect(wrapper.text()).not.toContain('AI 공식자료 확인 후보')
-    expect(wrapper.text()).not.toContain('내장 카메라')
-    expect(wrapper.find('input[type="checkbox"][value="CAMERA"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('AI 추가 항목 선택 가능')
+    expect(wrapper.text()).toContain('내장 카메라')
+    const cameraFeature = wrapper.get('input[type="checkbox"][value="CAMERA"]')
+    await cameraFeature.setValue(true)
     await buttonByText(wrapper, '다음 단계').trigger('click')
     await flushPromises()
 
     expect(createProduct).toHaveBeenCalledWith(expect.objectContaining({
-      confirmedFeatures: [],
+      confirmedFeatures: ['CAMERA'],
     }))
   })
 
-  it('스마트폰 모델도 승인 전 AI 후보를 판매자에게 노출하지 않는다', async () => {
+  it('스마트폰 모델도 관리자 검토 전 AI 후보를 판매자에게 노출한다', async () => {
     getDeviceCategories.mockResolvedValue([{ categoryId: 10, name: '스마트폰' }])
     getDeviceModels.mockResolvedValue([{
       deviceModelId: 101,
@@ -364,13 +395,14 @@ describe('ProductRegisterPage', () => {
       confirmedFeatures: [],
     })
     expect(getChecklistTemplate).not.toHaveBeenCalled()
-    expect(wrapper.text()).not.toContain('무선 충전')
+    expect(wrapper.text()).toContain('무선 충전')
+    await wrapper.get('input[type="checkbox"][value="WIRELESS_CHARGING"]').setValue(true)
 
     await buttonByText(wrapper, '다음 단계').trigger('click')
     await flushPromises()
 
     expect(createProduct).toHaveBeenCalledWith(expect.objectContaining({
-      confirmedFeatures: [],
+      confirmedFeatures: ['WIRELESS_CHARGING'],
     }))
   })
 
@@ -976,7 +1008,7 @@ describe('ProductRegisterPage', () => {
       expect(wrapper.findAll('select')[1].text()).not.toContain('기타 (직접 입력)')
     })
 
-    it('직접 입력한 모델은 상품을 만들지 않고 관리자 검토 요청으로 등록한다', async () => {
+    it('직접 입력한 모델을 즉시 등록하고 AI 체크리스트를 생성한다', async () => {
       const wrapper = mount(ProductRegisterPage, { global: globalOptions })
       await flushPromises()
       await buttonByText(wrapper, '찾는 모델이 없나요? 직접 입력').trigger('click')
@@ -998,7 +1030,11 @@ describe('ProductRegisterPage', () => {
         osFamily: 'ANDROID',
       })
       expect(createProduct).not.toHaveBeenCalled()
-      expect(wrapper.text()).toContain('관리자 승인 후 모델 목록에서 선택해 상품을 등록할 수 있습니다.')
+      expect(generateChecklist).toHaveBeenCalledWith({
+        deviceModelId: 202,
+        confirmedFeatures: [],
+      })
+      expect(wrapper.text()).toContain('새 모델을 바로 사용할 수 있습니다')
     })
   })
 

@@ -87,8 +87,9 @@ class ChecklistGenerationServiceTests {
 
         assertThat(result.aiApplied()).isFalse();
         assertThat(result.items()).hasSize(14);
-        assertThat(result.aiSuggestions()).isEmpty();
-        assertThat(result.reviewCandidates()).isEmpty();
+        assertThat(result.aiSuggestions()).extracting(ChecklistSuggestion::featureCode)
+                .containsExactly("CAMERA");
+        assertThat(result.reviewCandidates()).containsExactly("조도 센서");
         assertThat(result.researchStatus()).isEqualTo("PENDING_REVIEW");
     }
 
@@ -120,7 +121,7 @@ class ChecklistGenerationServiceTests {
                 new ChecklistSupplementResult(true, List.of(), List.of())));
         ReflectionTestUtils.setField(research, "id", 401L);
         when(categoryRepository.findById(201L)).thenReturn(Optional.of(model));
-        when(researchRepository.findByCategoryIdAndResearchVersion(201L, 1))
+        when(researchRepository.findFirstByDeviceModelIdOrderByResearchVersionDesc(201L))
                 .thenReturn(Optional.of(research));
 
         GeneratedChecklist result = service.generateForModel(201L, Set.of());
@@ -131,13 +132,31 @@ class ChecklistGenerationServiceTests {
     }
 
     @Test
-    void rejectsSellerSelectedLaptopFeatureToKeepSharedTemplate() {
+    void createsSellerSnapshotFromSelectedLaptopAiFeature() throws Exception {
         when(categoryRepository.findById(201L))
                 .thenReturn(Optional.of(laptop(OsFamily.WINDOWS)));
+        ModelChecklistResearch research = ModelChecklistResearch.start(201L, 1);
+        research.complete(new ObjectMapper().writeValueAsString(new ChecklistSupplementResult(
+                true,
+                List.of(new ChecklistSuggestion(
+                        "CAMERA",
+                        "내장 카메라",
+                        ChecklistEvidenceStatus.VERIFIED,
+                        "공식 사양",
+                        "카메라 앱에서 확인하세요.",
+                        "https://www.samsung.com/sec/support/model/NT960/",
+                        "Samsung support")),
+                List.of())));
+        when(researchRepository.findFirstByDeviceModelIdOrderByResearchVersionDesc(201L))
+                .thenReturn(Optional.of(research));
 
-        assertThatThrownBy(() ->
-                        service.generateSnapshotForModel(201L, Set.of("CAMERA")))
-                .isInstanceOf(com.c203.limit.global.exception.BusinessException.class);
+        GeneratedChecklist result = service
+                .generateSnapshotForModel(201L, Set.of("CAMERA"))
+                .orElseThrow();
+
+        assertThat(result.aiApplied()).isTrue();
+        assertThat(result.items()).extracting(GeneratedChecklistItem::featureCode)
+                .contains("CAMERA");
         verifyNoInteractions(supplementClient);
     }
 
@@ -164,14 +183,20 @@ class ChecklistGenerationServiceTests {
         assertThat(result.aiApplied()).isFalse();
         assertThat(result.items()).extracting(GeneratedChecklistItem::itemCode)
                 .containsExactly("EXT-001");
-        assertThat(result.aiSuggestions()).isEmpty();
+        assertThat(result.aiSuggestions()).extracting(ChecklistSuggestion::featureCode)
+                .containsExactly("WIRELESS_CHARGING");
         assertThat(result.researchStatus()).isEqualTo("PENDING_REVIEW");
     }
 
     @Test
-    void rejectsSellerSelectedSmartphoneFeatureToKeepSharedTemplate() {
+    void rejectsSmartphoneFeatureThatWasNotSuggestedByAi() throws Exception {
         Category model = smartphone();
         when(categoryRepository.findById(101L)).thenReturn(Optional.of(model));
+        ModelChecklistResearch research = ModelChecklistResearch.start(101L, 1);
+        research.complete(new ObjectMapper().writeValueAsString(
+                new ChecklistSupplementResult(true, List.of(), List.of())));
+        when(researchRepository.findFirstByDeviceModelIdOrderByResearchVersionDesc(101L))
+                .thenReturn(Optional.of(research));
 
         assertThatThrownBy(() -> service.generateSnapshotForModel(
                         101L, Set.of("WIRELESS_CHARGING")))

@@ -6,6 +6,7 @@ import BaseButton from '../components/BaseButton.vue'
 import BaseCard from '../components/BaseCard.vue'
 import BaseInput from '../components/BaseInput.vue'
 import AdminShell from '../components/AdminShell.vue'
+import AdminDeviceModelManagement from '../components/admin/AdminDeviceModelManagement.vue'
 import {
   createAdminAccount,
   createMemberRestriction,
@@ -77,6 +78,7 @@ const isSuperAdmin = computed(() => admin.value?.roles?.includes('SUPER_ADMIN'))
 const sections = computed(() => [
   { id: 'dashboard', label: '대시보드' },
   { id: 'members', label: '회원 관리' },
+  { id: 'device-models', label: '모델 관리' },
   { id: 'checklist-researches', label: '체크리스트 AI 검토' },
   { id: 'device-model-requests', label: '신규 기기 모델 검토' },
   { id: 'logs', label: '관리자 작업 로그' },
@@ -199,7 +201,7 @@ async function approveResearch(research) {
     })
     checklistResearches.value = checklistResearches.value
       .filter((item) => item.researchId !== research.researchId)
-    successMessage.value = '승인된 기능으로 새 공용 체크리스트 템플릿을 발행했습니다.'
+    successMessage.value = 'AI 조사 결과를 사후 검토 완료로 기록했습니다.'
   } catch (error) {
     showError(error, '체크리스트 조사 결과를 승인하지 못했습니다.')
   }
@@ -248,7 +250,7 @@ async function approveModelRequest(request) {
     await approveDeviceModelRequest(request.requestId, { note })
     deviceModelRequests.value = deviceModelRequests.value
       .filter((item) => item.requestId !== request.requestId)
-    successMessage.value = '새 모델과 초기 공용 체크리스트를 카탈로그에 등록했습니다.'
+    successMessage.value = '즉시 등록된 모델의 사후 검토를 완료했습니다.'
   } catch (error) {
     showError(error, '기기 모델 요청을 승인하지 못했습니다.')
   }
@@ -295,7 +297,7 @@ async function saveModelRequest(request) {
       item.requestId === updated.requestId ? updated : item
     ))
     editingModelRequestId.value = null
-    successMessage.value = '모델 요청 정보를 수정했습니다. 확인 후 승인해 주세요.'
+    successMessage.value = '즉시 등록된 모델 정보를 수정했습니다. 확인 후 사후 검토를 완료해 주세요.'
   } catch (error) {
     showError(error, '기기 모델 요청을 수정하지 못했습니다.')
   } finally {
@@ -783,6 +785,11 @@ onMounted(() => {
     </section>
 
     <section
+      v-else-if="activeSection === 'device-models'"
+    >
+      <AdminDeviceModelManagement />
+    </section>
+    <section
       v-else-if="activeSection === 'device-model-requests'"
       class="space-y-5"
     >
@@ -791,8 +798,8 @@ onMounted(() => {
           신규 기기 모델 요청
         </h2>
         <p class="mt-2 text-xs leading-5 text-text-sub">
-          승인하면 같은 카테고리의 검증된 기본 템플릿을 복제해 새 모델을 즉시 선택할 수 있게 합니다.
-          사용자가 처음 선택할 때 모델별 AI 조사가 한 번 시작됩니다.
+          사용자가 요청한 모델과 기본 템플릿은 이미 즉시 등록되어 판매에 사용할 수 있습니다.
+          이 화면에서는 오타와 분류를 확인하고 사후 검토를 완료합니다.
         </p>
       </BaseCard>
       <BaseCard
@@ -918,7 +925,7 @@ onMounted(() => {
             type="button"
             @click="approveModelRequest(request)"
           >
-            모델 등록 승인
+            사후 검토 완료
           </BaseButton>
           <BaseButton
             type="button"
@@ -969,8 +976,8 @@ onMounted(() => {
         </div>
         <p class="mt-2 text-xs leading-5 text-text-sub">
           <template v-if="checklistResearchStatus === 'PENDING_REVIEW'">
-            승인하면 선택한 기능이 새 PUBLISHED 체크리스트 버전으로 발행되고,
-            이후 같은 모델의 모든 매물이 이를 재사용합니다.
+            조사 후보는 판매자가 선택해서 매물별로 적용합니다. 이 화면의 승인은
+            전역 기본 템플릿을 바꾸지 않고 사후 검토 이력만 남깁니다.
           </template>
           <template v-else>
             AI 요청 실패 사유를 확인하고 모델별로 재조사할 수 있습니다.
@@ -1053,7 +1060,7 @@ onMounted(() => {
             type="button"
             @click="approveResearch(research)"
           >
-            전체 확인 기능 승인
+            조사 결과 검토 완료
           </BaseButton>
           <BaseButton
             type="button"

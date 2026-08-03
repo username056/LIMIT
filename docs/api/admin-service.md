@@ -2,7 +2,7 @@
 
 관리자 인증은 일반 회원과 분리한다. 일반 회원 권한은 `MEMBER`로 고정하고 관리자는 별도 `admin_account`에서 `OPERATOR` 또는 `SUPER_ADMIN` 권한을 가진다.
 
-관리자 API의 날짜·시간 값은 DB `DATETIME(6)` 및 공통 `BaseTimeEntity`와 동일하게 오프셋 없는 ISO-8601 `LocalDateTime` 형식을 사용한다. `createdAt`과 `updatedAt`은 JPA Auditing으로 기록된다.
+관리자 API의 모델·상품 날짜·시간 값은 DB `DATETIME(6)` 및 공통 `BaseTimeEntity`와 동일하게 오프셋 없는 ISO-8601 `LocalDateTime` 형식을 사용한다. `createdAt`과 `updatedAt`은 JPA Auditing으로 기록된다. 상품 자료의 증빙 `capturedAt`·`uploadedAt`은 기존 증빙 API 계약과 동일한 UTC 오프셋 형식이다.
 
 ## API 범위
 
@@ -21,8 +21,20 @@
 | `GET` | `/api/v1/admin/accounts` | `SUPER_ADMIN` | 관리자 계정 목록 |
 | `POST` | `/api/v1/admin/accounts` | `SUPER_ADMIN` | 관리자 계정 생성 |
 | `PATCH` | `/api/v1/admin/accounts/{adminId}` | `SUPER_ADMIN` | 관리자 권한·상태 변경 |
+| `GET` | `/api/v1/admin/device-models` | 관리자 | 모델 검색·필터·정렬·페이징 조회 |
+| `GET` | `/api/v1/admin/device-models/{modelId}` | 관리자 | 모델 정보와 기본/AI 체크리스트·영향도 상세 조회 |
+| `PATCH` | `/api/v1/admin/device-models/{modelId}` | 관리자 | 모델 정보 수정 완료 |
+| `PATCH` | `/api/v1/admin/device-models/{modelId}/status` | 관리자 | 모델 비활성화(논리 삭제)·재활성화 |
+| `GET` | `/api/v1/admin/device-models/{modelId}/products` | 관리자 | 연관 상품 페이징 조회 |
+| `GET` | `/api/v1/admin/device-models/{modelId}/products/{productId}/materials` | 관리자 | 선택 상품의 사진·영상·검수 증빙 조회 |
+| `GET` | `/api/v1/admin/device-models/{modelId}/researches` | 관리자 | 모델 AI 조사 이력 페이징 조회 |
+| `POST` | `/api/v1/admin/device-models/{modelId}/researches` | 관리자 | 현재 모델 정보로 새 버전 AI 재조사 |
 
 마지막 활성 `SUPER_ADMIN`을 강등하거나 정지하는 요청은 거절한다.
+
+모델 목록은 `keyword`, `categoryId`, `manufacturerId`, `isActive`, `reviewStatus`, `researchStatus`, `page`, `size`, `sort` 조건을 받는다. 정렬은 `updatedAt,desc`, `createdAt,desc`, `modelName,asc`를 지원한다. 연관 상품은 `updatedAt,desc` 또는 `createdAt,desc`로 조회한다.
+
+모델 삭제는 참조 중인 매물·판매 옵션·AI 조사·검수 증빙을 지우지 않는 논리 삭제다. 비활성화 사유를 필수로 기록하고 필요하면 활성 상태인 대체 모델을 지정한다. 기존 상품은 그대로 조회·거래할 수 있고, 해당 모델만 신규 판매 등록 검색에서 제외된다. 상품 자료는 모델 상세와 함께 일괄 조회하지 않고 연관 상품을 선택했을 때 별도 API로 지연 조회한다.
 
 작업 로그 상세에서는 작업 종류, 대상, 변경 전후 데이터, 접속 IP와 사유를 조회한다.
 감사 무결성을 위해 작업 종류·대상·발생 시각은 변경할 수 없으며 `PATCH`는 최대 500자의

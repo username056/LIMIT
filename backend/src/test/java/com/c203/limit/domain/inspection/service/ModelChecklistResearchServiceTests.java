@@ -24,6 +24,7 @@ import com.c203.limit.domain.product.repository.CategoryRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -38,6 +39,7 @@ class ModelChecklistResearchServiceTests {
     private ChecklistSupplementClient supplementClient;
     private ModelChecklistResearchService service;
     private ObjectMapper objectMapper;
+    private AtomicReference<ModelChecklistResearch> savedResearch;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -49,8 +51,18 @@ class ModelChecklistResearchServiceTests {
                 mock(PlatformTransactionManager.class);
         when(transactionManager.getTransaction(any()))
                 .thenReturn(mock(TransactionStatus.class));
+        savedResearch = new AtomicReference<>();
         when(researchRepository.saveAndFlush(any(ModelChecklistResearch.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+                .thenAnswer(invocation -> {
+                    ModelChecklistResearch research = invocation.getArgument(0);
+                    if (research.getId() == null) {
+                        ReflectionTestUtils.setField(research, "id", 601L);
+                    }
+                    savedResearch.set(research);
+                    return research;
+                });
+        when(researchRepository.findByIdForUpdate(601L))
+                .thenAnswer(invocation -> Optional.ofNullable(savedResearch.get()));
 
         objectMapper = new ObjectMapper();
         service = new ModelChecklistResearchService(
@@ -69,7 +81,8 @@ class ModelChecklistResearchServiceTests {
     @Test
     void retriesFailedResearchAndMovesItToPendingReview() throws Exception {
         ModelChecklistResearch research = failedResearch();
-        when(researchRepository.findByIdForUpdate(501L))
+        when(researchRepository.findById(501L)).thenReturn(Optional.of(research));
+        when(researchRepository.findFirstByDeviceModelIdOrderByResearchVersionDesc(201L))
                 .thenReturn(Optional.of(research));
         when(categoryRepository.findById(201L))
                 .thenReturn(Optional.of(laptop()));
@@ -81,7 +94,9 @@ class ModelChecklistResearchServiceTests {
         assertThat(response.status()).isEqualTo("PENDING_REVIEW");
         assertThat(response.failureCode()).isNull();
         assertThat(response.failureMessage()).isNull();
-        assertThat(research.getStatus())
+        assertThat(response.researchVersion()).isEqualTo(2);
+        assertThat(research.getStatus()).isEqualTo(ModelChecklistResearchStatus.FAILED);
+        assertThat(savedResearch.get().getStatus())
                 .isEqualTo(ModelChecklistResearchStatus.PENDING_REVIEW);
         verify(actionLogRepository).save(any());
     }
@@ -89,7 +104,8 @@ class ModelChecklistResearchServiceTests {
     @Test
     void keepsFailureReasonWhenRetryFailsAgain() throws Exception {
         ModelChecklistResearch research = failedResearch();
-        when(researchRepository.findByIdForUpdate(501L))
+        when(researchRepository.findById(501L)).thenReturn(Optional.of(research));
+        when(researchRepository.findFirstByDeviceModelIdOrderByResearchVersionDesc(201L))
                 .thenReturn(Optional.of(research));
         when(categoryRepository.findById(201L))
                 .thenReturn(Optional.of(laptop()));
@@ -101,7 +117,7 @@ class ModelChecklistResearchServiceTests {
         assertThat(response.status()).isEqualTo("FAILED");
         assertThat(response.failureCode()).isEqualTo("AI_REQUEST_FAILED");
         assertThat(response.failureMessage()).contains("시간 초과");
-        assertThat(research.getResultJson())
+        assertThat(savedResearch.get().getResultJson())
                 .contains("\"failureCode\":\"AI_REQUEST_FAILED\"");
     }
 
