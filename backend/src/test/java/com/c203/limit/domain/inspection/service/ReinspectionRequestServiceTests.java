@@ -135,6 +135,26 @@ class ReinspectionRequestServiceTests {
     }
 
     @Test
+    void findsRequestsWhereCurrentMemberIsSellerOrBuyer() {
+        ReinspectionRequest request = ReinspectionRequest.request(
+                LISTING_ID, ROOM_ID, "request-key", "다시 검수", BUYER_ID, SELLER_ID);
+        ReflectionTestUtils.setField(request, "id", 501L);
+        when(requestRepository.findBySellerIdOrBuyerIdOrderByRequestedAtDesc(
+                        BUYER_ID, BUYER_ID))
+                .thenReturn(List.of(request));
+        when(requestItemRepository.findByReinspectionRequestIdOrderByDisplayOrderAsc(501L))
+                .thenReturn(List.of());
+
+        var responses = service.findForMember(BUYER_ID);
+
+        assertThat(responses).singleElement()
+                .satisfies(response -> {
+                    assertThat(response.requestKey()).isEqualTo("request-key");
+                    assertThat(response.status()).isEqualTo("REQUESTED");
+                });
+    }
+
+    @Test
     void completesRequestAndPublishesCompletedEventForBuyer() {
         ReinspectionRequest request = ReinspectionRequest.request(
                 LISTING_ID, ROOM_ID, "request-key", "다시 확인", BUYER_ID, SELLER_ID);
