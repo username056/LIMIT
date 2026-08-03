@@ -194,6 +194,12 @@ public enum ErrorCode {
     MEDIA_UPLOAD_INVALID("INS030", HttpStatus.UNPROCESSABLE_ENTITY, "허용되지 않는 미디어 파일입니다."),
     MEDIA_STORAGE_UNAVAILABLE("INS031", HttpStatus.BAD_GATEWAY, "미디어 저장소 요청에 실패했습니다."),
     MEDIA_STORAGE_NOT_CONFIGURED("INS032", HttpStatus.SERVICE_UNAVAILABLE, "미디어 저장소 설정을 확인해 주세요."),
+    INSPECTION_SESSION_NOT_FOUND("INS034", HttpStatus.NOT_FOUND, "Windows 자동 검사 세션을 찾을 수 없습니다."),
+    INSPECTION_SESSION_EXPIRED("INS035", HttpStatus.GONE, "Windows 자동 검사 세션이 만료되었습니다."),
+    INSPECTION_PAIRING_INVALID("INS036", HttpStatus.UNAUTHORIZED, "연결 코드가 올바르지 않거나 만료되었습니다."),
+    INSPECTION_AGENT_UNAUTHORIZED("INS037", HttpStatus.UNAUTHORIZED, "진단 프로그램 인증이 유효하지 않습니다."),
+    INSPECTION_TARGET_NOT_FOUND("INS038", HttpStatus.NOT_FOUND, "자동 진단 대상 체크리스트 항목을 찾을 수 없습니다."),
+    INSPECTION_SESSION_INVALID_STATE("INS039", HttpStatus.CONFLICT, "현재 상태에서는 자동 검사를 처리할 수 없습니다."),
     LISTING_IMAGE_NOT_FOUND("PRD015", HttpStatus.NOT_FOUND, "상품 이미지를 찾을 수 없습니다."),
     LISTING_IMAGE_LIMIT_EXCEEDED(
             "PRD016", HttpStatus.UNPROCESSABLE_ENTITY, "상품 이미지는 최대 10개까지 등록할 수 있습니다.");

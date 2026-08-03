@@ -13,6 +13,7 @@ MySQL 스키마는 애플리케이션 시작 시 Flyway가 적용하고, Hiberna
 - `V20260723__create_product_checklist_tables.sql`: 상품·체크리스트·증거·재검수 스키마 추가
 - `V20260802__create_instant_seller_profiles.sql`: 즉시 판매자 등록 프로필과 기존 판매자 데이터 호환 이관
 - `V20260809__create_model_checklist_research.sql`: 모델별 AI 조사 상태·결과·승인 템플릿 연결 추가
+- `V20260817__create_inspection_session.sql`: Windows 자동 검사 일회용 연결 세션 추가
 - `V20260810__create_device_model_request.sql`: 판매자의 미등록 기기 모델 검토 요청 추가
 - `V20260816__support_immediate_model_checklist.sql`: 즉시 모델 등록, 사후 검토 상태와 버전형 AI 재조사 지원
 
