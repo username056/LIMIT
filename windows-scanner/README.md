@@ -25,5 +25,16 @@ dotnet publish .\src\LimitScanner\LimitScanner.csproj `
 
 출력 파일은 `src/LimitScanner/bin/Release/net8.0-windows/win-x64/publish/LimitScanner.exe`다.
 
-운영 배포본은 코드 서명 후 제공한다. 앱에는 판매자 JWT, AWS 키 또는 고정된 에이전트
-토큰을 포함하지 않는다.
+운영 배포본은 `LimitApiBaseUrl` MSBuild 속성으로 공개 API 주소를 주입한다.
+
+```powershell
+dotnet publish .\src\LimitScanner\LimitScanner.csproj `
+  -c Release -r win-x64 --self-contained true `
+  -p:PublishSingleFile=true `
+  -p:LimitApiBaseUrl='https://api.example.com/'
+```
+
+GitLab CI는 `WINDOWS_SCANNER_API_BASE_URL` 변수로 이 값을 전달하고, 변수가 없으면 기존
+`VITE_API_BASE_URL`을 사용한다. 빌드된 EXE는 프론트 배포 산출물의
+`/downloads/LimitScanner.exe`에 포함한다. 운영 배포본은 코드 서명 후 제공하는 것을
+권장한다. 앱에는 판매자 JWT, AWS 키 또는 고정된 에이전트 토큰을 포함하지 않는다.

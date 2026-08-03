@@ -19,8 +19,10 @@ public sealed class MainForm : Form
     {
         this.coordinator = coordinator;
         Text = "Limit Windows 자동 검사";
-        ClientSize = new Size(600, 500);
-        MinimumSize = new Size(560, 460);
+        AutoScaleMode = AutoScaleMode.Dpi;
+        Font = new Font("Segoe UI", 11F);
+        ClientSize = new Size(760, 600);
+        MinimumSize = new Size(700, 560);
         FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = true;
         StartPosition = FormStartPosition.CenterScreen;
@@ -29,20 +31,26 @@ public sealed class MainForm : Form
         var title = new Label
         {
             AutoSize = true,
-            Font = new Font(Font, FontStyle.Bold),
+            Font = new Font(Font.FontFamily, 18F, FontStyle.Bold),
             Text = "Limit Windows 자동 검사"
         };
         var description = new Label
         {
             AutoSize = true,
-            MaximumSize = new Size(460, 0),
+            MaximumSize = new Size(650, 0),
+            Font = new Font(Font.FontFamily, 11.5F),
             Text = "CPU, RAM, GPU, 사운드 장치와 배터리 상태를 수집합니다. "
                 + "비밀번호, 개인 파일, 브라우저 기록과 Windows 제품 키는 수집하지 않습니다."
         };
 
-        pairingCodeTextBox.Font = new Font(Font.FontFamily, 18);
+        pairingCodeTextBox.Font = new Font(Font.FontFamily, 24F);
         pairingCodeTextBox.TextAlign = HorizontalAlignment.Center;
-        pairingCodeTextBox.Width = 180;
+        pairingCodeTextBox.Width = 230;
+        pairingCodeTextBox.Height = 52;
+        startButton.AutoSize = true;
+        startButton.Padding = new Padding(18, 8, 18, 8);
+        progressBar.Width = 650;
+        statusLabel.MaximumSize = new Size(650, 0);
         pairingCodeTextBox.TextChanged += (_, _) => UpdateStartButton();
         consentCheckBox.CheckedChanged += (_, _) => UpdateStartButton();
         startButton.Click += StartButton_Click;
@@ -51,7 +59,7 @@ public sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.TopDown,
-            Padding = new Padding(25),
+            Padding = new Padding(36),
             WrapContents = false,
             AutoScroll = true
         };

@@ -251,6 +251,27 @@ describe('ProductRegisterPage', () => {
     expect(wrapper.text()).toContain('검수용 기기 촬영')
   })
 
+  it('Windows 검사기를 같은 웹 도메인의 기본 경로에서 내려받을 수 있다', async () => {
+    getProductChecklist.mockResolvedValue([{
+      checklistItemId: 7003,
+      itemCode: 'LAP-SCR-014',
+      name: 'Windows 시스템 정보',
+      evidenceType: 'DOCUMENT',
+      automationType: 'FILE_PARSE',
+      parserType: 'DXDIAG',
+      isRequired: true,
+      status: 'PENDING',
+    }])
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await goToCaptureStep(wrapper)
+
+    const downloadLink = wrapper.find('a[download]')
+    expect(downloadLink.exists()).toBe(true)
+    expect(downloadLink.attributes('href')).toBe('/downloads/LimitScanner.exe')
+    expect(downloadLink.text()).toContain('진단 프로그램 다운로드')
+  })
+
   it('AI 체크리스트 조사 중 진행률과 움직이는 점을 표시한다', async () => {
     let resolveChecklist
     generateChecklist.mockReturnValue(new Promise((resolve) => {
