@@ -20,7 +20,7 @@ public sealed class MainForm : Form
         this.coordinator = coordinator;
         Text = "Limit Windows 자동 검사";
         AutoScaleMode = AutoScaleMode.Dpi;
-        Font = new Font("Segoe UI", 11F);
+        Font = new Font("Segoe UI", 10F);
         ClientSize = new Size(760, 600);
         MinimumSize = new Size(700, 560);
         FormBorderStyle = FormBorderStyle.Sizable;
@@ -31,19 +31,19 @@ public sealed class MainForm : Form
         var title = new Label
         {
             AutoSize = true,
-            Font = new Font(Font.FontFamily, 18F, FontStyle.Bold),
+            Font = new Font(Font.FontFamily, 16F, FontStyle.Bold),
             Text = "Limit Windows 자동 검사"
         };
         var description = new Label
         {
             AutoSize = true,
             MaximumSize = new Size(650, 0),
-            Font = new Font(Font.FontFamily, 11.5F),
+            Font = new Font(Font.FontFamily, 10F),
             Text = "CPU, RAM, GPU, 사운드 장치와 배터리 상태를 수집합니다. "
                 + "비밀번호, 개인 파일, 브라우저 기록과 Windows 제품 키는 수집하지 않습니다."
         };
 
-        pairingCodeTextBox.Font = new Font(Font.FontFamily, 24F);
+        pairingCodeTextBox.Font = new Font(Font.FontFamily, 20F);
         pairingCodeTextBox.TextAlign = HorizontalAlignment.Center;
         pairingCodeTextBox.Width = 230;
         pairingCodeTextBox.Height = 52;
