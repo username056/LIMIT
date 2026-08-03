@@ -417,6 +417,22 @@ const modelGroups = computed(() => {
 const supportsGeneratedChecklist = computed(
   () => Boolean(selectedModel.value),
 )
+const selectedAiSuggestions = computed(() => {
+  const selectedCodes = new Set(confirmedFeatures.value)
+  return (checklistGeneration.value?.aiSuggestions || [])
+    .filter((suggestion) => selectedCodes.has(suggestion.featureCode))
+})
+const previewChecklistItems = computed(
+  () => [...templateItems.value, ...selectedAiSuggestions.value],
+)
+const previewMediaItemCount = computed(
+  () => previewChecklistItems.value
+    .filter((item) => item.evidenceType !== 'SELLER_CONFIRMATION').length,
+)
+const previewConfirmationItemCount = computed(
+  () => previewChecklistItems.value
+    .filter((item) => item.evidenceType === 'SELLER_CONFIRMATION').length,
+)
 const mediaChecklistItems = computed(
   () => checklistItems.value.filter((item) => item.evidenceType !== 'SELLER_CONFIRMATION'),
 )
@@ -1877,7 +1893,13 @@ onMounted(async () => {
                   <p class="mt-1 text-xs text-text-sub">
                     {{ checklistGeneration.manufacturer }} {{ checklistGeneration.modelName }}
                     · {{ checklistGeneration.osFamily }}
-                    · {{ templateItems.length }}개 항목
+                  </p>
+                  <p class="mt-2 text-sm font-semibold text-text-main">
+                    기본 {{ templateItems.length }}개 + AI 선택 {{ selectedAiSuggestions.length }}개
+                    = 전체 {{ previewChecklistItems.length }}개
+                  </p>
+                  <p class="mt-1 text-xs text-text-sub">
+                    촬영·업로드 {{ previewMediaItemCount }}개 · 직접 확인 {{ previewConfirmationItemCount }}개
                   </p>
                 </div>
                 <BaseBadge
@@ -1952,6 +1974,9 @@ onMounted(async () => {
                       <strong class="text-sm text-text-main">
                         {{ suggestion.featureName || suggestion.featureCode }}
                       </strong>
+                      <span class="ml-2 rounded-pill bg-white px-2 py-0.5 text-[10px] font-bold text-primary-dark">
+                        {{ evidenceTypeLabel(suggestion.evidenceType) }}
+                      </span>
                       <span class="mt-1 block text-xs leading-5 text-text-sub">
                         {{ suggestion.checkGuide || suggestion.reason }}
                       </span>
@@ -2195,7 +2220,8 @@ onMounted(async () => {
                 검수용 기기 촬영
               </h2>
               <p class="mt-1 text-sm text-text-sub">
-                구매자가 믿고 살 수 있도록 {{ mediaChecklistItems.length }}가지 필수 항목의 실물 사진을 등록하세요.
+                구매자가 확인할 수 있도록 촬영·업로드 항목 {{ mediaChecklistItems.length }}개에
+                사진·영상·진단파일을 등록하세요.
               </p>
 
               <section
@@ -2254,7 +2280,7 @@ onMounted(async () => {
               </section>
 
               <p class="mt-4 rounded-md bg-accent px-4 py-3 text-sm font-semibold text-primary-dark">
-                현재 진행률: {{ mediaChecklistItems.length }}개 중 {{ capturedMediaCount }}개 촬영 완료
+                현재 진행률: {{ mediaChecklistItems.length }}개 중 {{ capturedMediaCount }}개 등록 완료
               </p>
 
               <!-- 항목이 많으면 화면이 길어져서 6개 정도만 보이고 나머지는 스크롤로 봅니다. -->
@@ -2784,7 +2810,7 @@ onMounted(async () => {
               </div>
               <div>
                 <dt class="text-xs text-text-sub">
-                  촬영 완료
+                  촬영·업로드 완료
                 </dt><dd class="mt-1 font-semibold text-text-main">
                   {{ capturedMediaCount }} / {{ mediaChecklistItems.length }}
                 </dd>

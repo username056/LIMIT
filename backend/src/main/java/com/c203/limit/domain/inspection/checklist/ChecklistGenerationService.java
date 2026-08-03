@@ -5,6 +5,7 @@ import com.c203.limit.domain.inspection.entity.ChecklistTemplateItem;
 import com.c203.limit.domain.inspection.entity.ModelChecklistResearch;
 import com.c203.limit.domain.inspection.enums.ChecklistTemplateStatus;
 import com.c203.limit.domain.inspection.enums.DeviceType;
+import com.c203.limit.domain.inspection.enums.EvidenceType;
 import com.c203.limit.domain.inspection.enums.ModelChecklistResearchStatus;
 import com.c203.limit.domain.inspection.repository.ChecklistTemplateItemRepository;
 import com.c203.limit.domain.inspection.repository.ChecklistTemplateRepository;
@@ -321,11 +322,6 @@ public class ChecklistGenerationService {
     }
 
     private BaseChecklist baseChecklist(Category model, Set<String> confirmedFeatures) {
-        if (model.getDeviceType() == DeviceType.LAPTOP
-                && !confirmedFeatures.isEmpty()) {
-            return laptopChecklist(model.getOsFamily(), confirmedFeatures);
-        }
-
         Optional<ChecklistTemplate> published = templateRepository
                 .findFirstByCategoryIdAndStatusOrderByVersionDesc(
                         model.getId(), ChecklistTemplateStatus.PUBLISHED);
@@ -341,24 +337,36 @@ public class ChecklistGenerationService {
                 .stream()
                 .map(this::templateItem)
                 .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
-        items.addAll(featureCatalog.additionalItems(
-                model.getDeviceType(), confirmedFeatures, items.size() + 1));
+        items.addAll(additionalItems(model, confirmedFeatures, items.size() + 1));
         for (int index = 0; index < items.size(); index++) {
             items.set(index, items.get(index).withDisplayOrder(index + 1));
         }
         return new BaseChecklist(template.getVersion(), List.copyOf(items));
     }
 
+    private List<GeneratedChecklistItem> additionalItems(
+            Category model, Set<String> confirmedFeatures, int firstDisplayOrder) {
+        if (model.getDeviceType() == DeviceType.LAPTOP) {
+            return laptopPolicy.additionalItems(
+                    laptopFeatures(confirmedFeatures), firstDisplayOrder);
+        }
+        return featureCatalog.additionalItems(
+                model.getDeviceType(), confirmedFeatures, firstDisplayOrder);
+    }
+
     private BaseChecklist laptopChecklist(
             OsFamily osFamily, Set<String> confirmedFeatures) {
-        Set<LaptopFeatureCode> laptopFeatures =
-                confirmedFeatures.isEmpty()
-                        ? Set.of()
-                        : confirmedFeatures.stream()
-                                .map(LaptopFeatureCode::valueOf)
-                                .collect(java.util.stream.Collectors.toCollection(
-                                        () -> EnumSet.noneOf(LaptopFeatureCode.class)));
-        return new BaseChecklist(1, laptopPolicy.generate(osFamily, laptopFeatures));
+        return new BaseChecklist(
+                1, laptopPolicy.generate(osFamily, laptopFeatures(confirmedFeatures)));
+    }
+
+    private Set<LaptopFeatureCode> laptopFeatures(Set<String> confirmedFeatures) {
+        return confirmedFeatures.isEmpty()
+                ? Set.of()
+                : confirmedFeatures.stream()
+                        .map(LaptopFeatureCode::valueOf)
+                        .collect(java.util.stream.Collectors.toCollection(
+                                () -> EnumSet.noneOf(LaptopFeatureCode.class)));
     }
 
     private GeneratedChecklistItem templateItem(ChecklistTemplateItem item) {
@@ -400,8 +408,20 @@ public class ChecklistGenerationService {
                 .limit(DeviceChecklistFeatureCatalog.MAX_ADDITIONAL_ITEMS)
                 .forEach(suggestion -> unique.putIfAbsent(
                         suggestion.featureCode().trim().toUpperCase(Locale.ROOT),
-                        suggestion));
+                        suggestion.withEvidenceType(evidenceType(
+                                deviceType, suggestion.featureCode()))));
         return List.copyOf(unique.values());
+    }
+
+    private EvidenceType evidenceType(DeviceType deviceType, String featureCode) {
+        String normalized = featureCode.trim().toUpperCase(Locale.ROOT);
+        if (deviceType == DeviceType.LAPTOP) {
+            return laptopPolicy.evidenceType(LaptopFeatureCode.valueOf(normalized));
+        }
+        return featureCatalog
+                .find(deviceType, normalized)
+                .map(DeviceChecklistFeatureCatalog.FeatureDefinition::evidenceType)
+                .orElseThrow();
     }
 
     private ChecklistGenerationContext context(

@@ -122,6 +122,22 @@ class LaptopChecklistPolicyTests {
     }
 
     @Test
+    void createsOnlySelectedAdditionalItemsAfterPublishedTemplateOrder() {
+        var items = policy.additionalItems(
+                Set.of(LaptopFeatureCode.PORTS, LaptopFeatureCode.SPEAKERS), 7);
+
+        assertThat(items)
+                .extracting(GeneratedChecklistItem::itemCode)
+                .containsExactly("LAP-FTR-PORT", "LAP-FTR-SPK");
+        assertThat(items)
+                .extracting(GeneratedChecklistItem::displayOrder)
+                .containsExactly(7, 8);
+        assertThat(items)
+                .extracting(GeneratedChecklistItem::evidenceType)
+                .containsExactly(EvidenceType.VIDEO, EvidenceType.SELLER_CONFIRMATION);
+    }
+
+    @Test
     void marksFeatureDeviceActionCheckItemsAsSellerConfirmation() {
         var items = policy.generate(
                 OsFamily.WINDOWS,
