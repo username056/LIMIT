@@ -11,7 +11,7 @@ import { formatAddress } from '../utils/daumPostcode'
 import { getAccessToken } from '../auth/session'
 import { getMyProfile } from '../api/member'
 import { getProduct } from '../api/products'
-import { createPayment, getPayment, retryPayment } from '../api/payment'
+import { cancelPayment, createPayment, getPayment, retryPayment } from '../api/payment'
 import { getDefaultAddress } from '../stores/addressBook'
 
 const route = useRoute()
@@ -96,6 +96,43 @@ const selectedPayment = computed(
 )
 const selectedPaymentLabel = computed(() => selectedPayment.value?.label || '')
 
+// Toss 결제창이 승인 API 호출 없이 끝난 경우에만 오는 코드다. 이 두 코드가 뜨면 confirm이
+// 절대 호출되지 않았다는 뜻이므로, 예약 만료 스케줄러를 기다리지 않고 바로 취소해도 안전하다.
+const PAYMENT_WINDOW_ABORTED_CODES = new Set(['PAY_PROCESS_CANCELED', 'PAY_PROCESS_ABORTED'])
+
+// retryPaymentId는 CANCELLED로 바뀐 결제를 다시 가리키면 안 된다 — 서버가 REQUESTED 상태만
+// 재시도를 허용하므로(PAYMENT_RETRY_NOT_ALLOWED), 취소 성공 후에는 지워서 다음 시도가 새
+// 예약(createPayment)으로 가게 하고, 취소 실패 시에는 계속 같은 예약을 재사용하게 남겨둔다.
+function setRetryPaymentIdQuery(paymentId) {
+  const nextQuery = { ...route.query }
+  if (paymentId) {
+    nextQuery.retryPaymentId = String(paymentId)
+  } else {
+    delete nextQuery.retryPaymentId
+  }
+  router.replace({ query: nextQuery })
+}
+
+async function handlePaymentWindowAborted(paymentId) {
+  try {
+    await cancelPayment(paymentId)
+    checkoutError.value = '결제가 취소되었습니다. 상품 예약이 해제되었습니다.'
+    if (route.query.retryPaymentId) {
+      setRetryPaymentIdQuery(null)
+    }
+  } catch (error) {
+    // PAY015: 취소 시점에 결제가 이미 REQUESTED를 벗어났다는 뜻이다(예: 다른 탭에서 먼저 승인됨).
+    // 이 경우 "곧 자동 해제"라고 안내하거나 같은 결제로 재시도를 권하면, 실제로는 결제가 끝났는데
+    // 아직 안 끝난 것처럼 보여줘 혼란을 준다 — 재시도 경로를 열어주지 않고 사실대로 안내한다.
+    if (error.code === 'PAY015') {
+      checkoutError.value = '이미 처리된 결제입니다. 주문 내역에서 확인해 주세요.'
+      return
+    }
+    checkoutError.value = '결제는 완료되지 않았습니다. 상품 예약은 잠시 후 자동으로 해제됩니다.'
+    setRetryPaymentIdQuery(paymentId)
+  }
+}
+
 function validateCheckout() {
   if (!receiverName.value.trim() || !receiverPhone.value.trim()) {
     checkoutError.value = '수령인 이름과 연락처를 입력해 주세요.'
@@ -125,12 +162,13 @@ async function submitPayment() {
   }
 
   isSubmitting.value = true
+  let payment = null
   try {
     // 결제창 이탈 후 예약이 살아있는 상태에서 다시 왔다면(PurchaseFailPage에서 취소 실패로
     // retryPaymentId를 넘겨준 경우), 새 결제를 만들지 않고 같은 예약을 재사용하는 retry를 쓴다 —
     // 그래야 이미 RESERVED인 매물에 다시 예약을 걸다 LISTING_NOT_ON_SALE로 거부되지 않는다.
     const retryPaymentId = route.query.retryPaymentId
-    const payment = retryPaymentId
+    payment = retryPaymentId
       ? await retryPayment(retryPaymentId, selectedPayment.value.apiMethod)
       : await createPayment({
           listingId: Number(route.params.productId),
@@ -150,7 +188,14 @@ async function submitPayment() {
       failUrl: `${origin}/purchase/${productId}/fail?paymentId=${payment.paymentId}`,
     })
   } catch (error) {
-    checkoutError.value = error.message || '결제 요청을 처리하지 못했습니다.'
+    // payment가 만들어진 뒤(예약은 잡힌 뒤) 결제창에서 승인 없이 끝난 경우에만 취소를 시도한다.
+    // payment가 없으면(createPayment/retryPayment 자체 실패) 취소할 예약이 없으므로 메시지만 보여준다.
+    if (payment && PAYMENT_WINDOW_ABORTED_CODES.has(error.code)) {
+      await handlePaymentWindowAborted(payment.paymentId)
+    } else {
+      checkoutError.value = error.message || '결제 요청을 처리하지 못했습니다.'
+    }
+  } finally {
     isSubmitting.value = false
   }
 }

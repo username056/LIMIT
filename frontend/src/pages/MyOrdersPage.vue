@@ -19,29 +19,14 @@ const selectedOrder = ref(null)
 const ORDER_TABS = ['전체', '결제 완료', '취소/반품']
 const TAB_STATUS_GROUPS = {
   '결제 완료': ['결제 완료'],
-  '취소/반품': ['취소 요청', '반품 접수', '취소/환불'],
+  '취소/반품': ['취소 요청', '취소/환불'],
 }
 const IN_PROGRESS_STATUSES = ['결제 완료']
-const REQUESTED_STATUSES = ['취소 요청', '반품 접수']
-
-// 배송이 없으므로 배송 지연·파손 같은 사유는 뺐습니다.
-const CANCEL_REASONS = [
-  '상품이 필요 없어졌습니다.',
-  '다른 상품으로 다시 구매하려고 합니다.',
-  '판매자와 연락이 되지 않습니다.',
-  '거래 일정을 맞추기 어렵습니다.',
-]
-const RETURN_REASONS = [
-  '상품 상태가 설명과 다릅니다.',
-  '설명에 없던 하자가 있습니다.',
-  '구성품이 누락되었습니다.',
-  '검증 자료와 실물이 다릅니다.',
-]
+const REQUESTED_STATUSES = ['취소 요청']
 
 // 결제 상태(paymentStatus)만으로는 화면에 보여줄 한글 라벨을 정할 수 없어 매핑한다.
-// 취소 요청/반품 접수는 아직 서버에 별도 상태가 없어(환불 도메인 미연동), 실제로는
-// submitRequest()가 로컬에서만 상태를 바꾼다 — 새로고침하면 서버 값(REFUND_REQUESTED 등)
-// 대신 이 매핑으로 되돌아간다. 환불 API가 연동되면 이 부분을 실제 상태로 교체해야 한다.
+// 거래 취소·반품 신청 자체는 아직 API가 없어(환불 도메인 미연동) 버튼을 노출하지 않는다 —
+// 여기서 보여주는 건 백엔드가 실제로 가진 PaymentStatus뿐이다.
 function resolveStatusLabel(paymentStatus) {
   if (paymentStatus === 'APPROVED') return '결제 완료'
   if (paymentStatus === 'REFUND_REQUESTED') return '취소 요청'
@@ -78,7 +63,6 @@ function mapOrder(order) {
     price: Number(order.price).toLocaleString('ko-KR'),
     status,
     progress: resolveProgressText(order, dateLabel),
-    requestNote: '',
     paymentStatus: order.paymentStatus,
   }
 }
@@ -107,19 +91,6 @@ const visibleOrders = computed(() => {
   if (!group) return orders.value
   return orders.value.filter((order) => group.includes(order.status))
 })
-
-const requestModal = ref(null)
-const requestReason = ref('')
-const requestDetail = ref('')
-const requestError = ref('')
-const noticeMessage = ref('')
-
-const requestReasonOptions = computed(
-  () => (requestModal.value?.type === 'RETURN' ? RETURN_REASONS : CANCEL_REASONS),
-)
-const requestModalTitle = computed(
-  () => (requestModal.value?.type === 'RETURN' ? '반품 신청' : '거래 취소 요청'),
-)
 
 function badgeVariant(status) {
   if (IN_PROGRESS_STATUSES.includes(status)) return 'primary'
@@ -161,38 +132,6 @@ async function contactSeller(order) {
   }
 }
 
-function openRequestModal(type) {
-  requestModal.value = { type, orderId: selectedOrder.value.id }
-  requestReason.value = ''
-  requestDetail.value = ''
-  requestError.value = ''
-}
-
-function closeRequestModal() {
-  requestModal.value = null
-}
-
-function submitRequest() {
-  requestError.value = ''
-  if (!requestReason.value) {
-    requestError.value = '사유를 선택해 주세요.'
-    return
-  }
-
-  const isReturn = requestModal.value.type === 'RETURN'
-  const target = orders.value.find((order) => order.id === requestModal.value.orderId)
-  if (target) {
-    target.status = isReturn ? '반품 접수' : '취소 요청'
-    target.progress = isReturn ? '반품 신청 접수 · 판매자 확인 대기' : '취소 요청 접수 · 판매자 확인 대기'
-    target.requestNote = [requestReason.value, requestDetail.value.trim()].filter(Boolean).join(' / ')
-    selectedOrder.value = target
-  }
-
-  noticeMessage.value = isReturn
-    ? '반품 신청을 접수했습니다. 판매자 확인 후 반환 방법을 협의하게 됩니다.'
-    : '거래 취소 요청을 접수했습니다. 판매자 확인 후 환불이 진행됩니다.'
-  closeRequestModal()
-}
 </script>
 
 <template>
@@ -209,13 +148,6 @@ function submitRequest() {
       class="mb-5"
     />
 
-    <p
-      v-if="noticeMessage"
-      role="status"
-      class="mb-4 rounded-md bg-accent px-4 py-3 text-sm text-primary-dark"
-    >
-      {{ noticeMessage }}
-    </p>
     <p
       v-if="chatError"
       role="alert"
@@ -366,111 +298,17 @@ function submitRequest() {
       </div>
 
       <p
-        v-if="selectedOrder.requestNote"
-        class="mt-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700"
-      >
-        접수된 사유: {{ selectedOrder.requestNote }}
-      </p>
-
-      <div
-        v-if="canRequestCancel(selectedOrder) || canRequestReturn(selectedOrder)"
-        class="mt-5 flex flex-wrap gap-3 border-t border-border pt-5"
-      >
-        <BaseButton
-          v-if="canRequestCancel(selectedOrder)"
-          variant="outline"
-          @click="openRequestModal('CANCEL')"
-        >
-          거래 취소 요청
-        </BaseButton>
-        <BaseButton
-          v-if="canRequestReturn(selectedOrder)"
-          variant="outline"
-          @click="openRequestModal('RETURN')"
-        >
-          반품 신청
-        </BaseButton>
-      </div>
-      <p
-        v-else-if="REQUESTED_STATUSES.includes(selectedOrder.status)"
+        v-if="REQUESTED_STATUSES.includes(selectedOrder.status)"
         class="mt-5 border-t border-border pt-5 text-sm text-text-sub"
       >
-        요청이 접수되어 판매자 확인을 기다리는 중입니다.
+        환불 요청이 접수되어 판매자 확인을 기다리는 중입니다.
+      </p>
+      <p
+        v-else-if="canRequestCancel(selectedOrder) || canRequestReturn(selectedOrder)"
+        class="mt-5 border-t border-border pt-5 text-sm text-text-sub"
+      >
+        거래 취소·반품 신청은 아직 준비 중입니다. 판매자에게 문의해 주세요.
       </p>
     </BaseCard>
-
-    <!-- 거래 취소 / 반품 신청 모달 -->
-    <div
-      v-if="requestModal"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
-      role="dialog"
-      aria-modal="true"
-      :aria-label="requestModalTitle"
-      @click.self="closeRequestModal"
-    >
-      <div class="w-full max-w-md rounded-lg bg-surface p-6 shadow-elevated">
-        <h2 class="text-base font-bold text-text-main">
-          {{ requestModalTitle }}
-        </h2>
-        <p class="mt-1 text-xs text-text-sub">
-          {{ requestModal.orderId }}
-        </p>
-
-        <fieldset class="mt-5">
-          <legend class="text-sm font-semibold text-text-main">
-            사유를 선택해 주세요.
-          </legend>
-          <label
-            v-for="reason in requestReasonOptions"
-            :key="reason"
-            class="mt-2 flex cursor-pointer items-start gap-3 rounded-md border border-border p-3 text-sm text-text-main"
-            :class="requestReason === reason ? 'border-primary bg-accent' : 'hover:border-primary'"
-          >
-            <input
-              v-model="requestReason"
-              type="radio"
-              :value="reason"
-              class="mt-1 h-4 w-4 accent-primary"
-            >
-            <span>{{ reason }}</span>
-          </label>
-        </fieldset>
-
-        <label class="mt-4 block text-sm font-semibold text-text-main">
-          추가 설명 (선택)
-          <textarea
-            v-model="requestDetail"
-            rows="3"
-            maxlength="500"
-            placeholder="판매자에게 전달할 내용을 적어 주세요."
-            class="mt-2 w-full rounded-md border border-border px-3 py-2 text-sm font-normal outline-none focus:border-primary"
-          />
-        </label>
-
-        <p
-          v-if="requestError"
-          role="alert"
-          class="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700"
-        >
-          {{ requestError }}
-        </p>
-
-        <div class="mt-5 flex gap-3">
-          <BaseButton
-            variant="outline"
-            class="flex-1"
-            @click="closeRequestModal"
-          >
-            닫기
-          </BaseButton>
-          <BaseButton
-            class="flex-1"
-            @click="submitRequest"
-          >
-            신청하기
-          </BaseButton>
-        </div>
-      </div>
-    </div>
   </MyPageLayout>
 </template>
