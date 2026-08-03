@@ -287,7 +287,14 @@ class OpenApiContractTests {
                 .andExpect(jsonPath("$.components.schemas.PaymentResponse").exists())
                 .andExpect(
                         jsonPath("$.paths['/api/v1/payments'].post.responses['409'].description")
-                                .value(containsString("PAYMENT_REQUEST_CONFLICT")));
+                                .value(containsString("PAYMENT_REQUEST_CONFLICT")))
+                .andExpect(jsonPath(
+                                "$.paths['/api/v1/inspection-agent/sessions/{sessionKey}/test-results'].post")
+                        .exists())
+                .andExpect(jsonPath(
+                                "$.paths['/api/v1/inspection-sessions/{sessionKey}/test-results'].get")
+                        .exists())
+                .andExpect(jsonPath("$.components.schemas.SubmitTestResultRequest").exists());
     }
 
     @Test
