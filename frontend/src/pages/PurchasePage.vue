@@ -348,13 +348,32 @@ async function submitPayment() {
               :to="{ name: 'product-detail', params: { productId: route.params.productId } }"
               class="group flex items-center gap-3 rounded-md transition hover:bg-bg"
             >
-              <div class="h-16 w-16 shrink-0 rounded-md bg-primary-gradient" />
-              <div>
-                <p class="text-sm font-bold text-text-main group-hover:text-primary group-hover:underline">
-                  {{ product.name }}
+              <!--
+                실제 상품 사진입니다. 예전에는 그라데이션 네모만 있어서, 어떤
+                물건을 결제하는지 이름으로만 확인해야 했습니다.
+              -->
+              <img
+                v-if="product.thumbnailUrl"
+                :src="product.thumbnailUrl"
+                :alt="product.name"
+                class="h-16 w-16 shrink-0 rounded-md object-cover"
+              >
+              <div
+                v-else
+                class="h-16 w-16 shrink-0 rounded-md bg-primary-gradient"
+              />
+              <!--
+                순서는 상품 상세·목록 카드와 같습니다. 제조사·모델을 위에 파랗게,
+                판매글 이름을 아래에 굵게. 예전에는 이름이 위, 제조사가 아래 회색이라
+                같은 상품이 화면마다 다르게 읽혔습니다.
+              -->
+              <div class="min-w-0">
+                <p class="truncate text-xs font-semibold text-primary">
+                  {{ product.device?.manufacturer || '제조사 미등록' }}
+                  · {{ product.device?.model || '모델 미등록' }}
                 </p>
-                <p class="mt-1 text-xs text-text-sub">
-                  {{ product.device?.manufacturer }}
+                <p class="mt-1 truncate text-sm font-bold text-text-main group-hover:text-primary group-hover:underline">
+                  {{ product.name }}
                 </p>
               </div>
             </RouterLink>
