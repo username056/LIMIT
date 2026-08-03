@@ -121,6 +121,18 @@ public sealed class MainForm : Form
         {
             statusLabel.Text = "검사 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.";
         }
+        catch (TimeoutException)
+        {
+            statusLabel.Text = "Windows 시스템 정보 수집 시간이 초과되었습니다. 다시 시도해 주세요.";
+        }
+        catch (InvalidOperationException)
+        {
+            statusLabel.Text = "Windows 시스템 정보를 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+        }
+        catch (IOException)
+        {
+            statusLabel.Text = "검사 결과 파일을 처리하지 못했습니다. 저장 공간을 확인해 주세요.";
+        }
         catch (Exception)
         {
             statusLabel.Text = "검사를 완료하지 못했습니다. 연결 코드를 확인하고 다시 시도해 주세요.";
