@@ -378,6 +378,34 @@ class SystemInfoScreenshotParserTests {
     }
 
     @Test
+    void extractsFirstRowCardValuesWhenSecondRowLabelPrecedesThemInTokenOrder() {
+        // 클로바가 "라벨들을 몰아서 반환한 뒤 값들을 몰아서" 반환하는 깨끗한 스크린샷 순서를 흉내낸다 — 카드가
+        // 두 줄로 줄바꿈된 경우, 둘째 행(프로세서) 라벨이 배열 순서상 첫째 행의 실제 값들보다 먼저 온다.
+        // extractCardRow가 다음 행 라벨의 top을 상한(nextRowTop)으로 넘기지 않으면, 이 프로세서 라벨이
+        // 첫째 행의 "첫 값 후보"로 잘못 채택되어 진짜 값(1.86 TB / 8 GB / 64.0GB)에 도달하지 못하고
+        // 첫째 행 추출이 통째로 실패한다.
+        List<OcrToken> tokens = new ArrayList<>();
+        tokens.add(t("저장소", 0.999, 813, 247, 888, 273));
+        tokens.add(t("그래픽", 0.998, 1240, 247, 1312, 273));
+        tokens.add(t("카드", 0.998, 1319, 247, 1368, 273));
+        tokens.add(t("설치된", 0.999, 1660, 243, 1735, 273));
+        tokens.add(t("RAM", 0.9997, 1743, 251, 1799, 273));
+        tokens.add(t("프로세서", 0.999, 2088, 650, 2185, 676)); // 둘째 행 라벨이 먼저 온다.
+        tokens.add(t("1.86", 0.99, 800, 299, 850, 333));
+        tokens.add(t("TB", 0.99, 853, 299, 884, 333));
+        tokens.add(t("8", 0.99, 1290, 299, 1310, 333));
+        tokens.add(t("GB", 0.99, 1313, 299, 1360, 333));
+        tokens.add(t("64.0GB", 0.99, 1660, 299, 1770, 333));
+
+        List<OcrFieldExtraction> results =
+                parser.parse(tokens, OcrFieldExpectations.SCREENSHOT_FIELD_TYPES);
+
+        assertThat(fieldValue(results, OcrFieldType.STORAGE_CAPACITY)).isEqualTo("1.86 TB");
+        assertThat(fieldValue(results, OcrFieldType.GPU)).isEqualTo("8 GB");
+        assertThat(fieldValue(results, OcrFieldType.RAM)).isEqualTo("64.0GB");
+    }
+
+    @Test
     void stillFindsOtherCardFieldsWhenOneCardLabelIsMissing() {
         // 카드 라벨 4개 중 하나(그래픽카드)가 없어도(다른 Windows 버전 등) 나머지는 찾은 대로 반영한다.
         List<OcrToken> tokensWithoutGpuLabel = new ArrayList<>();

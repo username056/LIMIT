@@ -126,6 +126,11 @@ public class SystemInfoScreenshotParser {
             return;
         }
 
+        // rows는 centerY 오름차순이므로 rows.get(i + 1)은 항상 i행 바로 아래(다음 줄) 행이다. 클로바가
+        // "라벨들을 몰아서 반환한 뒤 값들을 몰아서" 반환하는 스크린샷에서는 다음 행의 라벨 토큰이 배열 순서상
+        // 이 행의 실제 값 토큰보다 먼저 나올 수 있다 — nextRowTop으로 그 다음 행 라벨의 최상단(top) 지점을
+        // 명시적인 상한으로 넘겨야, collectCardValueCandidates가 그 라벨을 이 행의 값 후보로 잘못 주워
+        // "첫 후보"로 오인해 진짜 값(더 뒤에 오는 후보)에 도달하지 못하는 오탐을 막을 수 있다.
         List<Map<OcrFieldType, LabelMatch>> rows = groupLabelsIntoRows(foundLabels);
         for (int i = 0; i < rows.size(); i++) {
             double nextRowTop =
