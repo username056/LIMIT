@@ -20,6 +20,7 @@ import {
   getProductImages,
   requestDeviceModel,
   transitionProductStatus,
+  updateProductDraftProgress,
   updateProductImageOrder,
 } from '../../api/products'
 import {
@@ -1098,7 +1099,7 @@ describe('ProductRegisterPage', () => {
         category: { categoryId: 10 },
         device: { deviceModelId: 101, color: '블랙', storageGb: 256 },
       })
-      getProductDraftProgress.mockResolvedValue({ step: 3, confirmedChecklistItemIds: [] })
+      getProductDraftProgress.mockResolvedValue({ step: 3, results: {} })
     })
 
     it('진행 단계가 남아 있어도 1단계부터 연다', async () => {
@@ -1125,6 +1126,71 @@ describe('ProductRegisterPage', () => {
       const selects = wrapper.findAll('select')
       expect(selects[0].attributes('disabled')).toBeUndefined()
       expect(selects[1].attributes('disabled')).toBeUndefined()
+    })
+
+    // 실동작 점검 대상(checkableItemCodes.js)은 개인정보 체크박스 목록에서 빠져야 합니다 —
+    // 그렇지 않으면 판매자가 실제 점검 없이 체크박스만 눌러 SUCCESS로 자기신고할 수 있습니다.
+    it('실동작 점검 항목은 체크박스로 렌더링되지 않고, 관련 없는 개인정보 체크를 바꿔도 그 FAILED 결과는 지우지 않는다', async () => {
+      getProductChecklist.mockResolvedValue([
+        { checklistItemId: 7002, itemCode: 'PRV-004', name: '계정 제거 및 초기화', evidenceType: 'SELLER_CONFIRMATION', isRequired: true, status: 'PENDING' },
+        { checklistItemId: 7003, itemCode: 'LAP-KBD-005', name: '키보드 실동작 확인', evidenceType: 'SELLER_CONFIRMATION', isRequired: true, status: 'PENDING' },
+      ])
+      // 키보드 실동작 점검이 이미 실패로 기록돼 있는 상태를 가정합니다.
+      getProductDraftProgress.mockResolvedValue({ step: 3, results: { 7003: 'FAILED' } })
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+
+      await buttonByText(wrapper, '다음 단계').trigger('click')
+      await flushPromises()
+      await buttonByText(wrapper, '다음 단계로').trigger('click')
+      await flushPromises()
+      expect(wrapper.text()).toContain('개인정보를 정리했는지 확인해 주세요.')
+
+      // 실동작 항목(키보드)은 체크박스가 아니라 읽기 전용 상태로만 보입니다.
+      const checkboxes = wrapper.findAll('input[type="checkbox"]')
+      expect(checkboxes).toHaveLength(1)
+      expect(wrapper.text()).toContain('키보드 실동작 확인')
+      expect(wrapper.text()).toContain('재점검 필요')
+
+      // 관련 없는 개인정보 체크박스만 체크합니다.
+      await checkboxes[0].setValue(true)
+      await flushPromises()
+
+      const [, payload] = updateProductDraftProgress.mock.calls.at(-1)
+      expect(payload.step).toBe(3)
+      expect(payload.results).toEqual(expect.arrayContaining([
+        { checklistItemId: 7002, result: 'SUCCESS' },
+        { checklistItemId: 7003, result: 'FAILED' },
+      ]))
+      expect(payload.results).toHaveLength(2)
+    })
+
+    // goToStep4는 개인정보·실동작 점검 둘 다 필수 완료를 요구하고, 안내 문구는 어디로 가야
+    // 하는지 구분해서 보여줍니다.
+    it('실동작 점검이 안 끝나면 개인정보를 다 체크해도 4단계로 못 넘어간다', async () => {
+      getProductChecklist.mockResolvedValue([
+        { checklistItemId: 7002, itemCode: 'PRV-004', name: '계정 제거 및 초기화', evidenceType: 'SELLER_CONFIRMATION', isRequired: true, status: 'PENDING' },
+        { checklistItemId: 7003, itemCode: 'LAP-KBD-005', name: '키보드 실동작 확인', evidenceType: 'SELLER_CONFIRMATION', isRequired: true, status: 'PENDING' },
+      ])
+      getProductDraftProgress.mockResolvedValue({ step: 3, results: {} })
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+
+      await buttonByText(wrapper, '다음 단계').trigger('click')
+      await flushPromises()
+      await buttonByText(wrapper, '다음 단계로').trigger('click')
+      await flushPromises()
+
+      await wrapper.get('input[type="checkbox"]').setValue(true)
+      await flushPromises()
+      await buttonByText(wrapper, '다음 단계로').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('실동작 자동 점검')
+      expect(wrapper.text()).toContain('키보드 실동작 확인')
+      expect(wrapper.text()).not.toContain('체크리스트 등록이 완료되었습니다.')
     })
   })
 
