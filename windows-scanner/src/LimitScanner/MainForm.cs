@@ -32,7 +32,8 @@ public sealed class MainForm : Form
         {
             AutoSize = true,
             Font = new Font(Font.FontFamily, 16F, FontStyle.Bold),
-            Text = "Limit Windows 자동 검사"
+            Text = "Limit Windows 자동 검사",
+            Margin = new Padding(3, 3, 3, 14)
         };
         var description = new Label
         {
@@ -40,17 +41,29 @@ public sealed class MainForm : Form
             MaximumSize = new Size(650, 0),
             Font = new Font(Font.FontFamily, 10F),
             Text = "CPU, RAM, GPU, 사운드 장치와 배터리 상태를 수집합니다. "
-                + "비밀번호, 개인 파일, 브라우저 기록과 Windows 제품 키는 수집하지 않습니다."
+                + "비밀번호, 개인 파일, 브라우저 기록과 Windows 제품 키는 수집하지 않습니다.",
+            Margin = new Padding(3, 0, 3, 18)
+        };
+        var pairingCodeLabel = new Label
+        {
+            AutoSize = true,
+            Text = "연결 코드",
+            Margin = new Padding(3, 0, 3, 8)
         };
 
         pairingCodeTextBox.Font = new Font(Font.FontFamily, 20F);
         pairingCodeTextBox.TextAlign = HorizontalAlignment.Center;
         pairingCodeTextBox.Width = 230;
         pairingCodeTextBox.Height = 52;
+        pairingCodeTextBox.Margin = new Padding(3, 0, 3, 16);
+        consentCheckBox.Margin = new Padding(3, 0, 3, 16);
         startButton.AutoSize = true;
         startButton.Padding = new Padding(18, 8, 18, 8);
+        startButton.Margin = new Padding(3, 0, 3, 18);
         progressBar.Width = 650;
+        progressBar.Margin = new Padding(3, 0, 3, 14);
         statusLabel.MaximumSize = new Size(650, 0);
+        statusLabel.Margin = new Padding(3, 0, 3, 3);
         pairingCodeTextBox.TextChanged += (_, _) => UpdateStartButton();
         consentCheckBox.CheckedChanged += (_, _) => UpdateStartButton();
         startButton.Click += StartButton_Click;
@@ -65,7 +78,7 @@ public sealed class MainForm : Form
         };
         layout.Controls.Add(title);
         layout.Controls.Add(description);
-        layout.Controls.Add(new Label { AutoSize = true, Text = "연결 코드" });
+        layout.Controls.Add(pairingCodeLabel);
         layout.Controls.Add(pairingCodeTextBox);
         layout.Controls.Add(consentCheckBox);
         layout.Controls.Add(startButton);
