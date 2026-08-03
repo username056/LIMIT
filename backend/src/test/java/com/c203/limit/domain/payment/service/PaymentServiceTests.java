@@ -941,6 +941,41 @@ class PaymentServiceTests {
     }
 
     @Test
+    void cancelRejectsWhenConfirmAttemptedRecoversAsApprovedViaReconcile() {
+        Payment payment = requestedPayment();
+        payment.markConfirmAttempted();
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        when(tossPaymentClient.findByOrderId(payment.getProviderOrderId()))
+                .thenReturn(new TossPaymentResponse(
+                        "payment-key-1", payment.getProviderOrderId(), "DONE", 650_000L, "CARD", null));
+
+        assertThatThrownBy(() -> service.cancel(BUYER_ID, PAYMENT_ID))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PAYMENT_NOT_CANCELLABLE));
+        assertThat(payment.getStatus().name()).isEqualTo("APPROVED");
+        verify(listingService, never()).cancelReservation(any(), any(), any());
+    }
+
+    @Test
+    void cancelProceedsWhenConfirmAttemptedButReconcileFindsNoTossRecord() {
+        Payment payment = requestedPayment();
+        payment.markConfirmAttempted();
+        when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        TossPaymentClientException notFound = mock(TossPaymentClientException.class);
+        when(notFound.isRetryable()).thenReturn(false);
+        when(tossPaymentClient.findByOrderId(payment.getProviderOrderId())).thenThrow(notFound);
+
+        PaymentResponse response = service.cancel(BUYER_ID, PAYMENT_ID);
+
+        assertThat(response.getStatus()).isEqualTo("CANCELLED");
+        assertThat(payment.getStatus().name()).isEqualTo("CANCELLED");
+        verify(listingService, times(1)).cancelReservation(eq(LISTING_ID), eq(BUYER_ID), any());
+    }
+
+    @Test
     void reconcileRecoversPaymentWhenTossReportsDoneWithMatchingAmount() {
         Payment payment = requestedPayment();
         when(paymentRepository.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));

@@ -2,23 +2,29 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import PurchasePage from '../PurchasePage.vue'
 import { getProduct } from '../../api/products'
-import { createPayment, getPayment, retryPayment } from '../../api/payment'
+import { cancelPayment, createPayment, getPayment, retryPayment } from '../../api/payment'
 import { getAccessToken } from '../../auth/session'
 import { getMyProfile } from '../../api/member'
 
 const routeState = { query: {} }
+const mockRouter = { push: vi.fn(), replace: vi.fn() }
 vi.mock('vue-router', () => ({
   useRoute: () => ({ params: { productId: '1001' }, fullPath: '/purchase/1001', query: routeState.query }),
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => mockRouter,
 }))
 vi.mock('../../api/products', () => ({ getProduct: vi.fn() }))
 vi.mock('../../api/payment', () => ({
   createPayment: vi.fn(),
   retryPayment: vi.fn(),
   getPayment: vi.fn(),
+  cancelPayment: vi.fn(),
 }))
 vi.mock('../../api/member', () => ({ getMyProfile: vi.fn() }))
 vi.mock('../../auth/session', () => ({ getAccessToken: vi.fn() }))
+
+function tossError(code, message) {
+  return Object.assign(new Error(message), { code })
+}
 
 const layoutStub = { template: '<main><slot /></main>' }
 const buttonStub = {
@@ -165,5 +171,95 @@ describe('PurchasePage', () => {
 
     expect(retryPayment).not.toHaveBeenCalled()
     expect(requestPayment).not.toHaveBeenCalled()
+  })
+
+  it('사용자가 결제창을 닫으면(PAY_PROCESS_CANCELED) 예약을 즉시 취소하고 안내한다', async () => {
+    createPayment.mockResolvedValue({ paymentId: 500, providerOrderId: 'PAY-500-1', requestedAmount: 650000 })
+    const requestPayment = vi.fn().mockRejectedValue(tossError('PAY_PROCESS_CANCELED', '사용자가 결제를 취소했습니다.'))
+    vi.stubGlobal('TossPayments', vi.fn(() => ({ requestPayment })))
+    cancelPayment.mockResolvedValue({ paymentId: 500, status: 'CANCELLED' })
+
+    const wrapper = mountPage()
+    await flushPromises()
+    await (wrapper.findAll('button').find((button) => button.text().includes('결제하기'))).trigger('click')
+    await flushPromises()
+
+    expect(cancelPayment).toHaveBeenCalledWith(500)
+    expect(wrapper.text()).toContain('결제가 취소되었습니다')
+  })
+
+  it('결제창이 승인 없이 중단되면(PAY_PROCESS_ABORTED) 예약을 즉시 취소한다', async () => {
+    createPayment.mockResolvedValue({ paymentId: 500, providerOrderId: 'PAY-500-1', requestedAmount: 650000 })
+    const requestPayment = vi.fn().mockRejectedValue(tossError('PAY_PROCESS_ABORTED', '승인 없이 중단되었습니다.'))
+    vi.stubGlobal('TossPayments', vi.fn(() => ({ requestPayment })))
+    cancelPayment.mockResolvedValue({ paymentId: 500, status: 'CANCELLED' })
+
+    const wrapper = mountPage()
+    await flushPromises()
+    await (wrapper.findAll('button').find((button) => button.text().includes('결제하기'))).trigger('click')
+    await flushPromises()
+
+    expect(cancelPayment).toHaveBeenCalledWith(500)
+    expect(wrapper.text()).toContain('결제가 취소되었습니다')
+  })
+
+  it('취소 API마저 실패하면 자동 해제 안내를 보여주고 같은 예약으로 재시도하도록 남겨둔다', async () => {
+    createPayment.mockResolvedValue({ paymentId: 500, providerOrderId: 'PAY-500-1', requestedAmount: 650000 })
+    const requestPayment = vi.fn().mockRejectedValue(tossError('PAY_PROCESS_CANCELED', '사용자가 결제를 취소했습니다.'))
+    vi.stubGlobal('TossPayments', vi.fn(() => ({ requestPayment })))
+    cancelPayment.mockRejectedValue(new Error('network error'))
+
+    const wrapper = mountPage()
+    await flushPromises()
+    await (wrapper.findAll('button').find((button) => button.text().includes('결제하기'))).trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('결제는 완료되지 않았습니다')
+    expect(mockRouter.replace).toHaveBeenCalledWith({ query: { retryPaymentId: '500' } })
+  })
+
+  it('취소 시점에 이미 승인된 결제라면(PAY015) 자동해제·재시도 안내 없이 사실대로 알린다', async () => {
+    createPayment.mockResolvedValue({ paymentId: 500, providerOrderId: 'PAY-500-1', requestedAmount: 650000 })
+    const requestPayment = vi.fn().mockRejectedValue(tossError('PAY_PROCESS_CANCELED', '사용자가 결제를 취소했습니다.'))
+    vi.stubGlobal('TossPayments', vi.fn(() => ({ requestPayment })))
+    cancelPayment.mockRejectedValue(tossError('PAY015', '요청 상태의 결제만 취소할 수 있습니다.'))
+
+    const wrapper = mountPage()
+    await flushPromises()
+    await (wrapper.findAll('button').find((button) => button.text().includes('결제하기'))).trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('이미 처리된 결제입니다')
+    expect(wrapper.text()).not.toContain('결제는 완료되지 않았습니다')
+    expect(mockRouter.replace).not.toHaveBeenCalled()
+  })
+
+  it('승인 여부가 불명확한 오류에서는 취소 API를 호출하지 않는다', async () => {
+    createPayment.mockResolvedValue({ paymentId: 500, providerOrderId: 'PAY-500-1', requestedAmount: 650000 })
+    const requestPayment = vi.fn().mockRejectedValue(new Error('네트워크 오류가 발생했습니다.'))
+    vi.stubGlobal('TossPayments', vi.fn(() => ({ requestPayment })))
+
+    const wrapper = mountPage()
+    await flushPromises()
+    await (wrapper.findAll('button').find((button) => button.text().includes('결제하기'))).trigger('click')
+    await flushPromises()
+
+    expect(cancelPayment).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('네트워크 오류가 발생했습니다.')
+  })
+
+  it('취소가 성공하면 재시도 경로로 들어온 retryPaymentId를 지운다', async () => {
+    routeState.query = { retryPaymentId: '500' }
+    retryPayment.mockResolvedValue({ paymentId: 500, providerOrderId: 'PAY-500-2', requestedAmount: 650000 })
+    const requestPayment = vi.fn().mockRejectedValue(tossError('PAY_PROCESS_CANCELED', '사용자가 결제를 취소했습니다.'))
+    vi.stubGlobal('TossPayments', vi.fn(() => ({ requestPayment })))
+    cancelPayment.mockResolvedValue({ paymentId: 500, status: 'CANCELLED' })
+
+    const wrapper = mountPage()
+    await flushPromises()
+    await (wrapper.findAll('button').find((button) => button.text().includes('결제하기'))).trigger('click')
+    await flushPromises()
+
+    expect(mockRouter.replace).toHaveBeenCalledWith({ query: {} })
   })
 })
