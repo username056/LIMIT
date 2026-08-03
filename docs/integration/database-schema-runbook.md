@@ -15,6 +15,7 @@ MySQL 스키마는 애플리케이션 시작 시 Flyway가 적용하고, Hiberna
 - `V20260809__create_model_checklist_research.sql`: 모델별 AI 조사 상태·결과·승인 템플릿 연결 추가
 - `V20260817__create_inspection_session.sql`: Windows 자동 검사 일회용 연결 세션 추가
 - `V20260810__create_device_model_request.sql`: 판매자의 미등록 기기 모델 검토 요청 추가
+- `V20260816__support_immediate_model_checklist.sql`: 즉시 모델 등록, 사후 검토 상태와 버전형 AI 재조사 지원
 
 `V20260721`은 기존 `member_role`, `user_sanction`, `user_account.member_type`을 삭제하지 않는다. 기존 `member_type` 값도 보존하며, 신규 회원 INSERT를 막지 않도록 해당 컬럼만 nullable/default 호환 상태로 바꾼다.
 

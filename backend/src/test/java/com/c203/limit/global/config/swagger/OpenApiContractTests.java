@@ -206,6 +206,9 @@ class OpenApiContractTests {
     @MockitoBean
     com.c203.limit.domain.product.service.DeviceModelRequestService deviceModelRequestService;
 
+    @MockitoBean
+    com.c203.limit.domain.product.service.DeviceModelManagementService deviceModelManagementService;
+
     @Autowired
     MockMvc mockMvc;
 
@@ -240,6 +243,11 @@ class OpenApiContractTests {
                 .andExpect(jsonPath("$.paths['/api/v1/admin/members']").exists())
                 .andExpect(jsonPath(
                                 "$.paths['/api/v1/admin/checklist-researches/{researchId}/retry']")
+                        .exists())
+                .andExpect(jsonPath("$.paths['/api/v1/admin/device-models']").exists())
+                .andExpect(jsonPath("$.paths['/api/v1/admin/device-models/{modelId}']").exists())
+                .andExpect(jsonPath(
+                                "$.paths['/api/v1/admin/device-models/{modelId}/researches']")
                         .exists())
                 .andExpect(jsonPath("$.paths['/api/v1/admin/me/password']").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/auth/password-reset-requests']").exists())

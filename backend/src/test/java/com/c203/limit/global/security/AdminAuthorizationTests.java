@@ -129,6 +129,9 @@ class AdminAuthorizationTests {
     @MockitoBean
     com.c203.limit.domain.product.service.DeviceModelRequestService deviceModelRequestService;
 
+    @MockitoBean
+    com.c203.limit.domain.product.service.DeviceModelManagementService deviceModelManagementService;
+
     @Test
     void publicHealthEndpointDoesNotRequireAuthentication() throws Exception {
         mockMvc.perform(get("/api/v1/health"))

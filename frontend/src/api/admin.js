@@ -68,6 +68,23 @@ export function retryChecklistResearch(researchId) {
   return apiClient.post(`/admin/checklist-researches/${researchId}/retry`)
 }
 
+export function getAdminDeviceModels(reviewStatus) {
+  const suffix = reviewStatus ? `?reviewStatus=${encodeURIComponent(reviewStatus)}` : ''
+  return apiClient.get(`/admin/device-models${suffix}`)
+}
+
+export function getAdminDeviceModel(modelId) {
+  return apiClient.get(`/admin/device-models/${modelId}`)
+}
+
+export function updateAdminDeviceModel(modelId, payload) {
+  return apiClient.patch(`/admin/device-models/${modelId}`, payload)
+}
+
+export function researchAdminDeviceModel(modelId) {
+  return apiClient.post(`/admin/device-models/${modelId}/researches`)
+}
+
 export function getDeviceModelRequests(status = 'PENDING') {
   return apiClient.get(`/admin/device-model-requests?status=${encodeURIComponent(status)}`)
 }

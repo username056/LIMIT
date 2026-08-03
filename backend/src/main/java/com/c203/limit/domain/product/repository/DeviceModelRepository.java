@@ -1,11 +1,14 @@
 package com.c203.limit.domain.product.repository;
 
 import com.c203.limit.domain.product.entity.DeviceModel;
+import com.c203.limit.domain.product.entity.DeviceModelReviewStatus;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -47,4 +50,17 @@ public interface DeviceModelRepository extends JpaRepository<DeviceModel, Long> 
             Pageable pageable);
 
     boolean existsByManufacturerIdAndModelCode(Long manufacturerId, String modelCode);
+
+    boolean existsByManufacturerIdAndModelCodeAndIdNot(
+            Long manufacturerId, String modelCode, Long modelId);
+
+    @EntityGraph(attributePaths = {"category", "manufacturer"})
+    List<DeviceModel> findByReviewStatusOrderByCreatedAtDesc(DeviceModelReviewStatus reviewStatus);
+
+    @EntityGraph(attributePaths = {"category", "manufacturer"})
+    List<DeviceModel> findAllByOrderByCreatedAtDesc();
+
+    @Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select model from DeviceModel model where model.id = :modelId")
+    Optional<DeviceModel> findByIdForUpdate(@Param("modelId") Long modelId);
 }

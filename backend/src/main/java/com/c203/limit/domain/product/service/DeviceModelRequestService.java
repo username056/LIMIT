@@ -67,13 +67,15 @@ public class DeviceModelRequestService {
                         DeviceModelRequestStatus.PENDING)) {
             throw new BusinessException(ErrorCode.DEVICE_MODEL_REQUEST_DUPLICATED);
         }
-        DeviceModelRequest created = requestRepository.save(DeviceModelRequest.create(
+        DeviceModelRequest created = requestRepository.saveAndFlush(DeviceModelRequest.create(
                 memberId,
                 category.getId(),
                 request.manufacturer(),
                 request.modelName(),
                 request.modelCode(),
                 request.osFamily()));
+        Category model = provision(created, category);
+        created.provision(model.getId());
         log.info(
                 "device model request created: requestId={}, categoryId={}, status={}",
                 created.getId(),
@@ -117,6 +119,22 @@ public class DeviceModelRequestService {
                 modelName,
                 update.modelCode(),
                 update.osFamily());
+        if (request.getResolvedModelId() != null) {
+            Category model = categoryRepository
+                    .findById(request.getResolvedModelId())
+                    .orElseThrow(() -> new BusinessException(ErrorCode.DEVICE_MODEL_NOT_FOUND));
+            Long previousParentId = model.getParent() == null ? null : model.getParent().getId();
+            model.updateLeaf(
+                    category,
+                    modelName,
+                    manufacturer,
+                    update.osFamily(),
+                    update.modelCode());
+            catalogRegistrar.update(model);
+            if (!category.getId().equals(previousParentId)) {
+                publishBaseTemplate(model, category, false);
+            }
+        }
         actionLogRepository.save(
                 AdminActionLog.of(
                         adminId,
@@ -134,52 +152,11 @@ public class DeviceModelRequestService {
     @Transactional
     public DeviceModelRequestResponse approve(Long requestId, Long adminId, String note) {
         DeviceModelRequest request = pendingRequest(requestId);
-        Category parent = categoryRepository
-                .findById(request.getParentCategoryId())
-                .filter(category -> category.getParent() == null && category.isActive())
-                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_INPUT_VALUE));
-        ChecklistTemplate sourceTemplate = sourceTemplate(parent.getId());
-        List<ChecklistTemplateItem> sourceItems = templateItemRepository
-                .findByChecklistTemplateIdOrderByDisplayOrderAsc(sourceTemplate.getId());
-        int displayOrder = categoryRepository
-                        .findByParentIdOrderByDisplayOrderAsc(parent.getId())
-                        .stream()
-                        .mapToInt(Category::getDisplayOrder)
-                        .max()
-                        .orElse(0)
-                + 1;
-        String modelCode = request.getModelCode() == null
-                ? "REQUEST-" + request.getId()
-                : request.getModelCode();
-        Category model = categoryRepository.saveAndFlush(Category.createLeaf(
-                parent,
-                request.getModelName(),
-                parent.getDeviceType(),
-                request.getManufacturer(),
-                request.getOsFamily(),
-                modelCode,
-                List.of(),
-                displayOrder));
-        // category에만 쓰면 이 모델로는 상품 등록이 FK 위반으로 실패한다. 승인과 카탈로그
-        // 반영은 같은 트랜잭션에서 끝나야 한다.
-        catalogRegistrar.register(model);
-        ChecklistTemplate template = templateRepository.saveAndFlush(
-                ChecklistTemplate.createDraft(model.getId(), 1));
-        templateItemRepository.saveAllAndFlush(sourceItems.stream()
-                .map(item -> ChecklistTemplateItem.createGenerated(
-                        template,
-                        item.getItemCode(),
-                        item.getName(),
-                        item.getPurpose(),
-                        item.getCaptureGuide(),
-                        item.getEvidenceType(),
-                        item.getAutomationType(),
-                        item.getParserType(),
-                        item.isRequired(),
-                        item.getDisplayOrder()))
-                .toList());
-        template.publish();
-        request.approve(adminId, model.getId(), note);
+        if (request.getResolvedModelId() == null) {
+            throw new BusinessException(ErrorCode.DEVICE_MODEL_NOT_FOUND);
+        }
+        request.approve(adminId, request.getResolvedModelId(), note);
+        catalogRegistrar.completeReview(request.getResolvedModelId(), adminId, note);
         actionLogRepository.save(AdminActionLog.of(
                 adminId,
                 "DEVICE_MODEL_REQUEST_APPROVE",
@@ -187,10 +164,9 @@ public class DeviceModelRequestService {
                 requestId,
                 note));
         log.info(
-                "device model request approved: requestId={}, modelId={}, templateId={}",
+                "device model request reviewed: requestId={}, modelId={}",
                 requestId,
-                model.getId(),
-                template.getId());
+                request.getResolvedModelId());
         return DeviceModelRequestResponse.from(request);
     }
 
@@ -198,6 +174,10 @@ public class DeviceModelRequestService {
     public DeviceModelRequestResponse reject(Long requestId, Long adminId, String note) {
         DeviceModelRequest request = pendingRequest(requestId);
         request.reject(adminId, note);
+        if (request.getResolvedModelId() != null) {
+            categoryRepository.findById(request.getResolvedModelId()).ifPresent(Category::deactivate);
+            catalogRegistrar.deactivate(request.getResolvedModelId());
+        }
         actionLogRepository.save(AdminActionLog.of(
                 adminId,
                 "DEVICE_MODEL_REQUEST_REJECT",
@@ -219,10 +199,65 @@ public class DeviceModelRequestService {
         return request;
     }
 
-    private ChecklistTemplate sourceTemplate(Long parentCategoryId) {
+    private Category provision(DeviceModelRequest request, Category parent) {
+        int displayOrder = categoryRepository
+                        .findByParentIdOrderByDisplayOrderAsc(parent.getId())
+                        .stream()
+                        .mapToInt(Category::getDisplayOrder)
+                        .max()
+                        .orElse(0)
+                + 1;
+        String modelCode = request.getModelCode() == null
+                ? "REQUEST-" + request.getId()
+                : request.getModelCode();
+        Category model = categoryRepository.saveAndFlush(Category.createLeaf(
+                parent,
+                request.getModelName(),
+                parent.getDeviceType(),
+                request.getManufacturer(),
+                request.getOsFamily(),
+                modelCode,
+                List.of(),
+                displayOrder));
+        catalogRegistrar.registerReported(model, request.getRequestedByMemberId());
+        publishBaseTemplate(model, parent, true);
+        return model;
+    }
+
+    private void publishBaseTemplate(Category model, Category parent, boolean initial) {
+        ChecklistTemplate sourceTemplate = sourceTemplate(parent.getId(), model.getId());
+        List<ChecklistTemplateItem> sourceItems = templateItemRepository
+                .findByChecklistTemplateIdOrderByDisplayOrderAsc(sourceTemplate.getId());
+        int version = initial
+                ? 1
+                : templateRepository
+                        .findFirstByCategoryIdAndStatusOrderByVersionDesc(
+                                model.getId(), ChecklistTemplateStatus.PUBLISHED)
+                        .map(template -> template.getVersion() + 1)
+                        .orElse(1);
+        ChecklistTemplate template = templateRepository.saveAndFlush(
+                ChecklistTemplate.createDraft(model.getId(), version));
+        templateItemRepository.saveAllAndFlush(sourceItems.stream()
+                .map(item -> ChecklistTemplateItem.createGenerated(
+                        template,
+                        item.getItemCode(),
+                        item.getName(),
+                        item.getPurpose(),
+                        item.getCaptureGuide(),
+                        item.getEvidenceType(),
+                        item.getAutomationType(),
+                        item.getParserType(),
+                        item.isRequired(),
+                        item.getDisplayOrder()))
+                .toList());
+        template.publish();
+    }
+
+    private ChecklistTemplate sourceTemplate(Long parentCategoryId, Long excludedModelId) {
         return categoryRepository.findByParentIdAndIsActiveTrueOrderByDisplayOrderAsc(
                         parentCategoryId)
                 .stream()
+                .filter(category -> !category.getId().equals(excludedModelId))
                 .map(Category::getId)
                 .map(categoryId -> templateRepository
                         .findFirstByCategoryIdAndStatusOrderByVersionAsc(

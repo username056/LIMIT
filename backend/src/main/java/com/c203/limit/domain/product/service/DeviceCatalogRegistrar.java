@@ -55,6 +55,15 @@ public class DeviceCatalogRegistrar {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public DeviceModel register(Category leaf) {
+        return register(leaf, null);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public DeviceModel registerReported(Category leaf, Long memberId) {
+        return register(leaf, memberId);
+    }
+
+    private DeviceModel register(Category leaf, Long reportedByMemberId) {
         if (leaf == null || leaf.getId() == null) {
             throw new IllegalArgumentException("leaf category must be persisted");
         }
@@ -71,16 +80,26 @@ public class DeviceCatalogRegistrar {
                                 new IllegalStateException(
                                         "device category not migrated: categoryId="
                                                 + leaf.getParent().getId()));
-        DeviceModel model = modelRepository.saveAndFlush(
-                DeviceModel.create(
+        Manufacturer manufacturer = manufacturer(leaf.getManufacturer());
+        DeviceModel model = modelRepository.saveAndFlush(reportedByMemberId == null
+                ? DeviceModel.create(
                         leaf.getId(),
                         category,
-                        manufacturer(leaf.getManufacturer()),
+                        manufacturer,
                         leaf.getName(),
                         leaf.getModelCode(),
                         leaf.getOsFamily(),
                         null,
-                        leaf.getDisplayOrder()));
+                        leaf.getDisplayOrder())
+                : DeviceModel.createReported(
+                        leaf.getId(),
+                        category,
+                        manufacturer,
+                        leaf.getName(),
+                        leaf.getModelCode(),
+                        leaf.getOsFamily(),
+                        leaf.getDisplayOrder(),
+                        reportedByMemberId));
 
         // 조합이 하나도 없는 모델은 검색에서 제외된다(DeviceModelRepository.search). 사용자가
         // 요청해 승인까지 난 모델이 그 규칙에 걸려 사라지면 승인 자체가 무의미해진다.
@@ -92,6 +111,41 @@ public class DeviceCatalogRegistrar {
                 model.getId(),
                 model.getModelCode());
         return model;
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public DeviceModel update(Category leaf) {
+        DeviceModel model = modelRepository
+                .findByIdForUpdate(leaf.getId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "device model not registered: modelId=" + leaf.getId()));
+        DeviceCategory category = deviceCategoryRepository
+                .findById(leaf.getParent().getId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "device category not migrated: categoryId="
+                                + leaf.getParent().getId()));
+        model.updateCatalog(
+                category,
+                manufacturer(leaf.getManufacturer()),
+                leaf.getName(),
+                leaf.getModelCode(),
+                leaf.getOsFamily());
+        log.info("device model catalog updated: modelId={}", model.getId());
+        return model;
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void completeReview(Long modelId, Long adminId, String note) {
+        DeviceModel model = modelRepository
+                .findByIdForUpdate(modelId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "device model not registered: modelId=" + modelId));
+        model.completeReview(adminId, note);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void deactivate(Long modelId) {
+        modelRepository.findByIdForUpdate(modelId).ifPresent(DeviceModel::deactivate);
     }
 
     /**
