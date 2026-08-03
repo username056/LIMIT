@@ -51,6 +51,7 @@ import {
 import { MAX_PRICE_DIGITS, formatPriceDigits, toPriceDigits } from '../utils/priceInput'
 import { guideContentFor, guideImageFor } from '../utils/checklistGuideImages'
 import { formatStorage } from '../utils/storage'
+import { CHECKABLE_ITEM_CODES } from '../features/deviceCheck/checkableItemCodes'
 
 const WIZARD_STEPS = [
   { number: 1, label: '기기 등록' },
@@ -443,15 +444,35 @@ const previewConfirmationItemCount = computed(
 const mediaChecklistItems = computed(
   () => checklistItems.value.filter((item) => item.evidenceType !== 'SELLER_CONFIRMATION'),
 )
-const confirmationChecklistItems = computed(
-  () => checklistItems.value.filter((item) => item.evidenceType === 'SELLER_CONFIRMATION'),
+// SELLER_CONFIRMATION 항목 중 checkableItemCodes.js가 실동작 점검 대상으로 지정한 itemCode는
+// DeviceCheckPage에서 실제로 눌러보고 받은 결과만 신뢰해야 합니다. 여기 체크박스로 노출하면
+// 판매자가 점검 없이 그냥 체크해서 SUCCESS로 덮어버릴 수 있어 개인정보 확인 항목과 분리합니다.
+const privacyChecklistItems = computed(
+  () => checklistItems.value.filter(
+    (item) => item.evidenceType === 'SELLER_CONFIRMATION' && !CHECKABLE_ITEM_CODES[item.itemCode],
+  ),
+)
+const deviceCheckConfirmationItems = computed(
+  () => checklistItems.value.filter(
+    (item) => item.evidenceType === 'SELLER_CONFIRMATION' && CHECKABLE_ITEM_CODES[item.itemCode],
+  ),
 )
 const capturedMediaCount = computed(
   () => mediaChecklistItems.value.filter((item) => mediaOf(item.checklistItemId).length > 0).length,
 )
 const confirmedCount = computed(
-  () => confirmationChecklistItems.value.filter((item) => confirmState[item.checklistItemId]).length,
+  () => privacyChecklistItems.value.filter((item) => confirmState[item.checklistItemId]).length,
 )
+const deviceCheckConfirmedCount = computed(
+  () => deviceCheckConfirmationItems.value.filter((item) => confirmState[item.checklistItemId]).length,
+)
+// draft 편집 중에는 draftProgressResults로 FAILED와 미점검을 구분할 수 있지만, 이미 판매 중인
+// 상품을 고칠 때는 서버가 COMPLETED/PENDING만 내려줘 구분할 수 없어 미점검으로만 표시합니다.
+function deviceCheckStatus(item) {
+  if (confirmState[item.checklistItemId]) return 'COMPLETED'
+  if (draftProgressResults.value.get(item.checklistItemId) === 'FAILED') return 'FAILED'
+  return 'PENDING'
+}
 const activeCaptureItem = computed(
   () => mediaChecklistItems.value.find((item) => item.checklistItemId === activeCaptureItemId.value)
     || mediaChecklistItems.value[0]
@@ -607,8 +628,12 @@ async function persistDraftProgress() {
   // 이미 판매 중·숨김인 상품은 초안 진행도를 갖지 않습니다. 서버가 409로 거절하므로 호출하지 않습니다.
   if (editingStatus.value && editingStatus.value !== 'DRAFT') return
   try {
+    // 불변 조건: 베이스는 항상 draftProgressResults 전체(개인정보 + 실동작 점검 결과 모두)에서
+    // 시작하고, 아래 루프는 privacyChecklistItems(개인정보 확인 항목)만 set/delete 합니다.
+    // deviceCheckConfirmationItems는 이 함수가 절대 건드리지 않아야 DeviceCheckPage에서 받은
+    // FAILED/SUCCESS가 여기서 조용히 덮이거나 사라지지 않습니다.
     const resultsByItemId = new Map(draftProgressResults.value)
-    confirmationChecklistItems.value.forEach((item) => {
+    privacyChecklistItems.value.forEach((item) => {
       if (confirmState[item.checklistItemId]) {
         resultsByItemId.set(item.checklistItemId, DEVICE_CHECK_RESULT.SUCCESS)
       } else if (resultsByItemId.get(item.checklistItemId) === DEVICE_CHECK_RESULT.SUCCESS) {
@@ -999,17 +1024,31 @@ function goToStep3() {
   proceed()
 }
 
-// 개인정보 확인은 체크 몇 번이면 되는 일이고 기기를 넘긴 뒤에는 되돌릴 수 없어 필수로 둡니다.
+// 개인정보 확인·실동작 점검은 기기를 넘긴 뒤에는 되돌릴 수 없어 필수로 둡니다.
 // 촬영 체크리스트와 달리 건너뛸 수 없습니다.
 function goToStep4() {
   errorMessage.value = ''
-  const missingConfirm = confirmationChecklistItems.value.filter(
+  const missingPrivacy = privacyChecklistItems.value.filter(
     (item) => isRequiredItem(item) && !confirmState[item.checklistItemId],
   )
-  if (missingConfirm.length) {
-    openAlert(
-      `개인정보 정리 확인이 남아 있습니다.\n${missingConfirm.map((item) => `· ${item.name}`).join('\n')}\n\n개인 정보 보호를 위해 반드시 초기화를 진행해주세요.`,
-    )
+  const missingDeviceCheck = deviceCheckConfirmationItems.value.filter(
+    (item) => isRequiredItem(item) && !confirmState[item.checklistItemId],
+  )
+  if (missingPrivacy.length || missingDeviceCheck.length) {
+    // 개인정보 확인과 실동작 점검은 사용자가 가야 할 곳이 다릅니다(체크박스 vs 점검 페이지)
+    // — 문구를 나눠서 어디로 가야 하는지 바로 알 수 있게 합니다.
+    const sections = []
+    if (missingPrivacy.length) {
+      sections.push(
+        `[개인정보 정리 확인]\n${missingPrivacy.map((item) => `· ${item.name}`).join('\n')}\n개인 정보 보호를 위해 반드시 초기화를 진행해주세요.`,
+      )
+    }
+    if (missingDeviceCheck.length) {
+      sections.push(
+        `[실동작 자동 점검]\n${missingDeviceCheck.map((item) => `· ${item.name}`).join('\n')}\n"실동작 자동 점검하기" 버튼을 눌러 직접 확인해 주세요.`,
+      )
+    }
+    openAlert(sections.join('\n\n'))
     return
   }
   setStep(4)
@@ -2762,9 +2801,56 @@ onMounted(async () => {
               카메라·마이크·키보드 등 실동작 자동 점검하기
             </BaseButton>
 
-            <ul class="mt-6 space-y-3">
+            <!--
+              카메라·마이크·키보드처럼 실제로 눌러봐야 하는 항목은 여기서 체크박스로 자기신고할
+              수 없게 읽기 전용으로만 보여줍니다. 체크박스를 두면 점검 없이 그냥 눌러서 SUCCESS로
+              덮을 수 있기 때문입니다 — 결과는 위 버튼으로 들어가 DeviceCheckPage에서만 남길 수 있습니다.
+            -->
+            <h3
+              v-if="deviceCheckConfirmationItems.length"
+              class="mt-6 text-sm font-bold text-text-main"
+            >
+              실동작 자동 점검
+            </h3>
+            <ul
+              v-if="deviceCheckConfirmationItems.length"
+              class="mt-3 space-y-3"
+            >
               <li
-                v-for="item in confirmationChecklistItems"
+                v-for="item in deviceCheckConfirmationItems"
+                :key="item.checklistItemId"
+                class="flex items-start justify-between gap-3 rounded-lg border border-border p-4"
+              >
+                <span>
+                  <span class="block text-sm font-bold text-text-main">
+                    {{ item.name }}<span
+                      v-if="isRequiredItem(item)"
+                      class="ml-1 text-red-500"
+                    >*</span>
+                  </span>
+                  <span class="mt-1 block text-xs text-text-sub">{{ guideFor(item) }}</span>
+                </span>
+                <BaseBadge
+                  class="shrink-0"
+                  :variant="deviceCheckStatus(item) === 'COMPLETED'
+                    ? 'success'
+                    : deviceCheckStatus(item) === 'FAILED' ? 'danger' : 'gray'"
+                >
+                  {{
+                    deviceCheckStatus(item) === 'COMPLETED'
+                      ? '완료'
+                      : deviceCheckStatus(item) === 'FAILED' ? '재점검 필요' : '미점검'
+                  }}
+                </BaseBadge>
+              </li>
+            </ul>
+
+            <h3 class="mt-6 text-sm font-bold text-text-main">
+              개인정보 확인 항목
+            </h3>
+            <ul class="mt-3 space-y-3">
+              <li
+                v-for="item in privacyChecklistItems"
                 :key="item.checklistItemId"
                 class="rounded-lg border border-border p-4"
               >
@@ -2787,7 +2873,7 @@ onMounted(async () => {
                 </label>
               </li>
               <li
-                v-if="!confirmationChecklistItems.length"
+                v-if="!privacyChecklistItems.length"
                 class="rounded-md bg-bg px-4 py-6 text-center text-sm text-text-sub"
               >
                 확인할 개인정보 항목이 없습니다.
@@ -2847,7 +2933,14 @@ onMounted(async () => {
                 <dt class="text-xs text-text-sub">
                   개인정보 확인
                 </dt><dd class="mt-1 font-semibold text-text-main">
-                  {{ confirmedCount }} / {{ confirmationChecklistItems.length }}
+                  {{ confirmedCount }} / {{ privacyChecklistItems.length }}
+                </dd>
+              </div>
+              <div v-if="deviceCheckConfirmationItems.length">
+                <dt class="text-xs text-text-sub">
+                  실동작 점검
+                </dt><dd class="mt-1 font-semibold text-text-main">
+                  {{ deviceCheckConfirmedCount }} / {{ deviceCheckConfirmationItems.length }}
                 </dd>
               </div>
             </dl>
