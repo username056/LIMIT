@@ -7,6 +7,7 @@ import StatCard from '../components/StatCard.vue'
 import BarChart from '../components/charts/BarChart.vue'
 import DonutChart from '../components/charts/DonutChart.vue'
 import MyPageLayout from '../layouts/MyPageLayout.vue'
+import PageHeader from '../components/PageHeader.vue'
 
 // 판매자 전용 통계 API가 아직 없어, 내 상품 목록에서 계산할 수 있는 지표만 보여줍니다.
 // 조회수·매출액처럼 목록 응답에 없는 지표는 주문/집계 API가 준비된 뒤 추가해야 합니다.
@@ -79,21 +80,15 @@ onMounted(async () => {
 <template>
   <MyPageLayout>
     <section>
-      <div class="mb-6">
-        <p class="text-xs font-semibold text-primary">
-          MY PAGE
-        </p>
-        <h1 class="mt-2 text-2xl font-bold text-text-main">
-          판매자 대시보드
-        </h1>
-        <p class="mt-1 text-sm text-text-sub">
-          내가 등록한 상품의 현황과 검증 진행 상태를 한눈에 확인하세요.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="MY DASHBOARD"
+        title="판매자 대시보드"
+        description="내가 등록한 상품의 현황과 검증 진행 상태를 한눈에 확인하세요."
+      />
 
       <p
         v-if="isLoadingStats"
-        class="mb-8 rounded-lg border border-border bg-surface p-6 text-sm text-text-sub"
+        class="mb-8 card-soft rounded-lg bg-surface p-6 text-sm text-text-sub"
       >
         상품 통계를 불러오는 중입니다.
       </p>
@@ -109,23 +104,19 @@ onMounted(async () => {
           <StatCard
             label="등록한 상품"
             :value="`${totalCount}개`"
-            icon="📦"
           />
           <StatCard
             label="판매 중"
             :value="`${statusBreakdown[0].count}개`"
-            icon="🟢"
           />
           <StatCard
             label="임시 저장 중"
             :value="`${statusBreakdown[1].count}개`"
             :trend="statusBreakdown[1].count ? '등록을 마치면 판매가 시작됩니다.' : ''"
-            icon="📝"
           />
           <StatCard
             label="판매 완료"
             :value="`${statusBreakdown[2].count}개`"
-            icon="✅"
           />
         </div>
 
@@ -140,7 +131,7 @@ onMounted(async () => {
             </p>
           </div>
 
-          <div class="rounded-lg border border-border bg-surface p-6 shadow-card">
+          <div class="card-soft rounded-lg bg-surface p-6">
             <h2 class="mb-1 text-base font-bold text-text-main">
               상태별 상품 수
             </h2>
@@ -167,7 +158,7 @@ onMounted(async () => {
       </h2>
       <p
         v-if="isLoading"
-        class="rounded-lg border border-border bg-surface p-6 text-sm text-text-sub"
+        class="card-soft rounded-lg bg-surface p-6 text-sm text-text-sub"
       >
         판매자 정보를 불러오는 중입니다.
       </p>
@@ -181,7 +172,7 @@ onMounted(async () => {
 
       <div
         v-else
-        class="rounded-lg border border-border bg-surface p-6 shadow-card"
+        class="card-soft rounded-lg bg-surface p-6"
       >
         <div class="mb-6 flex items-center justify-between border-b border-border pb-4">
           <div>

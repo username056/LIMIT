@@ -269,7 +269,11 @@ async function logoutMember() {
                   class="block rounded px-2 py-1.5 text-sm text-text-main hover:bg-bg"
                   @click="isProfileMenuOpen = false"
                 >
-                  내 정보
+                  <!--
+                    사이드바가 딸린 마이페이지 전체로 들어가는 입구입니다.
+                    '내 정보'라고 하면 그 안의 한 메뉴 이름과 겹쳐서, 어디로 가는지 헷갈립니다.
+                  -->
+                  마이 페이지
                 </RouterLink>
                 <button
                   type="button"

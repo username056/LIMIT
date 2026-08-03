@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
+import PageHeader from '../components/PageHeader.vue'
 import BaseCard from '../components/BaseCard.vue'
 import BaseInput from '../components/BaseInput.vue'
 import BaseButton from '../components/BaseButton.vue'
@@ -36,9 +37,9 @@ const defaultAddressError = ref('')
 const checkoutError = ref('')
 const isSubmitting = ref(false)
 
-const receiverName = ref('홍길동')
+const receiverName = ref('김싸피')
 const receiverPhone = ref('010-1234-5678')
-const address = ref({ zonecode: '', address: '서울시 강남구 테헤란로 123', addressDetail: '마크타워 5층 501호' })
+const address = ref({ zonecode: '', address: '광주광역시 광산구 하남산단 6번로 107', addressDetail: '광주 2반' })
 const deliveryMemo = ref('문 앞에 놓아주세요.')
 
 function goToLogin() {
@@ -138,13 +139,12 @@ async function submitPayment() {
 
 <template>
   <DefaultLayout>
-    <div class="mx-auto max-w-[1200px] px-6 py-10 lg:px-10">
-      <p class="text-xs font-bold uppercase tracking-[0.16em] text-primary">
-        PURCHASE
-      </p>
-      <h1 class="mb-6 mt-2 text-2xl font-bold text-text-main">
-        결제하기
-      </h1>
+    <div class="page-shell">
+      <PageHeader
+        eyebrow="PURCHASE"
+        title="결제하기"
+        description="결제 수단을 고르고 주문 내용을 확인한 뒤 진행해 주세요."
+      />
 
       <div class="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div class="space-y-6">

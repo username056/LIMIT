@@ -5,7 +5,7 @@ defineProps({
 </script>
 
 <template>
-  <div class="overflow-x-auto rounded-lg border border-border bg-surface">
+  <div class="overflow-x-auto card-soft rounded-lg bg-surface">
     <table class="w-full text-left text-sm">
       <thead class="border-b border-border bg-bg">
         <tr>

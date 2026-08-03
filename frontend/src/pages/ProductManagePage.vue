@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue'
 import MyPageLayout from '../layouts/MyPageLayout.vue'
+import PageHeader from '../components/PageHeader.vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseBadge from '../components/BaseBadge.vue'
 import ProductCard from '../components/ProductCard.vue'
@@ -126,17 +127,11 @@ onMounted(() => loadProducts(0))
 
 <template>
   <MyPageLayout>
-    <div class="mb-5">
-      <p class="text-xs font-semibold text-primary">
-        MY PAGE
-      </p>
-      <h1 class="mt-2 text-2xl font-bold text-text-main">
-        상품 관리
-      </h1>
-      <p class="mt-2 text-sm text-text-sub">
-        내가 등록한 상품의 상태와 검증 진행률을 확인하고 관리하세요.
-      </p>
-    </div>
+    <PageHeader
+      eyebrow="MY ITEMS"
+      title="상품 관리"
+      description="내가 등록한 상품의 상태와 검증 진행률을 확인하고 관리하세요."
+    />
 
     <p
       v-if="errorMessage"
