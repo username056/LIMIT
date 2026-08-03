@@ -10,6 +10,23 @@
   버튼과 카드가 손에 반응하는 느낌을 주는 공통 규칙입니다.
   색과 반지름은 tokens.css/tailwind.config.js의 값을 그대로 씁니다.
 */
+/*
+  본문 페이지의 바깥 틀
+  ------------------------------------------------------------------
+  폭과 좌우·위아래 여백을 한 곳에 둡니다. 페이지마다 각자 적어 두었더니
+  1200px·1120px·1040px·900px이 섞이고 좌우 여백도 제각각이라, 화면을 옮길
+  때마다 제목이 좌우로 튀었습니다.
+
+  본문이 좁아야 읽기 좋은 화면(긴 폼 등)은 이 틀은 그대로 두고 안쪽 내용에만
+  max-w를 겁니다. 그래야 페이지 제목 위치는 어디서나 같습니다.
+*/
+@layer components {
+  /* ▼ 폭을 바꾸려면 max-w 이 한 값만 고치면 11개 페이지가 함께 따라옵니다. */
+  .page-shell {
+    @apply mx-auto w-full max-w-[1080px] px-4 py-8 sm:px-6 lg:px-10 lg:py-12;
+  }
+}
+
 @layer components {
   /* 주요 버튼: 올리면 살짝 떠오르고 브랜드 색으로 은은하게 번집니다. */
   .btn-glow {
@@ -32,8 +49,43 @@
     box-shadow: 0 2px 6px rgb(99 102 241 / 18%);
   }
 
-  /* 상품 카드: 올리면 떠오르고 테두리에 브랜드 색이 감돕니다. */
+  /*
+    테두리 없는 카드.
+    배경(#F7F8FD)과 카드(흰색)의 색 차이만으로 경계를 냅니다. 선을 두르면 카드가
+    여러 개 깔릴 때 격자처럼 겹쳐 답답해집니다. 대신 그림자를 두 겹으로 깔아
+    배경에 녹지 않게 합니다(--shadow-card 혼자로는 너무 옅습니다).
+  */
+  .card-soft {
+    box-shadow:
+      0 1px 3px rgb(16 24 40 / 5%),
+      0 8px 24px -12px rgb(76 100 200 / 14%);
+  }
+
+  /* 눌러서 이동하는 카드에만 덧붙입니다. 올리면 브랜드 색이 감돕니다. */
+  .card-soft--hover {
+    border: 1px solid transparent;
+    transition:
+      border-color 0.25s ease,
+      box-shadow 0.25s ease;
+  }
+
+  .card-soft--hover:hover {
+    border-color: rgb(99 102 241 / 35%);
+    box-shadow:
+      0 4px 12px rgb(16 24 40 / 6%),
+      0 12px 28px -12px rgb(76 100 200 / 22%);
+  }
+
+  /*
+    상품 카드: 위와 같은 그림자에 올리면 떠오르는 움직임과 브랜드 색 테두리를 더합니다.
+    평소에도 투명한 테두리를 1px 깔아 둡니다. 호버에서 처음 생기게 하면 그 순간 카드가
+    2px 커지면서 목록 전체가 흔들립니다.
+  */
   .card-lift {
+    border: 1px solid transparent;
+    box-shadow:
+      0 1px 3px rgb(16 24 40 / 5%),
+      0 8px 24px -12px rgb(76 100 200 / 14%);
     transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
       box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1),
       border-color 0.3s cubic-bezier(0.16, 1, 0.3, 1);
@@ -43,8 +95,8 @@
     transform: translateY(-5px);
     border-color: rgb(99 102 241 / 35%);
     box-shadow:
-      0 12px 30px -5px rgb(99 102 241 / 15%),
-      0 4px 12px -2px rgb(147 197 253 / 18%);
+      0 12px 30px -5px rgb(99 102 241 / 18%),
+      0 4px 12px -2px rgb(147 197 253 / 20%);
   }
 
   /* 카드 위 사진은 아주 살짝만 커집니다. 크게 움직이면 목록이 산만해집니다. */

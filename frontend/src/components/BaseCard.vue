@@ -6,7 +6,7 @@ defineProps({
 
 <template>
   <div
-    class="rounded-lg border border-border bg-surface shadow-card"
+    class="card-soft rounded-lg bg-surface"
     :class="padded ? 'p-6' : ''"
   >
     <slot />

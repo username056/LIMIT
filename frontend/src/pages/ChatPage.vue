@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
+import PageHeader from '../components/PageHeader.vue'
 import BaseCard from '../components/BaseCard.vue'
 import ChatThread from '../components/ChatThread.vue'
 import { getChatRooms, leaveChatRoom } from '../api/chat'
@@ -103,18 +104,35 @@ function formatTime(isoString) {
 <template>
   <DefaultLayout>
     <!--
-      폭·좌우 여백은 상품 목록·상세와 같은 값(max-w-[1200px], px-4 → sm:px-6 → lg:px-10)입니다.
-      화면을 꽉 채우는 대화창이라 위아래만 조금 좁게 둡니다.
+      폭·좌우 여백·위 여백은 index.css의 .page-shell과 같은 값입니다. 여기만 클래스를 못 쓰는
+      이유는 화면 높이를 꽉 채워야 해서(lg:h-[calc(...)]) 자체 컨테이너가 필요하기 때문입니다.
+
+      아래 여백만 .page-shell(48px)보다 작은 32px입니다. 위가 어긋나면 제목 위치가 다른
+      화면과 달라 보이지만, 아래는 대화창이 쓸 높이라 줄이는 편이 낫습니다.
+      .page-shell의 폭이나 위 여백을 바꾸면 이 값도 같이 맞춰 주세요.
     -->
-    <div class="mx-auto w-full max-w-[1200px] px-4 py-8 sm:px-6 lg:h-[calc(100dvh-72px)] lg:min-h-0 lg:px-10 lg:py-8">
-      <div class="grid min-h-[560px] grid-cols-1 overflow-hidden rounded-lg border border-border bg-surface shadow-card lg:h-full lg:min-h-0 lg:grid-cols-[340px_minmax(0,1fr)]">
+    <div class="mx-auto flex w-full max-w-[1080px] flex-col px-4 py-8 sm:px-6 lg:h-[calc(100dvh-72px)] lg:min-h-0 lg:px-10 lg:pb-8 lg:pt-12">
+      <!--
+        페이지 이름은 다른 화면과 같이 맨 위에 둡니다. 예전에는 왼쪽 목록 카드 안에
+        들어 있어서, 채팅만 제목이 화면 구석에 박혀 있는 꼴이었습니다.
+      -->
+      <PageHeader
+        eyebrow="CHAT"
+        title="채팅"
+        description="상품에 대해 판매자와 직접 이야기하고, 실시간 확인 일정을 잡아 보세요."
+      />
+
+      <!-- 대화 영역. 머리말이 쓰고 남은 높이를 전부 차지합니다. -->
+      <!-- 상품 등록과 같이 테두리 없이 흰 판만 얹습니다. -->
+      <div class="grid min-h-[560px] grid-cols-1 overflow-hidden rounded-lg bg-surface shadow-card lg:min-h-0 lg:flex-1 lg:grid-cols-[340px_minmax(0,1fr)]">
         <BaseCard
           :padded="false"
           class="rounded-none border-0 border-b shadow-none lg:flex lg:min-h-0 lg:flex-col lg:border-b-0 lg:border-r lg:border-r-slate-100"
         >
-          <h1 class="border-b border-border px-5 py-4 text-lg font-bold text-text-main">
-            채팅
-          </h1>
+          <!-- 페이지 이름은 위 머리말이 맡았으니, 여기는 이 칸이 무엇인지만 알립니다. -->
+          <h2 class="border-b border-border px-5 py-4 text-base font-bold text-text-main">
+            대화 목록
+          </h2>
 
           <p
             v-if="isLoading"

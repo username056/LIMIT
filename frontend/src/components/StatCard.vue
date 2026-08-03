@@ -8,7 +8,7 @@ defineProps({
 </script>
 
 <template>
-  <div class="rounded-lg border border-border bg-surface p-5 shadow-card">
+  <div class="card-soft rounded-lg bg-surface p-5">
     <div class="mb-2 flex items-center justify-between">
       <p class="text-xs text-text-sub">
         {{ label }}
