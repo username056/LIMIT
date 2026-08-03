@@ -24,6 +24,36 @@ const CHECK_KIND_LABEL = {
   [CHECK_KIND.STYLUS]: '스타일러스',
 }
 
+// 특정 기종의 실제 배열이 아니라 일반적인 표준 노트북 자판처럼 보이도록 하는 표시용 값입니다.
+// 점검 로직(useKeyboardCheck)의 키 코드 목록은 그대로 두고, 라벨과 상대 너비만 덧입힙니다.
+const KEY_LABEL_OVERRIDES = {
+  Backquote: '`', Minus: '-', Equal: '=', Backspace: '⌫', Tab: 'Tab',
+  BracketLeft: '[', BracketRight: ']', Backslash: '\\', CapsLock: 'Caps Lock',
+  Semicolon: ';', Quote: "'", Enter: 'Enter', ShiftLeft: 'Shift', ShiftRight: 'Shift',
+  Comma: ',', Period: '.', Slash: '/', ControlLeft: 'Ctrl', MetaLeft: 'Win',
+  AltLeft: 'Alt', AltRight: 'Alt', Lang1: '한/영', Lang2: '한자', Space: 'Space',
+  ArrowLeft: '←', ArrowUp: '↑', ArrowDown: '↓', ArrowRight: '→',
+  NumLock: 'Num Lock', NumpadDivide: '/', NumpadMultiply: '*', NumpadSubtract: '-',
+  NumpadAdd: '+', NumpadEnter: 'Enter', NumpadDecimal: '.',
+}
+const KEY_WIDTH_OVERRIDES = {
+  Backspace: 2, Tab: 1.5, Backslash: 1.5, CapsLock: 1.75, Enter: 2.25,
+  ShiftLeft: 2.25, ShiftRight: 2.25, ControlLeft: 1.25, MetaLeft: 1.25,
+  AltLeft: 1.25, AltRight: 1.25, Space: 6.25,
+}
+
+function keyLabel(code) {
+  if (KEY_LABEL_OVERRIDES[code]) return KEY_LABEL_OVERRIDES[code]
+  if (code.startsWith('Digit')) return code.slice(5)
+  if (code.startsWith('Key')) return code.slice(3)
+  if (code.startsWith('Numpad')) return code.slice(6)
+  return code
+}
+
+function keyWidth(code) {
+  return KEY_WIDTH_OVERRIDES[code] || 1
+}
+
 const route = useRoute()
 const router = useRouter()
 const productId = route.params.productId
@@ -54,6 +84,7 @@ const currentItem = computed(() => items.value[stepIndex.value] || null)
 const currentLabel = computed(() =>
   currentItem.value ? CHECK_KIND_LABEL[currentItem.value.checkKind] : '',
 )
+const isNumpadCheck = computed(() => currentItem.value?.checkKind === CHECK_KIND.NUMPAD)
 
 async function load() {
   loading.value = true
@@ -342,6 +373,13 @@ onBeforeUnmount(() => {
                 </BaseButton>
               </template>
               <BaseButton
+                v-if="speaker.status.value === 'failed'"
+                variant="outline"
+                @click="retryCurrent"
+              >
+                다시 시도
+              </BaseButton>
+              <BaseButton
                 v-if="speaker.status.value === 'passed' || speaker.status.value === 'failed'"
                 @click="next"
               >
@@ -363,20 +401,23 @@ onBeforeUnmount(() => {
             </p>
             <div
               v-else
-              class="space-y-2"
+              class="space-y-1.5"
             >
               <div
                 v-for="(row, rowIndex) in keyboard.rows"
                 :key="rowIndex"
-                class="flex flex-wrap gap-1"
+                :class="isNumpadCheck ? 'grid max-w-[220px] grid-cols-4 gap-1' : 'flex gap-1'"
               >
                 <span
                   v-for="code in row"
                   :key="code"
-                  class="rounded border px-2 py-1 text-xs"
+                  class="flex h-9 min-w-0 items-center justify-center overflow-hidden whitespace-nowrap rounded border px-1 text-[11px] font-medium sm:h-10 sm:text-xs"
                   :class="keyboard.pressed.has(code) ? 'border-primary bg-primary-gradient text-white' : 'border-border text-text-sub'"
+                  :style="isNumpadCheck
+                    ? { gridColumn: code === 'Numpad0' ? 'span 2' : undefined }
+                    : { flex: `${keyWidth(code)} 0 0%` }"
                 >
-                  {{ code }}
+                  {{ keyLabel(code) }}
                 </span>
               </div>
               <p class="text-sm text-text-sub">
@@ -402,12 +443,18 @@ onBeforeUnmount(() => {
               >
                 완료
               </BaseButton>
-              <BaseButton
-                v-else
-                @click="next"
-              >
-                다음
-              </BaseButton>
+              <template v-else>
+                <BaseButton
+                  v-if="keyboard.status.value === 'passedWithMissing'"
+                  variant="outline"
+                  @click="retryCurrent"
+                >
+                  다시 시도
+                </BaseButton>
+                <BaseButton @click="next">
+                  다음
+                </BaseButton>
+              </template>
             </div>
           </div>
 

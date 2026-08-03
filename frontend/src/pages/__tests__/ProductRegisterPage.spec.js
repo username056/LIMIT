@@ -20,6 +20,7 @@ import {
   getProductImages,
   requestDeviceModel,
   transitionProductStatus,
+  updateProductDraftProgress,
   updateProductImageOrder,
 } from '../../api/products'
 import {
@@ -1098,7 +1099,7 @@ describe('ProductRegisterPage', () => {
         category: { categoryId: 10 },
         device: { deviceModelId: 101, color: '블랙', storageGb: 256 },
       })
-      getProductDraftProgress.mockResolvedValue({ step: 3, confirmedChecklistItemIds: [] })
+      getProductDraftProgress.mockResolvedValue({ step: 3, results: {} })
     })
 
     it('진행 단계가 남아 있어도 1단계부터 연다', async () => {
@@ -1125,6 +1126,41 @@ describe('ProductRegisterPage', () => {
       const selects = wrapper.findAll('select')
       expect(selects[0].attributes('disabled')).toBeUndefined()
       expect(selects[1].attributes('disabled')).toBeUndefined()
+    })
+
+    // persistDraftProgress는 체크한 항목만 SUCCESS로 덮어쓰고, 체크 해제는 기존 값이 SUCCESS일
+    // 때만 지웁니다. 실동작 점검(DeviceCheckPage)에서 넘어온 FAILED는 관련 없는 체크박스를
+    // 바꿔도 조용히 사라지면 안 됩니다 — 실제로는 안 되는 기능이 확인된 것처럼 보일 수 있습니다.
+    it('개인정보 체크를 바꿔도 실동작 점검에서 온 FAILED 결과는 지우지 않는다', async () => {
+      getProductChecklist.mockResolvedValue([
+        { checklistItemId: 7002, itemCode: 'PRV-004', name: '계정 제거 및 초기화', evidenceType: 'SELLER_CONFIRMATION', isRequired: true, status: 'PENDING' },
+        { checklistItemId: 7003, itemCode: 'LAP-KBD-005', name: '키보드 실동작 확인', evidenceType: 'SELLER_CONFIRMATION', isRequired: true, status: 'PENDING' },
+      ])
+      // 키보드 실동작 점검이 이미 실패로 기록돼 있는 상태를 가정합니다.
+      getProductDraftProgress.mockResolvedValue({ step: 3, results: { 7003: 'FAILED' } })
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+
+      await buttonByText(wrapper, '다음 단계').trigger('click')
+      await flushPromises()
+      await buttonByText(wrapper, '다음 단계로').trigger('click')
+      await flushPromises()
+      expect(wrapper.text()).toContain('개인정보를 정리했는지 확인해 주세요.')
+
+      const checkboxes = wrapper.findAll('input[type="checkbox"]')
+      expect(checkboxes).toHaveLength(2)
+      // FAILED로 기록된 키보드 항목이 아니라, 관련 없는 개인정보 항목만 체크합니다.
+      await checkboxes[0].setValue(true)
+      await flushPromises()
+
+      const [, payload] = updateProductDraftProgress.mock.calls.at(-1)
+      expect(payload.step).toBe(3)
+      expect(payload.results).toEqual(expect.arrayContaining([
+        { checklistItemId: 7002, result: 'SUCCESS' },
+        { checklistItemId: 7003, result: 'FAILED' },
+      ]))
+      expect(payload.results).toHaveLength(2)
     })
   })
 
