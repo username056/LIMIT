@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300">
+  <rect width="400" height="300" rx="16" fill="#F1F0FF"/>
+  <g transform="translate(115,100)" fill="none" stroke="#6C5CE7" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="0" y="10" width="170" height="120" rx="10"/>
+    <path d="M55 10 L70 -8 H115 L130 10"/>
+    <circle cx="85" cy="72" r="30"/>
+  </g>
+  <text x="200" y="250" text-anchor="middle" font-family="sans-serif" font-size="16" fill="#7A73A1">사진으로 확인하는 항목입니다</text>
+</svg>
