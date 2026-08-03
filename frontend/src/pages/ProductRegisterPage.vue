@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
+import PageHeader from '../components/PageHeader.vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseBadge from '../components/BaseBadge.vue'
 import {
@@ -1515,29 +1516,28 @@ onMounted(async () => {
 
 <template>
   <DefaultLayout>
-    <main class="mx-auto max-w-[1040px] px-4 py-8 sm:px-6 lg:px-10 lg:py-12">
-      <!-- 흰 배경 패널은 유지하고 테두리만 없애 페이지에 자연스럽게 얹힙니다. -->
-      <section class="mb-10 overflow-hidden rounded-lg bg-surface shadow-card">
-        <div class="flex flex-col gap-5 border-b border-border px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p class="text-xs font-bold uppercase tracking-[0.16em] text-primary">
-              SELL YOUR DEVICE
-            </p>
-            <h1 class="mt-1 text-2xl font-bold text-text-main">
-              {{ editingId ? '상품 수정' : '상품 등록' }}
-            </h1>
-            <p class="mt-1 text-sm text-text-sub">
-              기기 정보와 검증 체크리스트를 순서대로 완료하면 바로 판매가 시작됩니다. 중간에 나가야 하면 임시저장을 눌러 주세요.
-            </p>
-          </div>
+    <main class="page-shell">
+      <!--
+        머리말은 카드 밖으로 뺐습니다. 안에 넣으면 이 화면만 제목이 흰 판 안에서
+        시작해, 다른 화면과 제목 위치가 어긋나 보입니다.
+      -->
+      <PageHeader
+        eyebrow="ITEM REGISTER"
+        :title="editingId ? '상품 수정' : '상품 등록'"
+        description="기기 정보와 검증 체크리스트를 순서대로 완료하면 바로 판매가 시작됩니다. 중간에 나가야 하면 임시저장을 눌러 주세요."
+      >
+        <template #action>
           <RouterLink
             :to="{ name: 'seller-products' }"
             class="shrink-0 text-sm font-semibold text-primary hover:underline"
           >
             상품 관리로 이동
           </RouterLink>
-        </div>
+        </template>
+      </PageHeader>
 
+      <!-- 흰 배경 패널은 유지하고 테두리만 없애 페이지에 자연스럽게 얹힙니다. -->
+      <section class="mb-10 overflow-hidden rounded-lg bg-surface shadow-card">
         <div
           v-if="reinspectionRequest"
           class="border-b border-amber-200 bg-amber-50 px-6 py-4 text-sm text-amber-900"
@@ -2189,7 +2189,7 @@ onMounted(async () => {
               </ul>
             </div>
 
-            <div class="rounded-lg border border-border bg-surface p-6">
+            <div class="card-soft rounded-lg bg-surface p-6">
               <h2 class="text-base font-bold text-text-main">
                 {{ activeCaptureItem ? `${activeCaptureItem.name} 촬영 프리뷰` : '촬영 프리뷰' }}
               </h2>

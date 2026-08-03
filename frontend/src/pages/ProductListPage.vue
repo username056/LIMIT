@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseButton from '../components/BaseButton.vue'
+import PageHeader from '../components/PageHeader.vue'
 import { getDeviceCategories, getProducts } from '../api/products'
 import { addFavorite, getMyFavorites, removeFavorite } from '../api/favorites'
 import { getAccessToken } from '../auth/session'
@@ -209,23 +210,18 @@ watch(() => [route.query.q, route.query.categoryId], async ([keyword, categoryId
 
 <template>
   <DefaultLayout>
-    <main class="mx-auto max-w-[1200px] px-4 py-8 sm:px-6 lg:px-10 lg:py-12">
-      <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p class="text-xs font-bold uppercase tracking-[0.18em] text-primary">
-            VERIFIED DEVICES
-          </p>
-          <h1 class="mt-2 text-2xl font-bold text-text-main">
-            전체 상품
-          </h1>
-          <p class="mt-2 text-sm text-text-sub">
-            검증 자료가 연결된 중고 전자기기를 찾아보세요.
-          </p>
-        </div>
-        <BaseButton @click="goToSell">
-          내 상품 등록하기
-        </BaseButton>
-      </div>
+    <main class="page-shell">
+      <PageHeader
+        eyebrow="VERIFIED DEVICES"
+        title="전체 상품"
+        description="검증 자료가 연결된 중고 전자기기를 찾아보세요."
+      >
+        <template #action>
+          <BaseButton @click="goToSell">
+            내 상품 등록하기
+          </BaseButton>
+        </template>
+      </PageHeader>
 
       <div class="mb-5 lg:hidden">
         <button
@@ -242,7 +238,7 @@ watch(() => [route.query.q, route.query.categoryId], async ([keyword, categoryId
       <div class="grid gap-8 lg:grid-cols-[220px_minmax(0,1fr)]">
         <aside :class="isFilterOpen ? 'block' : 'hidden lg:block'">
           <form
-            class="sticky top-6 rounded-lg border border-border bg-surface p-5 shadow-card"
+            class="card-soft sticky top-6 rounded-lg bg-surface p-5"
             aria-label="상품 검색 필터"
             @submit.prevent="search(0)"
           >
@@ -355,12 +351,13 @@ watch(() => [route.query.q, route.query.categoryId], async ([keyword, categoryId
         </aside>
 
         <section class="min-w-0">
-          <div class="mb-5 flex items-center justify-between border-b border-border pb-4">
+          <!-- 아래 카드들이 이미 떠 있어 경계가 보입니다. 선까지 그으면 한 겹 남아돕니다. -->
+          <div class="mb-5 flex items-center justify-between">
             <p class="text-sm text-text-sub">
               총 <strong class="text-text-main">{{ resultCount.toLocaleString('ko-KR') }}</strong>개의 상품
             </p>
             <label class="flex items-center gap-2 text-xs text-text-sub">
-              <span>정렬</span>
+              <!-- <span>정렬</span> -->
               <select
                 v-model="filters.sort"
                 aria-label="상품 정렬"
@@ -404,7 +401,7 @@ watch(() => [route.query.q, route.query.categoryId], async ([keyword, categoryId
             <div
               v-for="index in 6"
               :key="index"
-              class="overflow-hidden rounded-lg border border-border bg-surface"
+              class="card-soft overflow-hidden rounded-lg bg-surface"
             >
               <div class="aspect-[4/3] animate-pulse bg-slate-100" />
               <div class="space-y-3 p-4">
@@ -507,3 +504,4 @@ watch(() => [route.query.q, route.query.categoryId], async ([keyword, categoryId
     />
   </DefaultLayout>
 </template>
+

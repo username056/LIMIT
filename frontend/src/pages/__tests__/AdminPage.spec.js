@@ -114,7 +114,7 @@ describe('AdminPage', () => {
     ))
     retryChecklistResearch.mockResolvedValue(pendingResearch)
     setAuthSession({
-      accessToken: 'admin-token',
+      accessToken: 'tk',
       admin: { name: '관리자', roles: ['SUPER_ADMIN'] },
     })
 
@@ -177,7 +177,7 @@ describe('AdminPage', () => {
     updateAdminDeviceModel.mockResolvedValue({ ...detail, categoryId: 20, reviewStatus: 'VERIFIED' })
     researchAdminDeviceModel.mockResolvedValue({ researchId: 502, status: 'PENDING_REVIEW' })
     setAuthSession({
-      accessToken: 'admin-token',
+      accessToken: 'tk',
       admin: { name: '관리자', roles: ['SUPER_ADMIN'] },
     })
 
@@ -230,7 +230,7 @@ describe('AdminPage', () => {
     getDeviceModelRequests.mockResolvedValue([request])
     updateDeviceModelRequest.mockResolvedValue(updated)
     setAuthSession({
-      accessToken: 'admin-token',
+      accessToken: 'tk',
       admin: { name: '관리자', roles: ['SUPER_ADMIN'] },
     })
 
@@ -290,7 +290,7 @@ describe('AdminPage', () => {
     getAdminActionLog.mockResolvedValue(detail)
     updateAdminActionLog.mockResolvedValue(updated)
     setAuthSession({
-      accessToken: 'admin-token',
+      accessToken: 'tk',
       admin: { name: '관리자', roles: ['SUPER_ADMIN'] },
     })
 

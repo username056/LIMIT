@@ -30,7 +30,7 @@ function formatViewCount(viewCount) {
   <component
     :is="to ? 'RouterLink' : 'div'"
     :to="to || undefined"
-    class="card-lift group block overflow-hidden rounded-lg border border-border bg-surface shadow-card"
+    class="card-lift group block overflow-hidden rounded-lg bg-surface"
   >
     <div class="relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-slate-50">
       <img

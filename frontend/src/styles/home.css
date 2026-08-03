@@ -10,7 +10,7 @@
 :root {
   /* 섹션 사이 숨 쉬는 간격. 프리미엄한 인상은 대부분 여백에서 나옵니다. */
   --home-section-gap: 112px;
-  --home-shell-max: 1200px;
+  --home-shell-max: 1080px;
   --home-shell-pad: 24px;
 
   /* 유리 느낌 카드. 배경이 거의 흰색이라 아주 옅게만 씁니다. */

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import MyPageLayout from '../layouts/MyPageLayout.vue'
+import PageHeader from '../components/PageHeader.vue'
 import BaseTabs from '../components/BaseTabs.vue'
 import BaseBadge from '../components/BaseBadge.vue'
 import BaseButton from '../components/BaseButton.vue'
@@ -196,17 +197,11 @@ function submitRequest() {
 
 <template>
   <MyPageLayout>
-    <div class="mb-5">
-      <p class="text-xs font-semibold text-primary">
-        MY PAGE
-      </p>
-      <h1 class="mt-2 text-2xl font-bold text-text-main">
-        주문 내역
-      </h1>
-      <p class="mt-2 text-sm text-text-sub">
-        최근 주문한 상품의 결제 상태를 확인하고, 필요하면 판매자에게 바로 문의하세요.
-      </p>
-    </div>
+    <PageHeader
+      eyebrow="MY ORDER"
+      title="주문 내역"
+      description="최근 주문한 상품의 결제 상태를 확인하고, 필요하면 판매자에게 바로 문의하세요."
+    />
 
     <BaseTabs
       v-model="activeTab"
@@ -260,7 +255,7 @@ function submitRequest() {
       <li
         v-for="order in visibleOrders"
         :key="order.id"
-        class="flex items-center gap-4 rounded-lg border border-border bg-surface p-4"
+        class="flex items-center gap-4 card-soft rounded-lg bg-surface p-4"
       >
         <!-- 대표 이미지는 그 상품의 얼굴이라 주문 내역에서도 보여줍니다. -->
         <div class="h-14 w-14 shrink-0 overflow-hidden rounded-md bg-bg">

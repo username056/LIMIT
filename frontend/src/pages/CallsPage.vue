@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
+import PageHeader from '../components/PageHeader.vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseCard from '../components/BaseCard.vue'
 import BaseBadge from '../components/BaseBadge.vue'
@@ -269,16 +270,12 @@ function remainingTime(expiresAt) {
 
 <template>
   <DefaultLayout>
-    <main class="mx-auto max-w-[900px] px-6 py-10">
-      <p class="text-xs font-bold uppercase tracking-[0.16em] text-primary">
-        LIVE VERIFICATION
-      </p>
-      <h1 class="mt-2 text-2xl font-bold text-text-main">
-        1:1 실시간 확인
-      </h1>
-      <p class="mt-2 text-sm text-text-sub">
-        구매 희망자가 요청한 실시간 영상 확인과 재촬영 요청을 한곳에서 확인하세요.
-      </p>
+    <main class="page-shell">
+      <PageHeader
+        eyebrow="LIVE VERIFICATION"
+        title="1:1 실시간 확인"
+        description="구매 희망자가 요청한 실시간 영상 확인과 재촬영 요청을 한곳에서 확인하세요."
+      />
 
       <BaseTabs
         v-model="activeTab"

@@ -57,17 +57,17 @@ onMounted(async () => {
 
 <template>
   <DefaultLayout>
-    <main class="mx-auto max-w-[1120px] px-4 py-8 sm:px-6 lg:px-10 lg:py-12">
+    <main class="page-shell">
       <p
         v-if="isLoading"
-        class="rounded-lg border border-border bg-surface px-6 py-16 text-center text-sm text-text-sub"
+        class="card-soft rounded-lg bg-surface px-6 py-16 text-center text-sm text-text-sub"
       >
         판매자 정보를 불러오는 중입니다.
       </p>
 
       <div
         v-else-if="errorMessage"
-        class="rounded-lg border border-border bg-surface px-6 py-16 text-center"
+        class="card-soft rounded-lg bg-surface px-6 py-16 text-center"
       >
         <p
           role="alert"
@@ -85,7 +85,7 @@ onMounted(async () => {
       </div>
 
       <template v-else-if="profile">
-        <section class="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-surface p-6">
+        <section class="flex flex-wrap items-center gap-4 card-soft rounded-lg bg-surface p-6">
           <span
             class="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary-gradient text-2xl font-bold text-white"
             aria-hidden="true"

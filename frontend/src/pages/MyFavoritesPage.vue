@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import MyPageLayout from '../layouts/MyPageLayout.vue'
+import PageHeader from '../components/PageHeader.vue'
 import BaseBadge from '../components/BaseBadge.vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseCard from '../components/BaseCard.vue'
@@ -54,17 +55,11 @@ onMounted(() => loadFavorites(0))
 
 <template>
   <MyPageLayout>
-    <div class="mb-6">
-      <p class="text-xs font-semibold text-primary">
-        MY FAVORITES
-      </p>
-      <h1 class="mt-2 text-2xl font-bold text-text-main">
-        좋아요한 상품
-      </h1>
-      <p class="mt-2 text-sm text-text-sub">
-        저장한 상품의 판매 상태와 가격을 한곳에서 확인하세요.
-      </p>
-    </div>
+    <PageHeader
+      eyebrow="MY FAVORITES"
+      title="좋아요한 상품"
+      description="저장한 상품의 판매 상태와 가격을 한곳에서 확인하세요."
+    />
 
     <BaseCard
       v-if="isLoading"
