@@ -121,4 +121,17 @@ describe('DeviceCheckPage', () => {
       results: [{ checklistItemId: 5, result: 'SUCCESS' }],
     })
   })
+
+  it('저장하고 돌아가면 등록 3단계로 되돌린다', async () => {
+    const wrapper = await mountAndLoad({ step: 3, results: {} })
+
+    await runKeyboardStepAndSave(wrapper, [])
+
+    // step을 안 실어 보내면 등록 화면이 startEdit에서 1단계를 열어, 하던 자리를 잃습니다.
+    expect(routerPushMock).toHaveBeenCalledWith({
+      name: 'seller-product-edit',
+      params: { productId: '1' },
+      query: { step: '3' },
+    })
+  })
 })

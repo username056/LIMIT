@@ -429,6 +429,32 @@ describe('ProductDetailPage', () => {
     })
   })
 
+  it('대표 사진을 누르면 잘리지 않은 원본을 띄우고 Esc로 닫는다', async () => {
+    getProductImages.mockResolvedValue([
+      { imageId: 1, imageType: 'THUMBNAIL', imageUrl: 'https://cdn.test/main.jpg' },
+    ])
+
+    const wrapper = mount(ProductDetailPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    // 목록 틀은 4:3 object-cover라 세로로 긴 사진은 위아래가 잘립니다.
+    await wrapper.get('button[aria-label="상품 이미지 확대 보기"]').trigger('click')
+    const viewer = wrapper.get('[aria-label="상품 이미지 원본"]')
+    expect(viewer.find('img').classes()).toContain('object-contain')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await flushPromises()
+    expect(wrapper.find('[aria-label="상품 이미지 원본"]').exists()).toBe(false)
+  })
+
   it('조회·좋아요·문의 수를 한 줄에 보여준다', async () => {
     getProduct.mockResolvedValue({
       productId: 1001,
