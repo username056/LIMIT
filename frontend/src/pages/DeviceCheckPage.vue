@@ -10,8 +10,10 @@ import { CHECK_KIND, toUniversalCheckItems } from '../features/deviceCheck/check
 import { useCameraCheck } from '../features/deviceCheck/useCameraCheck'
 import { useMicCheck } from '../features/deviceCheck/useMicCheck'
 import { useSpeakerCheck } from '../features/deviceCheck/useSpeakerCheck'
-import { useKeyboardCheck } from '../features/deviceCheck/useKeyboardCheck'
+import { AMBIGUOUS_CODES, OS_RESERVED_CODES, useKeyboardCheck } from '../features/deviceCheck/useKeyboardCheck'
 import { usePointerInteractionCheck } from '../features/deviceCheck/usePointerInteractionCheck'
+
+const POINTER_TIMEOUT_MS = 10000
 
 const CHECK_KIND_LABEL = {
   [CHECK_KIND.CAMERA]: '카메라',
@@ -52,6 +54,16 @@ function keyLabel(code) {
   return code
 }
 
+// 감지가 보장되지 않는 키 목록엔 왼쪽·오른쪽이 라벨만 보면 구분 안 되는 키(Alt, Shift)가 섞여 있어
+// keyLabel 그대로 쓰면 "Alt, Alt"처럼 뭐가 뭔지 모르게 나온다. 이 목록 전용으로만 좌우를 밝힌다.
+const UNRELIABLE_KEY_LABEL_OVERRIDES = {
+  AltLeft: '왼쪽 Alt', AltRight: '오른쪽 Alt', ShiftRight: '오른쪽 Shift',
+}
+function unreliableKeyLabel(code) {
+  return UNRELIABLE_KEY_LABEL_OVERRIDES[code] || keyLabel(code)
+}
+const KEYBOARD_UNRELIABLE_CODES = [...OS_RESERVED_CODES, ...AMBIGUOUS_CODES]
+
 function keyWidth(code) {
   return KEY_WIDTH_OVERRIDES[code] || 1
 }
@@ -76,6 +88,7 @@ const finished = ref(false)
 const videoEl = ref(null)
 const pointerAreaEl = ref(null)
 const keyboardMissing = ref([])
+const keyboardMissingUnreliable = ref([])
 const displayStarted = ref(false)
 const chargingStarted = ref(false)
 const forceRecheckIds = reactive(new Set())
@@ -101,6 +114,7 @@ const mic = useMicCheck()
 const speaker = useSpeakerCheck()
 let keyboard = null
 const pointer = shallowRef(null)
+let pointerTimeoutId = null
 
 const currentItem = computed(() => items.value[stepIndex.value] || null)
 const currentLabel = computed(() =>
@@ -152,12 +166,21 @@ function markResult(testType, passed) {
   itemResults.value.set(testType, passed ? RESULT.SUCCESS : RESULT.FAILED)
 }
 
+function startPointerTimeout() {
+  clearTimeout(pointerTimeoutId)
+  pointerTimeoutId = setTimeout(() => {
+    if (pointer.value && pointer.value.status.value === 'listening') finishPointer()
+  }, POINTER_TIMEOUT_MS)
+}
+
 async function runCurrent() {
   const item = currentItem.value
   if (!item) return
   keyboardMissing.value = []
+  keyboardMissingUnreliable.value = []
   displayStarted.value = false
   chargingStarted.value = false
+  clearTimeout(pointerTimeoutId)
 
   if (item.checkKind === CHECK_KIND.CAMERA) {
     const passed = await camera.start(videoEl.value)
@@ -180,12 +203,15 @@ async function runCurrent() {
   } else if (item.checkKind === CHECK_KIND.POINTER) {
     pointer.value = usePointerInteractionCheck({ pointerTypes: ['mouse', 'touch', 'pen'] })
     pointer.value.start(pointerAreaEl.value)
+    startPointerTimeout()
   } else if (item.checkKind === CHECK_KIND.TOUCHSCREEN) {
     pointer.value = usePointerInteractionCheck({ pointerTypes: ['touch'] })
     pointer.value.start(pointerAreaEl.value)
+    startPointerTimeout()
   } else if (item.checkKind === CHECK_KIND.STYLUS) {
     pointer.value = usePointerInteractionCheck({ pointerTypes: ['pen'], requirePressure: true })
     pointer.value.start(pointerAreaEl.value)
+    startPointerTimeout()
   }
 }
 
@@ -205,10 +231,12 @@ function confirmSpeakerHeard(heard) {
 function finishKeyboard() {
   const result = keyboard.finish()
   keyboardMissing.value = result.missingCodes
+  keyboardMissingUnreliable.value = result.missingUnreliableCodes
   markResult(currentItem.value.testType, result.missingCodes.length === 0)
 }
 
 function finishPointer() {
+  clearTimeout(pointerTimeoutId)
   const passed = pointer.value.finish()
   markResult(currentItem.value.testType, passed)
 }
@@ -222,6 +250,7 @@ function next() {
   mic.stop()
   keyboard?.stop()
   keyboard = null
+  clearTimeout(pointerTimeoutId)
   pointer.value?.stop()
   pointer.value = null
   stepIndex.value += 1
@@ -279,6 +308,7 @@ onBeforeUnmount(() => {
   camera.stop()
   mic.stop()
   keyboard?.stop()
+  clearTimeout(pointerTimeoutId)
   pointer.value?.stop()
 })
 </script>
@@ -607,6 +637,13 @@ onBeforeUnmount(() => {
             class="mt-4"
           >
             <p
+              v-if="currentItem.checkKind === 'KEYBOARD'"
+              class="mb-2 text-sm text-text-sub"
+            >
+              {{ KEYBOARD_UNRELIABLE_CODES.map(unreliableKeyLabel).join(', ') }}는 브라우저·OS가 가로채거나
+              좌우를 구분할 정보를 주지 않아 정상 키여도 감지가 보장되지 않습니다.
+            </p>
+            <p
               v-if="!keyboard"
               class="text-sm text-text-sub"
             >
@@ -616,6 +653,9 @@ onBeforeUnmount(() => {
               v-else
               class="space-y-1.5"
             >
+              <p class="text-xs text-text-sub">
+                이 노트북에 물리적으로 없는 키는 회색 칸을 눌러 "없음"으로 표시할 수 있습니다.
+              </p>
               <div
                 v-for="(row, rowIndex) in keyboard.rows"
                 :key="rowIndex"
@@ -624,17 +664,22 @@ onBeforeUnmount(() => {
                 <span
                   v-for="code in row"
                   :key="code"
-                  class="flex h-9 min-w-0 items-center justify-center overflow-hidden whitespace-nowrap rounded border px-1 text-[11px] font-medium sm:h-10 sm:text-xs"
-                  :class="keyboard.pressed.has(code) ? 'border-primary bg-primary-gradient text-white' : 'border-border text-text-sub'"
+                  class="flex h-9 min-w-0 cursor-pointer items-center justify-center overflow-hidden whitespace-nowrap rounded border px-1 text-[11px] font-medium sm:h-10 sm:text-xs"
+                  :class="keyboard.pressed.has(code)
+                    ? 'border-primary bg-primary-gradient text-white'
+                    : keyboard.excludedCodes.has(code)
+                      ? 'border-dashed border-border text-text-sub/50 line-through'
+                      : 'border-border text-text-sub'"
                   :style="isNumpadCheck
                     ? { gridColumn: code === 'Numpad0' ? 'span 2' : undefined }
                     : { flex: `${keyWidth(code)} 0 0%` }"
+                  @click="keyboard.toggleExcluded(code)"
                 >
                   {{ keyLabel(code) }}
                 </span>
               </div>
               <p class="text-sm text-text-sub">
-                {{ keyboard.pressedCount.value }} / {{ keyboard.total }}
+                {{ keyboard.pressedCount.value }} / {{ keyboard.total.value }}
               </p>
             </div>
             <p
@@ -642,6 +687,18 @@ onBeforeUnmount(() => {
               class="mt-2 text-sm text-amber-600"
             >
               응답 없음: {{ keyboardMissing.join(', ') }}
+            </p>
+            <p
+              v-if="keyboardMissingUnreliable.length"
+              class="mt-2 text-sm text-text-sub"
+            >
+              확인 불가: {{ keyboardMissingUnreliable.map(unreliableKeyLabel).join(', ') }}
+            </p>
+            <p
+              v-if="keyboard && keyboard.excludedCodes.size"
+              class="mt-2 text-sm text-text-sub"
+            >
+              없는 키로 표시함: {{ [...keyboard.excludedCodes].map(keyLabel).join(', ') }}
             </p>
             <div class="mt-4 flex gap-3">
               <BaseButton
@@ -676,6 +733,10 @@ onBeforeUnmount(() => {
             v-else
             class="mt-4"
           >
+            <p class="mb-2 text-sm text-text-sub">
+              점검 시작 후 10초 안에 클릭·드래그·스크롤(또는 터치·펜)을 확인해 주세요. 시간 안에 확인되지
+              않으면 자동으로 실패 처리됩니다.
+            </p>
             <div
               ref="pointerAreaEl"
               class="flex h-40 items-center justify-center rounded-md border border-dashed border-border text-sm text-text-sub"
@@ -698,7 +759,6 @@ onBeforeUnmount(() => {
               </BaseButton>
               <BaseButton
                 v-else-if="pointer.status.value === 'listening'"
-                :disabled="!pointer.passed.value"
                 @click="finishPointer"
               >
                 완료
