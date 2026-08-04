@@ -50,7 +50,7 @@ import {
 } from '../utils/camera'
 import { MAX_PRICE_DIGITS, formatPriceDigits, toPriceDigits } from '../utils/priceInput'
 import { guideContentFor, guideImageFor } from '../utils/checklistGuideImages'
-import { CHECKABLE_ITEM_CODES } from '../features/deviceCheck/checkableItemCodes'
+import { CHECKABLE_ITEM_CODES, toUniversalCheckItems } from '../features/deviceCheck/checkableItemCodes'
 
 const WIZARD_STEPS = [
   { number: 1, label: '기기 등록' },
@@ -146,16 +146,23 @@ const reinspectionRequestKey = computed(
 /*
   잠깐 나갔다 돌아왔을 때 되돌아갈 단계.
   ---------------------------------------------------------------------------
-  실동작 점검 화면이 ?step=3으로 돌려보냅니다. 1~3만 받습니다 — 주소를 직접 고쳐
+  실동작 점검 화면이 ?step=2로 돌려보냅니다. 1~3만 받습니다 — 주소를 직접 고쳐
   step=9로 들어와도 없는 단계가 열려 화면이 비지 않게 합니다.
 */
+const resumeProductId = computed(() => {
+  const productId = Number(route.query.resumeProductId)
+  return Number.isInteger(productId) && productId > 0 ? productId : null
+})
 const returnStep = computed(() => {
-  // 새로 등록하는 중에는 무시합니다. 상품이 없는데 3단계를 열면 카테고리·모델도
-  // 고르지 않은 채 '판매 준비' 화면이 떠서, 저장할 수 없는 자리에 갇힙니다.
-  if (!route.params.productId) return null
+  // 가리키는 상품이 있어야 단계를 되살립니다. 수정 화면은 주소에 productId가 있고,
+  // 점검을 마치고 등록 화면으로 돌아올 때는 resumeProductId가 붙습니다.
+  // 상품이 없는데 3단계를 열면 카테고리·모델도 고르지 않은 채 '판매 준비' 화면이
+  // 떠서, 저장할 수 없는 자리에 갇힙니다.
+  if (!route.params.productId && !resumeProductId.value) return null
   const step = Number(route.query.step)
   return [1, 2, 3].includes(step) ? step : null
 })
+const isRegistrationResume = computed(() => Boolean(resumeProductId.value))
 const editingId = ref(null)
 // 수정 모드로 열린 상품의 현재 상태입니다. 판매 중인 상품을 고칠 때는 임시저장(초안) 진행도를
 // 서버에 밀어 넣지 않아야 하므로 상태를 들고 있습니다.
@@ -228,6 +235,7 @@ const captureState = reactive({})
 const confirmState = reactive({})
 const DEVICE_CHECK_RESULT = { SUCCESS: 'SUCCESS' }
 const draftProgressResults = ref(new Map())
+const draftDeviceResults = ref(new Map())
 // diagnosisState[checklistItemId] = { status: 'parsing'|'ready'|'error', fields: [...], errorMessage }
 // fields의 각 항목은 취합 응답(fieldName/ocrValue/fileParseValue/conflict/confirmedValue)에
 // draftValue(입력창 값)와 saving(저장 중 여부)을 더한 것입니다.
@@ -291,7 +299,9 @@ function isAutomatedDiagnosisComplete(item) {
 }
 
 function isCaptureItemComplete(item) {
-  return mediaOf(item.checklistItemId).length > 0 || isAutomatedDiagnosisComplete(item)
+  return mediaOf(item.checklistItemId).length > 0
+    || isAutomatedDiagnosisComplete(item)
+    || (CHECKABLE_ITEM_CODES[item.itemCode] && confirmState[item.checklistItemId])
 }
 
 function allDiagnosisFieldNamesFor(item) {
@@ -309,7 +319,17 @@ function stopWindowsInspectionPolling() {
 
 async function refreshAutomatedDiagnoses() {
   if (!currentProductId.value) return
-  checklistItems.value = await getProductChecklist(currentProductId.value)
+  const [checklist, progress] = await Promise.all([
+    getProductChecklist(currentProductId.value),
+    getProductDraftProgress(currentProductId.value),
+  ])
+  checklistItems.value = checklist
+  draftDeviceResults.value = new Map(Object.entries(progress.deviceResults || {}))
+  checklistItems.value
+    .filter((item) => CHECKABLE_ITEM_CODES[item.itemCode])
+    .forEach((item) => {
+      confirmState[item.checklistItemId] = item.status === 'COMPLETED'
+    })
   await Promise.allSettled(checklistItems.value
     .filter((item) => allDiagnosisFieldNamesFor(item).length > 0)
     .map((item) => refreshDiagnosis(item, { revealEmptyFields: true })))
@@ -510,9 +530,7 @@ const privacyChecklistItems = computed(
   ),
 )
 const deviceCheckConfirmationItems = computed(
-  () => checklistItems.value.filter(
-    (item) => item.evidenceType === 'SELLER_CONFIRMATION' && CHECKABLE_ITEM_CODES[item.itemCode],
-  ),
+  () => toUniversalCheckItems(checklistItems.value),
 )
 const capturedMediaCount = computed(
   () => mediaChecklistItems.value.filter((item) => isCaptureItemComplete(item)).length,
@@ -521,14 +539,27 @@ const confirmedCount = computed(
   () => privacyChecklistItems.value.filter((item) => confirmState[item.checklistItemId]).length,
 )
 const deviceCheckConfirmedCount = computed(
-  () => deviceCheckConfirmationItems.value.filter((item) => confirmState[item.checklistItemId]).length,
+  () => deviceCheckConfirmationItems.value.filter(
+    (item) => deviceCheckStatus(item) === 'COMPLETED',
+  ).length,
 )
 // draft 편집 중에는 draftProgressResults로 FAILED와 미점검을 구분할 수 있지만, 이미 판매 중인
 // 상품을 고칠 때는 서버가 COMPLETED/PENDING만 내려줘 구분할 수 없어 미점검으로만 표시합니다.
 function deviceCheckStatus(item) {
+  const webResult = draftDeviceResults.value.get(item.testType)
+  if (webResult === 'SUCCESS') return 'COMPLETED'
+  if (webResult === 'FAILED') return 'FAILED'
   if (confirmState[item.checklistItemId]) return 'COMPLETED'
   if (draftProgressResults.value.get(item.checklistItemId) === 'FAILED') return 'FAILED'
   return 'PENDING'
+}
+function deviceCheckStatusLabel(item) {
+  const status = deviceCheckStatus(item)
+  if (status === 'FAILED') return '재점검 필요'
+  if (status !== 'COMPLETED') return '직접 점검 가능'
+  return draftDeviceResults.value.get(item.testType) === 'SUCCESS'
+    ? '웹 점검 완료'
+    : '자동 입력 완료'
 }
 const activeCaptureItem = computed(
   () => mediaChecklistItems.value.find((item) => item.checklistItemId === activeCaptureItemId.value)
@@ -751,6 +782,7 @@ function resetForm() {
   isGeneratingChecklist.value = false
   checklistItems.value = []
   draftProgressResults.value = new Map()
+  draftDeviceResults.value = new Map()
   activeCaptureItemId.value = null
   handoverGuide.value = null
   priceRejection.value = ''
@@ -1113,7 +1145,7 @@ function goToStep4() {
     }
     if (missingDeviceCheck.length) {
       sections.push(
-        `[실동작 자동 점검]\n${missingDeviceCheck.map((item) => `· ${item.name}`).join('\n')}\n"실동작 자동 점검하기" 버튼을 눌러 직접 확인해 주세요.`,
+        `[실동작 점검]\n${missingDeviceCheck.map((item) => `· ${item.name}`).join('\n')}\n2단계의 "직접 점검하기" 버튼을 눌러 확인해 주세요.`,
       )
     }
     openAlert(sections.join('\n\n'))
@@ -1683,8 +1715,10 @@ async function startEdit(productId) {
       confirmedFeatures.value = product.confirmedFeatures || []
     }
     await Promise.all(checklistItems.value.map(async (item) => {
-      if (item.evidenceType === 'SELLER_CONFIRMATION') {
+      if (CHECKABLE_ITEM_CODES[item.itemCode]) {
         confirmState[item.checklistItemId] = item.status === 'COMPLETED'
+      }
+      if (item.evidenceType === 'SELLER_CONFIRMATION') {
         return
       }
       const history = await getEvidenceHistory(productId, item.checklistItemId)
@@ -1714,10 +1748,15 @@ async function startEdit(productId) {
       : null
     if (draftProgress) {
       draftProgressResults.value = progressResultsMap(draftProgress.results) || new Map()
-      Object.keys(confirmState).forEach((key) => { confirmState[key] = false })
-      draftProgressResults.value.forEach((result, itemId) => {
-        confirmState[itemId] = result === DEVICE_CHECK_RESULT.SUCCESS
-      })
+      draftDeviceResults.value = new Map(Object.entries(draftProgress.deviceResults || {}))
+      checklistItems.value
+        .filter((item) => item.evidenceType === 'SELLER_CONFIRMATION' || CHECKABLE_ITEM_CODES[item.itemCode])
+        .forEach((item) => {
+          const savedResult = draftProgressResults.value.get(item.checklistItemId)
+          confirmState[item.checklistItemId] = savedResult
+            ? savedResult === DEVICE_CHECK_RESULT.SUCCESS
+            : item.status === 'COMPLETED'
+        })
     }
     activeCaptureItemId.value = mediaChecklistItems.value[0]?.checklistItemId || null
     const hasEvidence = mediaChecklistItems.value.some(
@@ -1808,6 +1847,12 @@ onMounted(async () => {
     errorMessage.value = error.message || '기기 카테고리를 불러오지 못했습니다.'
   }
 
+  // 직접 점검에서 등록 화면으로 돌아올 때는 /new 주소를 유지한 채 초안 ID로 이어서 엽니다.
+  if (resumeProductId.value) {
+    await startEdit(resumeProductId.value)
+    return
+  }
+
   // /seller/products/:productId/edit 로 들어오면 기존 데이터를 불러 수정 모드로 엽니다.
   if (route.params.productId) {
     await startEdit(Number(route.params.productId))
@@ -1833,7 +1878,7 @@ onMounted(async () => {
       -->
       <PageHeader
         eyebrow="ITEM REGISTER"
-        :title="editingId ? '상품 수정' : '상품 등록'"
+        :title="editingId && !isRegistrationResume ? '상품 수정' : '상품 등록'"
         description="기기 정보와 검증 체크리스트를 순서대로 완료하면 바로 판매가 시작됩니다. 중간에 나가야 하면 임시저장을 눌러 주세요."
       >
         <template #action>
@@ -2456,7 +2501,7 @@ onMounted(async () => {
                   Windows 자동 검사
                 </h3>
                 <p class="mt-1 text-xs leading-5 text-text-sub">
-                  Limit 진단 프로그램으로 모델명·저장 용량·OS 버전·CPU·RAM·GPU와 배터리 정보를 자동으로 채울 수 있습니다.
+                  Limit 진단 프로그램으로 기기 정보와 점검 결과를 자동으로 입력할 수 있습니다.
                   비밀번호와 개인 파일은 수집하지 않습니다.
                 </p>
                 <div class="mt-3 flex flex-wrap items-center gap-2">
@@ -2507,7 +2552,7 @@ onMounted(async () => {
               <ul class="mt-4 max-h-[32rem] space-y-3 overflow-y-auto pr-1">
                 <li
                   v-for="item in mediaChecklistItems"
-                  :key="item.checklistItemId"
+                  :key="item.testType"
                 >
                   <div
                     role="button"
@@ -2888,6 +2933,57 @@ onMounted(async () => {
                 <p>• 흔들림을 줄이려면 촬영 순간 잠시 호흡을 멈추고 1초간 유지해 주세요.</p>
               </div>
             </div>
+
+            <div class="col-span-full rounded-lg border border-border bg-surface p-6">
+              <div class="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <h2 class="text-lg font-bold text-text-main">
+                    실동작 점검
+                  </h2>
+                  <p class="mt-1 text-sm text-text-sub">
+                    진단 프로그램으로 완료된 항목은 자동 반영됩니다. 나머지 항목은 웹에서 직접 점검할 수 있습니다.
+                  </p>
+                </div>
+                <!--
+                  점검 화면으로 옮겨 가는 것은 의도한 이동입니다. 이탈 경고를 띄우지 않게
+                  먼저 문을 열어 둡니다(점검을 마치면 ?step=2로 이 화면에 돌아옵니다).
+                -->
+                <BaseButton
+                  v-if="currentProductId"
+                  variant="outline"
+                  :to="{ name: 'seller-product-device-check', params: { productId: currentProductId } }"
+                  @click="allowLeave = true"
+                >
+                  카메라·마이크·키보드 등 직접 점검하기
+                </BaseButton>
+              </div>
+
+              <ul class="mt-4 grid gap-3 md:grid-cols-2">
+                <li
+                  v-for="item in deviceCheckConfirmationItems"
+                  :key="item.checklistItemId"
+                  class="flex items-start justify-between gap-3 rounded-lg border border-border p-4"
+                >
+                  <span>
+                    <span class="block text-sm font-bold text-text-main">
+                      {{ item.name }}<span
+                        v-if="isRequiredItem(item)"
+                        class="ml-1 text-red-500"
+                      >*</span>
+                    </span>
+                    <span class="mt-1 block text-xs text-text-sub">{{ guideFor(item) }}</span>
+                  </span>
+                  <BaseBadge
+                    class="shrink-0"
+                    :variant="deviceCheckStatus(item) === 'COMPLETED'
+                      ? 'success'
+                      : deviceCheckStatus(item) === 'FAILED' ? 'danger' : 'gray'"
+                  >
+                    {{ deviceCheckStatusLabel(item) }}
+                  </BaseBadge>
+                </li>
+              </ul>
+            </div>
           </section>
 
           <section
@@ -2936,64 +3032,6 @@ onMounted(async () => {
                 ⚠ {{ handoverGuide.disclaimer }}
               </p>
             </div>
-
-            <!--
-              점검 화면으로 옮겨 가는 것은 의도한 이동입니다. 이탈 경고를 띄우지 않게
-              먼저 문을 열어 둡니다(점검을 마치면 ?step=3으로 이 화면에 돌아옵니다).
-            -->
-            <BaseButton
-              v-if="currentProductId"
-              variant="outline"
-              class="mt-6"
-              :to="{ name: 'seller-product-device-check', params: { productId: currentProductId } }"
-              @click="allowLeave = true"
-            >
-              카메라·마이크·키보드 등 실동작 자동 점검하기
-            </BaseButton>
-
-            <!--
-              카메라·마이크·키보드처럼 실제로 눌러봐야 하는 항목은 여기서 체크박스로 자기신고할
-              수 없게 읽기 전용으로만 보여줍니다. 체크박스를 두면 점검 없이 그냥 눌러서 SUCCESS로
-              덮을 수 있기 때문입니다 — 결과는 위 버튼으로 들어가 DeviceCheckPage에서만 남길 수 있습니다.
-            -->
-            <h3
-              v-if="deviceCheckConfirmationItems.length"
-              class="mt-6 text-sm font-bold text-text-main"
-            >
-              실동작 자동 점검
-            </h3>
-            <ul
-              v-if="deviceCheckConfirmationItems.length"
-              class="mt-3 space-y-3"
-            >
-              <li
-                v-for="item in deviceCheckConfirmationItems"
-                :key="item.checklistItemId"
-                class="flex items-start justify-between gap-3 rounded-lg border border-border p-4"
-              >
-                <span>
-                  <span class="block text-sm font-bold text-text-main">
-                    {{ item.name }}<span
-                      v-if="isRequiredItem(item)"
-                      class="ml-1 text-red-500"
-                    >*</span>
-                  </span>
-                  <span class="mt-1 block text-xs text-text-sub">{{ guideFor(item) }}</span>
-                </span>
-                <BaseBadge
-                  class="shrink-0"
-                  :variant="deviceCheckStatus(item) === 'COMPLETED'
-                    ? 'success'
-                    : deviceCheckStatus(item) === 'FAILED' ? 'danger' : 'gray'"
-                >
-                  {{
-                    deviceCheckStatus(item) === 'COMPLETED'
-                      ? '완료'
-                      : deviceCheckStatus(item) === 'FAILED' ? '재점검 필요' : '미점검'
-                  }}
-                </BaseBadge>
-              </li>
-            </ul>
 
             <h3 class="mt-6 text-sm font-bold text-text-main">
               개인정보 확인 항목

@@ -2,6 +2,7 @@ using System.Text.Json;
 using LimitScanner.Api;
 using LimitScanner.Diagnostics;
 using Xunit;
+using System.Windows.Forms;
 
 namespace LimitScanner.Tests;
 
@@ -88,5 +89,56 @@ public sealed class ModuleResultTests
         Assert.Equal("CONNECTED", tracker.InitialState);
         Assert.Equal("CONNECTED", tracker.CurrentState);
         Assert.Equal(2, tracker.TransitionCount);
+    }
+
+    [Fact]
+    public void EachModuleAttemptGetsANewClientResultId()
+    {
+        var first = ModuleResult.Create(
+            ModuleTestTypes.Keyboard,
+            ModuleMeasurementStatuses.Detected,
+            ModuleUserResults.Confirmed,
+            new Dictionary<string, object?>());
+        var rerun = ModuleResult.Create(
+            ModuleTestTypes.Keyboard,
+            ModuleMeasurementStatuses.Detected,
+            ModuleUserResults.Confirmed,
+            new Dictionary<string, object?>());
+
+        Assert.NotEqual(Guid.Empty, first.ClientResultId);
+        Assert.NotEqual(Guid.Empty, rerun.ClientResultId);
+        Assert.NotEqual(first.ClientResultId, rerun.ClientResultId);
+    }
+
+    [Fact]
+    public void PointerRequiresMoveBothClicksAndScroll()
+    {
+        var state = new PointerTestState();
+        state.RecordMove();
+        state.RecordClick(MouseButtons.Left);
+        state.RecordClick(MouseButtons.Right);
+        Assert.False(state.HasRequiredInput);
+
+        state.RecordScroll();
+
+        Assert.True(state.HasRequiredInput);
+        Assert.Equal(ModuleMeasurementStatuses.Detected,
+            state.CreateResult(ModuleUserResults.Confirmed).MeasurementStatus);
+        Assert.Equal("TOUCHPAD",
+            state.CreateResult(ModuleUserResults.Confirmed).TestType);
+    }
+
+    [Fact]
+    public void KeyboardTracksDistinctDetectableKeys()
+    {
+        var state = new KeyboardTestState();
+        state.Record(Keys.A);
+        state.Record(Keys.A);
+        state.Record(Keys.Enter);
+
+        Assert.Equal(2, state.PressedKeys.Count);
+        Assert.Equal("Enter", state.LastKey);
+        Assert.Equal(ModuleMeasurementStatuses.Detected,
+            state.CreateResult(ModuleUserResults.Confirmed).MeasurementStatus);
     }
 }

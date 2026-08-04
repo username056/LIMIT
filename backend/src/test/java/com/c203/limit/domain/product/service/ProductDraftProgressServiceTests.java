@@ -11,9 +11,11 @@ import com.c203.limit.domain.inspection.enums.AutomationType;
 import com.c203.limit.domain.inspection.enums.ChecklistItemCompletionStatus;
 import com.c203.limit.domain.inspection.enums.DeviceCheckResult;
 import com.c203.limit.domain.inspection.enums.EvidenceType;
+import com.c203.limit.domain.inspection.enums.TestType;
 import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
 import com.c203.limit.domain.product.dto.request.UpdateProductDraftProgressRequest;
 import com.c203.limit.domain.product.dto.request.UpdateProductDraftProgressRequest.ChecklistItemResult;
+import com.c203.limit.domain.product.dto.request.UpdateProductDraftProgressRequest.WebDeviceResult;
 import com.c203.limit.domain.product.dto.response.ProductDraftProgressResponse;
 import com.c203.limit.domain.product.entity.Listing;
 import com.c203.limit.domain.product.repository.ListingRepository;
@@ -21,6 +23,7 @@ import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.util.List;
 import java.util.Optional;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -48,6 +51,16 @@ class ProductDraftProgressServiceTests {
     private ListingChecklistItem confirmationItem(long id) {
         ChecklistTemplateItem templateItem = ChecklistTemplateItem.create(
                 null, "LAP-KBD-005", "키보드", "작동 확인", "안내", EvidenceType.SELLER_CONFIRMATION,
+                AutomationType.NONE, true, 1);
+        ListingChecklistItem item =
+                ListingChecklistItem.createFromTemplateItem(PRODUCT_ID, templateItem);
+        ReflectionTestUtils.setField(item, "id", id);
+        return item;
+    }
+
+    private ListingChecklistItem videoItem(long id, String itemCode) {
+        ChecklistTemplateItem templateItem = ChecklistTemplateItem.create(
+                null, itemCode, "영상 항목", "작동 확인", "안내", EvidenceType.VIDEO,
                 AutomationType.NONE, true, 1);
         ListingChecklistItem item =
                 ListingChecklistItem.createFromTemplateItem(PRODUCT_ID, templateItem);
@@ -116,6 +129,70 @@ class ProductDraftProgressServiceTests {
 
         assertThat(item.getCompletionStatus()).isEqualTo(ChecklistItemCompletionStatus.PENDING);
         assertThat(item.getDeviceCheckResult()).isNull();
+    }
+
+    @Test
+    void displayAndChargingVideoItemsAcceptWebDeviceCheckResults() {
+        ListingChecklistItem display = videoItem(21L, "LAP-DSP-003");
+        ListingChecklistItem charging = videoItem(22L, "LAP-CHG-007");
+        when(checklistItems.findByListingIdOrderByDisplayOrderAsc(PRODUCT_ID))
+                .thenReturn(List.of(display, charging));
+
+        ProductDraftProgressResponse response = service.update(
+                SELLER_ID,
+                PRODUCT_ID,
+                new UpdateProductDraftProgressRequest(
+                        2,
+                        List.of(
+                                new ChecklistItemResult(21L, DeviceCheckResult.SUCCESS),
+                                new ChecklistItemResult(22L, DeviceCheckResult.SUCCESS))));
+
+        assertThat(display.getCompletionStatus()).isEqualTo(ChecklistItemCompletionStatus.COMPLETED);
+        assertThat(charging.getCompletionStatus()).isEqualTo(ChecklistItemCompletionStatus.COMPLETED);
+        assertThat(response.results()).containsEntry(21L, DeviceCheckResult.SUCCESS)
+                .containsEntry(22L, DeviceCheckResult.SUCCESS);
+    }
+
+    @Test
+    void omittingVideoItemFromWebResultsDoesNotEraseExistingEvidenceCompletion() {
+        ListingChecklistItem display = videoItem(23L, "LAP-DSP-003");
+        display.markCompleted();
+        when(checklistItems.findByListingIdOrderByDisplayOrderAsc(PRODUCT_ID))
+                .thenReturn(List.of(display));
+
+        service.update(SELLER_ID, PRODUCT_ID, new UpdateProductDraftProgressRequest(2, List.of()));
+
+        assertThat(display.getCompletionStatus()).isEqualTo(ChecklistItemCompletionStatus.COMPLETED);
+    }
+
+    @Test
+    void storesSevenWebChecksWithoutChecklistItems() {
+        when(checklistItems.findByListingIdOrderByDisplayOrderAsc(PRODUCT_ID))
+                .thenReturn(List.of());
+
+        ProductDraftProgressResponse response = service.update(
+                SELLER_ID,
+                PRODUCT_ID,
+                new UpdateProductDraftProgressRequest(
+                        2,
+                        List.of(),
+                        List.of(
+                                new WebDeviceResult(TestType.SPEAKER, DeviceCheckResult.SUCCESS),
+                                new WebDeviceResult(TestType.DISPLAY, DeviceCheckResult.SUCCESS),
+                                new WebDeviceResult(TestType.CHARGING, DeviceCheckResult.SUCCESS),
+                                new WebDeviceResult(TestType.CAMERA, DeviceCheckResult.SUCCESS),
+                                new WebDeviceResult(TestType.MICROPHONE, DeviceCheckResult.SUCCESS),
+                                new WebDeviceResult(TestType.KEYBOARD, DeviceCheckResult.SUCCESS),
+                                new WebDeviceResult(TestType.TOUCHPAD, DeviceCheckResult.SUCCESS))));
+
+        assertThat(response.deviceResults()).containsAllEntriesOf(Map.of(
+                TestType.SPEAKER, DeviceCheckResult.SUCCESS,
+                TestType.DISPLAY, DeviceCheckResult.SUCCESS,
+                TestType.CHARGING, DeviceCheckResult.SUCCESS,
+                TestType.CAMERA, DeviceCheckResult.SUCCESS,
+                TestType.MICROPHONE, DeviceCheckResult.SUCCESS,
+                TestType.KEYBOARD, DeviceCheckResult.SUCCESS,
+                TestType.TOUCHPAD, DeviceCheckResult.SUCCESS));
     }
 
     @Test
