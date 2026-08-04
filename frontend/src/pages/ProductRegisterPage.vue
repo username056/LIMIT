@@ -544,7 +544,9 @@ const isActiveItemFull = computed(
 const activeItemLatestMedia = computed(() => activeItemMedia.value[activeItemMedia.value.length - 1] || null)
 const activeItemStatusLabel = computed(() => {
   const busy = activeCaptureItem.value && busyOf(activeCaptureItem.value.checklistItemId)
-  if (busy === 'optimizing') return '최적화 중…'
+  // 몇 %인지는 바로 아래 막대가 말해 주므로, 버튼에는 무엇을 하는 중인지만 적습니다.
+  if (busy === 'queued') return '차례 기다리는 중…'
+  if (busy === 'optimizing') return '압축 중…'
   if (busy === 'uploading') return '업로드 중…'
   if (isActiveItemFull.value) return `최대 ${maxMediaFor(activeCaptureItem.value)}개까지 첨부했습니다`
   // 촬영을 못 하는 항목(영상이거나 카메라가 없는 기기)에서 '촬영'을 말하면 안 됩니다.
@@ -1259,6 +1261,29 @@ async function saveDiagnosisValue(checklistItemId, field) {
   }
 }
 
+/*
+  진행 상태 한 줄로 묶기.
+  ---------------------------------------------------------------------------
+  영상은 줄이는 데 몇십 초가 걸립니다. 예전에는 '최적화 중…'만 떠서 멈춘 것인지
+  일하는 중인지 알 수 없었습니다. 이제 세 단계를 %로 보여 줍니다.
+    대기 중  - 앞 영상을 줄이는 중이라 자기 차례를 기다림
+    압축 N%  - ffmpeg이 알려 주는 실제 진행률
+    업로드 N% - S3로 올리는 진행률
+*/
+const CAPTURE_PHASE_LABELS = {
+  queued: '대기 중',
+  optimizing: '압축',
+  uploading: '업로드',
+}
+
+function captureProgressLabel(checklistItemId) {
+  const busy = busyOf(checklistItemId)
+  const label = CAPTURE_PHASE_LABELS[busy]
+  if (!label) return ''
+  if (busy === 'queued') return label
+  return `${label} ${progressOf(checklistItemId)}%`
+}
+
 async function handleCaptureFile(item, file) {
   if (!item || !file || !currentProductId.value) return
   const itemId = item.checklistItemId
@@ -1268,7 +1293,8 @@ async function handleCaptureFile(item, file) {
     return
   }
   errorMessage.value = ''
-  captureState[itemId].busy = 'optimizing'
+  // 영상은 한 번에 하나씩 줄이므로, 차례가 오기 전에는 '대기 중'입니다.
+  captureState[itemId].busy = item.evidenceType === 'VIDEO' ? 'queued' : 'optimizing'
   captureState[itemId].progress = 0
 
   // 업로드 용량과 서버 비용을 줄이기 위해 사진은 Canvas로, 영상은 ffmpeg.wasm으로
@@ -1276,7 +1302,13 @@ async function handleCaptureFile(item, file) {
   let optimizedFile = file
   try {
     if (item.evidenceType === 'VIDEO') {
-      optimizedFile = await measureRegistrationPhase('videoCompressionMs', () => compressVideo(file))
+      optimizedFile = await measureRegistrationPhase('videoCompressionMs', () => compressVideo(file, {
+        onStart: () => {
+          captureState[itemId].busy = 'optimizing'
+          captureState[itemId].progress = 0
+        },
+        onProgress: (percent) => { captureState[itemId].progress = percent },
+      }))
     } else {
       // 항목 종류가 아니라 파일 종류로 판단합니다. 진단 자료 항목에도 사진이 올라올 수 있고,
       // compressImage는 이미지가 아닌 파일(txt·html)은 그대로 돌려주므로 안전합니다.
@@ -1288,6 +1320,7 @@ async function handleCaptureFile(item, file) {
 
   const previewUrl = URL.createObjectURL(optimizedFile)
   captureState[itemId].busy = 'uploading'
+  captureState[itemId].progress = 0
 
   try {
     const durationSeconds = item.evidenceType === 'VIDEO' ? await readVideoDuration(optimizedFile) : null
@@ -2531,8 +2564,9 @@ onMounted(async () => {
                         <template v-if="captureStatusOf(item.checklistItemId) === 'captured'">
                           첨부 {{ mediaOf(item.checklistItemId).length }} / {{ maxMediaFor(item) }}
                         </template>
-                        <template v-else-if="captureStatusOf(item.checklistItemId) === 'optimizing'">최적화 중…</template>
-                        <template v-else-if="captureStatusOf(item.checklistItemId) === 'uploading'">업로드 중…</template>
+                        <template v-else-if="captureProgressLabel(item.checklistItemId)">
+                          {{ captureProgressLabel(item.checklistItemId) }}
+                        </template>
                         <template v-else-if="captureStatusOf(item.checklistItemId) === 'auto-completed'">자동 입력 완료</template>
                         <template v-else-if="activeCaptureItemId === item.checklistItemId">촬영 대기</template>
                         <template v-else>미촬영</template>
@@ -2703,15 +2737,31 @@ onMounted(async () => {
                   >
                     {{ canShootActiveItem ? '파일 업로드' : activeItemStatusLabel }}
                   </span>
+                  <!--
+                    압축과 업로드를 같은 막대로 보여 줍니다. 예전에는 업로드 %만 있어서,
+                    영상을 줄이는 몇십 초 동안은 아무 표시가 없었습니다. 차례를 기다리는
+                    동안에는 채울 값이 없으므로 막대를 비우고 '대기 중'만 적습니다.
+                  -->
                   <span
-                    v-if="activeCaptureItem && busyOf(activeCaptureItem.checklistItemId) === 'uploading'"
-                    class="mt-2 block text-center text-xs font-medium text-primary"
-                    role="progressbar"
-                    :aria-valuenow="progressOf(activeCaptureItem.checklistItemId)"
-                    aria-valuemin="0"
-                    aria-valuemax="100"
+                    v-if="activeCaptureItem && captureProgressLabel(activeCaptureItem.checklistItemId)"
+                    class="mt-2 block"
                   >
-                    S3 업로드 {{ progressOf(activeCaptureItem.checklistItemId) }}%
+                    <span class="mb-1 flex items-center justify-between text-xs font-medium text-primary">
+                      <span>{{ captureProgressLabel(activeCaptureItem.checklistItemId) }}</span>
+                    </span>
+                    <span
+                      class="block h-1.5 w-full overflow-hidden rounded-full bg-border"
+                      role="progressbar"
+                      :aria-label="`${activeCaptureItem.name} 처리 진행률`"
+                      :aria-valuenow="progressOf(activeCaptureItem.checklistItemId)"
+                      aria-valuemin="0"
+                      aria-valuemax="100"
+                    >
+                      <span
+                        class="block h-full rounded-full bg-primary-gradient transition-[width] duration-200"
+                        :style="{ width: `${progressOf(activeCaptureItem.checklistItemId)}%` }"
+                      />
+                    </span>
                   </span>
                 </label>
               </div>
@@ -2839,6 +2889,9 @@ onMounted(async () => {
               <p class="mt-2 text-center text-[11px] text-text-sub">
                 항목별 최대 파일 개수와 크기·영상 길이를 적용합니다.
                 파일은 자동으로 압축됩니다.
+              </p>
+              <p class="mt-1 text-center text-[11px] text-text-sub">
+                영상은 60초 이내, 100MB 이하만 가능하며 최대 6개까지 가능합니다.
               </p>
 
               <div class="mt-5 rounded-lg bg-bg p-4 text-xs leading-6 text-text-sub">

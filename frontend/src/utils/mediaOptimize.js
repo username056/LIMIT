@@ -24,7 +24,7 @@ export async function compressImage(file) {
 
 // ffmpeg.wasm은 무거워서(코어 파일 수십 MB) 촬영/업로드 화면에 실제로 진입했을 때만
 // 동적 import로 불러옵니다. 다른 페이지의 번들 크기에는 영향을 주지 않습니다.
-export async function compressVideo(file) {
+export async function compressVideo(file, handlers = {}) {
   const { compressVideo: run } = await import('./ffmpegVideoCompressor.js')
-  return run(file)
+  return run(file, handlers)
 }

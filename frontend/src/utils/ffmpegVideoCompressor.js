@@ -40,9 +40,9 @@ function extensionOf(filename) {
 let queue = Promise.resolve()
 let sequence = 0
 
-export function compressVideo(file) {
+export function compressVideo(file, handlers = {}) {
   // 앞 작업이 실패해도 줄이 끊기지 않게 성공·실패 양쪽에서 이어 붙입니다.
-  const start = () => transcode(file)
+  const start = () => transcode(file, handlers)
   const result = queue.then(start, start)
   queue = result.then(
     () => undefined,
@@ -51,11 +51,29 @@ export function compressVideo(file) {
   return result
 }
 
-async function transcode(file) {
+async function transcode(file, { onStart, onProgress } = {}) {
   const ffmpeg = await loadFFmpeg()
+  // 줄을 서 있다가 이제 자기 차례가 됐다는 것을 알립니다. 이게 없으면 앞 영상을
+  // 줄이는 동안 뒤 영상은 '0%'로 멈춰 있어, 멈춘 것처럼 보입니다.
+  onStart?.()
   sequence += 1
   const inputName = `input-${sequence}${extensionOf(file.name)}`
   const outputName = `output-${sequence}.mp4`
+
+  /*
+    ffmpeg이 알려 주는 진행률을 그대로 쓰지 않고 다듬습니다. 값이 1을 넘기거나 뒤로
+    가는 경우가 있어, 그대로 보여 주면 숫자가 줄어들었다 늘어납니다. 한 번 올라간
+    값은 내리지 않고 99에서 멈춰 두었다가, 끝났을 때 100으로 맞춥니다.
+  */
+  let reported = 0
+  const relay = ({ progress }) => {
+    if (!onProgress || !Number.isFinite(progress)) return
+    const next = Math.min(99, Math.max(reported, Math.round(progress * 100)))
+    if (next === reported) return
+    reported = next
+    onProgress(next)
+  }
+  if (onProgress) ffmpeg.on('progress', relay)
 
   try {
     await ffmpeg.writeFile(inputName, await fetchFile(file))
@@ -70,10 +88,12 @@ async function transcode(file) {
       outputName,
     ])
     const data = await ffmpeg.readFile(outputName)
+    onProgress?.(100)
 
     const name = `${file.name.replace(/\.[^.]+$/, '')}-optimized.mp4`
     return new File([data], name, { type: 'video/mp4' })
   } finally {
+    if (onProgress) ffmpeg.off('progress', relay)
     // 실패해도 치웁니다. 남겨 두면 다음 영상을 올릴 때까지 메모리에 그대로 있습니다.
     await ffmpeg.deleteFile(inputName).catch(() => {})
     await ffmpeg.deleteFile(outputName).catch(() => {})

@@ -15,7 +15,19 @@ const state = vi.hoisted(() => ({
 
 vi.mock('@ffmpeg/ffmpeg', () => ({
   FFmpeg: class {
+    constructor() { this.listeners = { progress: [] } }
+
     load() { return Promise.resolve() }
+
+    on(event, handler) { this.listeners[event].push(handler) }
+
+    off(event, handler) {
+      this.listeners[event] = this.listeners[event].filter((candidate) => candidate !== handler)
+    }
+
+    emitProgress(progress) {
+      this.listeners.progress.forEach((handler) => handler({ progress }))
+    }
 
     writeFile(name, data) {
       state.files.set(name, data)
@@ -28,6 +40,11 @@ vi.mock('@ffmpeg/ffmpeg', () => ({
       const input = args[args.indexOf('-i') + 1]
       const output = args[args.length - 1]
       state.execOrder.push(input)
+      // ffmpeg은 1을 넘기거나 뒤로 가는 값을 주기도 합니다. 그대로 쓰면 숫자가 요동칩니다.
+      this.emitProgress(0.3)
+      this.emitProgress(0.2)
+      this.emitProgress(0.9)
+      this.emitProgress(1.4)
       // 변환에 시간이 걸리는 동안 다른 호출이 끼어드는지 봅니다.
       await new Promise((resolve) => setTimeout(resolve, 5))
       if (!state.files.has(input)) {
@@ -123,4 +140,28 @@ describe('compressVideo', () => {
     expect(results[1].status).toBe('fulfilled')
     expect(results[1].value.name).toBe('b-optimized.mp4')
   })
+it('진행률은 뒤로 가지 않고 99에서 멈췄다가 끝나면 100이 된다', async () => {
+    const reported = []
+
+    await compressVideo(new File(['x'], 'a.mp4', { type: 'video/mp4' }), {
+      onProgress: (percent) => reported.push(percent),
+    })
+
+    // ffmpeg이 준 값은 30 → 20 → 90 → 140 이지만 화면에 뒤로 가는 숫자를 보여 주지 않습니다.
+    expect(reported).toEqual([30, 90, 99, 100])
+  })
+
+  it('차례가 되면 알려 준다', async () => {
+    const started = []
+    const files = ['a.mp4', 'b.mp4'].map((name) => new File(['x'], name, { type: 'video/mp4' }))
+
+    await Promise.all(files.map((file, index) => compressVideo(file, {
+      onStart: () => started.push(index),
+    })))
+
+    // 뒤 영상은 앞 영상이 끝난 뒤에 시작합니다. 이 신호가 없으면 기다리는 동안
+    // 화면에 '0%'가 멈춰 있어 고장난 것처럼 보입니다.
+    expect(started).toEqual([0, 1])
+  })
 })
+
