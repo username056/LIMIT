@@ -182,6 +182,24 @@ public class DiagnosisAggregationService {
                 .forEach(
                         result -> {
                             Long evidenceId = result.getEvidenceId();
+                            putIfPresent(
+                                    values,
+                                    DiagnosisFieldName.MODEL_NAME,
+                                    result.getModelName(),
+                                    evidenceId,
+                                    DiagnosisSourceType.DXDIAG);
+                            putIfPresent(
+                                    values,
+                                    DiagnosisFieldName.OS_VERSION,
+                                    result.getOsVersion(),
+                                    evidenceId,
+                                    DiagnosisSourceType.DXDIAG);
+                            putIfPresent(
+                                    values,
+                                    DiagnosisFieldName.STORAGE_CAPACITY,
+                                    result.getStorageCapacity(),
+                                    evidenceId,
+                                    DiagnosisSourceType.DXDIAG);
                             putIfPresent(values, DiagnosisFieldName.CPU, result.getCpu(), evidenceId, DiagnosisSourceType.DXDIAG);
                             putIfPresent(
                                     values, DiagnosisFieldName.RAM, result.getMemory(), evidenceId, DiagnosisSourceType.DXDIAG);

@@ -17,6 +17,9 @@ class DxdiagTxtParserTests {
     void parsesAllFieldsFromRealisticDxdiagTxtDump() {
         DxdiagParseResult result = parser.parse(bytes(completeDxdiagTxt()));
 
+        assertThat(result.modelName()).isEqualTo("950XDB");
+        assertThat(result.osVersion()).isEqualTo("Windows 11 Pro 64-bit (10.0, Build 26100)");
+        assertThat(result.storageCapacity()).isEqualTo("475.8 GB");
         assertThat(result.cpu())
                 .isEqualTo("11th Gen Intel(R) Core(TM) i7-1165G7 @ 2.80GHz (8 CPUs), ~2.8GHz");
         assertThat(result.memory()).isEqualTo("16384 MB RAM");
@@ -42,6 +45,10 @@ class DxdiagTxtParserTests {
                 ------------------
                       Description: Default Speaker
                 Default Sound Playback: Yes
+                ------------------------
+                Disk & DVD/CD-ROM Drives
+                ------------------------
+                Total Space: 475.8GB
                 """;
 
         DxdiagParseResult result = parser.parse(bytes(txt));
@@ -58,11 +65,17 @@ class DxdiagTxtParserTests {
                 ------------------
                       Processor: Test CPU
                         Memory: 8192MB RAM
+                  Operating System: Test OS
+                      System Model: Test Model
                 ------------------
                 Sound Devices
                 ------------------
                       Description: Default Speaker
                 Default Sound Playback: Yes
+                ------------------------
+                Disk & DVD/CD-ROM Drives
+                ------------------------
+                Total Space: 475.8 GB
                 """;
 
         DxdiagParseResult result = parser.parse(bytes(txt));
@@ -82,7 +95,7 @@ class DxdiagTxtParserTests {
 
         DxdiagParseResult result = parser.parse(bytes(txt));
 
-        assertThat(result.missingFields()).hasSize(6);
+        assertThat(result.missingFields()).hasSize(9);
         assertThat(result.isComplete()).isFalse();
     }
 
@@ -109,6 +122,9 @@ class DxdiagTxtParserTests {
         DxdiagParseResult result = parser.parse(readFixture("fixtures/inspection/dxdiag-sample.txt"));
 
         assertThat(result.cpu()).isEqualTo("13th Gen Intel(R) Core(TM) i7-13700H (20 CPUs), ~2.4GHz");
+        assertThat(result.modelName()).isEqualTo("960XFH");
+        assertThat(result.osVersion()).contains("Windows 11 Enterprise 64-bit");
+        assertThat(result.storageCapacity()).isEqualTo("975.7 GB");
         assertThat(result.memory()).isEqualTo("32768 MB RAM");
         assertThat(result.gpu()).isEqualTo("Intel(R) Iris(R) Xe Graphics");
         assertThat(result.gpuMemory()).isEqualTo("16291 MB");
@@ -153,6 +169,11 @@ class DxdiagTxtParserTests {
                       Description: 스피커 (Realtek(R) Audio)
                 Default Sound Playback: Yes
                      Driver Version: 6.0.9200.16384
+                ------------------------
+                Disk & DVD/CD-ROM Drives
+                ------------------------
+                      Drive: C:
+                 Total Space: 475.8GB
                 """;
     }
 }

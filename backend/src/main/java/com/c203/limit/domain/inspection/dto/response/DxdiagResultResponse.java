@@ -14,6 +14,15 @@ public class DxdiagResultResponse {
     @Schema(example = "1")
     private final Long dxdiagResultId;
 
+    @Schema(example = "960XFH")
+    private final String modelName;
+
+    @Schema(example = "Windows 11 Enterprise 64-bit (10.0, Build 26200)")
+    private final String osVersion;
+
+    @Schema(example = "975.7 GB")
+    private final String storageCapacity;
+
     @Schema(example = "11th Gen Intel(R) Core(TM) i7-1165G7 @ 2.80GHz (8 CPUs), ~2.8GHz")
     private final String cpu;
 

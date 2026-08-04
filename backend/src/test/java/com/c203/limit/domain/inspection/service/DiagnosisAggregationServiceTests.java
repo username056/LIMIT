@@ -255,6 +255,32 @@ class DiagnosisAggregationServiceTests {
     }
 
     @Test
+    void mapsDxdiagSystemFieldsIntoFileParseValues() {
+        stubItemAndOwnership();
+        when(evidenceRepository.findAllByListingChecklistItem_Id(ITEM_ID))
+                .thenReturn(List.of(diagnosticFileEvidence()));
+        DxdiagResult result =
+                DxdiagResult.builder()
+                        .evidenceId(DIAGNOSTIC_FILE_EVIDENCE_ID)
+                        .modelName("960XFH")
+                        .osVersion("Windows 11 Enterprise 64-bit")
+                        .storageCapacity("975.7 GB")
+                        .parserVersion("dxdiag-v1")
+                        .parseStatus(ParseStatus.SUCCESS)
+                        .parsedAt(LocalDateTime.now())
+                        .build();
+        when(dxdiagResultRepository.findAllByEvidenceIdIn(anyList())).thenReturn(List.of(result));
+        when(batteryReportResultRepository.findAllByEvidenceIdIn(anyList())).thenReturn(List.of());
+
+        DiagnosisFieldListResponse response = service.getDiagnosis(ITEM_ID, SELLER_ID);
+
+        assertThat(fieldNamed(response, "MODEL_NAME").getFileParseValue()).isEqualTo("960XFH");
+        assertThat(fieldNamed(response, "OS_VERSION").getFileParseValue())
+                .isEqualTo("Windows 11 Enterprise 64-bit");
+        assertThat(fieldNamed(response, "STORAGE_CAPACITY").getFileParseValue()).isEqualTo("975.7 GB");
+    }
+
+    @Test
     void mapsBatteryReportColumnsIntoFileParseValues() {
         stubItemAndOwnership();
         when(evidenceRepository.findAllByListingChecklistItem_Id(ITEM_ID))

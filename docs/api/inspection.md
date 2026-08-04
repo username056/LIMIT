@@ -64,9 +64,9 @@ OS_VERSION은 에디션("Windows 11 Enterprise")·버전("25H2")·"장치 사양
 `system_info_screenshot.png` 실촬영 이미지를 `SystemInfoScreenshotLiveManualTests`로 호출한 원본 좌표
 그대로다.
 
-DxDiag는 `CPU`/`RAM`(`memory`)/`GPU`/`GPU_MEMORY`/`DRIVER_VERSION`/`SOUND_DEVICE`를, 배터리 리포트는
+DxDiag는 `MODEL_NAME`/`OS_VERSION`/`STORAGE_CAPACITY`/`CPU`/`RAM`(`memory`)/`GPU`/`GPU_MEMORY`/`DRIVER_VERSION`/`SOUND_DEVICE`를, 배터리 리포트는
 `DESIGN_CAPACITY`/`FULL_CHARGE_CAPACITY`/`CYCLE_COUNT`/`BATTERY_MANUFACTURER`/`CAPACITY_RATIO`를 추출한다.
-이 필드 이름들은 `DiagnosisFieldName` enum으로 통일되어 있어, OCR과 DxDiag가 겹치는 필드(`CPU`/`RAM`/`GPU`
+이 필드 이름들은 `DiagnosisFieldName` enum으로 통일되어 있어, OCR과 DxDiag가 겹치는 필드(`MODEL_NAME`/`OS_VERSION`/`STORAGE_CAPACITY`/`CPU`/`RAM`/`GPU`
 등)는 같은 이름으로 취합·비교된다.
 
 ### 취합 조회 (`GET .../diagnosis`)
