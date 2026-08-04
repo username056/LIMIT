@@ -256,9 +256,37 @@ const DXDIAG_FIELD_NAMES = ['RAM', 'GPU', 'GPU_MEMORY', 'DRIVER_VERSION', 'SOUND
 const BATTERY_REPORT_FIELD_NAMES = [
   'DESIGN_CAPACITY', 'FULL_CHARGE_CAPACITY', 'CYCLE_COUNT', 'BATTERY_MANUFACTURER', 'CAPACITY_RATIO',
 ]
+const COMPLETION_FIELD_NAMES_BY_PARSER = {
+  DXDIAG: ['RAM', 'GPU'],
+  BATTERY_REPORT: ['DESIGN_CAPACITY', 'FULL_CHARGE_CAPACITY', 'CAPACITY_RATIO'],
+}
 
 function isDeviceInfoItem(item) {
   return ['LAP-SCR-013', 'SYS-003'].includes(item?.itemCode)
+}
+
+function hasAutomaticallyDetectedValue(field) {
+  return String(field?.fileParseValue ?? field?.ocrValue ?? '').trim().length > 0
+}
+
+function diagnosisCompletionFieldNames(item) {
+  if (isDeviceInfoItem(item)) return OCR_FIELD_NAMES
+  return COMPLETION_FIELD_NAMES_BY_PARSER[item?.parserType] || []
+}
+
+function isAutomatedDiagnosisComplete(item) {
+  const requiredFieldNames = diagnosisCompletionFieldNames(item)
+  if (!requiredFieldNames.length) return false
+
+  const fields = diagnosisState[item.checklistItemId]?.fields || []
+  return requiredFieldNames.every((fieldName) => {
+    const field = fields.find((candidate) => candidate.fieldName === fieldName)
+    return hasAutomaticallyDetectedValue(field)
+  })
+}
+
+function isCaptureItemComplete(item) {
+  return mediaOf(item.checklistItemId).length > 0 || isAutomatedDiagnosisComplete(item)
 }
 
 function allDiagnosisFieldNamesFor(item) {
@@ -279,7 +307,7 @@ async function refreshAutomatedDiagnoses() {
   checklistItems.value = await getProductChecklist(currentProductId.value)
   await Promise.allSettled(checklistItems.value
     .filter((item) => allDiagnosisFieldNamesFor(item).length > 0)
-    .map((item) => refreshDiagnosis(item)))
+    .map((item) => refreshDiagnosis(item, { revealEmptyFields: true })))
 }
 
 function beginWindowsInspectionPolling(sessionKey) {
@@ -398,7 +426,14 @@ function progressOf(checklistItemId) {
 }
 
 function captureStatusOf(checklistItemId) {
-  return busyOf(checklistItemId) || (mediaOf(checklistItemId).length ? 'captured' : 'idle')
+  const busy = busyOf(checklistItemId)
+  if (busy) return busy
+  if (mediaOf(checklistItemId).length) return 'captured'
+
+  const item = checklistItems.value.find(
+    (candidate) => candidate.checklistItemId === checklistItemId,
+  )
+  return isAutomatedDiagnosisComplete(item) ? 'auto-completed' : 'idle'
 }
 
 function maxMediaFor(item) {
@@ -475,7 +510,7 @@ const deviceCheckConfirmationItems = computed(
   ),
 )
 const capturedMediaCount = computed(
-  () => mediaChecklistItems.value.filter((item) => mediaOf(item.checklistItemId).length > 0).length,
+  () => mediaChecklistItems.value.filter((item) => isCaptureItemComplete(item)).length,
 )
 const confirmedCount = computed(
   () => privacyChecklistItems.value.filter((item) => confirmState[item.checklistItemId]).length,
@@ -1035,7 +1070,7 @@ function goToStep3() {
   // 가이드 조회는 setStep이 맡습니다.
   const proceed = () => setStep(3)
   const missingRequired = mediaChecklistItems.value.filter(
-    (item) => isRequiredItem(item) && mediaOf(item.checklistItemId).length === 0,
+    (item) => isRequiredItem(item) && !isCaptureItemComplete(item),
   )
   if (missingRequired.length) {
     activeCaptureItemId.value = missingRequired[0].checklistItemId
@@ -1127,7 +1162,7 @@ function readVideoDuration(file) {
 
 // 항목 하나의 취합된 진단값을 다시 조회해 draftValue(입력창 초기값)와 saving 상태를 붙여 저장하고,
 // 인식되지 못한 필드도 빈 입력 칸(placeholder row)으로 함께 채워 바로 타이핑해 저장할 수 있게 합니다.
-async function refreshDiagnosis(item) {
+async function refreshDiagnosis(item, { revealEmptyFields = false } = {}) {
   const result = await getDiagnosis(item.checklistItemId)
   const detectedFields = (result.fields || []).map((field) => ({
     ...field,
@@ -1136,7 +1171,8 @@ async function refreshDiagnosis(item) {
     justSaved: false,
   }))
   const detectedFieldNames = new Set(detectedFields.map((field) => field.fieldName))
-  const placeholderFields = allDiagnosisFieldNamesFor(item)
+  const shouldRevealEmptyFields = isDeviceInfoItem(item) || revealEmptyFields || detectedFields.length > 0
+  const placeholderFields = (shouldRevealEmptyFields ? allDiagnosisFieldNamesFor(item) : [])
     .filter((fieldName) => !detectedFieldNames.has(fieldName))
     .map((fieldName) => ({
       fieldName,
@@ -1181,7 +1217,7 @@ async function runDiagnosisAutomation(item, evidenceId) {
   }
 
   try {
-    await refreshDiagnosis(item)
+    await refreshDiagnosis(item, { revealEmptyFields: true })
   } catch {
     // 취합 조회 실패는 아래 에러 메시지로 안내합니다.
   }
@@ -1653,7 +1689,7 @@ async function startEdit(productId) {
       }
       if (item.automationType && item.automationType !== 'NONE') {
         try {
-          await refreshDiagnosis(item)
+          await refreshDiagnosis(item, { revealEmptyFields: true })
         } catch {
           // 조회 실패는 조용히 넘어가고, 새로 업로드하면 다시 자동 인식을 시도합니다.
         }
@@ -2472,13 +2508,14 @@ onMounted(async () => {
                       </div>
                       <span
                         class="shrink-0 text-xs font-semibold"
-                        :class="captureStatusOf(item.checklistItemId) === 'captured' ? 'text-primary' : 'text-text-sub'"
+                        :class="['captured', 'auto-completed'].includes(captureStatusOf(item.checklistItemId)) ? 'text-primary' : 'text-text-sub'"
                       >
                         <template v-if="captureStatusOf(item.checklistItemId) === 'captured'">
                           첨부 {{ mediaOf(item.checklistItemId).length }} / {{ maxMediaFor(item) }}
                         </template>
                         <template v-else-if="captureStatusOf(item.checklistItemId) === 'optimizing'">최적화 중…</template>
                         <template v-else-if="captureStatusOf(item.checklistItemId) === 'uploading'">업로드 중…</template>
+                        <template v-else-if="captureStatusOf(item.checklistItemId) === 'auto-completed'">자동 입력 완료</template>
                         <template v-else-if="activeCaptureItemId === item.checklistItemId">촬영 대기</template>
                         <template v-else>미촬영</template>
                       </span>
@@ -2779,12 +2816,6 @@ onMounted(async () => {
                     </p>
                   </li>
                 </ul>
-                <p
-                  v-else-if="diagnosisState[activeCaptureItem.checklistItemId].status === 'ready'"
-                  class="mt-2 text-xs text-text-sub"
-                >
-                  인식된 값이 없습니다. 파일을 다시 확인하거나 다른 파일로 다시 업로드해 주세요.
-                </p>
               </div>
 
               <p class="mt-2 text-center text-[11px] text-text-sub">
