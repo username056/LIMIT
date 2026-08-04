@@ -53,7 +53,7 @@ public sealed class InspectionCoordinator(
                 cancellationToken);
         }
 
-        progress.Report("스피커·디스플레이·충전·카메라·마이크 상태를 직접 확인해 주세요.");
+        progress.Report("스피커·디스플레이·충전·카메라·마이크·키보드·포인터 상태를 직접 확인해 주세요.");
         var moduleResults = deviceDiagnostics.Run(owner);
         foreach (var moduleResult in moduleResults)
         {
@@ -64,7 +64,7 @@ public sealed class InspectionCoordinator(
                 cancellationToken);
         }
 
-        progress.Report("모든 항목 검사를 마쳤습니다. 필요하면 카메라·마이크를 재검사한 뒤 최종 제출해 주세요.");
+        progress.Report("모든 항목 검사를 마쳤습니다. 필요하면 항목을 선택해 재검사한 뒤 최종 제출해 주세요.");
     }
 
     public async Task RerunCameraAsync(IWin32Window owner, CancellationToken cancellationToken)
@@ -76,6 +76,15 @@ public sealed class InspectionCoordinator(
     public async Task RerunMicrophoneAsync(IWin32Window owner, CancellationToken cancellationToken)
     {
         var result = deviceDiagnostics.RunMicrophone(owner);
+        await SubmitSingleModuleAsync(result, cancellationToken);
+    }
+
+    public async Task RerunModuleAsync(
+        string testType,
+        IWin32Window owner,
+        CancellationToken cancellationToken)
+    {
+        var result = deviceDiagnostics.RunModule(testType, owner);
         await SubmitSingleModuleAsync(result, cancellationToken);
     }
 
