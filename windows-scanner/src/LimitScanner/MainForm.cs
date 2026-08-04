@@ -15,8 +15,7 @@ public sealed class MainForm : Form
     private readonly Button startButton = new() { Text = "검사 시작", Enabled = false };
     private readonly Label statusLabel = new() { AutoSize = true, Text = "웹의 6자리 코드를 입력해 주세요." };
     private readonly ProgressBar progressBar = new() { Style = ProgressBarStyle.Marquee, Visible = false };
-    private readonly Button rerunCameraButton = new() { Text = "카메라만 다시 검사", Enabled = false, AutoSize = true };
-    private readonly Button rerunMicrophoneButton = new() { Text = "마이크만 다시 검사", Enabled = false, AutoSize = true };
+    private readonly List<Button> rerunButtons = [];
     private readonly Label rerunStatusLabel = new() { AutoSize = true, MaximumSize = new Size(750, 0) };
     private readonly Button finalSubmitButton = new() { Text = "최종 제출", Enabled = false, AutoSize = true };
     private bool hasCompletedFullRun;
@@ -74,11 +73,7 @@ public sealed class MainForm : Form
         pairingCodeTextBox.TextChanged += (_, _) => UpdateStartButton();
         consentCheckBox.CheckedChanged += (_, _) => UpdateStartButton();
         startButton.Click += StartButton_Click;
-        rerunCameraButton.Click += RerunCameraButton_Click;
-        rerunMicrophoneButton.Click += RerunMicrophoneButton_Click;
         finalSubmitButton.Click += FinalSubmitButton_Click;
-        rerunCameraButton.Margin = new Padding(3, 22, 3, 4);
-        rerunMicrophoneButton.Margin = new Padding(3, 4, 3, 4);
         rerunStatusLabel.Margin = new Padding(3, 4, 3, 12);
         finalSubmitButton.Padding = new Padding(18, 8, 18, 8);
         finalSubmitButton.Margin = new Padding(3, 4, 3, 4);
@@ -99,8 +94,7 @@ public sealed class MainForm : Form
         layout.Controls.Add(startButton);
         layout.Controls.Add(progressBar);
         layout.Controls.Add(statusLabel);
-        layout.Controls.Add(rerunCameraButton);
-        layout.Controls.Add(rerunMicrophoneButton);
+        layout.Controls.Add(CreateRerunPanel());
         layout.Controls.Add(rerunStatusLabel);
         layout.Controls.Add(finalSubmitButton);
         Controls.Add(layout);
@@ -158,25 +152,54 @@ public sealed class MainForm : Form
         }
     }
 
-    private async void RerunCameraButton_Click(object? sender, EventArgs eventArgs)
+    private Control CreateRerunPanel()
     {
-        await RerunSingleModuleAsync(coordinator.RerunCameraAsync, "카메라");
-    }
+        var modules = new[]
+        {
+            ("스피커", ModuleTestTypes.Speaker),
+            ("디스플레이", ModuleTestTypes.Display),
+            ("충전", ModuleTestTypes.Charging),
+            ("카메라", ModuleTestTypes.Camera),
+            ("마이크", ModuleTestTypes.Microphone),
+            ("키보드", ModuleTestTypes.Keyboard),
+            ("포인터", ModuleTestTypes.Pointer)
+        };
+        var panel = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true,
+            MaximumSize = new Size(750, 0),
+            Margin = new Padding(3, 22, 3, 4)
+        };
 
-    private async void RerunMicrophoneButton_Click(object? sender, EventArgs eventArgs)
-    {
-        await RerunSingleModuleAsync(coordinator.RerunMicrophoneAsync, "마이크");
+        foreach (var (name, testType) in modules)
+        {
+            var button = new Button
+            {
+                Text = $"{name} 재검사",
+                Enabled = false,
+                AutoSize = true,
+                Padding = new Padding(12, 6, 12, 6),
+                Margin = new Padding(3, 3, 6, 3)
+            };
+            button.Click += async (_, _) => await RerunSingleModuleAsync(testType, name);
+            rerunButtons.Add(button);
+            panel.Controls.Add(button);
+        }
+
+        return panel;
     }
 
     private async Task RerunSingleModuleAsync(
-        Func<IWin32Window, CancellationToken, Task> rerunAsync,
+        string testType,
         string moduleName)
     {
         SetRerunControlsEnabled(false);
         rerunStatusLabel.Text = $"{moduleName} 재검사를 진행하고 있습니다.";
         try
         {
-            await rerunAsync(this, CancellationToken.None);
+            await coordinator.RerunModuleAsync(testType, this, CancellationToken.None);
             rerunStatusLabel.Text = $"{moduleName} 재검사 결과를 전송했습니다.";
         }
         catch (Exception)
@@ -218,8 +241,10 @@ public sealed class MainForm : Form
     private void SetRerunControlsEnabled(bool enabled)
     {
         var available = enabled && hasCompletedFullRun && !hasFinalized;
-        rerunCameraButton.Enabled = available;
-        rerunMicrophoneButton.Enabled = available;
+        foreach (var button in rerunButtons)
+        {
+            button.Enabled = available;
+        }
         finalSubmitButton.Enabled = available;
     }
 

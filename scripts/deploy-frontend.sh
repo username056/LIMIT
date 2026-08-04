@@ -45,9 +45,18 @@ promote_directory() {
     --recursive \
     --exclude "assets/*" \
     --exclude "index.html" \
+    --exclude "downloads/LimitScanner.exe" \
     --exclude "releases/*" \
     --only-show-errors \
     --cache-control "public,max-age=3600,must-revalidate"
+
+  if test -f "$source_dir/downloads/LimitScanner.exe"; then
+    aws s3 cp "$source_dir/downloads/LimitScanner.exe" \
+      "s3://$bucket/downloads/LimitScanner.exe" \
+      --only-show-errors \
+      --content-type "application/vnd.microsoft.portable-executable" \
+      --cache-control "no-cache,no-store,must-revalidate"
+  fi
 
   # index.html is uploaded last so it never points at assets that are not present yet.
   aws s3 cp "$source_dir/index.html" "s3://$bucket/index.html" \
@@ -60,7 +69,7 @@ invalidate_entrypoint() {
   distribution_id=$1
   aws cloudfront create-invalidation \
     --distribution-id "$distribution_id" \
-    --paths "/" "/index.html" \
+    --paths "/" "/index.html" "/downloads/LimitScanner.exe" \
     --query 'Invalidation.Id' \
     --output text
 }
