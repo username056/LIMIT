@@ -9,6 +9,14 @@ public sealed class InteractiveDeviceDiagnostics(
     {
         var results = new List<ModuleResult>(5);
 
+        MessageBox.Show(
+            owner,
+            "이제부터 스피커 → 디스플레이 → 충전 → 카메라 → 마이크 순서로 5가지 항목을 직접 확인합니다.\n"
+                + "각 항목의 안내를 확인한 뒤 정상·이상 있음·건너뛰기 중 하나를 선택해 주세요.",
+            "직접 확인 검사 시작",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information);
+
         using (var speakerForm = new SpeakerDiagnosticForm(audioOutputService))
         {
             speakerForm.ShowDialog(owner);

@@ -21,6 +21,13 @@ public sealed class MicrophoneDiagnosticForm : Form
         Padding = new Padding(28, 12, 28, 12),
         Font = new Font("Segoe UI", 11F)
     };
+    private readonly Button skipButton = new()
+    {
+        Text = "건너뛰기",
+        AutoSize = true,
+        Padding = new Padding(28, 12, 28, 12),
+        Font = new Font("Segoe UI", 11F)
+    };
     private readonly ProgressBar levelBar = new() { Minimum = 0, Maximum = 100, Width = 520 };
     private readonly Label statusLabel = new() { AutoSize = true };
     private bool measureAttempted;
@@ -36,8 +43,8 @@ public sealed class MicrophoneDiagnosticForm : Form
         Result = CreateResult(ModuleUserResults.Skipped);
 
         Text = "마이크 검사";
-        ClientSize = new Size(700, 680);
-        MinimumSize = new Size(700, 680);
+        ClientSize = new Size(800, 1020);
+        MinimumSize = new Size(800, 1020);
         StartPosition = FormStartPosition.CenterParent;
         Font = new Font("Segoe UI", 10F);
         AutoScaleMode = AutoScaleMode.Dpi;
@@ -64,6 +71,7 @@ public sealed class MicrophoneDiagnosticForm : Form
         measureButton.Click += MeasureButton_Click;
         normalButton.Click += (_, _) => Finish(ModuleUserResults.Confirmed);
         issueButton.Click += (_, _) => Finish(ModuleUserResults.ReportedIssue);
+        skipButton.Click += (_, _) => Finish(ModuleUserResults.Skipped);
 
         statusLabel.MaximumSize = new Size(540, 0);
         statusLabel.Text = devices.Count > 0
@@ -76,7 +84,9 @@ public sealed class MicrophoneDiagnosticForm : Form
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false
         };
-        decisions.Controls.AddRange([normalButton, issueButton]);
+        decisions.Controls.AddRange([normalButton, issueButton, skipButton]);
+
+        var stepLabel = DiagnosticUi.CreateStepLabel("5 / 5  마이크");
 
         var scrollPanel = new FlowLayoutPanel
         {
@@ -87,6 +97,7 @@ public sealed class MicrophoneDiagnosticForm : Form
             Padding = new Padding(32, 32, 32, 12)
         };
         scrollPanel.Controls.AddRange([
+            stepLabel,
             title,
             guide,
             new Label { AutoSize = true, Text = "입력 장치", Margin = new Padding(3, 18, 3, 4) },
@@ -100,8 +111,8 @@ public sealed class MicrophoneDiagnosticForm : Form
         var decisionPanel = new Panel
         {
             Dock = DockStyle.Bottom,
-            Height = 130,
-            Padding = new Padding(32, 8, 32, 20)
+            Height = 180,
+            Padding = new Padding(32, 8, 32, 40)
         };
         var decisionInner = new FlowLayoutPanel
         {
@@ -223,6 +234,7 @@ public sealed class MicrophoneDiagnosticForm : Form
         measureButton.Enabled = enabled;
         normalButton.Enabled = enabled && measureAttempted;
         issueButton.Enabled = enabled && measureAttempted;
+        skipButton.Enabled = enabled;
     }
 
     protected override void OnFormClosing(FormClosingEventArgs eventArgs)

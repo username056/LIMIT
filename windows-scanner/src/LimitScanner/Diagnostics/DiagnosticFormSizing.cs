@@ -8,6 +8,12 @@ public static class DiagnosticFormSizing
         var maxHeight = workingArea.Height - 40;
         var maxWidth = workingArea.Width - 40;
 
+        // MinimumSize silently clamps Height/Width assignments below it, so it must
+        // be relaxed first or the shrink below has no effect on a tall/wide form.
+        form.MinimumSize = new Size(
+            Math.Min(form.MinimumSize.Width, maxWidth),
+            Math.Min(form.MinimumSize.Height, maxHeight));
+
         if (form.Height > maxHeight)
         {
             form.Height = maxHeight;

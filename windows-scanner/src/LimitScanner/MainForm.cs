@@ -1,3 +1,4 @@
+using LimitScanner.Diagnostics;
 using LimitScanner.Services;
 
 namespace LimitScanner;
@@ -27,8 +28,8 @@ public sealed class MainForm : Form
         Text = "Limit Windows 자동 검사";
         AutoScaleMode = AutoScaleMode.Dpi;
         Font = new Font("Segoe UI", 10F);
-        ClientSize = new Size(860, 700);
-        MinimumSize = new Size(800, 660);
+        ClientSize = new Size(860, 960);
+        MinimumSize = new Size(800, 900);
         FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = true;
         StartPosition = FormStartPosition.CenterScreen;
@@ -233,5 +234,11 @@ public sealed class MainForm : Form
         {
             UpdateStartButton();
         }
+    }
+
+    protected override void OnLoad(EventArgs eventArgs)
+    {
+        base.OnLoad(eventArgs);
+        DiagnosticFormSizing.FitToWorkingArea(this);
     }
 }

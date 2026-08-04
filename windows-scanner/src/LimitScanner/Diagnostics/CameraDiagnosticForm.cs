@@ -21,6 +21,13 @@ public sealed class CameraDiagnosticForm : Form
         Padding = new Padding(28, 12, 28, 12),
         Font = new Font("Segoe UI", 11F)
     };
+    private readonly Button skipButton = new()
+    {
+        Text = "건너뛰기",
+        AutoSize = true,
+        Padding = new Padding(28, 12, 28, 12),
+        Font = new Font("Segoe UI", 11F)
+    };
     private readonly PictureBox previewBox = new()
     {
         Width = 480,
@@ -46,8 +53,8 @@ public sealed class CameraDiagnosticForm : Form
         Result = CreateResult(ModuleUserResults.Skipped);
 
         Text = "카메라 검사";
-        ClientSize = new Size(760, 960);
-        MinimumSize = new Size(760, 960);
+        ClientSize = new Size(800, 1020);
+        MinimumSize = new Size(800, 1020);
         StartPosition = FormStartPosition.CenterParent;
         Font = new Font("Segoe UI", 10F);
         AutoScaleMode = AutoScaleMode.Dpi;
@@ -71,6 +78,7 @@ public sealed class CameraDiagnosticForm : Form
         captureButton.Click += CaptureButton_Click;
         normalButton.Click += (_, _) => Finish(ModuleUserResults.Confirmed);
         issueButton.Click += (_, _) => Finish(ModuleUserResults.ReportedIssue);
+        skipButton.Click += (_, _) => Finish(ModuleUserResults.Skipped);
 
         statusLabel.MaximumSize = new Size(560, 0);
         statusLabel.Text = "카메라 목록을 불러오는 중입니다.";
@@ -81,7 +89,9 @@ public sealed class CameraDiagnosticForm : Form
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false
         };
-        decisions.Controls.AddRange([normalButton, issueButton]);
+        decisions.Controls.AddRange([normalButton, issueButton, skipButton]);
+
+        var stepLabel = DiagnosticUi.CreateStepLabel("4 / 5  카메라");
 
         var scrollPanel = new FlowLayoutPanel
         {
@@ -92,6 +102,7 @@ public sealed class CameraDiagnosticForm : Form
             Padding = new Padding(32, 32, 32, 12)
         };
         scrollPanel.Controls.AddRange([
+            stepLabel,
             title,
             guide,
             new Label { AutoSize = true, Text = "카메라 장치", Margin = new Padding(3, 18, 3, 4) },
@@ -104,8 +115,8 @@ public sealed class CameraDiagnosticForm : Form
         var decisionPanel = new Panel
         {
             Dock = DockStyle.Bottom,
-            Height = 150,
-            Padding = new Padding(32, 8, 32, 20)
+            Height = 190,
+            Padding = new Padding(32, 8, 32, 40)
         };
         var decisionInner = new FlowLayoutPanel
         {
@@ -242,6 +253,7 @@ public sealed class CameraDiagnosticForm : Form
         captureButton.Enabled = enabled;
         normalButton.Enabled = enabled && captureAttempted;
         issueButton.Enabled = enabled && captureAttempted;
+        skipButton.Enabled = enabled;
     }
 
     protected override void OnFormClosing(FormClosingEventArgs eventArgs)

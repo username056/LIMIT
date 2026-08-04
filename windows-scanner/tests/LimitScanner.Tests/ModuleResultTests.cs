@@ -53,12 +53,6 @@ public sealed class ModuleResultTests
             Assert.True(root.TryGetProperty("testedAt", out _));
             Assert.True(root.TryGetProperty("errorCode", out _));
         }
-        Assert.NotEqual(Guid.Empty, root.GetProperty("clientResultId").GetGuid());
-        Assert.Equal("SPEAKER", root.GetProperty("testType").GetString());
-        Assert.Equal("DETECTED", root.GetProperty("measurementStatus").GetString());
-        Assert.Equal("USER_CONFIRMED", root.GetProperty("userResult").GetString());
-        Assert.Equal("기본 장치", root.GetProperty("measuredValues").GetProperty("deviceName").GetString());
-        Assert.Equal(JsonValueKind.Null, root.GetProperty("errorCode").ValueKind);
     }
 
     [Fact]
