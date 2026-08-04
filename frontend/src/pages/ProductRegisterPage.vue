@@ -2843,10 +2843,7 @@ onMounted(async () => {
               </div>
             </div>
 
-            <div
-              v-if="deviceCheckConfirmationItems.length"
-              class="col-span-full rounded-lg border border-border bg-surface p-6"
-            >
+            <div class="col-span-full rounded-lg border border-border bg-surface p-6">
               <div class="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <h2 class="text-lg font-bold text-text-main">
@@ -2892,6 +2889,12 @@ onMounted(async () => {
                         : deviceCheckStatus(item) === 'FAILED' ? '재점검 필요' : '직접 점검 가능'
                     }}
                   </BaseBadge>
+                </li>
+                <li
+                  v-if="!deviceCheckConfirmationItems.length"
+                  class="rounded-lg border border-dashed border-border p-4 text-sm text-text-sub md:col-span-2"
+                >
+                  자동으로 연결된 실동작 항목이 없습니다. 필요한 항목은 직접 점검할 수 있습니다.
                 </li>
               </ul>
             </div>

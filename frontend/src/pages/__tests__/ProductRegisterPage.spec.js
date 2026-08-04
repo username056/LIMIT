@@ -483,6 +483,17 @@ describe('ProductRegisterPage', () => {
     )
   })
 
+  it('연결된 실동작 항목이 없어도 2단계에서 직접 점검 진입점을 보여준다', async () => {
+    getProductChecklist.mockResolvedValue([])
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await goToCaptureStep(wrapper)
+
+    expect(wrapper.text()).toContain('실동작 점검')
+    expect(wrapper.text()).toContain('카메라·마이크·키보드 등 직접 점검하기')
+    expect(wrapper.text()).toContain('자동으로 연결된 실동작 항목이 없습니다.')
+  })
+
   it('AI 체크리스트 조사 중 진행률과 움직이는 점을 표시한다', async () => {
     let resolveChecklist
     generateChecklist.mockReturnValue(new Promise((resolve) => {
