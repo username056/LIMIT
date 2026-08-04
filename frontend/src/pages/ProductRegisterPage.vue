@@ -50,7 +50,6 @@ import {
 } from '../utils/camera'
 import { MAX_PRICE_DIGITS, formatPriceDigits, toPriceDigits } from '../utils/priceInput'
 import { guideContentFor, guideImageFor } from '../utils/checklistGuideImages'
-import { formatStorage } from '../utils/storage'
 import { CHECKABLE_ITEM_CODES } from '../features/deviceCheck/checkableItemCodes'
 
 const WIZARD_STEPS = [
@@ -80,10 +79,13 @@ const MAX_LISTING_IMAGE_BYTES = 15 * 1024 * 1024
 // 값을 비우면 등록이 400으로 실패합니다. 백엔드에서 해당 제약이 풀리면 이 상수와 payload 항목을 함께 지우세요.
 const DEFAULT_TRADE_REGION = '협의'
 
-// 실제로 많이 쓰이는 용량만 골라 두고, 해당하지 않으면 직접 입력으로 넘어갑니다.
-const STORAGE_OPTIONS = [16, 32, 64, 128, 256, 512, 1024]
-
-const storageOptionLabel = formatStorage
+/*
+  색상·저장 용량은 등록 화면에서 입력받지 않습니다.
+  ---------------------------------------------------------------------------
+  값 자체는 form에 남겨 두고 payload로도 계속 보냅니다. 입력칸만 없앴다고
+  전송에서까지 빼 버리면, 이미 색상·용량이 들어 있는 상품을 수정할 때 그 값이
+  null로 덮여 사라집니다. 화면에서 안 보일 뿐 기존 값은 그대로 지켜집니다.
+*/
 
 // 기종별 초기화 가이드 API/데이터가 아직 준비되지 않아(handover_guide 테이블 미생성),
 // 조회 실패 시 OS 계열별 일반 초기화 안내로 대체합니다. 모델별 가이드가 생기면 이 대체 로직은 제거하세요.
@@ -149,14 +151,6 @@ const form = reactive({
   color: '', storageGb: '',
 })
 
-// 사용자가 직접 입력을 고른 상태. 수정 진입 시 목록에 없는 용량이면 자동으로 직접 입력으로 보여줍니다.
-const isCustomStorage = ref(false)
-const showStorageInput = computed(() => isCustomStorage.value
-  || (form.storageGb !== '' && !STORAGE_OPTIONS.includes(Number(form.storageGb))))
-const storageSelectValue = computed(() => {
-  if (showStorageInput.value) return 'custom'
-  return form.storageGb === '' ? '' : String(form.storageGb)
-})
 // 가격은 form.price에 숫자만 담아 두고, 화면에는 천 단위 쉼표를 붙여 보여줍니다.
 // type="number"의 증감 화살표가 고가 상품 입력에 방해가 되어 문자 입력으로 바꿨습니다.
 // 안내 문구는 평소에 숨기고, 입력이 실제로 거부됐을 때만 그 이유를 보여줍니다.
@@ -186,17 +180,6 @@ const priceRejectionMessage = computed(() => {
   if (priceRejection.value === 'non-digit') return '숫자만 입력해 주세요.'
   return ''
 })
-
-function onStorageSelect(event) {
-  const { value } = event.target
-  if (value === 'custom') {
-    isCustomStorage.value = true
-    form.storageGb = ''
-    return
-  }
-  isCustomStorage.value = false
-  form.storageGb = value
-}
 
 
 // 체크리스트 관련: templateItems는 항목 가이드/허용 형식을 보여주기 위한 모델 템플릿,
@@ -688,7 +671,6 @@ function resetForm() {
   draftProgressResults.value = new Map()
   activeCaptureItemId.value = null
   handoverGuide.value = null
-  isCustomStorage.value = false
   priceRejection.value = ''
   stopChecklistLoading()
   clearCaptureState()
@@ -1742,7 +1724,49 @@ onMounted(async () => {
             <p class="mt-1 text-sm text-text-sub">
               선택한 모델에 맞는 검증 체크리스트가 자동으로 연결됩니다. 다음 단계에서 항목별로 사진·영상을 등록하게 됩니다.
             </p>
+
+            <!--
+              글제목과 가격을 맨 위로 올렸습니다.
+              -------------------------------------------------------------------
+              둘 다 반드시 있어야 다음 단계로 넘어가는 값인데, 예전에는 카테고리·모델
+              선택과 체크리스트가 다 끝난 뒤 화면 맨 아래에 있었습니다. 무엇을 써야
+              하는지 알려면 한참 내려가야 했습니다.
+            -->
             <div class="mt-6 grid gap-5 sm:grid-cols-2">
+              <!-- 서버 필드명은 name이지만, 판매자가 쓰는 것은 판매글의 제목이라 화면에서는 '글제목'으로 부릅니다. -->
+              <label class="text-sm font-semibold text-text-main">글제목<span class="ml-0.5 text-red-500">*</span><input
+                v-model.trim="form.name"
+                required
+                maxlength="100"
+                placeholder="예: 갤럭시 S24 256GB 자급제"
+                class="mt-2 w-full rounded-md border border-border px-3 py-3 font-normal outline-none focus:border-primary"
+              ></label>
+              <label class="text-sm font-semibold text-text-main">
+                가격<span class="ml-0.5 text-red-500">*</span>
+                <div class="relative mt-2">
+                  <input
+                    :value="priceFormatted"
+                    required
+                    type="text"
+                    inputmode="numeric"
+                    autocomplete="off"
+                    placeholder="판매 가격"
+                    class="w-full rounded-md border border-border px-3 py-3 pr-10 font-normal outline-none focus:border-primary"
+                    @input="onPriceInput"
+                  >
+                  <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm font-normal text-text-sub">원</span>
+                </div>
+                <!-- 자리를 미리 잡아 두어 문구가 떠도 아래 입력칸이 밀리지 않게 합니다. -->
+                <span
+                  role="alert"
+                  class="mt-1 block min-h-[1.125rem] text-xs font-normal text-red-600"
+                >
+                  {{ priceRejectionMessage }}
+                </span>
+              </label>
+            </div>
+
+            <div class="mt-5 grid gap-5 sm:grid-cols-2">
               <label class="text-sm font-semibold text-text-main">카테고리<span class="ml-0.5 text-red-500">*</span>
                 <select
                   v-model="form.categoryId"
@@ -2091,80 +2115,16 @@ onMounted(async () => {
               </li>
             </ul>
 
-            <div class="mt-6 grid gap-5 sm:grid-cols-2">
-              <!-- 서버 필드명은 name이지만, 판매자가 쓰는 것은 판매글의 제목이라 화면에서는 '글제목'으로 부릅니다. -->
-              <label class="text-sm font-semibold text-text-main">글제목<span class="ml-0.5 text-red-500">*</span><input
-                v-model.trim="form.name"
-                required
-                maxlength="100"
-                placeholder="예: 갤럭시 S24 256GB 자급제"
+            <label class="mt-6 block text-sm font-semibold text-text-main sm:col-span-2">
+              상품 설명
+              <textarea
+                v-model.trim="form.description"
+                maxlength="2000"
+                rows="5"
+                placeholder="외관 상태, 사용 기간, 구성품 등을 알려 주세요."
                 class="mt-2 w-full rounded-md border border-border px-3 py-3 font-normal outline-none focus:border-primary"
-              ></label>
-              <label class="text-sm font-semibold text-text-main">
-                가격<span class="ml-0.5 text-red-500">*</span>
-                <div class="relative mt-2">
-                  <input
-                    :value="priceFormatted"
-                    required
-                    type="text"
-                    inputmode="numeric"
-                    autocomplete="off"
-                    placeholder="판매 가격"
-                    class="w-full rounded-md border border-border px-3 py-3 pr-10 font-normal outline-none focus:border-primary"
-                    @input="onPriceInput"
-                  >
-                  <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm font-normal text-text-sub">원</span>
-                </div>
-                <!-- 자리를 미리 잡아 두어 문구가 떠도 아래 입력칸이 밀리지 않게 합니다. -->
-                <span
-                  role="alert"
-                  class="mt-1 block min-h-[1.125rem] text-xs font-normal text-red-600"
-                >
-                  {{ priceRejectionMessage }}
-                </span>
-              </label>
-              <label class="text-sm font-semibold text-text-main">색상<input
-                v-model.trim="form.color"
-                maxlength="50"
-                placeholder="예: 오닉스 블랙"
-                class="mt-2 w-full rounded-md border border-border px-3 py-3 font-normal outline-none focus:border-primary"
-              ></label>
-              <label class="text-sm font-semibold text-text-main">
-                저장 용량
-                <select
-                  :value="storageSelectValue"
-                  aria-label="저장 용량 선택"
-                  class="mt-2 w-full rounded-md border border-border bg-bg px-3 py-3 font-normal outline-none focus:border-primary"
-                  @change="onStorageSelect"
-                >
-                  <option value="">용량 선택</option><option
-                    v-for="gb in STORAGE_OPTIONS"
-                    :key="gb"
-                    :value="gb"
-                  >{{ storageOptionLabel(gb) }}</option><option value="custom">직접 입력</option>
-                </select>
-                <input
-                  v-if="showStorageInput"
-                  v-model="form.storageGb"
-                  min="1"
-                  type="number"
-                  inputmode="numeric"
-                  placeholder="용량을 GB 단위 숫자로 입력 (예: 384)"
-                  aria-label="저장 용량 직접 입력"
-                  class="mt-2 w-full rounded-md border border-border px-3 py-3 font-normal outline-none focus:border-primary"
-                >
-              </label>
-              <label class="text-sm font-semibold text-text-main sm:col-span-2">
-                상품 설명
-                <textarea
-                  v-model.trim="form.description"
-                  maxlength="2000"
-                  rows="5"
-                  placeholder="외관 상태, 사용 기간, 구성품 등을 알려 주세요."
-                  class="mt-2 w-full rounded-md border border-border px-3 py-3 font-normal outline-none focus:border-primary"
-                />
-              </label>
-            </div>
+              />
+            </label>
           </section>
 
           <section

@@ -116,7 +116,6 @@ async function fillDeviceStep(wrapper) {
 
   await wrapper.find('input[placeholder="예: 갤럭시 S24 256GB 자급제"]').setValue('갤럭시 북 테스트 상품')
   await wrapper.find('input[placeholder="판매 가격"]').setValue('850000')
-  await wrapper.find('select[aria-label="저장 용량 선택"]').setValue('256')
 }
 
 async function goToCaptureStep(wrapper) {
@@ -230,8 +229,6 @@ describe('ProductRegisterPage', () => {
       confirmedFeatures: [],
     })
 
-    await wrapper.find('input[placeholder="예: 오닉스 블랙"]').setValue('그라파이트')
-    await wrapper.find('select[aria-label="저장 용량 선택"]').setValue('512')
     await wrapper.find('textarea').setValue('상태가 좋은 테스트 상품입니다.')
     await buttonByText(wrapper, '다음 단계').trigger('click')
     await flushPromises()
@@ -242,8 +239,9 @@ describe('ProductRegisterPage', () => {
       name: '갤럭시 북 테스트 상품',
       description: '상태가 좋은 테스트 상품입니다.',
       price: 850000,
-      color: '그라파이트',
-      storageGb: 512,
+      // 등록 화면에서 색상·용량은 받지 않습니다. 값이 없으면 null로 보냅니다.
+      color: null,
+      storageGb: null,
       // 화면에서는 거래 지역을 받지 않지만 백엔드 @NotBlank 때문에 기본값을 채워 보냅니다.
       tradeRegion: '협의',
       confirmedFeatures: [],
@@ -566,25 +564,28 @@ describe('ProductRegisterPage', () => {
     expect(routerPushMock).toHaveBeenCalledWith({ name: 'seller-products' })
   })
 
-  it('저장 용량은 드롭다운으로 고르거나 직접 입력할 수 있다', async () => {
+  it('등록 폼에서 색상과 저장 용량을 받지 않는다', async () => {
     const wrapper = mount(ProductRegisterPage, { global: globalOptions })
     await flushPromises()
 
-    const storageSelect = wrapper.find('select[aria-label="저장 용량 선택"]')
-    expect(wrapper.text()).toContain('1TB')
+    expect(wrapper.find('select[aria-label="저장 용량 선택"]').exists()).toBe(false)
     expect(wrapper.find('input[aria-label="저장 용량 직접 입력"]').exists()).toBe(false)
+    expect(wrapper.find('input[placeholder="예: 오닉스 블랙"]').exists()).toBe(false)
+  })
 
-    // fillDeviceStep이 드롭다운으로 용량을 채우므로, 직접 입력은 그 뒤에 설정합니다.
-    await fillDeviceStep(wrapper)
-    await storageSelect.setValue('custom')
-    const customInput = wrapper.find('input[aria-label="저장 용량 직접 입력"]')
-    expect(customInput.exists()).toBe(true)
-
-    await customInput.setValue('384')
-    await buttonByText(wrapper, '다음 단계').trigger('click')
+  it('글제목과 가격을 카테고리보다 먼저 묻는다', async () => {
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
     await flushPromises()
 
-    expect(createProduct).toHaveBeenCalledWith(expect.objectContaining({ storageGb: 384 }))
+    // 둘 다 없으면 다음 단계로 못 넘어가는 값이라 맨 위에 둡니다.
+    const order = wrapper.findAll('label').map((label) => label.text())
+    const titleIndex = order.findIndex((text) => text.startsWith('글제목'))
+    const priceIndex = order.findIndex((text) => text.startsWith('가격'))
+    const categoryIndex = order.findIndex((text) => text.startsWith('카테고리'))
+
+    expect(titleIndex).toBeGreaterThanOrEqual(0)
+    expect(titleIndex).toBeLessThan(categoryIndex)
+    expect(priceIndex).toBeLessThan(categoryIndex)
   })
 
   it('필수 촬영 항목이 남으면 팝업으로 알리되 계속 작성하기를 누르면 그 단계에 머문다', async () => {
