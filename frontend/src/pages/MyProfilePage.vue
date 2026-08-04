@@ -7,7 +7,6 @@ import BaseBadge from '../components/BaseBadge.vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseCard from '../components/BaseCard.vue'
 import BaseInput from '../components/BaseInput.vue'
-import BaseToggle from '../components/BaseToggle.vue'
 import BaseAddressInput from '../components/BaseAddressInput.vue'
 import { changeMyPassword, getMyProfile, updateMyProfile } from '../api/member'
 import { getSocialAccounts, unlinkSocialAccount } from '../api/auth'
@@ -117,30 +116,6 @@ const addressForm = reactive({
   receiverPhone: '',
   isDefault: false,
 })
-
-// 알림 발송 API가 아직 없어 토글 상태는 화면 안에서만 유지되는 예시 값입니다.
-const notificationSettings = reactive({
-  priceAlert: true,
-  inspectionAlert: true,
-  rtcAlert: false,
-})
-const notificationItems = [
-  {
-    key: 'priceAlert',
-    label: '좋아요한 상품 가격 변동 알림',
-    description: '좋아요한 상품의 가격이 낮아지면 즉시 알림을 발송합니다.',
-  },
-  {
-    key: 'inspectionAlert',
-    label: '자가 기기 검수 완료 소식',
-    description: '새로운 전문 체크리스트가 등록되거나 업데이트 되었을 때 알려드립니다.',
-  },
-  {
-    key: 'rtcAlert',
-    label: '실시간 WebRTC 라이브 화상 거래 검증 안내',
-    description: '판매자와 합의된 실시간 화상 검증 세션 예정 일정을 전송합니다.',
-  },
-]
 
 function formatDate(value) {
   if (!value) return '-'
@@ -625,33 +600,6 @@ onMounted(() => {
               </BaseButton>
             </div>
           </form>
-        </section>
-
-        <section
-          id="notification-section"
-          class="p-6"
-        >
-          <h2 class="text-lg font-bold text-text-main">
-            실시간 알림 및 마케팅 설정
-          </h2>
-          <!-- 한 소제목 아래 묶인 항목들이라 사이에 선을 긋지 않습니다. 간격으로만 나눕니다. -->
-          <ul class="mt-5 space-y-5">
-            <li
-              v-for="item in notificationItems"
-              :key="item.key"
-              class="flex items-center justify-between gap-4"
-            >
-              <div>
-                <p class="text-sm font-bold text-text-main">
-                  {{ item.label }}
-                </p>
-                <p class="mt-1 text-[13px] text-text-sub">
-                  {{ item.description }}
-                </p>
-              </div>
-              <BaseToggle v-model="notificationSettings[item.key]" />
-            </li>
-          </ul>
         </section>
 
         <section class="p-6">
