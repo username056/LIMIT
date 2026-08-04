@@ -12,6 +12,7 @@ public static class ModuleMeasurementStatuses
     public const string Detected = "DETECTED";
     public const string NotDetected = "NOT_DETECTED";
     public const string ExecutionFailed = "EXECUTION_FAILED";
+    public const string NotExecuted = "NOT_EXECUTED";
 }
 
 public static class ModuleUserResults
