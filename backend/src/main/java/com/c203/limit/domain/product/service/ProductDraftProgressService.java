@@ -3,6 +3,7 @@ package com.c203.limit.domain.product.service;
 import com.c203.limit.domain.inspection.entity.ListingChecklistItem;
 import com.c203.limit.domain.inspection.enums.DeviceCheckResult;
 import com.c203.limit.domain.inspection.enums.EvidenceType;
+import com.c203.limit.domain.inspection.enums.TestType;
 import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
 import com.c203.limit.domain.product.dto.request.UpdateProductDraftProgressRequest;
 import com.c203.limit.domain.product.dto.response.ProductDraftProgressResponse;
@@ -14,6 +15,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.EnumMap;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,6 +25,14 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ProductDraftProgressService {
     private static final Logger log = LoggerFactory.getLogger(ProductDraftProgressService.class);
+    private static final Set<String> WEB_DEVICE_CHECK_ITEM_CODES = Set.of(
+            "LAP-FTR-SPK",
+            "LAP-DSP-003",
+            "LAP-CHG-007",
+            "LAP-FTR-CAM",
+            "LAP-FTR-MIC",
+            "LAP-KBD-005",
+            "LAP-PAD-006");
 
     private final ListingRepository listings;
     private final ListingChecklistItemRepository checklistItems;
@@ -60,16 +70,30 @@ public class ProductDraftProgressService {
                         UpdateProductDraftProgressRequest.ChecklistItemResult::checklistItemId,
                         UpdateProductDraftProgressRequest.ChecklistItemResult::result));
 
-        Set<Long> confirmationIds = new HashSet<>();
+        Set<Long> checkableIds = new HashSet<>();
         for (ListingChecklistItem item : items) {
-            if (item.getEvidenceType() != EvidenceType.SELLER_CONFIRMATION) continue;
-            confirmationIds.add(item.getId());
+            if (!isWebDeviceCheckItem(item)) continue;
+            checkableIds.add(item.getId());
             DeviceCheckResult result = requested.get(item.getId());
             if (result != null) item.applyDeviceCheckResult(result);
-            else item.markPending();
+            else if (item.getEvidenceType() == EvidenceType.SELLER_CONFIRMATION) item.markPending();
         }
-        if (!confirmationIds.containsAll(requested.keySet())) {
+        if (!checkableIds.containsAll(requested.keySet())) {
             throw new BusinessException(ErrorCode.ITEM_NOT_FOUND);
+        }
+        if (request.deviceResults() != null) {
+            List<UpdateProductDraftProgressRequest.WebDeviceResult> deviceResults =
+                    request.deviceResults();
+            long distinctTypeCount = deviceResults.stream()
+                    .map(UpdateProductDraftProgressRequest.WebDeviceResult::testType)
+                    .distinct()
+                    .count();
+            if (distinctTypeCount != deviceResults.size()) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+            }
+            Map<TestType, DeviceCheckResult> webResults = new EnumMap<>(TestType.class);
+            deviceResults.forEach(result -> webResults.put(result.testType(), result.result()));
+            listing.updateWebDeviceCheckResults(webResults);
         }
         listing.updateDraftStep(request.step());
         log.info(
@@ -88,10 +112,17 @@ public class ProductDraftProgressService {
     private ProductDraftProgressResponse response(
             Listing listing, List<ListingChecklistItem> items) {
         Map<Long, DeviceCheckResult> results = items.stream()
-                .filter(item -> item.getEvidenceType() == EvidenceType.SELLER_CONFIRMATION)
+                .filter(this::isWebDeviceCheckItem)
                 .filter(item -> item.getDeviceCheckResult() != null)
                 .collect(Collectors.toMap(
                         ListingChecklistItem::getId, ListingChecklistItem::getDeviceCheckResult));
-        return new ProductDraftProgressResponse(listing.getDraftStep(), results);
+        Map<TestType, DeviceCheckResult> deviceResults = listing.getWebDeviceCheckResults() == null
+                ? Map.of()
+                : Map.copyOf(listing.getWebDeviceCheckResults());
+        return new ProductDraftProgressResponse(listing.getDraftStep(), results, deviceResults);
+    }
+
+    private boolean isWebDeviceCheckItem(ListingChecklistItem item) {
+        return WEB_DEVICE_CHECK_ITEM_CODES.contains(item.getItemCode());
     }
 }

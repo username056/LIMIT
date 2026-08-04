@@ -7,51 +7,41 @@ public sealed class InteractiveDeviceDiagnostics(
 {
     public IReadOnlyList<ModuleResult> Run(IWin32Window owner)
     {
-        var results = new List<ModuleResult>(5);
-
-        MessageBox.Show(
-            owner,
-            "이제부터 스피커 → 디스플레이 → 충전 → 카메라 → 마이크 순서로 5가지 항목을 직접 확인합니다.\n"
-                + "각 항목의 안내를 확인한 뒤 정상·이상 있음·건너뛰기 중 하나를 선택해 주세요.",
-            "직접 확인 검사 시작",
-            MessageBoxButtons.OK,
-            MessageBoxIcon.Information);
-
-        using (var speakerForm = new SpeakerDiagnosticForm(audioOutputService))
-        {
-            speakerForm.ShowDialog(owner);
-            results.Add(speakerForm.Result);
-        }
-
-        using (var displayForm = new DisplayDiagnosticForm())
-        {
-            displayForm.ShowDialog(owner);
-            results.Add(displayForm.Result);
-        }
-
-        using (var chargingForm = new ChargingDiagnosticForm())
-        {
-            chargingForm.ShowDialog(owner);
-            results.Add(chargingForm.Result);
-        }
-
-        results.Add(RunCamera(owner));
-        results.Add(RunMicrophone(owner));
-
-        return results;
+        using var form = new InspectionFlowForm(CreateModules());
+        form.ShowDialog(owner);
+        return form.Results;
     }
 
-    public ModuleResult RunCamera(IWin32Window owner)
+    public ModuleResult RunCamera(IWin32Window owner) => RunDialog(owner, new CameraDiagnosticForm(cameraCaptureService));
+
+    public ModuleResult RunMicrophone(IWin32Window owner) => RunDialog(owner, new MicrophoneDiagnosticForm(microphoneInputService));
+
+    public ModuleResult RunModule(string testType, IWin32Window owner)
     {
-        using var cameraForm = new CameraDiagnosticForm(cameraCaptureService);
-        cameraForm.ShowDialog(owner);
-        return cameraForm.Result;
+        var module = CreateModules().SingleOrDefault(candidate => candidate.TestType == testType)
+            ?? throw new ArgumentOutOfRangeException(nameof(testType), testType, "지원하지 않는 검사 유형입니다.");
+        return module.Run(owner);
     }
 
-    public ModuleResult RunMicrophone(IWin32Window owner)
+    private IReadOnlyList<InspectionModule> CreateModules() =>
+    [
+        new("스피커", ModuleTestTypes.Speaker, owner => RunDialog(owner, new SpeakerDiagnosticForm(audioOutputService))),
+        new("디스플레이", ModuleTestTypes.Display, owner => RunDialog(owner, new DisplayDiagnosticForm())),
+        new("충전", ModuleTestTypes.Charging, owner => RunDialog(owner, new ChargingDiagnosticForm())),
+        new("카메라", ModuleTestTypes.Camera, RunCamera),
+        new("마이크", ModuleTestTypes.Microphone, RunMicrophone),
+        new("키보드", ModuleTestTypes.Keyboard, owner => RunDialog(owner, new KeyboardDiagnosticForm())),
+        new("포인터", ModuleTestTypes.Pointer, owner => RunDialog(owner, new PointerDiagnosticForm()))
+    ];
+
+    private static ModuleResult RunDialog(IWin32Window owner, Form form)
     {
-        using var microphoneForm = new MicrophoneDiagnosticForm(microphoneInputService);
-        microphoneForm.ShowDialog(owner);
-        return microphoneForm.Result;
+        using (form)
+        {
+            form.ShowDialog(owner);
+            return (ModuleResult)form.GetType().GetProperty("Result")!.GetValue(form)!;
+        }
     }
 }
+
+public sealed record InspectionModule(string Name, string TestType, Func<IWin32Window, ModuleResult> Run);
