@@ -13,6 +13,7 @@ import com.c203.limit.domain.inspection.entity.ListingChecklistItem;
 import com.c203.limit.domain.inspection.entity.OcrResult;
 import com.c203.limit.domain.inspection.enums.DiagnosisFieldName;
 import com.c203.limit.domain.inspection.enums.DiagnosisSourceType;
+import com.c203.limit.domain.inspection.enums.AutomationType;
 import com.c203.limit.domain.inspection.enums.OcrFieldType;
 import com.c203.limit.domain.inspection.enums.ParseStatus;
 import com.c203.limit.domain.inspection.repository.BatteryReportResultRepository;
@@ -218,6 +219,25 @@ class DiagnosisValueConfirmationServiceTests {
                         BusinessException.class,
                         exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FIELD_NOT_EDITABLE));
         verifyNoInteractions(ocrResultRepository, dxdiagResultRepository, batteryReportResultRepository);
+    }
+
+    @Test
+    void savesDeviceInfoValueWithoutEvidence() {
+        stubItemAndOwnership();
+        when(listingChecklistItem.getItemCode()).thenReturn("LAP-SCR-013");
+        when(diagnosisAggregationService.getFieldValue(ITEM_ID, DiagnosisFieldName.MODEL_NAME))
+                .thenReturn(new DiagnosisAggregationService.DiagnosisFieldValue(null, null, null, null));
+
+        DiagnosisValueUpdateResponse response =
+                service.confirm(
+                        ITEM_ID,
+                        SELLER_ID,
+                        new DiagnosisValueUpdateRequest("MODEL_NAME", "Galaxy Book4 Ultra"));
+
+        org.mockito.Mockito.verify(listingChecklistItem)
+                .correctManualDeviceInfo(DiagnosisFieldName.MODEL_NAME, "Galaxy Book4 Ultra");
+        org.mockito.Mockito.verify(listingChecklistItemRepository).save(listingChecklistItem);
+        assertThat(response.getConfirmedValue()).isEqualTo("Galaxy Book4 Ultra");
     }
 
     @Test
