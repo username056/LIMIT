@@ -209,6 +209,20 @@ public class Listing extends BaseTimeEntity {
         this.customModelName = trimToNull(customModelName);
     }
 
+    /** 카탈로그에 없는 기기를 직접 입력해 등록했는지 여부. */
+    public boolean hasCustomModel() {
+        return customManufacturer != null && customModelName != null;
+    }
+
+    /**
+     * 선택 기능 체크리스트 항목을 append하기 위해 매물 전용 DRAFT 템플릿으로 전환하거나 교체한다.
+     * 등록 시점에 선택 기능이 없어 카테고리 공유 PUBLISHED 템플릿을 쓰던 매물이, 수정 화면에서 처음
+     * 기능을 선택하는 순간 이 메서드로 전용 템플릿을 갖게 된다.
+     */
+    public void changeChecklistTemplate(Long checklistTemplateId) {
+        this.checklistTemplateId = checklistTemplateId;
+    }
+
     /**
      * 등록 시점의 카탈로그 참조와 사양 스냅샷을 확정한다.
      *

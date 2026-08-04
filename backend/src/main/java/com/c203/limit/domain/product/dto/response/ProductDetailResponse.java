@@ -2,6 +2,7 @@ package com.c203.limit.domain.product.dto.response;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.List;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Getter;
@@ -58,4 +59,10 @@ public class ProductDetailResponse {
 
     @Schema(description = "이 매물로 열린 문의 채팅방 수", example = "3")
     private final Long chatRoomCount;
+
+    @Schema(description = "카탈로그에 없는 기기를 직접 입력해 등록했는지 여부. 커스텀 모델은 수정 시 기능 체크리스트를 바꿀 수 없다.")
+    private final boolean customModel;
+
+    @Schema(description = "판매자가 확정한 선택 기능 코드 목록. 수정 화면 체크박스 복원에 그대로 쓸 수 있다.")
+    private final List<String> confirmedFeatures;
 }

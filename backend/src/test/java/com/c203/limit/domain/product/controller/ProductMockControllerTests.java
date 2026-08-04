@@ -330,7 +330,7 @@ class ProductMockControllerTests {
         when(productApplicationService.findPublicDetail(1001L))
                 .thenReturn(new ProductDetailResponse(
                         1001L, 55L, null, null, "테스트 상품", null, null, "ON_SALE", null,
-                        null, null, null, null, 128L, 12L, 3L));
+                        null, null, null, null, 128L, 12L, 3L, false, List.of()));
         mockMvc.perform(get("/api/v1/products/1001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.productId").value(1001))

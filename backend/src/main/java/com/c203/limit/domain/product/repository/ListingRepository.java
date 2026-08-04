@@ -1,6 +1,7 @@
 package com.c203.limit.domain.product.repository;
 
 import com.c203.limit.domain.product.entity.Listing;
+import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -10,6 +11,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.domain.Specification;
@@ -29,6 +31,18 @@ public interface ListingRepository
 
     @EntityGraph(attributePaths = {"category", "category.parent"})
     Optional<Listing> findByIdAndSellerIdAndDeletedAtIsNull(Long id, Long sellerId);
+
+    /**
+     * 선택 기능 체크리스트 재구성처럼 listing_checklist_item 쓰기가 뒤따르는 갱신에서 쓴다. 동시에
+     * 들어온 두 PATCH가 같은 매물을 서로 다른 스냅샷 기준으로 갱신하지 않도록 행 잠금을 건다.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query(
+            "select listing from Listing listing"
+                    + " where listing.id = :id and listing.sellerId = :sellerId"
+                    + " and listing.deletedAt is null")
+    Optional<Listing> findByIdAndSellerIdAndDeletedAtIsNullForUpdate(
+            @Param("id") Long id, @Param("sellerId") Long sellerId);
 
     @EntityGraph(attributePaths = "category")
     Page<Listing> findBySellerIdAndDeletedAtIsNull(Long sellerId, Pageable pageable);
@@ -64,6 +78,9 @@ public interface ListingRepository
     long countBySellerIdAndStatusAndDeletedAtIsNull(Long sellerId, ListingStatus status);
 
     boolean existsBySellerIdAndTitleAndDeletedAtIsNull(Long sellerId, String title);
+
+    /** 매물 전용(DRAFT) 체크리스트 템플릿에 항목을 이어 붙이기 전, 다른 매물과 공유되지 않는지 확인한다. */
+    long countByChecklistTemplateId(Long checklistTemplateId);
 
     @EntityGraph(attributePaths = "category")
     Page<Listing> findBySellerIdAndStatusAndDeletedAtIsNull(
