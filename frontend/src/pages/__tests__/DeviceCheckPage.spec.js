@@ -90,40 +90,40 @@ describe('DeviceCheckPage', () => {
   })
 
   it('키보드에 응답 없는 키가 있으면 FAILED로 저장한다', async () => {
-    const wrapper = await mountAndLoad({ step: 3, results: {} })
+    const wrapper = await mountAndLoad({ step: 2, results: {} })
 
     await runKeyboardStepAndSave(wrapper, ['KeyA'])
 
     expect(updateProductDraftProgress).toHaveBeenCalledWith('1', {
-      step: 3,
+      step: 2,
       results: [{ checklistItemId: 5, result: 'FAILED' }],
     })
   })
 
   it('이전에 SUCCESS였던 항목이 이번 점검에서 실패하면 FAILED로 덮어써진다', async () => {
-    const wrapper = await mountAndLoad({ step: 3, results: { 5: 'SUCCESS' } })
+    const wrapper = await mountAndLoad({ step: 2, results: { 5: 'SUCCESS' } })
 
     await runKeyboardStepAndSave(wrapper, ['KeyB'])
 
     expect(updateProductDraftProgress).toHaveBeenCalledWith('1', {
-      step: 3,
+      step: 2,
       results: [{ checklistItemId: 5, result: 'FAILED' }],
     })
   })
 
   it('모든 키를 다 누르면 SUCCESS로 저장한다', async () => {
-    const wrapper = await mountAndLoad({ step: 3, results: {} })
+    const wrapper = await mountAndLoad({ step: 2, results: {} })
 
     await runKeyboardStepAndSave(wrapper, [])
 
     expect(updateProductDraftProgress).toHaveBeenCalledWith('1', {
-      step: 3,
+      step: 2,
       results: [{ checklistItemId: 5, result: 'SUCCESS' }],
     })
   })
 
-  it('저장하고 돌아가면 등록 3단계로 되돌린다', async () => {
-    const wrapper = await mountAndLoad({ step: 3, results: {} })
+  it('저장하고 돌아가면 등록 2단계로 되돌린다', async () => {
+    const wrapper = await mountAndLoad({ step: 2, results: {} })
 
     await runKeyboardStepAndSave(wrapper, [])
 
@@ -131,7 +131,7 @@ describe('DeviceCheckPage', () => {
     expect(routerPushMock).toHaveBeenCalledWith({
       name: 'seller-product-edit',
       params: { productId: '1' },
-      query: { step: '3' },
+      query: { step: '2' },
     })
   })
 })

@@ -144,7 +144,7 @@ const reinspectionRequestKey = computed(
 /*
   잠깐 나갔다 돌아왔을 때 되돌아갈 단계.
   ---------------------------------------------------------------------------
-  실동작 점검 화면이 ?step=3으로 돌려보냅니다. 1~3만 받습니다 — 주소를 직접 고쳐
+  실동작 점검 화면이 ?step=2로 돌려보냅니다. 1~3만 받습니다 — 주소를 직접 고쳐
   step=9로 들어와도 없는 단계가 열려 화면이 비지 않게 합니다.
 */
 const returnStep = computed(() => {
@@ -305,6 +305,11 @@ function stopWindowsInspectionPolling() {
 async function refreshAutomatedDiagnoses() {
   if (!currentProductId.value) return
   checklistItems.value = await getProductChecklist(currentProductId.value)
+  checklistItems.value
+    .filter((item) => item.evidenceType === 'SELLER_CONFIRMATION')
+    .forEach((item) => {
+      confirmState[item.checklistItemId] = item.status === 'COMPLETED'
+    })
   await Promise.allSettled(checklistItems.value
     .filter((item) => allDiagnosisFieldNamesFor(item).length > 0)
     .map((item) => refreshDiagnosis(item, { revealEmptyFields: true })))
@@ -1104,7 +1109,7 @@ function goToStep4() {
     }
     if (missingDeviceCheck.length) {
       sections.push(
-        `[실동작 자동 점검]\n${missingDeviceCheck.map((item) => `· ${item.name}`).join('\n')}\n"실동작 자동 점검하기" 버튼을 눌러 직접 확인해 주세요.`,
+        `[실동작 점검]\n${missingDeviceCheck.map((item) => `· ${item.name}`).join('\n')}\n2단계의 "직접 점검하기" 버튼을 눌러 확인해 주세요.`,
       )
     }
     openAlert(sections.join('\n\n'))
@@ -1700,10 +1705,14 @@ async function startEdit(productId) {
       : null
     if (draftProgress) {
       draftProgressResults.value = progressResultsMap(draftProgress.results) || new Map()
-      Object.keys(confirmState).forEach((key) => { confirmState[key] = false })
-      draftProgressResults.value.forEach((result, itemId) => {
-        confirmState[itemId] = result === DEVICE_CHECK_RESULT.SUCCESS
-      })
+      checklistItems.value
+        .filter((item) => item.evidenceType === 'SELLER_CONFIRMATION')
+        .forEach((item) => {
+          const savedResult = draftProgressResults.value.get(item.checklistItemId)
+          confirmState[item.checklistItemId] = savedResult
+            ? savedResult === DEVICE_CHECK_RESULT.SUCCESS
+            : item.status === 'COMPLETED'
+        })
     }
     activeCaptureItemId.value = mediaChecklistItems.value[0]?.checklistItemId || null
     const hasEvidence = mediaChecklistItems.value.some(
@@ -2401,7 +2410,7 @@ onMounted(async () => {
                   Windows 자동 검사
                 </h3>
                 <p class="mt-1 text-xs leading-5 text-text-sub">
-                  Limit 진단 프로그램으로 모델명·저장 용량·OS 버전·CPU·RAM·GPU와 배터리 정보를 자동으로 채울 수 있습니다.
+                  Limit 진단 프로그램으로 기기 정보와 점검 결과를 자동으로 입력할 수 있습니다.
                   비밀번호와 개인 파일은 수집하지 않습니다.
                 </p>
                 <div class="mt-3 flex flex-wrap items-center gap-2">
@@ -2833,6 +2842,59 @@ onMounted(async () => {
                 <p>• 흔들림을 줄이려면 촬영 순간 잠시 호흡을 멈추고 1초간 유지해 주세요.</p>
               </div>
             </div>
+
+            <div
+              v-if="deviceCheckConfirmationItems.length"
+              class="col-span-full rounded-lg border border-border bg-surface p-6"
+            >
+              <div class="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <h2 class="text-lg font-bold text-text-main">
+                    실동작 점검
+                  </h2>
+                  <p class="mt-1 text-sm text-text-sub">
+                    진단 프로그램으로 완료된 항목은 자동 반영됩니다. 완료되지 않은 항목은 직접 점검할 수 있습니다.
+                  </p>
+                </div>
+                <BaseButton
+                  v-if="currentProductId"
+                  variant="outline"
+                  :to="{ name: 'seller-product-device-check', params: { productId: currentProductId } }"
+                >
+                  카메라·마이크·키보드 등 직접 점검하기
+                </BaseButton>
+              </div>
+
+              <ul class="mt-4 grid gap-3 md:grid-cols-2">
+                <li
+                  v-for="item in deviceCheckConfirmationItems"
+                  :key="item.checklistItemId"
+                  class="flex items-start justify-between gap-3 rounded-lg border border-border p-4"
+                >
+                  <span>
+                    <span class="block text-sm font-bold text-text-main">
+                      {{ item.name }}<span
+                        v-if="isRequiredItem(item)"
+                        class="ml-1 text-red-500"
+                      >*</span>
+                    </span>
+                    <span class="mt-1 block text-xs text-text-sub">{{ guideFor(item) }}</span>
+                  </span>
+                  <BaseBadge
+                    class="shrink-0"
+                    :variant="deviceCheckStatus(item) === 'COMPLETED'
+                      ? 'success'
+                      : deviceCheckStatus(item) === 'FAILED' ? 'danger' : 'gray'"
+                  >
+                    {{
+                      deviceCheckStatus(item) === 'COMPLETED'
+                        ? '자동 입력 완료'
+                        : deviceCheckStatus(item) === 'FAILED' ? '재점검 필요' : '직접 점검 가능'
+                    }}
+                  </BaseBadge>
+                </li>
+              </ul>
+            </div>
           </section>
 
           <section
@@ -2881,59 +2943,6 @@ onMounted(async () => {
                 ⚠ {{ handoverGuide.disclaimer }}
               </p>
             </div>
-
-            <BaseButton
-              v-if="currentProductId"
-              variant="outline"
-              class="mt-6"
-              :to="{ name: 'seller-product-device-check', params: { productId: currentProductId } }"
-            >
-              카메라·마이크·키보드 등 실동작 자동 점검하기
-            </BaseButton>
-
-            <!--
-              카메라·마이크·키보드처럼 실제로 눌러봐야 하는 항목은 여기서 체크박스로 자기신고할
-              수 없게 읽기 전용으로만 보여줍니다. 체크박스를 두면 점검 없이 그냥 눌러서 SUCCESS로
-              덮을 수 있기 때문입니다 — 결과는 위 버튼으로 들어가 DeviceCheckPage에서만 남길 수 있습니다.
-            -->
-            <h3
-              v-if="deviceCheckConfirmationItems.length"
-              class="mt-6 text-sm font-bold text-text-main"
-            >
-              실동작 자동 점검
-            </h3>
-            <ul
-              v-if="deviceCheckConfirmationItems.length"
-              class="mt-3 space-y-3"
-            >
-              <li
-                v-for="item in deviceCheckConfirmationItems"
-                :key="item.checklistItemId"
-                class="flex items-start justify-between gap-3 rounded-lg border border-border p-4"
-              >
-                <span>
-                  <span class="block text-sm font-bold text-text-main">
-                    {{ item.name }}<span
-                      v-if="isRequiredItem(item)"
-                      class="ml-1 text-red-500"
-                    >*</span>
-                  </span>
-                  <span class="mt-1 block text-xs text-text-sub">{{ guideFor(item) }}</span>
-                </span>
-                <BaseBadge
-                  class="shrink-0"
-                  :variant="deviceCheckStatus(item) === 'COMPLETED'
-                    ? 'success'
-                    : deviceCheckStatus(item) === 'FAILED' ? 'danger' : 'gray'"
-                >
-                  {{
-                    deviceCheckStatus(item) === 'COMPLETED'
-                      ? '완료'
-                      : deviceCheckStatus(item) === 'FAILED' ? '재점검 필요' : '미점검'
-                  }}
-                </BaseBadge>
-              </li>
-            </ul>
 
             <h3 class="mt-6 text-sm font-bold text-text-main">
               개인정보 확인 항목

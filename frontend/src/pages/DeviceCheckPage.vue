@@ -75,9 +75,9 @@ const pointerAreaEl = ref(null)
 const keyboardMissing = ref([])
 
 /*
-  돌아갈 곳은 3단계입니다.
+  돌아갈 곳은 2단계입니다.
   ---------------------------------------------------------------------------
-  이 화면은 등록 3단계의 '실동작 자동 점검하기'로 들어옵니다. 그런데 돌아가면 늘
+  이 화면은 등록 2단계의 '직접 점검하기'로 들어옵니다. 그런데 돌아가면 늘
   1단계가 열렸습니다. 등록 화면의 startEdit이 "수정은 기기 정보부터 훑는다"는 뜻으로
   activeStep을 1로 못 박고 있어서입니다.
 
@@ -88,7 +88,7 @@ const keyboardMissing = ref([])
 const backToRegister = {
   name: 'seller-product-edit',
   params: { productId },
-  query: { step: '3' },
+  query: { step: '2' },
 }
 
 const camera = useCameraCheck()
