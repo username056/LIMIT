@@ -8,6 +8,7 @@ import com.c203.limit.domain.inspection.entity.ListingChecklistItem;
 import com.c203.limit.domain.inspection.entity.OcrResult;
 import com.c203.limit.domain.inspection.enums.DiagnosisFieldName;
 import com.c203.limit.domain.inspection.enums.DiagnosisSourceType;
+import com.c203.limit.domain.inspection.enums.AutomationType;
 import com.c203.limit.domain.inspection.enums.OcrFieldType;
 import com.c203.limit.domain.inspection.enums.ParseStatus;
 import com.c203.limit.domain.inspection.repository.BatteryReportResultRepository;
@@ -33,6 +34,7 @@ public class DiagnosisValueConfirmationService {
 
     private static final Logger log = LoggerFactory.getLogger(DiagnosisValueConfirmationService.class);
     private static final String MANUAL_SOURCE_LABEL = "manual";
+    private static final java.util.Set<String> DEVICE_INFO_ITEM_CODES = java.util.Set.of("LAP-SCR-013", "SYS-003");
 
     private final ListingChecklistItemRepository listingChecklistItemRepository;
     private final ListingOwnerReader listingOwnerReader;
@@ -69,7 +71,16 @@ public class DiagnosisValueConfirmationService {
 
         DiagnosisAggregationService.DiagnosisFieldValue current = diagnosisAggregationService.getFieldValue(itemId, fieldName);
         if (current.sourceEvidenceId() == null || current.sourceType() == null) {
-            throw new BusinessException(ErrorCode.FIELD_NOT_EDITABLE);
+            if (item.getAutomationType() != AutomationType.OCR
+                    || !DEVICE_INFO_ITEM_CODES.contains(item.getItemCode())
+                    || !isDeviceInfoField(fieldName)) {
+                throw new BusinessException(ErrorCode.FIELD_NOT_EDITABLE);
+            }
+            String originalValue = item.manualDiagnosisValue(fieldName);
+            item.correctManualDeviceInfo(fieldName, request.getConfirmedValue());
+            listingChecklistItemRepository.save(item);
+            return new DiagnosisValueUpdateResponse(
+                    itemId, fieldName.name(), originalValue, request.getConfirmedValue(), LocalDateTime.now());
         }
         String originalValue = current.fileParseValue() != null ? current.fileParseValue() : current.ocrValue();
 
@@ -83,6 +94,13 @@ public class DiagnosisValueConfirmationService {
 
         return new DiagnosisValueUpdateResponse(
                 itemId, fieldName.name(), originalValue, request.getConfirmedValue(), LocalDateTime.now());
+    }
+
+    private boolean isDeviceInfoField(DiagnosisFieldName fieldName) {
+        return fieldName == DiagnosisFieldName.MODEL_NAME
+                || fieldName == DiagnosisFieldName.STORAGE_CAPACITY
+                || fieldName == DiagnosisFieldName.OS_VERSION
+                || fieldName == DiagnosisFieldName.CPU;
     }
 
     private void applyCorrection(

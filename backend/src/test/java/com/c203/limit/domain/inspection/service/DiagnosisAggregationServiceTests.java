@@ -3,6 +3,7 @@ package com.c203.limit.domain.inspection.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
@@ -261,6 +262,7 @@ class DiagnosisAggregationServiceTests {
     void mapsDxdiagSystemFieldsIntoFileParseValues() {
         stubItemAndOwnership();
         when(listingChecklistItem.getAutomationType()).thenReturn(AutomationType.OCR);
+        when(listingChecklistItem.getItemCode()).thenReturn("LAP-SCR-013");
         when(evidenceRepository.findAllByListingChecklistItem_Id(ITEM_ID)).thenReturn(List.of(photoEvidence()));
         when(evidenceRepository.findAllByListingId(LISTING_ID)).thenReturn(List.of(diagnosticFileEvidence()));
         DxdiagResult result =
@@ -314,6 +316,25 @@ class DiagnosisAggregationServiceTests {
         assertThat(response.getFields())
                 .extracting(DiagnosisFieldResponse::getFieldName)
                 .containsExactlyInAnyOrder("RAM", "GPU", "GPU_MEMORY", "DRIVER_VERSION", "SOUND_DEVICE");
+    }
+
+    @Test
+    void exposesManualDeviceInfoWithoutAnyEvidence() {
+        stubItemAndOwnership();
+        when(listingChecklistItem.getAutomationType()).thenReturn(AutomationType.OCR);
+        when(listingChecklistItem.getItemCode()).thenReturn("LAP-SCR-013");
+        when(listingChecklistItem.manualDiagnosisValue(any(DiagnosisFieldName.class)))
+                .thenAnswer(
+                        invocation ->
+                                invocation.getArgument(0) == DiagnosisFieldName.MODEL_NAME
+                                        ? "Galaxy Book4 Ultra"
+                                        : null);
+        when(evidenceRepository.findAllByListingChecklistItem_Id(ITEM_ID)).thenReturn(List.of());
+        when(evidenceRepository.findAllByListingId(LISTING_ID)).thenReturn(List.of());
+
+        DiagnosisFieldListResponse response = service.getDiagnosis(ITEM_ID, SELLER_ID);
+
+        assertThat(fieldNamed(response, "MODEL_NAME").getConfirmedValue()).isEqualTo("Galaxy Book4 Ultra");
     }
 
     @Test

@@ -271,6 +271,9 @@ describe('ProductRegisterPage', () => {
     expect(downloadLink.exists()).toBe(true)
     expect(downloadLink.attributes('href')).toBe('/downloads/LimitScanner.exe')
     expect(downloadLink.text()).toContain('진단 프로그램 다운로드')
+    expect(wrapper.text()).toContain(
+      'Limit 진단 프로그램으로 모델명·저장 용량·OS 버전·CPU·RAM·GPU와 배터리 정보를 자동으로 채울 수 있습니다.',
+    )
   })
 
   it('AI 체크리스트 조사 중 진행률과 움직이는 점을 표시한다', async () => {
@@ -699,6 +702,11 @@ describe('ProductRegisterPage', () => {
     await flushPromises()
     await goToCaptureStep(wrapper)
 
+    expect(wrapper.find('input[aria-label="모델명 값"]').exists()).toBe(true)
+    expect(wrapper.find('input[aria-label="저장용량 값"]').exists()).toBe(true)
+    expect(wrapper.find('input[aria-label="OS 버전 값"]').exists()).toBe(true)
+    expect(wrapper.find('input[aria-label="CPU 값"]').exists()).toBe(true)
+
     await attachFile(
       wrapper.find('input[accept="image/*"]'),
       new File(['x'], 'system-info.png', { type: 'image/png' }),
@@ -707,7 +715,7 @@ describe('ProductRegisterPage', () => {
 
     expect(extractOcrText).toHaveBeenCalledWith(9101)
     expect(getDiagnosis).toHaveBeenCalledWith(7003)
-    expect(wrapper.text()).toContain('자동 인식된 사양')
+    expect(wrapper.text()).not.toContain('자동 인식된 사양')
     expect(wrapper.text()).toContain('CPU')
 
     const valueInput = wrapper.find('input[aria-label="CPU 값"]')

@@ -256,9 +256,13 @@ const BATTERY_REPORT_FIELD_NAMES = [
   'DESIGN_CAPACITY', 'FULL_CHARGE_CAPACITY', 'CYCLE_COUNT', 'BATTERY_MANUFACTURER', 'CAPACITY_RATIO',
 ]
 
+function isDeviceInfoItem(item) {
+  return ['LAP-SCR-013', 'SYS-003'].includes(item?.itemCode)
+}
+
 function allDiagnosisFieldNamesFor(item) {
   if (!item) return []
-  if (item.automationType === 'OCR') return OCR_FIELD_NAMES
+  if (item.automationType === 'OCR' && isDeviceInfoItem(item)) return OCR_FIELD_NAMES
   if (item.automationType === 'FILE_PARSE' && item.parserType === 'BATTERY_REPORT') return BATTERY_REPORT_FIELD_NAMES
   if (item.automationType === 'FILE_PARSE' && item.parserType === 'DXDIAG') return DXDIAG_FIELD_NAMES
   return []
@@ -930,6 +934,9 @@ async function persistSaleInfo() {
   // 상품이 생긴 다음이라야 대표 이미지 presigned URL을 받을 수 있습니다.
   await flushPendingThumbnail()
   checklistItems.value = await getProductChecklist(productId)
+  await Promise.allSettled(checklistItems.value
+    .filter((item) => allDiagnosisFieldNamesFor(item).length > 0)
+    .map((item) => refreshDiagnosis(item)))
   activeCaptureItemId.value = mediaChecklistItems.value[0]?.checklistItemId || null
   return productId
 }
@@ -2303,7 +2310,7 @@ onMounted(async () => {
                   Windows 자동 검사
                 </h3>
                 <p class="mt-1 text-xs leading-5 text-text-sub">
-                  Limit 진단 프로그램으로 CPU·RAM·GPU와 배터리 정보를 자동으로 채울 수 있습니다.
+                  Limit 진단 프로그램으로 모델명·저장 용량·OS 버전·CPU·RAM·GPU와 배터리 정보를 자동으로 채울 수 있습니다.
                   비밀번호와 개인 파일은 수집하지 않습니다.
                 </p>
                 <div class="mt-3 flex flex-wrap items-center gap-2">
@@ -2651,9 +2658,6 @@ onMounted(async () => {
                 v-if="activeCaptureItem && diagnosisState[activeCaptureItem.checklistItemId]"
                 class="mt-4 rounded-lg border border-border bg-bg p-4"
               >
-                <p class="text-sm font-bold text-text-main">
-                  자동 인식된 사양
-                </p>
                 <p
                   v-if="diagnosisState[activeCaptureItem.checklistItemId].status === 'parsing'"
                   class="mt-2 text-xs text-text-sub"

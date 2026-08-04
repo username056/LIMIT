@@ -46,6 +46,7 @@ public class DiagnosisAggregationService {
                     DiagnosisFieldName.STORAGE_CAPACITY,
                     DiagnosisFieldName.OS_VERSION,
                     DiagnosisFieldName.CPU);
+    private static final Set<String> DEVICE_INFO_ITEM_CODES = Set.of("LAP-SCR-013", "SYS-003");
 
     private final ListingChecklistItemRepository listingChecklistItemRepository;
     private final EvidenceRepository evidenceRepository;
@@ -81,7 +82,7 @@ public class DiagnosisAggregationService {
         Map<DiagnosisFieldName, FieldSource> ocrValues = collectOcrValues(item);
         Map<DiagnosisFieldName, FieldSource> fileParseValues = collectFileParseValues(item);
 
-        List<DiagnosisFieldResponse> fields = buildFields(ocrValues, fileParseValues);
+        List<DiagnosisFieldResponse> fields = buildFields(item, ocrValues, fileParseValues);
 
         long conflictCount = fields.stream().filter(DiagnosisFieldResponse::isConflict).count();
         if (conflictCount > 0) {
@@ -105,8 +106,9 @@ public class DiagnosisAggregationService {
             primary = fallbackEditTarget(itemId);
         }
 
+        String manualValue = item == null ? null : item.manualDiagnosisValue(fieldName);
         return new DiagnosisFieldValue(
-                ocr == null ? null : ocr.value(),
+                ocr == null ? manualValue : ocr.value(),
                 fileParse == null ? null : fileParse.value(),
                 primary == null ? null : primary.evidenceId(),
                 primary == null ? null : primary.sourceType());
@@ -207,7 +209,7 @@ public class DiagnosisAggregationService {
                                     values, item, DiagnosisFieldName.SOUND_DEVICE, result.getSoundDevice(), evidenceId);
                         });
 
-        if (item.getAutomationType() == AutomationType.OCR) {
+        if (isDeviceInfoItem(item)) {
             return values;
         }
 
@@ -251,7 +253,7 @@ public class DiagnosisAggregationService {
     }
 
     private List<Long> diagnosticEvidenceIdsFor(ListingChecklistItem item) {
-        if (item.getAutomationType() == AutomationType.OCR) {
+        if (isDeviceInfoItem(item)) {
             return evidenceRepository.findAllByListingId(item.getListingId()).stream()
                     .filter(evidence -> evidence.getEvidenceType() == EvidenceType.DIAGNOSTIC_FILE)
                     .map(Evidence::getId)
@@ -272,13 +274,17 @@ public class DiagnosisAggregationService {
     }
 
     private boolean isFieldVisibleFor(ListingChecklistItem item, DiagnosisFieldName fieldName) {
-        if (item.getAutomationType() == AutomationType.OCR) {
+        if (isDeviceInfoItem(item)) {
             return DEVICE_INFO_FIELDS.contains(fieldName);
         }
         if (item.getAutomationType() == AutomationType.FILE_PARSE && "DXDIAG".equals(item.getParserType())) {
             return !DEVICE_INFO_FIELDS.contains(fieldName);
         }
         return true;
+    }
+
+    private boolean isDeviceInfoItem(ListingChecklistItem item) {
+        return item.getAutomationType() == AutomationType.OCR && DEVICE_INFO_ITEM_CODES.contains(item.getItemCode());
     }
 
     private List<Long> evidenceIdsOfType(Long itemId, EvidenceType evidenceType) {
@@ -300,22 +306,29 @@ public class DiagnosisAggregationService {
     }
 
     private List<DiagnosisFieldResponse> buildFields(
+            ListingChecklistItem item,
             Map<DiagnosisFieldName, FieldSource> ocrValues, Map<DiagnosisFieldName, FieldSource> fileParseValues) {
         return Arrays.stream(DiagnosisFieldName.values())
-                .map(fieldName -> toFieldResponse(fieldName, ocrValues.get(fieldName), fileParseValues.get(fieldName)))
+                .map(
+                        fieldName ->
+                                toFieldResponse(
+                                        fieldName,
+                                        ocrValues.get(fieldName),
+                                        fileParseValues.get(fieldName),
+                                        item.manualDiagnosisValue(fieldName)))
                 .filter(Objects::nonNull)
                 .toList();
     }
 
     private DiagnosisFieldResponse toFieldResponse(
-            DiagnosisFieldName fieldName, FieldSource ocr, FieldSource fileParse) {
-        if (ocr == null && fileParse == null) {
+            DiagnosisFieldName fieldName, FieldSource ocr, FieldSource fileParse, String confirmedValue) {
+        if (ocr == null && fileParse == null && confirmedValue == null) {
             return null;
         }
         String ocrValue = ocr == null ? null : ocr.value();
         String fileParseValue = fileParse == null ? null : fileParse.value();
         boolean conflict = ocrValue != null && fileParseValue != null && !ocrValue.equals(fileParseValue);
-        return new DiagnosisFieldResponse(fieldName.name(), ocrValue, fileParseValue, conflict, null);
+        return new DiagnosisFieldResponse(fieldName.name(), ocrValue, fileParseValue, conflict, confirmedValue);
     }
 
     /** 필드 하나의 값과, 그 값이 어느 evidence·어느 소스(OCR/DXDIAG/BATTERY_REPORT)에서 왔는지. */
