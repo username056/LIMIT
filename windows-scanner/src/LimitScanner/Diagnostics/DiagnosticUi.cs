@@ -13,12 +13,13 @@ internal static class DiagnosticUi
     public static void ConfigureForm(Form form, string title)
     {
         form.Text = title;
-        form.ClientSize = new Size(760, 650);
-        form.MinimumSize = new Size(720, 620);
+        form.ClientSize = new Size(820, 1040);
+        form.MinimumSize = new Size(820, 1040);
         form.StartPosition = FormStartPosition.CenterParent;
         form.Font = new Font("Segoe UI", 10F);
         form.AutoScaleMode = AutoScaleMode.Dpi;
         form.BackColor = Color.White;
+        form.Load += (_, _) => DiagnosticFormSizing.FitToWorkingArea(form);
     }
 
     public static Label CreateStepLabel(string text) => new()
@@ -87,9 +88,10 @@ internal static class DiagnosticUi
 
     public static void StyleButton(Button button, ButtonKind kind, int width = 150)
     {
-        button.AutoSize = false;
-        button.Width = width;
-        button.Height = 44;
+        button.AutoSize = true;
+        button.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        button.MinimumSize = new Size(width, 48);
+        button.Padding = new Padding(14, 10, 14, 10);
         button.FlatStyle = FlatStyle.Flat;
         button.FlatAppearance.BorderSize = kind == ButtonKind.Secondary ? 1 : 0;
         button.FlatAppearance.BorderColor = Border;

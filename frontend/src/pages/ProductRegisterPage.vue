@@ -140,12 +140,30 @@ const reinspectionRequest = ref(null)
 const reinspectionRequestKey = computed(
   () => String(route.query.reinspectionRequestKey || '').trim(),
 )
+
+/*
+  잠깐 나갔다 돌아왔을 때 되돌아갈 단계.
+  ---------------------------------------------------------------------------
+  실동작 점검 화면이 ?step=3으로 돌려보냅니다. 1~3만 받습니다 — 주소를 직접 고쳐
+  step=9로 들어와도 없는 단계가 열려 화면이 비지 않게 합니다.
+*/
+const returnStep = computed(() => {
+  const step = Number(route.query.step)
+  return [1, 2, 3].includes(step) ? step : null
+})
 const editingId = ref(null)
 // 수정 모드로 열린 상품의 현재 상태입니다. 판매 중인 상품을 고칠 때는 임시저장(초안) 진행도를
 // 서버에 밀어 넣지 않아야 하므로 상태를 들고 있습니다.
 const editingStatus = ref('')
 const draftProductId = ref(null)
-const activeStep = ref(1)
+/*
+  처음 그릴 때부터 되돌아갈 단계로 엽니다.
+  ---------------------------------------------------------------------------
+  ref(1)로 시작하면 상품을 불러오는 동안 1단계가 먼저 그려지고, startEdit이 끝난
+  뒤에야 3단계로 바뀝니다. 실동작 점검에서 돌아올 때 1단계가 잠깐 번쩍이던 이유입니다.
+  주소는 setup 시점에 이미 알 수 있으므로 처음부터 맞춰 둡니다.
+*/
+const activeStep = ref(returnStep.value || 1)
 const form = reactive({
   categoryId: '', deviceModelId: '', name: '', description: '', price: '',
   color: '', storageGb: '',
@@ -336,6 +354,18 @@ const listingImages = ref([])
 const listingImageBusy = ref(false)
 const listingImageProgress = ref(0)
 let listingImageInFlight = 0
+
+/*
+  '올리는 중'과 '순서 바꾸는 중'을 따로 셉니다.
+  ---------------------------------------------------------------------------
+  둘 다 버튼을 잠가야 하지만, 진행 막대는 올릴 때만 뜻이 있습니다. 하나로 묶어
+  두었더니 순서를 옮길 때마다 0% 막대가 깜빡였습니다.
+*/
+const listingImageUploading = ref(false)
+
+// 목록의 사진을 눌렀을 때 크게 띄울 주소. 정사각으로 잘라 보여 주므로 잘린 부분은
+// 여기서만 확인됩니다.
+const expandedImage = ref('')
 
 // 파일 입력은 label 안에 숨겨 둡니다. label에는 :disabled가 안 걸리므로,
 // 못 누르는 상태를 라벨 쪽에도 따로 알려 줘야 버튼이 눌리는 것처럼 보이지 않습니다.
@@ -638,9 +668,16 @@ function startChecklistLoading() {
   }, 450)
 }
 
-// 단계가 바뀌면 위자드 상단(단계 표시줄)부터 보이도록 항상 스크롤을 올립니다.
+/*
+  단계가 바뀌면 위자드 상단(단계 표시줄)부터 보이도록 항상 스크롤을 올립니다.
+
+  3단계로 들어오는 길이 여럿이라(다음 단계로 / 4단계에서 이전 단계로 / 실동작 점검
+  복귀) 초기화 가이드는 여기 한곳에서 받아 옵니다. 예전에는 goToStep3에만 있어,
+  다른 길로 들어오면 '판매 준비' 안내가 통째로 비었습니다.
+*/
 function setStep(step) {
   activeStep.value = step
+  if (step === 3) loadHandoverGuide()
   persistDraftProgress()
   scrollToTop()
 }
@@ -1030,10 +1067,8 @@ async function loadHandoverGuide() {
 // 남은 항목을 알려주되, 확인을 누르면 그대로 다음 단계로 넘어갈 수 있게 합니다.
 function goToStep3() {
   errorMessage.value = ''
-  const proceed = () => {
-    setStep(3)
-    loadHandoverGuide()
-  }
+  // 가이드 조회는 setStep이 맡습니다.
+  const proceed = () => setStep(3)
   const missingRequired = mediaChecklistItems.value.filter(
     (item) => isRequiredItem(item) && !isCaptureItemComplete(item),
   )
@@ -1291,6 +1326,7 @@ async function handleListingImage(file, displayOrder = listingImages.value.lengt
   if (!file || !currentProductId.value || listingImages.value.length >= 10) return
   listingImageInFlight += 1
   listingImageBusy.value = true
+  listingImageUploading.value = true
   listingImageProgress.value = 0
   errorMessage.value = ''
   let optimizedFile = file
@@ -1322,11 +1358,20 @@ async function handleListingImage(file, displayOrder = listingImages.value.lengt
       ...image,
       previewUrl: URL.createObjectURL(optimizedFile),
     })
+    /*
+      displayOrder로 다시 줄 세웁니다.
+      -----------------------------------------------------------------------
+      여러 장을 한 번에 올리면 업로드가 동시에 돌아, 먼저 끝난 것부터 push됩니다.
+      그러면 화면에 늘어선 순서가 고른 순서가 아니라 '빨리 올라간 순서'가 되어,
+      맨 왼쪽 사진이 매번 달라집니다. 대표 사진도 그래서 뒤바뀌어 보였습니다.
+    */
+    listingImages.value.sort((first, second) => first.displayOrder - second.displayOrder)
   } catch {
     errorMessage.value = '상품 이미지를 업로드하지 못했습니다. 잠시 후 다시 시도해 주세요.'
   } finally {
     listingImageInFlight -= 1
     listingImageBusy.value = listingImageInFlight > 0
+    listingImageUploading.value = listingImageInFlight > 0
     if (!listingImageBusy.value) listingImageProgress.value = 0
   }
 }
@@ -1441,22 +1486,30 @@ async function saveListingImageOrder(imageIds, thumbnailImageId) {
   }
 }
 
+/*
+  맨 왼쪽 사진이 대표입니다.
+  ---------------------------------------------------------------------------
+  예전에는 순서를 옮겨도 대표가 그대로 따라다녀서, 사진을 맨 앞으로 끌어와도 대표가
+  바뀌지 않았습니다. 판매자가 대표를 정하는 방법이 '대표' 버튼 하나뿐이었고, 화면의
+  왼쪽 사진과 실제 대표가 서로 다른 상태가 될 수 있었습니다.
+
+  지금은 순서가 곧 대표입니다. 옮기면 첫 장이 대표가 됩니다.
+*/
 async function moveListingImage(image, offset) {
   const currentIndex = listingImages.value.findIndex((item) => item.imageId === image.imageId)
   const nextIndex = currentIndex + offset
   if (currentIndex < 0 || nextIndex < 0 || nextIndex >= listingImages.value.length) return
   const imageIds = listingImages.value.map((item) => item.imageId)
   ;[imageIds[currentIndex], imageIds[nextIndex]] = [imageIds[nextIndex], imageIds[currentIndex]]
-  const thumbnailImageId = listingImages.value.find((item) => item.imageType === 'THUMBNAIL')?.imageId
-    || imageIds[0]
-  await saveListingImageOrder(imageIds, thumbnailImageId)
+  await saveListingImageOrder(imageIds, imageIds[0])
 }
 
+/** 한 칸씩 옮기지 않고 바로 맨 앞으로 보냅니다. 사진이 열 장이면 아홉 번 눌러야 합니다. */
 async function makeListingThumbnail(image) {
-  await saveListingImageOrder(
-    listingImages.value.map((item) => item.imageId),
-    image.imageId,
-  )
+  const others = listingImages.value
+    .map((item) => item.imageId)
+    .filter((imageId) => imageId !== image.imageId)
+  await saveListingImageOrder([image.imageId, ...others], image.imageId)
 }
 
 async function onCaptureInput(event, item) {
@@ -1656,9 +1709,22 @@ async function startEdit(productId) {
     const hasEvidence = mediaChecklistItems.value.some(
       (item) => mediaOf(item.checklistItemId).length > 0,
     )
-    // 수정은 항상 1단계부터 엽니다. 이어서 쓰는 게 아니라 고치러 들어온 것이라, 기기 정보부터
-    // 훑어보고 필요한 단계로 옮겨 가는 편이 자연스럽습니다.
-    activeStep.value = 1
+    /*
+      수정은 1단계부터 엽니다. 이어서 쓰는 게 아니라 고치러 들어온 것이라, 기기 정보부터
+      훑어보고 필요한 단계로 옮겨 가는 편이 자연스럽습니다.
+
+      다만 이 화면에서 잠깐 나갔다 돌아온 경우는 다릅니다(실동작 점검 등). 주소에
+      step이 실려 있으면 하던 자리로 되돌립니다.
+    */
+    activeStep.value = returnStep.value || 1
+    /*
+      3단계로 바로 들어오면 초기화 가이드를 아무도 불러 주지 않습니다.
+      -----------------------------------------------------------------------
+      가이드는 goToStep3()에서만 받아 왔습니다. 단계를 밟아 오는 길만 있다고 봤던
+      것인데, 실동작 점검에서 돌아오면 그 함수를 지나지 않아 '판매 준비' 안내가
+      통째로 비고 체크박스만 남았습니다.
+    */
+    if (activeStep.value === 3) await loadHandoverGuide()
     if (editingStatus.value && editingStatus.value !== 'DRAFT') {
       notice.value = '판매 중인 상품을 수정하고 있습니다.'
     } else if (hasEvidence) {
@@ -1670,10 +1736,19 @@ async function startEdit(productId) {
   }
 }
 
+// 확대 보기는 Esc로도 닫습니다. 바깥을 누르는 것만 두면 화면을 가득 채운 사진에서
+// 어디를 눌러야 닫히는지 알기 어렵습니다.
+function closeExpandedImageOnEscape({ key: pressed }) {
+  if (pressed === 'Escape') expandedImage.value = ''
+}
+
+onMounted(() => window.addEventListener('keydown', closeExpandedImageOnEscape))
+
 onBeforeUnmount(() => {
   stopChecklistLoading()
   stopWindowsInspectionPolling()
   modelRequestId += 1
+  window.removeEventListener('keydown', closeExpandedImageOnEscape)
 })
 
 onMounted(async () => {
@@ -2181,8 +2256,8 @@ onMounted(async () => {
                     상품 이미지
                   </h2>
                   <p class="mt-1 text-sm text-text-sub">
-                    1단계에서 고른 대표 이미지가 맨 앞에 있습니다. 여기서 사진을 최대 10개까지 더하고
-                    '대표'를 눌러 대표 이미지를 바꿀 수 있습니다.
+                    <strong class="font-semibold text-text-main">맨 왼쪽 사진이 대표 이미지</strong>입니다.
+                    최대 10개까지 올리고, ← → 로 순서를 바꿔 대표를 정하세요.
                   </p>
                 </div>
                 <!-- 다른 주요 버튼(BaseButton primary)과 같은 그라데이션·번짐을 씁니다. -->
@@ -2201,8 +2276,15 @@ onMounted(async () => {
                   >
                 </label>
               </div>
+              <!--
+                올리는 중에만 띄웁니다.
+                ---------------------------------------------------------------
+                예전에는 listingImageBusy로 열어 두어, 순서를 바꿀 때도 막대가
+                0%로 깜빡였습니다. 올릴 것이 없으니 채워지지도 않고 사라져
+                화면만 어수선했습니다.
+              -->
               <div
-                v-if="listingImageBusy"
+                v-if="listingImageUploading"
                 class="mt-3 h-2 overflow-hidden rounded-pill bg-slate-100"
                 role="progressbar"
                 :aria-valuenow="listingImageProgress"
@@ -2227,20 +2309,40 @@ onMounted(async () => {
               >
                 등록된 상품 이미지가 없습니다.
               </p>
-              <ul
+              <!--
+                순서를 바꾸면 사진이 제자리로 미끄러져 들어갑니다.
+                ---------------------------------------------------------------
+                TransitionGroup이 옮기기 전후 위치를 재어 그 사이를 채워 줍니다(FLIP).
+                두 장이 순간이동하면 무엇과 무엇이 바뀐 것인지 눈으로 못 따라갑니다.
+              -->
+              <TransitionGroup
                 v-else
+                tag="ul"
+                name="thumb"
                 class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5"
               >
+                <!--
+                  화면에 늘어선 순서(index)로 판단합니다. image.displayOrder를 쓰면
+                  서버 값과 방금 옮긴 화면 순서가 어긋나는 순간에 버튼이 잘못 잠깁니다.
+                -->
                 <li
-                  v-for="image in listingImages"
+                  v-for="(image, index) in listingImages"
                   :key="image.imageId"
                   class="relative overflow-hidden rounded-md border border-border"
                 >
-                  <img
-                    :src="image.previewUrl || image.imageUrl"
-                    alt="상품 등록 이미지"
-                    class="aspect-square w-full object-cover"
+                  <!-- 눌러서 크게 봅니다. 정사각으로 잘라 두어 잘린 부분은 확대로만 확인됩니다. -->
+                  <button
+                    type="button"
+                    class="block w-full cursor-zoom-in"
+                    :aria-label="`${index + 1}번째 상품 이미지 확대 보기`"
+                    @click="expandedImage = image.previewUrl || image.imageUrl"
                   >
+                    <img
+                      :src="image.previewUrl || image.imageUrl"
+                      alt="상품 등록 이미지"
+                      class="aspect-square w-full object-cover"
+                    >
+                  </button>
                   <span
                     v-if="image.imageType === 'THUMBNAIL'"
                     class="absolute left-1 top-1 rounded bg-primary px-2 py-1 text-[11px] font-bold text-white"
@@ -2254,11 +2356,12 @@ onMounted(async () => {
                   >
                     삭제
                   </button>
-                  <div class="flex items-center justify-center gap-1 border-t border-border bg-white p-1">
+                  <!-- 화살표는 양 끝으로 붙입니다. 가운데 모여 있으면 어느 쪽으로 가는지 헷갈립니다. -->
+                  <div class="flex items-center justify-between border-t border-border bg-white px-1 py-1">
                     <button
                       type="button"
                       class="rounded px-2 py-1 text-xs font-semibold text-text-sub hover:bg-bg"
-                      :disabled="listingImageBusy || image.displayOrder === 0"
+                      :disabled="listingImageBusy || index === 0"
                       aria-label="이미지 순서를 앞으로 이동"
                       @click="moveListingImage(image, -1)"
                     >
@@ -2266,16 +2369,8 @@ onMounted(async () => {
                     </button>
                     <button
                       type="button"
-                      class="rounded px-2 py-1 text-xs font-semibold text-primary hover:bg-accent"
-                      :disabled="listingImageBusy || image.imageType === 'THUMBNAIL'"
-                      @click="makeListingThumbnail(image)"
-                    >
-                      대표
-                    </button>
-                    <button
-                      type="button"
                       class="rounded px-2 py-1 text-xs font-semibold text-text-sub hover:bg-bg"
-                      :disabled="listingImageBusy || image.displayOrder === listingImages.length - 1"
+                      :disabled="listingImageBusy || index === listingImages.length - 1"
                       aria-label="이미지 순서를 뒤로 이동"
                       @click="moveListingImage(image, 1)"
                     >
@@ -2283,7 +2378,7 @@ onMounted(async () => {
                     </button>
                   </div>
                 </li>
-              </ul>
+              </TransitionGroup>
             </div>
             <div>
               <h2 class="text-lg font-bold text-text-main">
@@ -3173,6 +3268,54 @@ onMounted(async () => {
           </BaseButton>
         </div>
       </div>
+
+      <!--
+        올린 사진 크게 보기.
+        -------------------------------------------------------------------------
+        목록에서는 정사각으로 잘라 보여 주기 때문에, 실제로 무엇이 찍혔는지는
+        여기서만 확인됩니다. 바깥을 누르거나 Esc로 닫습니다.
+      -->
+      <div
+        v-if="expandedImage"
+        role="dialog"
+        aria-modal="true"
+        aria-label="상품 이미지 확대 보기"
+        class="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-4 sm:p-8"
+        @click.self="expandedImage = ''"
+      >
+        <button
+          type="button"
+          class="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-2xl text-white transition hover:bg-white/25"
+          aria-label="확대 이미지 닫기"
+          @click="expandedImage = ''"
+        >
+          ×
+        </button>
+        <img
+          :src="expandedImage"
+          alt="상품 이미지 확대"
+          class="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
+        >
+      </div>
     </main>
   </DefaultLayout>
 </template>
+
+<style scoped>
+/*
+  사진 순서 바꾸기 애니메이션.
+  ---------------------------------------------------------------------------
+  TransitionGroup이 옮기기 전 위치와 옮긴 뒤 위치를 재어, 그 사이를 transform으로
+  채웁니다. 두 장이 순간이동하면 무엇과 무엇이 자리를 바꿨는지 눈으로 못 따라갑니다.
+  240ms에 살짝 튀는 곡선을 써서 "밀려 들어갔다"는 느낌만 줍니다.
+*/
+.thumb-move {
+  transition: transform 0.24s cubic-bezier(0.34, 1.2, 0.64, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thumb-move {
+    transition: none;
+  }
+}
+</style>

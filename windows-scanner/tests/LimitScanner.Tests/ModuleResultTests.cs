@@ -54,4 +54,39 @@ public sealed class ModuleResultTests
             Assert.True(root.TryGetProperty("errorCode", out _));
         }
     }
+
+    [Fact]
+    public void SerializesCameraAndMicrophonePermissionDeniedStatus()
+    {
+        var cameraResult = ModuleResult.Create(
+            ModuleTestTypes.Camera,
+            ModuleMeasurementStatuses.PermissionDenied,
+            ModuleUserResults.ReportedIssue,
+            new Dictionary<string, object?> { ["deviceName"] = "내장 카메라" },
+            "CAMERA_PERMISSION_DENIED");
+
+        var json = JsonSerializer.Serialize(cameraResult, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+
+        Assert.Equal("CAMERA", root.GetProperty("testType").GetString());
+        Assert.Equal("PERMISSION_DENIED", root.GetProperty("measurementStatus").GetString());
+        Assert.Equal("CAMERA_PERMISSION_DENIED", root.GetProperty("errorCode").GetString());
+        Assert.Equal("MICROPHONE", ModuleTestTypes.Microphone);
+    }
+
+    [Fact]
+    public void PowerStateTrackerCountsOnlyActualStateChanges()
+    {
+        var tracker = new PowerStateTracker("CONNECTED");
+
+        Assert.False(tracker.Record("CONNECTED"));
+        Assert.True(tracker.Record("DISCONNECTED"));
+        Assert.False(tracker.Record("DISCONNECTED"));
+        Assert.True(tracker.Record("CONNECTED"));
+
+        Assert.Equal("CONNECTED", tracker.InitialState);
+        Assert.Equal("CONNECTED", tracker.CurrentState);
+        Assert.Equal(2, tracker.TransitionCount);
+    }
 }
