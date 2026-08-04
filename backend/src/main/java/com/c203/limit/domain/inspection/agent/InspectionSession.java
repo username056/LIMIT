@@ -74,9 +74,14 @@ public class InspectionSession {
         return session;
     }
 
-    public void pair(byte[] tokenHash, String version, LocalDateTime pairedAt) {
+    public void pair(
+            byte[] tokenHash,
+            String version,
+            LocalDateTime expiresAt,
+            LocalDateTime pairedAt) {
         this.agentTokenHash = tokenHash;
         this.collectorVersion = version;
+        this.expiresAt = expiresAt;
         this.pairedAt = pairedAt;
         this.status = InspectionSessionStatus.PAIRED;
     }
