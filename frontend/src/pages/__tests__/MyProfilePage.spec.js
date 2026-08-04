@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   deleteProfileImage: vi.fn(),
   uploadToPresignedUrl: vi.fn(),
   compressImage: vi.fn(),
+  getSocialAccounts: vi.fn(),
   routerReplace: vi.fn(),
 }))
 
@@ -30,6 +31,23 @@ vi.mock('../../api/products', () => ({
 
 vi.mock('../../utils/mediaOptimize', () => ({
   compressImage: mocks.compressImage,
+}))
+
+/*
+  연결된 소셜 계정 조회는 반드시 막습니다.
+  ---------------------------------------------------------------------------
+  막지 않으면 실제 요청이 나가고, 그 응답이 401이면 client가 세션 복구를 시도한 뒤
+  실패 시 세션을 비웁니다(clearAuthSession). 그러면 이 파일의 다른 테스트가 보는
+  세션이 화면 동작과 무관하게 사라져, 어느 컴퓨터에서 돌리느냐에 따라 성공·실패가
+  갈립니다. 실제로 CI에서만 깨졌습니다.
+*/
+vi.mock('../../api/auth', () => ({
+  getSocialAccounts: mocks.getSocialAccounts,
+  unlinkSocialAccount: vi.fn(),
+}))
+
+vi.mock('../../auth/oauth', () => ({
+  startOAuthLink: vi.fn(),
 }))
 
 vi.mock('vue-router', () => ({
@@ -57,6 +75,7 @@ describe('MyProfilePage', () => {
   beforeEach(() => {
     setAuthSession({ accessToken: 'member-token', member: { nickname: 'limit-user' } })
     mocks.getMyProfile.mockResolvedValue(profile)
+    mocks.getSocialAccounts.mockResolvedValue([])
     mocks.updateMyProfile.mockResolvedValue({
       memberId: 1,
       nickname: 'new-nickname',
