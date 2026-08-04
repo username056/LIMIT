@@ -41,9 +41,11 @@ public sealed class CameraCaptureService
             ImageEncodingProperties.CreateUncompressed(MediaPixelFormat.Bgra8));
         try
         {
-            var capturedPhoto = await lowLagCapture.CaptureAsync();
+            var capturedPhoto = await lowLagCapture.CaptureAsync()
+                ?? throw new InvalidOperationException("카메라에서 프레임을 가져오지 못했습니다.");
+            using var originalBitmap = capturedPhoto.Frame.SoftwareBitmap;
             using var softwareBitmap = SoftwareBitmap.Convert(
-                capturedPhoto.Frame.SoftwareBitmap,
+                originalBitmap,
                 BitmapPixelFormat.Bgra8,
                 BitmapAlphaMode.Ignore);
             return new CameraFrame(ToBitmap(softwareBitmap), softwareBitmap.PixelWidth, softwareBitmap.PixelHeight);
