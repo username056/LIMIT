@@ -26,6 +26,8 @@ vi.mock('../../api/products', () => ({
 const { nextMissingCodes } = vi.hoisted(() => ({ nextMissingCodes: { value: [] } }))
 
 vi.mock('../../features/deviceCheck/useKeyboardCheck', () => ({
+  OS_RESERVED_CODES: ['MetaLeft', 'AltLeft', 'AltRight'],
+  AMBIGUOUS_CODES: ['ShiftRight'],
   useKeyboardCheck: () => {
     const status = ref('idle')
     return {
@@ -35,14 +37,16 @@ vi.mock('../../features/deviceCheck/useKeyboardCheck', () => ({
       finish: () => {
         const missingCodes = nextMissingCodes.value
         status.value = missingCodes.length === 0 ? 'passed' : 'passedWithMissing'
-        return { missingCodes, pressedCodes: [] }
+        return { missingCodes, missingUnreliableCodes: [], pressedCodes: [], excludedCodes: [] }
       },
       stop: () => {},
       status,
       rows: [],
       pressed: new Set(),
       pressedCount: { value: 0 },
-      total: 10,
+      total: { value: 10 },
+      excludedCodes: new Set(),
+      toggleExcluded: () => {},
     }
   },
 }))
@@ -188,6 +192,14 @@ describe('DeviceCheckPage', () => {
     expect(wrapper.text()).toContain('웹 점검을 생략할 수 있습니다.')
   })
 
+  it('포인터 점검은 시작 전부터 시간 제한 안내를 보여준다', async () => {
+    const wrapper = await mountWithChecklist([
+      { checklistItemId: 41, itemCode: 'LAP-PAD-006', evidenceType: 'SELLER_CONFIRMATION', status: 'PENDING' },
+    ])
+
+    expect(wrapper.text()).toContain('10초 안에')
+  })
+
   it('포인터 점검 시작을 누르면 입력 감지 상태와 완료 버튼을 표시한다', async () => {
     const wrapper = await mountWithChecklist([
       { checklistItemId: 41, itemCode: 'LAP-PAD-006', evidenceType: 'SELLER_CONFIRMATION', status: 'PENDING' },
@@ -197,7 +209,7 @@ describe('DeviceCheckPage', () => {
     await flushPromises()
 
     const completeButton = wrapper.findAll('button').find((button) => button.text() === '완료')
-    expect(completeButton.attributes('disabled')).toBeDefined()
+    expect(completeButton.attributes('disabled')).toBeUndefined()
     expect(wrapper.text()).toContain('누르기 대기 · 이동/스크롤 대기')
 
     const pointerArea = wrapper.find('.border-dashed').element
@@ -212,9 +224,45 @@ describe('DeviceCheckPage', () => {
     }
     await flushPromises()
 
-    expect(completeButton.attributes('disabled')).toBeUndefined()
     expect(wrapper.text()).toContain('누르기 감지 · 이동/스크롤 감지')
     expect(wrapper.text()).toContain('클릭·드래그·스크롤')
+  })
+
+  it('입력 없이 포인터 점검을 완료하면 실패로 표시되고 다시 시도할 수 있다', async () => {
+    const wrapper = await mountWithChecklist([
+      { checklistItemId: 41, itemCode: 'LAP-PAD-006', evidenceType: 'SELLER_CONFIRMATION', status: 'PENDING' },
+    ])
+
+    await wrapper.findAll('button').find((button) => button.text() === '점검 시작').trigger('click')
+    await flushPromises()
+
+    await wrapper.findAll('button').find((button) => button.text() === '완료').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.findAll('button').find((button) => button.text() === '다시 시도')).toBeDefined()
+    expect(wrapper.findAll('button').some((button) => button.text() === '완료')).toBe(false)
+  })
+
+  it('일정 시간 안에 입력이 없으면 자동으로 실패 처리되고 시간 제한 안내를 보여준다', async () => {
+    vi.useFakeTimers()
+    try {
+      const wrapper = await mountWithChecklist([
+        { checklistItemId: 41, itemCode: 'LAP-PAD-006', evidenceType: 'SELLER_CONFIRMATION', status: 'PENDING' },
+      ])
+
+      await wrapper.findAll('button').find((button) => button.text() === '점검 시작').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('10초 안에')
+
+      await vi.advanceTimersByTimeAsync(10000)
+      await flushPromises()
+
+      expect(wrapper.findAll('button').find((button) => button.text() === '다시 시도')).toBeDefined()
+      expect(wrapper.findAll('button').some((button) => button.text() === '완료')).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('이전 웹 성공 결과는 자동 입력이 아니라 웹 점검 완료로 안내한다', async () => {
@@ -236,6 +284,12 @@ describe('DeviceCheckPage', () => {
 
     expect(wrapper.text()).toContain('약 3초 동안 손을 흔들거나 기기를 조금 움직여 주세요.')
     expect(wrapper.text()).toContain('화면 변화를 감지하면 자동으로 점검이 완료됩니다.')
+  })
+
+  it('키보드 점검은 시작 전부터 좌우를 밝힌 감지 불확실 키 안내를 보여준다', async () => {
+    const wrapper = await mountAndLoad({ step: 2, results: {} })
+
+    expect(wrapper.text()).toContain('Win, 왼쪽 Alt, 오른쪽 Alt, 오른쪽 Shift')
   })
 
   it('키보드에 응답 없는 키가 있으면 FAILED로 저장한다', async () => {
