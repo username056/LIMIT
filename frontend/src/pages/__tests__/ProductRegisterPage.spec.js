@@ -130,6 +130,41 @@ const templateItems = [
 ]
 
 describe('ProductRegisterPage', () => {
+  it('기존 체크리스트의 자동화 유형이 NONE이어도 기기 정보 진단값을 표시한다', async () => {
+    getProductChecklist.mockResolvedValue([{
+      checklistItemId: 7003,
+      itemCode: 'LAP-SCR-013',
+      name: '기기 정보 화면',
+      evidenceType: 'PHOTO',
+      automationType: 'NONE',
+      isRequired: true,
+      status: 'PENDING',
+    }])
+    getDiagnosis.mockResolvedValue({
+      itemId: 7003,
+      fields: [
+        { fieldName: 'MODEL_NAME', fileParseValue: 'Galaxy Book4 Ultra', ocrValue: null, conflict: false, confirmedValue: null },
+        { fieldName: 'STORAGE_CAPACITY', fileParseValue: '975.7 GB', ocrValue: null, conflict: false, confirmedValue: null },
+        { fieldName: 'OS_VERSION', fileParseValue: 'Windows 11 Pro', ocrValue: null, conflict: false, confirmedValue: null },
+        { fieldName: 'CPU', fileParseValue: 'Intel Core Ultra 9', ocrValue: null, conflict: false, confirmedValue: null },
+      ],
+    })
+
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await goToCaptureStep(wrapper)
+
+    expect(getDiagnosis).toHaveBeenCalledWith(7003)
+    const diagnosisValues = wrapper.findAll('input[type="text"]')
+      .map((input) => input.element.value)
+    expect(diagnosisValues).toEqual(expect.arrayContaining([
+      'Galaxy Book4 Ultra',
+      '975.7 GB',
+      'Windows 11 Pro',
+      'Intel Core Ultra 9',
+    ]))
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     delete routeParams.productId
@@ -269,6 +304,9 @@ describe('ProductRegisterPage', () => {
     expect(downloadLink.exists()).toBe(true)
     expect(downloadLink.attributes('href')).toBe('/downloads/LimitScanner.exe')
     expect(downloadLink.text()).toContain('진단 프로그램 다운로드')
+    expect(wrapper.text()).toContain(
+      'Limit 진단 프로그램으로 모델명·저장 용량·OS 버전·CPU·RAM·GPU와 배터리 정보를 자동으로 채울 수 있습니다.',
+    )
   })
 
   it('AI 체크리스트 조사 중 진행률과 움직이는 점을 표시한다', async () => {
@@ -700,6 +738,11 @@ describe('ProductRegisterPage', () => {
     await flushPromises()
     await goToCaptureStep(wrapper)
 
+    expect(wrapper.find('input[aria-label="모델명 값"]').exists()).toBe(true)
+    expect(wrapper.find('input[aria-label="저장용량 값"]').exists()).toBe(true)
+    expect(wrapper.find('input[aria-label="OS 버전 값"]').exists()).toBe(true)
+    expect(wrapper.find('input[aria-label="CPU 값"]').exists()).toBe(true)
+
     await attachFile(
       wrapper.find('input[accept="image/*"]'),
       new File(['x'], 'system-info.png', { type: 'image/png' }),
@@ -708,7 +751,7 @@ describe('ProductRegisterPage', () => {
 
     expect(extractOcrText).toHaveBeenCalledWith(9101)
     expect(getDiagnosis).toHaveBeenCalledWith(7003)
-    expect(wrapper.text()).toContain('자동 인식된 사양')
+    expect(wrapper.text()).not.toContain('자동 인식된 사양')
     expect(wrapper.text()).toContain('CPU')
 
     const valueInput = wrapper.find('input[aria-label="CPU 값"]')
@@ -725,10 +768,11 @@ describe('ProductRegisterPage', () => {
     expect(wrapper.text()).not.toContain('저장 중…')
     expect(wrapper.text()).toContain('저장됐습니다')
 
-    // CPU 외에 인식되지 않은 필드(RAM 등)도 드롭다운 없이 바로 타이핑할 수 있는 빈 입력으로 보인다.
-    const ramInput = wrapper.find('input[aria-label="RAM 값"]')
-    expect(ramInput.exists()).toBe(true)
-    expect(ramInput.element.value).toBe('')
+    // 기기 정보 화면에는 모델명·저장 용량·OS 버전·CPU만 표시하고, 미인식 항목은 빈칸으로 둔다.
+    expect(wrapper.find('input[aria-label="RAM 값"]').exists()).toBe(false)
+    const storageInput = wrapper.find('input[aria-label="저장용량 값"]')
+    expect(storageInput.exists()).toBe(true)
+    expect(storageInput.element.value).toBe('')
 
     // 저장 후 값을 다시 고치기 시작하면, 방금 본 "저장됐습니다"는 이제 그 값 얘기가 아니므로 사라진다.
     await valueInput.setValue('Intel i7-1165G7 (다시 수정)')

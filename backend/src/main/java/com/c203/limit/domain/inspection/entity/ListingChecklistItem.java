@@ -3,6 +3,7 @@ package com.c203.limit.domain.inspection.entity;
 import com.c203.limit.domain.inspection.enums.AutomationType;
 import com.c203.limit.domain.inspection.enums.ChecklistItemCompletionStatus;
 import com.c203.limit.domain.inspection.enums.DeviceCheckResult;
+import com.c203.limit.domain.inspection.enums.DiagnosisFieldName;
 import com.c203.limit.domain.inspection.enums.EvidenceType;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -88,6 +89,18 @@ public class ListingChecklistItem {
     @Column(name = "display_order", nullable = false)
     private int displayOrder;
 
+    @Column(name = "manual_model_name", length = 100)
+    private String manualModelName;
+
+    @Column(name = "manual_storage_capacity", length = 30)
+    private String manualStorageCapacity;
+
+    @Column(name = "manual_os_version", length = 200)
+    private String manualOsVersion;
+
+    @Column(name = "manual_cpu", length = 100)
+    private String manualCpu;
+
     public static ListingChecklistItem createFromTemplateItem(Long listingId, ChecklistTemplateItem templateItem) {
         ListingChecklistItem item = new ListingChecklistItem();
         item.listingId = listingId;
@@ -123,6 +136,26 @@ public class ListingChecklistItem {
     public void markPending() {
         this.completionStatus = ChecklistItemCompletionStatus.PENDING;
         this.deviceCheckResult = null;
+    }
+
+    public String manualDiagnosisValue(DiagnosisFieldName fieldName) {
+        return switch (fieldName) {
+            case MODEL_NAME -> manualModelName;
+            case STORAGE_CAPACITY -> manualStorageCapacity;
+            case OS_VERSION -> manualOsVersion;
+            case CPU -> manualCpu;
+            default -> null;
+        };
+    }
+
+    public void correctManualDeviceInfo(DiagnosisFieldName fieldName, String value) {
+        switch (fieldName) {
+            case MODEL_NAME -> manualModelName = value;
+            case STORAGE_CAPACITY -> manualStorageCapacity = value;
+            case OS_VERSION -> manualOsVersion = value;
+            case CPU -> manualCpu = value;
+            default -> throw new IllegalArgumentException("device info does not support " + fieldName);
+        }
     }
 
     /**

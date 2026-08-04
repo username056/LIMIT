@@ -1,6 +1,7 @@
 package com.c203.limit.global.config.swagger;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -192,6 +193,10 @@ class OpenApiContractTests {
     com.c203.limit.domain.inspection.agent.InspectionSessionRepository inspectionSessionRepository;
 
     @MockitoBean
+    com.c203.limit.domain.inspection.agent.InspectionSessionTestResultRepository
+            inspectionSessionTestResultRepository;
+
+    @MockitoBean
     ReinspectionRequestRepository reinspectionRequestRepository;
 
     @MockitoBean
@@ -296,9 +301,27 @@ class OpenApiContractTests {
                                 "$.paths['/api/v1/inspection-agent/sessions/{sessionKey}/test-results'].post")
                         .exists())
                 .andExpect(jsonPath(
+                                "$.paths['/api/v1/inspection-agent/sessions/{sessionKey}/test-results'].post.responses['201']")
+                        .exists())
+                .andExpect(jsonPath(
+                                "$.paths['/api/v1/inspection-agent/sessions/{sessionKey}/test-results'].post.responses['200']")
+                        .exists())
+                .andExpect(jsonPath(
+                                "$.paths['/api/v1/inspection-agent/sessions/{sessionKey}/test-results'].post.responses['409'].description")
+                        .value(containsString("IDEMPOTENCY_CONFLICT")))
+                .andExpect(jsonPath(
                                 "$.paths['/api/v1/inspection-sessions/{sessionKey}/test-results'].get")
                         .exists())
-                .andExpect(jsonPath("$.components.schemas.SubmitTestResultRequest").exists());
+                .andExpect(jsonPath("$.components.schemas.SubmitTestResultRequest").exists())
+                .andExpect(jsonPath(
+                                "$.components.schemas.SubmitTestResultRequest.properties.measurementStatus.enum")
+                        .value(hasItem("NOT_EXECUTED")))
+                .andExpect(jsonPath(
+                                "$.components.schemas.TestResultResponse.properties.listingId")
+                        .exists())
+                .andExpect(jsonPath(
+                                "$.components.schemas.TestResultResponse.properties.checklistItemId")
+                        .exists());
     }
 
     @Test

@@ -1,15 +1,18 @@
 using LimitScanner.Api;
 using LimitScanner.Collectors;
+using LimitScanner.Diagnostics;
 
 namespace LimitScanner.Services;
 
 public sealed class InspectionCoordinator(
     LimitApiClient apiClient,
     DxDiagCollector dxDiagCollector,
-    BatteryReportCollector batteryReportCollector)
+    BatteryReportCollector batteryReportCollector,
+    InteractiveDeviceDiagnostics deviceDiagnostics)
 {
     public async Task RunAsync(
         string pairingCode,
+        IWin32Window owner,
         IProgress<string> progress,
         CancellationToken cancellationToken)
     {
@@ -44,6 +47,17 @@ public sealed class InspectionCoordinator(
                 "BATTERY_REPORT",
                 batteryReportPath,
                 "text/html",
+                cancellationToken);
+        }
+
+        progress.Report("스피커·디스플레이·충전 상태를 직접 확인해 주세요.");
+        var moduleResults = deviceDiagnostics.Run(owner);
+        foreach (var moduleResult in moduleResults)
+        {
+            progress.Report($"{moduleResult.TestType} 검사 결과를 전송하고 있습니다.");
+            await apiClient.SubmitTestResultAsync(
+                session.SessionKey,
+                moduleResult,
                 cancellationToken);
         }
 

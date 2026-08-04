@@ -233,15 +233,19 @@ function diagnosisFieldLabel(fieldName) {
 // 항목의 자동화 종류가 다룰 수 있는 필드 전체 목록입니다. 자동 인식이 실패했거나(값 없음)
 // 일부만 인식됐을 때도, 인식 못한 필드까지 빈 입력 칸으로 미리 보여줘서 드롭다운 없이
 // 바로 타이핑해 저장할 수 있게 합니다.
-const OCR_FIELD_NAMES = ['MODEL_NAME', 'CPU', 'RAM', 'GPU', 'OS_VERSION', 'STORAGE_CAPACITY']
-const DXDIAG_FIELD_NAMES = ['CPU', 'RAM', 'GPU', 'GPU_MEMORY', 'DRIVER_VERSION', 'SOUND_DEVICE']
+const OCR_FIELD_NAMES = ['MODEL_NAME', 'STORAGE_CAPACITY', 'OS_VERSION', 'CPU']
+const DXDIAG_FIELD_NAMES = ['RAM', 'GPU', 'GPU_MEMORY', 'DRIVER_VERSION', 'SOUND_DEVICE']
 const BATTERY_REPORT_FIELD_NAMES = [
   'DESIGN_CAPACITY', 'FULL_CHARGE_CAPACITY', 'CYCLE_COUNT', 'BATTERY_MANUFACTURER', 'CAPACITY_RATIO',
 ]
 
+function isDeviceInfoItem(item) {
+  return ['LAP-SCR-013', 'SYS-003'].includes(item?.itemCode)
+}
+
 function allDiagnosisFieldNamesFor(item) {
   if (!item) return []
-  if (item.automationType === 'OCR') return OCR_FIELD_NAMES
+  if (isDeviceInfoItem(item)) return OCR_FIELD_NAMES
   if (item.automationType === 'FILE_PARSE' && item.parserType === 'BATTERY_REPORT') return BATTERY_REPORT_FIELD_NAMES
   if (item.automationType === 'FILE_PARSE' && item.parserType === 'DXDIAG') return DXDIAG_FIELD_NAMES
   return []
@@ -256,7 +260,7 @@ async function refreshAutomatedDiagnoses() {
   if (!currentProductId.value) return
   checklistItems.value = await getProductChecklist(currentProductId.value)
   await Promise.allSettled(checklistItems.value
-    .filter((item) => item.automationType === 'FILE_PARSE')
+    .filter((item) => allDiagnosisFieldNamesFor(item).length > 0)
     .map((item) => refreshDiagnosis(item)))
 }
 
@@ -912,6 +916,9 @@ async function persistSaleInfo() {
   // 상품이 생긴 다음이라야 대표 이미지 presigned URL을 받을 수 있습니다.
   await flushPendingThumbnail()
   checklistItems.value = await getProductChecklist(productId)
+  await Promise.allSettled(checklistItems.value
+    .filter((item) => allDiagnosisFieldNamesFor(item).length > 0)
+    .map((item) => refreshDiagnosis(item)))
   activeCaptureItemId.value = mediaChecklistItems.value[0]?.checklistItemId || null
   return productId
 }
@@ -1591,7 +1598,7 @@ async function startEdit(productId) {
           restored: true,
         })),
       }
-      if (item.automationType && item.automationType !== 'NONE' && history.length) {
+      if (item.automationType && item.automationType !== 'NONE') {
         try {
           await refreshDiagnosis(item)
         } catch {
@@ -2263,7 +2270,7 @@ onMounted(async () => {
                   Windows 자동 검사
                 </h3>
                 <p class="mt-1 text-xs leading-5 text-text-sub">
-                  Limit 진단 프로그램으로 CPU·RAM·GPU와 배터리 정보를 자동으로 채울 수 있습니다.
+                  Limit 진단 프로그램으로 모델명·저장 용량·OS 버전·CPU·RAM·GPU와 배터리 정보를 자동으로 채울 수 있습니다.
                   비밀번호와 개인 파일은 수집하지 않습니다.
                 </p>
                 <div class="mt-3 flex flex-wrap items-center gap-2">
@@ -2611,9 +2618,6 @@ onMounted(async () => {
                 v-if="activeCaptureItem && diagnosisState[activeCaptureItem.checklistItemId]"
                 class="mt-4 rounded-lg border border-border bg-bg p-4"
               >
-                <p class="text-sm font-bold text-text-main">
-                  자동 인식된 사양
-                </p>
                 <p
                   v-if="diagnosisState[activeCaptureItem.checklistItemId].status === 'parsing'"
                   class="mt-2 text-xs text-text-sub"
