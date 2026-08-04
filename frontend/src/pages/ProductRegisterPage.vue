@@ -151,6 +151,11 @@ const returnStep = computed(() => {
   const step = Number(route.query.step)
   return [1, 2, 3].includes(step) ? step : null
 })
+const resumeProductId = computed(() => {
+  const productId = Number(route.query.resumeProductId)
+  return Number.isInteger(productId) && productId > 0 ? productId : null
+})
+const isRegistrationResume = computed(() => Boolean(resumeProductId.value))
 const editingId = ref(null)
 // 수정 모드로 열린 상품의 현재 상태입니다. 판매 중인 상품을 고칠 때는 임시저장(초안) 진행도를
 // 서버에 밀어 넣지 않아야 하므로 상태를 들고 있습니다.
@@ -286,7 +291,9 @@ function isAutomatedDiagnosisComplete(item) {
 }
 
 function isCaptureItemComplete(item) {
-  return mediaOf(item.checklistItemId).length > 0 || isAutomatedDiagnosisComplete(item)
+  return mediaOf(item.checklistItemId).length > 0
+    || isAutomatedDiagnosisComplete(item)
+    || (CHECKABLE_ITEM_CODES[item.itemCode] && confirmState[item.checklistItemId])
 }
 
 function allDiagnosisFieldNamesFor(item) {
@@ -306,7 +313,7 @@ async function refreshAutomatedDiagnoses() {
   if (!currentProductId.value) return
   checklistItems.value = await getProductChecklist(currentProductId.value)
   checklistItems.value
-    .filter((item) => item.evidenceType === 'SELLER_CONFIRMATION')
+    .filter((item) => CHECKABLE_ITEM_CODES[item.itemCode])
     .forEach((item) => {
       confirmState[item.checklistItemId] = item.status === 'COMPLETED'
     })
@@ -511,7 +518,7 @@ const privacyChecklistItems = computed(
 )
 const deviceCheckConfirmationItems = computed(
   () => checklistItems.value.filter(
-    (item) => item.evidenceType === 'SELLER_CONFIRMATION' && CHECKABLE_ITEM_CODES[item.itemCode],
+    (item) => CHECKABLE_ITEM_CODES[item.itemCode],
   ),
 )
 const capturedMediaCount = computed(
@@ -1674,8 +1681,10 @@ async function startEdit(productId) {
     Object.keys(confirmState).forEach((key) => delete confirmState[key])
     checklistItems.value = await getProductChecklist(productId)
     await Promise.all(checklistItems.value.map(async (item) => {
-      if (item.evidenceType === 'SELLER_CONFIRMATION') {
+      if (CHECKABLE_ITEM_CODES[item.itemCode]) {
         confirmState[item.checklistItemId] = item.status === 'COMPLETED'
+      }
+      if (item.evidenceType === 'SELLER_CONFIRMATION') {
         return
       }
       const history = await getEvidenceHistory(productId, item.checklistItemId)
@@ -1706,7 +1715,7 @@ async function startEdit(productId) {
     if (draftProgress) {
       draftProgressResults.value = progressResultsMap(draftProgress.results) || new Map()
       checklistItems.value
-        .filter((item) => item.evidenceType === 'SELLER_CONFIRMATION')
+        .filter((item) => item.evidenceType === 'SELLER_CONFIRMATION' || CHECKABLE_ITEM_CODES[item.itemCode])
         .forEach((item) => {
           const savedResult = draftProgressResults.value.get(item.checklistItemId)
           confirmState[item.checklistItemId] = savedResult
@@ -1770,6 +1779,12 @@ onMounted(async () => {
     errorMessage.value = error.message || '기기 카테고리를 불러오지 못했습니다.'
   }
 
+  // 직접 점검에서 등록 화면으로 돌아올 때는 /new 주소를 유지한 채 초안 ID로 이어서 엽니다.
+  if (resumeProductId.value) {
+    await startEdit(resumeProductId.value)
+    return
+  }
+
   // /seller/products/:productId/edit 로 들어오면 기존 데이터를 불러 수정 모드로 엽니다.
   if (route.params.productId) {
     await startEdit(Number(route.params.productId))
@@ -1795,7 +1810,7 @@ onMounted(async () => {
       -->
       <PageHeader
         eyebrow="ITEM REGISTER"
-        :title="editingId ? '상품 수정' : '상품 등록'"
+        :title="editingId && !isRegistrationResume ? '상품 수정' : '상품 등록'"
         description="기기 정보와 검증 체크리스트를 순서대로 완료하면 바로 판매가 시작됩니다. 중간에 나가야 하면 임시저장을 눌러 주세요."
       >
         <template #action>

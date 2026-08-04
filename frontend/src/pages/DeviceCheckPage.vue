@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import PageHeader from '../components/PageHeader.vue'
@@ -17,6 +17,8 @@ const CHECK_KIND_LABEL = {
   [CHECK_KIND.CAMERA]: '카메라',
   [CHECK_KIND.MIC]: '마이크',
   [CHECK_KIND.SPEAKER]: '스피커',
+  [CHECK_KIND.DISPLAY]: '디스플레이',
+  [CHECK_KIND.CHARGING]: '충전',
   [CHECK_KIND.KEYBOARD]: '키보드',
   [CHECK_KIND.NUMPAD]: '숫자 키패드',
   [CHECK_KIND.POINTER]: '마우스/터치패드',
@@ -73,6 +75,9 @@ const finished = ref(false)
 const videoEl = ref(null)
 const pointerAreaEl = ref(null)
 const keyboardMissing = ref([])
+const displayStarted = ref(false)
+const chargingStarted = ref(false)
+const forceRecheckIds = reactive(new Set())
 
 /*
   돌아갈 곳은 2단계입니다.
@@ -86,9 +91,8 @@ const keyboardMissing = ref([])
   엽니다).
 */
 const backToRegister = {
-  name: 'seller-product-edit',
-  params: { productId },
-  query: { step: '2' },
+  name: 'seller-product-new',
+  query: { step: '2', resumeProductId: String(productId) },
 }
 
 const camera = useCameraCheck()
@@ -98,9 +102,19 @@ let keyboard = null
 let pointer = null
 
 const currentItem = computed(() => items.value[stepIndex.value] || null)
+const hasNoCheckableItems = computed(
+  () => !loading.value && !loadError.value && items.value.length === 0,
+)
 const currentLabel = computed(() =>
   currentItem.value ? CHECK_KIND_LABEL[currentItem.value.checkKind] : '',
 )
+const currentAlreadyCompleted = computed(() => {
+  const item = currentItem.value
+  if (!item) return false
+  if (forceRecheckIds.has(item.checklistItemId)) return false
+  return item.status === 'COMPLETED'
+    || existingResults.value.get(item.checklistItemId) === RESULT.SUCCESS
+})
 const isNumpadCheck = computed(() => currentItem.value?.checkKind === CHECK_KIND.NUMPAD)
 
 async function load() {
@@ -116,7 +130,6 @@ async function load() {
       Object.entries(progress.results || {}).map(([itemId, result]) => [Number(itemId), result]),
     )
     draftStep.value = progress.step
-    if (items.value.length === 0) finished.value = true
   } catch {
     loadError.value = '점검 대상 체크리스트를 불러오지 못했습니다.'
   } finally {
@@ -133,6 +146,8 @@ async function runCurrent() {
   const item = currentItem.value
   if (!item) return
   keyboardMissing.value = []
+  displayStarted.value = false
+  chargingStarted.value = false
 
   if (item.checkKind === CHECK_KIND.CAMERA) {
     const passed = await camera.start(videoEl.value)
@@ -142,6 +157,10 @@ async function runCurrent() {
     markResult(item.checklistItemId, passed)
   } else if (item.checkKind === CHECK_KIND.SPEAKER) {
     speaker.playTone()
+  } else if (item.checkKind === CHECK_KIND.DISPLAY) {
+    displayStarted.value = true
+  } else if (item.checkKind === CHECK_KIND.CHARGING) {
+    chargingStarted.value = true
   } else if (item.checkKind === CHECK_KIND.KEYBOARD) {
     keyboard = useKeyboardCheck({ includeNumpad: false })
     keyboard.start()
@@ -158,6 +177,14 @@ async function runCurrent() {
     pointer = usePointerInteractionCheck({ pointerTypes: ['pen'], requirePressure: true })
     pointer.start(pointerAreaEl.value)
   }
+}
+
+function confirmManualCheck(passed) {
+  markResult(currentItem.value.checklistItemId, passed)
+}
+
+function forceRecheckCurrent() {
+  forceRecheckIds.add(currentItem.value.checklistItemId)
 }
 
 function confirmSpeakerHeard(heard) {
@@ -250,6 +277,24 @@ onBeforeUnmount(() => {
         </BaseCard>
 
         <BaseCard
+          v-else-if="hasNoCheckableItems"
+          class="mt-6 p-8"
+        >
+          <p class="font-semibold text-text-main">
+            직접 점검할 수 있는 항목이 없습니다.
+          </p>
+          <p class="mt-2 text-sm leading-6 text-text-sub">
+            이 상품의 체크리스트에 실동작 점검 항목이 연결되지 않아 점검 결과를 완료로 저장하지 않았습니다.
+          </p>
+          <BaseButton
+            class="mt-6"
+            :to="backToRegister"
+          >
+            상품 등록으로 돌아가기
+          </BaseButton>
+        </BaseCard>
+
+        <BaseCard
           v-else-if="finished"
           class="mt-6 p-8"
         >
@@ -289,9 +334,32 @@ onBeforeUnmount(() => {
             {{ currentLabel }}
           </h2>
 
+          <div
+            v-if="currentAlreadyCompleted"
+            class="mt-4 rounded-md border border-primary/30 bg-accent p-4"
+          >
+            <p class="font-semibold text-primary-dark">
+              자동 입력 완료
+            </p>
+            <p class="mt-1 text-sm text-text-sub">
+              Limit 진단 프로그램에서 정상 결과를 받아 웹 점검을 생략할 수 있습니다.
+            </p>
+            <div class="mt-4 flex gap-3">
+              <BaseButton @click="next">
+                다음
+              </BaseButton>
+              <BaseButton
+                variant="outline"
+                @click="forceRecheckCurrent"
+              >
+                다시 점검
+              </BaseButton>
+            </div>
+          </div>
+
           <!-- 카메라 -->
           <div
-            v-if="currentItem.checkKind === 'CAMERA'"
+            v-else-if="currentItem.checkKind === 'CAMERA'"
             class="mt-4"
           >
             <video
@@ -398,6 +466,83 @@ onBeforeUnmount(() => {
               </BaseButton>
               <BaseButton
                 v-if="speaker.status.value === 'passed' || speaker.status.value === 'failed'"
+                @click="next"
+              >
+                다음
+              </BaseButton>
+            </div>
+          </div>
+
+          <!-- 디스플레이 -->
+          <div
+            v-else-if="currentItem.checkKind === 'DISPLAY'"
+            class="mt-4"
+          >
+            <p class="text-sm text-text-sub">
+              점검을 시작한 뒤 흰색·검은색·빨강·초록·파랑 영역에서 멍, 줄, 깜빡임과 불량 화소를 확인하세요.
+            </p>
+            <div
+              v-if="displayStarted"
+              class="mt-4 grid h-48 grid-cols-5 overflow-hidden rounded-md border border-border"
+            >
+              <span class="bg-white" /><span class="bg-black" /><span class="bg-red-600" />
+              <span class="bg-green-600" /><span class="bg-blue-600" />
+            </div>
+            <div class="mt-4 flex flex-wrap gap-3">
+              <BaseButton
+                v-if="!displayStarted"
+                @click="runCurrent"
+              >
+                점검 시작
+              </BaseButton>
+              <template v-else-if="!itemResults.has(currentItem.checklistItemId)">
+                <BaseButton @click="confirmManualCheck(true)">
+                  정상이에요
+                </BaseButton>
+                <BaseButton
+                  variant="outline"
+                  @click="confirmManualCheck(false)"
+                >
+                  이상이 있어요
+                </BaseButton>
+              </template>
+              <BaseButton
+                v-else
+                @click="next"
+              >
+                다음
+              </BaseButton>
+            </div>
+          </div>
+
+          <!-- 충전 -->
+          <div
+            v-else-if="currentItem.checkKind === 'CHARGING'"
+            class="mt-4"
+          >
+            <p class="text-sm text-text-sub">
+              충전기를 연결하거나 분리하고 운영체제의 배터리 아이콘과 충전 표시가 바뀌는지 확인하세요.
+            </p>
+            <div class="mt-4 flex flex-wrap gap-3">
+              <BaseButton
+                v-if="!chargingStarted"
+                @click="runCurrent"
+              >
+                점검 시작
+              </BaseButton>
+              <template v-else-if="!itemResults.has(currentItem.checklistItemId)">
+                <BaseButton @click="confirmManualCheck(true)">
+                  정상이에요
+                </BaseButton>
+                <BaseButton
+                  variant="outline"
+                  @click="confirmManualCheck(false)"
+                >
+                  인식되지 않아요
+                </BaseButton>
+              </template>
+              <BaseButton
+                v-else
                 @click="next"
               >
                 다음

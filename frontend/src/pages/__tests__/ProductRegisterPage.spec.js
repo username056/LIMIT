@@ -1484,6 +1484,21 @@ describe('ProductRegisterPage', () => {
       expect(wrapper.text()).toContain('카메라·마이크·키보드 등 직접 점검하기')
     })
 
+    it('직접 점검에서 new 주소로 돌아오면 상품 등록 제목과 초안 2단계를 복구한다', async () => {
+      delete routeParams.productId
+      routeQuery.step = '2'
+      routeQuery.resumeProductId = '1001'
+      getProductChecklist.mockResolvedValue([])
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+
+      expect(getMyProduct).toHaveBeenCalledWith(1001)
+      expect(wrapper.text()).toContain('상품 등록')
+      expect(wrapper.text()).not.toContain('상품 수정')
+      expect(wrapper.text()).toContain('실동작 점검')
+    })
+
     it('없는 단계를 주소로 넣으면 1단계로 연다', async () => {
       routeQuery.step = '9'
       const wrapper = mount(ProductRegisterPage, { global: globalOptions })

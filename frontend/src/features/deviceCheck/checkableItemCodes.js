@@ -4,6 +4,8 @@ export const CHECK_KIND = {
   CAMERA: 'CAMERA',
   MIC: 'MIC',
   SPEAKER: 'SPEAKER',
+  DISPLAY: 'DISPLAY',
+  CHARGING: 'CHARGING',
   KEYBOARD: 'KEYBOARD',
   NUMPAD: 'NUMPAD',
   POINTER: 'POINTER',
@@ -15,6 +17,8 @@ export const CHECKABLE_ITEM_CODES = {
   'LAP-FTR-CAM': CHECK_KIND.CAMERA,
   'LAP-FTR-MIC': CHECK_KIND.MIC,
   'LAP-FTR-SPK': CHECK_KIND.SPEAKER,
+  'LAP-DSP-003': CHECK_KIND.DISPLAY,
+  'LAP-CHG-007': CHECK_KIND.CHARGING,
   'LAP-KBD-005': CHECK_KIND.KEYBOARD,
   'LAP-FTR-NUM': CHECK_KIND.NUMPAD,
   'LAP-PAD-006': CHECK_KIND.POINTER,
@@ -23,12 +27,7 @@ export const CHECKABLE_ITEM_CODES = {
 }
 
 export function toCheckableItems(checklistItems) {
-  // itemCode가 일치해도, 이 기능 배포 전에 스냅샷된 기존 상품은 evidenceType이 여전히
-  // PHOTO/VIDEO일 수 있다 — 그런 항목까지 포함하면 저장 시 백엔드가 SELLER_CONFIRMATION만
-  // 허용해서 ITEM_NOT_FOUND로 거부한다.
   return checklistItems
-    .filter(
-      (item) => CHECKABLE_ITEM_CODES[item.itemCode] && item.evidenceType === 'SELLER_CONFIRMATION',
-    )
+    .filter((item) => CHECKABLE_ITEM_CODES[item.itemCode])
     .map((item) => ({ ...item, checkKind: CHECKABLE_ITEM_CODES[item.itemCode] }))
 }

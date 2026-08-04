@@ -23,6 +23,14 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ProductDraftProgressService {
     private static final Logger log = LoggerFactory.getLogger(ProductDraftProgressService.class);
+    private static final Set<String> WEB_DEVICE_CHECK_ITEM_CODES = Set.of(
+            "LAP-FTR-SPK",
+            "LAP-DSP-003",
+            "LAP-CHG-007",
+            "LAP-FTR-CAM",
+            "LAP-FTR-MIC",
+            "LAP-KBD-005",
+            "LAP-PAD-006");
 
     private final ListingRepository listings;
     private final ListingChecklistItemRepository checklistItems;
@@ -60,15 +68,15 @@ public class ProductDraftProgressService {
                         UpdateProductDraftProgressRequest.ChecklistItemResult::checklistItemId,
                         UpdateProductDraftProgressRequest.ChecklistItemResult::result));
 
-        Set<Long> confirmationIds = new HashSet<>();
+        Set<Long> checkableIds = new HashSet<>();
         for (ListingChecklistItem item : items) {
-            if (item.getEvidenceType() != EvidenceType.SELLER_CONFIRMATION) continue;
-            confirmationIds.add(item.getId());
+            if (!isWebDeviceCheckItem(item)) continue;
+            checkableIds.add(item.getId());
             DeviceCheckResult result = requested.get(item.getId());
             if (result != null) item.applyDeviceCheckResult(result);
-            else item.markPending();
+            else if (item.getEvidenceType() == EvidenceType.SELLER_CONFIRMATION) item.markPending();
         }
-        if (!confirmationIds.containsAll(requested.keySet())) {
+        if (!checkableIds.containsAll(requested.keySet())) {
             throw new BusinessException(ErrorCode.ITEM_NOT_FOUND);
         }
         listing.updateDraftStep(request.step());
@@ -88,10 +96,14 @@ public class ProductDraftProgressService {
     private ProductDraftProgressResponse response(
             Listing listing, List<ListingChecklistItem> items) {
         Map<Long, DeviceCheckResult> results = items.stream()
-                .filter(item -> item.getEvidenceType() == EvidenceType.SELLER_CONFIRMATION)
+                .filter(this::isWebDeviceCheckItem)
                 .filter(item -> item.getDeviceCheckResult() != null)
                 .collect(Collectors.toMap(
                         ListingChecklistItem::getId, ListingChecklistItem::getDeviceCheckResult));
         return new ProductDraftProgressResponse(listing.getDraftStep(), results);
+    }
+
+    private boolean isWebDeviceCheckItem(ListingChecklistItem item) {
+        return WEB_DEVICE_CHECK_ITEM_CODES.contains(item.getItemCode());
     }
 }
