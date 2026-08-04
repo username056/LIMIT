@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseButton from '../components/BaseButton.vue'
@@ -142,6 +142,9 @@ const activeDiagnosisField = ref(null)
 
 // 증빙 원본을 크게 보는 팝업입니다. 목록 안 썸네일은 56px이라 영상 재생에는 너무 작습니다.
 const mediaViewer = ref(null)
+
+// 상품 사진 원본. 위 4:3 틀이 사진을 잘라 채우기 때문에, 잘린 부분은 여기서만 보입니다.
+const expandedImage = ref('')
 
 function openMediaViewer(item, evidence) {
   mediaViewer.value = { itemName: item.name, evidence }
@@ -312,7 +315,17 @@ async function loadProduct(productId) {
   }
 }
 
+// 화면을 가득 채운 사진에서는 어디를 눌러야 닫히는지 알기 어려워 Esc도 받습니다.
+function closeViewersOnEscape({ key: pressed }) {
+  if (pressed !== 'Escape') return
+  if (expandedImage.value) expandedImage.value = ''
+  else if (mediaViewer.value) mediaViewer.value = null
+}
+
+onBeforeUnmount(() => window.removeEventListener('keydown', closeViewersOnEscape))
+
 onMounted(async () => {
+  window.addEventListener('keydown', closeViewersOnEscape)
   try {
     await loadProduct(route.params.productId)
     try {
@@ -458,12 +471,26 @@ onMounted(async () => {
               아래로 빈 공간이 크게 생깁니다. 최대 높이를 두어 설명이 화면 안으로 올라오게 합니다.
             -->
             <div class="relative flex aspect-[4/3] max-h-[460px] items-center justify-center overflow-hidden rounded-md bg-slate-50">
-              <img
+              <!--
+                눌러서 잘리지 않은 원본을 봅니다.
+                ---------------------------------------------------------------
+                4:3 틀에 object-cover로 채우기 때문에 세로로 긴 사진은 위아래가,
+                가로로 긴 사진은 좌우가 잘립니다. 구매자가 기기 상태를 보러 온
+                화면인데 잘린 부분을 확인할 방법이 없었습니다.
+              -->
+              <button
                 v-if="activeImageUrl"
-                :src="activeImageUrl"
-                :alt="product.name"
-                class="h-full w-full object-cover"
+                type="button"
+                class="h-full w-full cursor-zoom-in"
+                aria-label="상품 이미지 확대 보기"
+                @click="expandedImage = activeImageUrl"
               >
+                <img
+                  :src="activeImageUrl"
+                  :alt="product.name"
+                  class="h-full w-full object-cover"
+                >
+              </button>
               <div
                 v-else
                 class="flex flex-col items-center text-slate-300"
@@ -684,8 +711,13 @@ onMounted(async () => {
             <h2 class="text-lg font-bold text-text-main">
               상품 설명
             </h2>
+            <!--
+              본문은 text-main입니다. 회색(text-sub)으로 두면 흰 바탕에서 대비가
+              4.6:1까지 떨어져 길게 읽기 어렵습니다. 판매자가 직접 쓴 글이고 이
+              화면에서 가장 오래 읽는 부분이라 본문 색으로 둡니다.
+            -->
             <p
-              class="mt-3 whitespace-pre-wrap text-base leading-7 text-text-sub"
+              class="mt-3 whitespace-pre-wrap text-base leading-7 text-text-main"
               :class="isDescriptionExpanded ? '' : 'line-clamp-4'"
             >
               {{ product.description || '판매자가 등록한 상세 설명이 없습니다.' }}
@@ -937,6 +969,35 @@ onMounted(async () => {
               </div>
             </dl>
           </div>
+        </div>
+
+        <!--
+          상품 사진 원본 팝업.
+          -------------------------------------------------------------------------
+          위 4:3 틀은 사진을 잘라 채웁니다. 여기서는 object-contain으로 잘리지 않은
+          전체를 보여 줍니다. 바깥을 누르거나 Esc로 닫습니다.
+        -->
+        <div
+          v-if="expandedImage"
+          role="dialog"
+          aria-modal="true"
+          aria-label="상품 이미지 원본"
+          class="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-4 sm:p-8"
+          @click.self="expandedImage = ''"
+        >
+          <button
+            type="button"
+            class="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-2xl text-white transition hover:bg-white/25"
+            aria-label="확대 이미지 닫기"
+            @click="expandedImage = ''"
+          >
+            ×
+          </button>
+          <img
+            :src="expandedImage"
+            :alt="product.name"
+            class="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
+          >
         </div>
 
         <!-- 증빙 원본 팝업. 목록 썸네일이 작아서 영상은 여기서 재생합니다. -->

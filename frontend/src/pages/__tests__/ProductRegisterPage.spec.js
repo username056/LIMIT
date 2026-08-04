@@ -33,13 +33,14 @@ import {
 
 // 수정 모드는 /seller/products/:productId/edit 로 들어옵니다. 테스트마다 params를 바꿀 수 있게
 // 참조를 공유합니다(기본은 등록 모드).
-const { routerPushMock, routeParams } = vi.hoisted(() => ({
+const { routerPushMock, routeParams, routeQuery } = vi.hoisted(() => ({
   routerPushMock: vi.fn(),
   routeParams: {},
+  routeQuery: {},
 }))
 
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: routeParams, query: {} }),
+  useRoute: () => ({ params: routeParams, query: routeQuery }),
   useRouter: () => ({ push: routerPushMock, replace: vi.fn() }),
 }))
 
@@ -168,6 +169,7 @@ describe('ProductRegisterPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     delete routeParams.productId
+    Object.keys(routeQuery).forEach((key) => delete routeQuery[key])
     // clearAllMocks는 호출 기록만 지우고 구현은 남기므로, 테스트마다 기본 동작을 다시 세웁니다.
     getEvidenceHistory.mockResolvedValue([])
     transitionProductStatus.mockResolvedValue({})
@@ -907,16 +909,148 @@ describe('ProductRegisterPage', () => {
     await attachFile(imageInput, new File(['b'], 'b.jpg', { type: 'image/jpeg' }))
     await flushPromises()
 
-    const promoteButton = wrapper.findAll('button')
-      .find((button) => button.text() === '대표' && button.attributes('disabled') === undefined)
-    await promoteButton.trigger('click')
+    const moveLeft = wrapper.findAll('button[aria-label="이미지 순서를 앞으로 이동"]')
+      .find((button) => button.attributes('disabled') === undefined)
+    await moveLeft.trigger('click')
+    await flushPromises()
+
+    // 서버가 돌려준 목록을 그대로 씁니다. 2번이 앞으로 오고 대표도 2번이 됩니다.
+    expect(updateProductImageOrder).toHaveBeenCalledWith(1001, {
+      imageIds: [2, 1],
+      thumbnailImageId: 2,
+    })
+    const badgeOwners = wrapper.findAll('li')
+      .filter((card) => card.findAll('span').some((node) => node.text() === '대표'))
+    expect(badgeOwners).toHaveLength(1)
+    expect(wrapper.text()).not.toContain('상품 이미지 순서를 변경하지 못했습니다.')
+  })
+
+  it('올린 사진을 누르면 크게 띄우고 Esc로 닫는다', async () => {
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await goToCaptureStep(wrapper)
+
+    await attachFile(
+      wrapper.find('input[accept="image/jpeg,image/png,image/webp"]'),
+      new File(['image'], 'product.jpg', { type: 'image/jpeg' }),
+    )
+    await flushPromises()
+
+    // 목록은 정사각으로 잘라 보여 주므로, 무엇이 찍혔는지는 확대로만 확인됩니다.
+    await wrapper.get('button[aria-label="1번째 상품 이미지 확대 보기"]').trigger('click')
+    expect(wrapper.find('[aria-label="상품 이미지 확대 보기"]').exists()).toBe(true)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await flushPromises()
+    expect(wrapper.find('[aria-label="상품 이미지 확대 보기"]').exists()).toBe(false)
+  })
+
+  it('순서를 옮길 때는 업로드 진행 막대를 띄우지 않는다', async () => {
+    completeProductImage
+      .mockResolvedValueOnce({
+        imageId: 1, imageType: 'THUMBNAIL', displayOrder: 0,
+        imageUrl: 'https://storage.test/image-1', mimeType: 'image/jpeg',
+      })
+      .mockResolvedValueOnce({
+        imageId: 2, imageType: 'DETAIL', displayOrder: 1,
+        imageUrl: 'https://storage.test/image-2', mimeType: 'image/jpeg',
+      })
+    // 응답을 늦춰 순서 변경이 진행 중인 순간을 붙잡습니다.
+    let releaseOrder
+    updateProductImageOrder.mockImplementation(
+      () => new Promise((resolve) => { releaseOrder = () => resolve([]) }),
+    )
+
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await goToCaptureStep(wrapper)
+
+    const imageInput = wrapper.find('input[accept="image/jpeg,image/png,image/webp"]')
+    await attachFile(imageInput, new File(['a'], 'a.jpg', { type: 'image/jpeg' }))
+    await flushPromises()
+    await attachFile(imageInput, new File(['b'], 'b.jpg', { type: 'image/jpeg' }))
+    await flushPromises()
+
+    const moveLeft = wrapper.findAll('button[aria-label="이미지 순서를 앞으로 이동"]')
+      .find((button) => button.attributes('disabled') === undefined)
+    await moveLeft.trigger('click')
+
+    // 올릴 것이 없으니 0% 막대가 깜빡이지 않아야 합니다.
+    expect(wrapper.find('[role="progressbar"]').exists()).toBe(false)
+
+    releaseOrder()
+    await flushPromises()
+  })
+
+  it('순서를 옮기면 맨 왼쪽 사진이 대표가 된다', async () => {
+    completeProductImage
+      .mockResolvedValueOnce({
+        imageId: 1, imageType: 'THUMBNAIL', displayOrder: 0,
+        imageUrl: 'https://storage.test/image-1', mimeType: 'image/jpeg',
+      })
+      .mockResolvedValueOnce({
+        imageId: 2, imageType: 'DETAIL', displayOrder: 1,
+        imageUrl: 'https://storage.test/image-2', mimeType: 'image/jpeg',
+      })
+    updateProductImageOrder.mockResolvedValue([])
+
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await goToCaptureStep(wrapper)
+
+    const imageInput = wrapper.find('input[accept="image/jpeg,image/png,image/webp"]')
+    await attachFile(imageInput, new File(['a'], 'a.jpg', { type: 'image/jpeg' }))
+    await flushPromises()
+    await attachFile(imageInput, new File(['b'], 'b.jpg', { type: 'image/jpeg' }))
+    await flushPromises()
+
+    // 두 번째 사진을 앞으로 보냅니다. 예전에는 순서만 바뀌고 대표는 1번에 남았습니다.
+    const moveLeft = wrapper.findAll('button[aria-label="이미지 순서를 앞으로 이동"]')
+      .find((button) => button.attributes('disabled') === undefined)
+    await moveLeft.trigger('click')
     await flushPromises()
 
     expect(updateProductImageOrder).toHaveBeenCalledWith(1001, {
-      imageIds: [1, 2],
+      imageIds: [2, 1],
       thumbnailImageId: 2,
     })
-    expect(wrapper.text()).not.toContain('상품 이미지 순서를 변경하지 못했습니다.')
+  })
+
+  it('여러 장을 한 번에 올려도 고른 순서대로 늘어세운다', async () => {
+    // 업로드가 동시에 돌아 먼저 끝난 것부터 도착해도, displayOrder로 다시 줄 세웁니다.
+    completeProductImage
+      .mockResolvedValueOnce({
+        imageId: 9, imageType: 'DETAIL', displayOrder: 1,
+        imageUrl: 'https://storage.test/second', mimeType: 'image/jpeg',
+      })
+      .mockResolvedValueOnce({
+        imageId: 8, imageType: 'THUMBNAIL', displayOrder: 0,
+        imageUrl: 'https://storage.test/first', mimeType: 'image/jpeg',
+      })
+
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await goToCaptureStep(wrapper)
+
+    const imageInput = wrapper.find('input[accept="image/jpeg,image/png,image/webp"]')
+    await attachFile(imageInput, new File(['a'], 'a.jpg', { type: 'image/jpeg' }))
+    await flushPromises()
+    await attachFile(imageInput, new File(['b'], 'b.jpg', { type: 'image/jpeg' }))
+    await flushPromises()
+
+    /*
+      나중에 도착한 displayOrder 0이 맨 왼쪽에 와야 합니다.
+      화면에는 blob 미리보기가 걸려 있어 URL로는 구분할 수 없으므로, 대표 배지가
+      첫 칸에 붙었는지로 확인합니다. 정렬하지 않으면 먼저 도착한 1번이 앞에 서서
+      배지가 둘째 칸에 붙습니다.
+    */
+    const hasThumbnailBadge = (card) => card.findAll('span')
+      .some((node) => node.text() === '대표')
+
+    const cards = wrapper.findAll('li').filter((node) => node.find('img').exists())
+    expect(cards.length).toBeGreaterThanOrEqual(2)
+    expect(hasThumbnailBadge(cards[0])).toBe(true)
+    expect(hasThumbnailBadge(cards[1])).toBe(false)
   })
 
   it('등록을 완료하면 판매 상태로 올리고 등록한 상품 상세로 이동한다', async () => {
@@ -1148,6 +1282,24 @@ describe('ProductRegisterPage', () => {
     })
 
     it('진행 단계가 남아 있어도 1단계부터 연다', async () => {
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('판매할 기기를 등록해 주세요.')
+    })
+
+    // 실동작 점검 화면에서 저장하고 돌아오면 ?step=3으로 옵니다. 하던 자리를 잃지 않아야 합니다.
+    it('주소에 step이 실려 오면 그 단계로 되돌린다', async () => {
+      routeQuery.step = '3'
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+
+      expect(wrapper.text()).not.toContain('판매할 기기를 등록해 주세요.')
+      expect(wrapper.text()).toContain('실동작 자동 점검하기')
+    })
+
+    it('없는 단계를 주소로 넣으면 1단계로 연다', async () => {
+      routeQuery.step = '9'
       const wrapper = mount(ProductRegisterPage, { global: globalOptions })
       await flushPromises()
 
