@@ -125,6 +125,8 @@ const isLoadingModels = ref(false)
 const modelLoadError = ref('')
 let modelRequestId = 0
 const isCustomModelInput = ref(false)
+// 수정 중인 기존 상품이 직접 입력 모델인지 여부. 이 경우 기능 체크리스트는 서버가 수정을 거부한다.
+const editingCustomModel = ref(false)
 const isRequestingModel = ref(false)
 const modelRequestResult = ref(null)
 const customModel = reactive({
@@ -259,9 +261,37 @@ const DXDIAG_FIELD_NAMES = ['RAM', 'GPU', 'GPU_MEMORY', 'DRIVER_VERSION', 'SOUND
 const BATTERY_REPORT_FIELD_NAMES = [
   'DESIGN_CAPACITY', 'FULL_CHARGE_CAPACITY', 'CYCLE_COUNT', 'BATTERY_MANUFACTURER', 'CAPACITY_RATIO',
 ]
+const COMPLETION_FIELD_NAMES_BY_PARSER = {
+  DXDIAG: ['RAM', 'GPU'],
+  BATTERY_REPORT: ['DESIGN_CAPACITY', 'FULL_CHARGE_CAPACITY', 'CAPACITY_RATIO'],
+}
 
 function isDeviceInfoItem(item) {
   return ['LAP-SCR-013', 'SYS-003'].includes(item?.itemCode)
+}
+
+function hasAutomaticallyDetectedValue(field) {
+  return String(field?.fileParseValue ?? field?.ocrValue ?? '').trim().length > 0
+}
+
+function diagnosisCompletionFieldNames(item) {
+  if (isDeviceInfoItem(item)) return OCR_FIELD_NAMES
+  return COMPLETION_FIELD_NAMES_BY_PARSER[item?.parserType] || []
+}
+
+function isAutomatedDiagnosisComplete(item) {
+  const requiredFieldNames = diagnosisCompletionFieldNames(item)
+  if (!requiredFieldNames.length) return false
+
+  const fields = diagnosisState[item.checklistItemId]?.fields || []
+  return requiredFieldNames.every((fieldName) => {
+    const field = fields.find((candidate) => candidate.fieldName === fieldName)
+    return hasAutomaticallyDetectedValue(field)
+  })
+}
+
+function isCaptureItemComplete(item) {
+  return mediaOf(item.checklistItemId).length > 0 || isAutomatedDiagnosisComplete(item)
 }
 
 function allDiagnosisFieldNamesFor(item) {
@@ -282,7 +312,7 @@ async function refreshAutomatedDiagnoses() {
   checklistItems.value = await getProductChecklist(currentProductId.value)
   await Promise.allSettled(checklistItems.value
     .filter((item) => allDiagnosisFieldNamesFor(item).length > 0)
-    .map((item) => refreshDiagnosis(item)))
+    .map((item) => refreshDiagnosis(item, { revealEmptyFields: true })))
 }
 
 function beginWindowsInspectionPolling(sessionKey) {
@@ -401,7 +431,14 @@ function progressOf(checklistItemId) {
 }
 
 function captureStatusOf(checklistItemId) {
-  return busyOf(checklistItemId) || (mediaOf(checklistItemId).length ? 'captured' : 'idle')
+  const busy = busyOf(checklistItemId)
+  if (busy) return busy
+  if (mediaOf(checklistItemId).length) return 'captured'
+
+  const item = checklistItems.value.find(
+    (candidate) => candidate.checklistItemId === checklistItemId,
+  )
+  return isAutomatedDiagnosisComplete(item) ? 'auto-completed' : 'idle'
 }
 
 function maxMediaFor(item) {
@@ -478,7 +515,7 @@ const deviceCheckConfirmationItems = computed(
   ),
 )
 const capturedMediaCount = computed(
-  () => mediaChecklistItems.value.filter((item) => mediaOf(item.checklistItemId).length > 0).length,
+  () => mediaChecklistItems.value.filter((item) => isCaptureItemComplete(item)).length,
 )
 const confirmedCount = computed(
   () => privacyChecklistItems.value.filter((item) => confirmState[item.checklistItemId]).length,
@@ -688,6 +725,7 @@ function progressResultsMap(results) {
 function resetForm() {
   editingId.value = null
   editingStatus.value = ''
+  editingCustomModel.value = false
   draftProductId.value = null
   if (pendingThumbnail.value) URL.revokeObjectURL(pendingThumbnail.value.previewUrl)
   pendingThumbnail.value = null
@@ -942,7 +980,10 @@ async function persistSaleInfo() {
   }
   let productId = editingId.value
   if (productId) {
-    await updateProduct(productId, payload)
+    // 직접 입력 모델은 서버가 기능 체크리스트 수정 자체를 거부하므로 아예 보내지 않습니다.
+    await updateProduct(productId, editingCustomModel.value
+      ? payload
+      : { ...payload, confirmedFeatures: confirmedFeatures.value })
   } else {
     const created = await createProduct({
       ...payload,
@@ -1038,7 +1079,7 @@ function goToStep3() {
   // 가이드 조회는 setStep이 맡습니다.
   const proceed = () => setStep(3)
   const missingRequired = mediaChecklistItems.value.filter(
-    (item) => isRequiredItem(item) && mediaOf(item.checklistItemId).length === 0,
+    (item) => isRequiredItem(item) && !isCaptureItemComplete(item),
   )
   if (missingRequired.length) {
     activeCaptureItemId.value = missingRequired[0].checklistItemId
@@ -1130,7 +1171,7 @@ function readVideoDuration(file) {
 
 // 항목 하나의 취합된 진단값을 다시 조회해 draftValue(입력창 초기값)와 saving 상태를 붙여 저장하고,
 // 인식되지 못한 필드도 빈 입력 칸(placeholder row)으로 함께 채워 바로 타이핑해 저장할 수 있게 합니다.
-async function refreshDiagnosis(item) {
+async function refreshDiagnosis(item, { revealEmptyFields = false } = {}) {
   const result = await getDiagnosis(item.checklistItemId)
   const detectedFields = (result.fields || []).map((field) => ({
     ...field,
@@ -1139,7 +1180,8 @@ async function refreshDiagnosis(item) {
     justSaved: false,
   }))
   const detectedFieldNames = new Set(detectedFields.map((field) => field.fieldName))
-  const placeholderFields = allDiagnosisFieldNamesFor(item)
+  const shouldRevealEmptyFields = isDeviceInfoItem(item) || revealEmptyFields || detectedFields.length > 0
+  const placeholderFields = (shouldRevealEmptyFields ? allDiagnosisFieldNamesFor(item) : [])
     .filter((fieldName) => !detectedFieldNames.has(fieldName))
     .map((fieldName) => ({
       fieldName,
@@ -1184,7 +1226,7 @@ async function runDiagnosisAutomation(item, evidenceId) {
   }
 
   try {
-    await refreshDiagnosis(item)
+    await refreshDiagnosis(item, { revealEmptyFields: true })
   } catch {
     // 취합 조회 실패는 아래 에러 메시지로 안내합니다.
   }
@@ -1623,6 +1665,7 @@ async function startEdit(productId) {
     listingImages.value = await getProductImages(productId)
     editingId.value = productId
     editingStatus.value = product.status || ''
+    editingCustomModel.value = !!product.customModel
     draftProductId.value = null
     Object.assign(form, {
       categoryId: product.category?.categoryId || '',
@@ -1635,6 +1678,10 @@ async function startEdit(productId) {
     clearCaptureState()
     Object.keys(confirmState).forEach((key) => delete confirmState[key])
     checklistItems.value = await getProductChecklist(productId)
+    // 서버가 확정된 선택 기능 코드를 그대로 내려주므로 itemCode 역추론 없이 바로 복원합니다.
+    if (!editingCustomModel.value) {
+      confirmedFeatures.value = product.confirmedFeatures || []
+    }
     await Promise.all(checklistItems.value.map(async (item) => {
       if (item.evidenceType === 'SELLER_CONFIRMATION') {
         confirmState[item.checklistItemId] = item.status === 'COMPLETED'
@@ -1656,7 +1703,7 @@ async function startEdit(productId) {
       }
       if (item.automationType && item.automationType !== 'NONE') {
         try {
-          await refreshDiagnosis(item)
+          await refreshDiagnosis(item, { revealEmptyFields: true })
         } catch {
           // 조회 실패는 조용히 넘어가고, 새로 업로드하면 다시 자동 인식을 시도합니다.
         }
@@ -2146,10 +2193,10 @@ onMounted(async () => {
                 상품 등록은 그대로 진행할 수 있습니다.
               </p>
               <p
-                v-if="editingId"
+                v-if="editingId && editingCustomModel"
                 class="mt-3 rounded-md bg-white/80 px-3 py-2 text-xs leading-5 text-text-sub"
               >
-                수정 중인 상품에는 최초 등록 시 고정된 체크리스트 스냅샷이 유지됩니다.
+                직접 입력한 기기는 등록 후 기능 체크리스트를 수정할 수 없습니다.
               </p>
             </div>
 
@@ -2162,6 +2209,9 @@ onMounted(async () => {
               </h3>
               <p class="mt-1 text-xs leading-5 text-text-sub">
                 기본 항목은 항상 적용됩니다. 아래 항목은 실제 기기에 해당하는 경우에만 선택해 주세요.
+                <template v-if="editingId && editingCustomModel">
+                  직접 입력한 기기는 이 목록을 수정할 수 없습니다.
+                </template>
               </p>
               <ul class="mt-3 grid gap-3 sm:grid-cols-2">
                 <li
@@ -2169,11 +2219,15 @@ onMounted(async () => {
                   :key="suggestion.featureCode"
                   class="rounded-md border border-border bg-bg p-3"
                 >
-                  <label class="flex cursor-pointer items-start gap-3">
+                  <label
+                    class="flex items-start gap-3"
+                    :class="editingCustomModel ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'"
+                  >
                     <input
                       v-model="confirmedFeatures"
                       type="checkbox"
                       :value="suggestion.featureCode"
+                      :disabled="editingCustomModel"
                       class="mt-1 h-4 w-4 rounded border-border text-primary"
                     >
                     <span>
@@ -2509,13 +2563,14 @@ onMounted(async () => {
                       </div>
                       <span
                         class="shrink-0 text-xs font-semibold"
-                        :class="captureStatusOf(item.checklistItemId) === 'captured' ? 'text-primary' : 'text-text-sub'"
+                        :class="['captured', 'auto-completed'].includes(captureStatusOf(item.checklistItemId)) ? 'text-primary' : 'text-text-sub'"
                       >
                         <template v-if="captureStatusOf(item.checklistItemId) === 'captured'">
                           첨부 {{ mediaOf(item.checklistItemId).length }} / {{ maxMediaFor(item) }}
                         </template>
                         <template v-else-if="captureStatusOf(item.checklistItemId) === 'optimizing'">최적화 중…</template>
                         <template v-else-if="captureStatusOf(item.checklistItemId) === 'uploading'">업로드 중…</template>
+                        <template v-else-if="captureStatusOf(item.checklistItemId) === 'auto-completed'">자동 입력 완료</template>
                         <template v-else-if="activeCaptureItemId === item.checklistItemId">촬영 대기</template>
                         <template v-else>미촬영</template>
                       </span>
@@ -2816,12 +2871,6 @@ onMounted(async () => {
                     </p>
                   </li>
                 </ul>
-                <p
-                  v-else-if="diagnosisState[activeCaptureItem.checklistItemId].status === 'ready'"
-                  class="mt-2 text-xs text-text-sub"
-                >
-                  인식된 값이 없습니다. 파일을 다시 확인하거나 다른 파일로 다시 업로드해 주세요.
-                </p>
               </div>
 
               <p class="mt-2 text-center text-[11px] text-text-sub">

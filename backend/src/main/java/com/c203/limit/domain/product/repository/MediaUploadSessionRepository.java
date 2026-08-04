@@ -20,4 +20,6 @@ public interface MediaUploadSessionRepository
     List<MediaUploadSession> findTop100ByStatusAndExpiresAtBeforeOrderByExpiresAtAsc(
             com.c203.limit.domain.product.entity.MediaUploadStatus status,
             LocalDateTime expiresAt);
+
+    boolean existsByChecklistItem_Id(Long checklistItemId);
 }

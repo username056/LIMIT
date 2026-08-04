@@ -22,5 +22,7 @@ public interface EvidenceRepository extends JpaRepository<Evidence, Long> {
     boolean existsByListingChecklistItem_IdAndUploadedAtAfter(
             Long listingChecklistItemId, LocalDateTime uploadedAt);
 
+    boolean existsByListingChecklistItem_Id(Long listingChecklistItemId);
+
     long countByListingChecklistItem_Id(Long listingChecklistItemId);
 }

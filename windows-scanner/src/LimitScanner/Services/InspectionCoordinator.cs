@@ -10,6 +10,8 @@ public sealed class InspectionCoordinator(
     BatteryReportCollector batteryReportCollector,
     InteractiveDeviceDiagnostics deviceDiagnostics)
 {
+    private string? sessionKey;
+
     public async Task RunAsync(
         string pairingCode,
         IWin32Window owner,
@@ -18,6 +20,7 @@ public sealed class InspectionCoordinator(
     {
         progress.Report("웹과 연결하는 중입니다.");
         var session = await apiClient.PairAsync(pairingCode, cancellationToken);
+        sessionKey = session.SessionKey;
         using var workspace = new InspectionWorkspace();
 
         progress.Report("시스템 정보와 배터리 정보를 동시에 수집하고 있습니다.");
@@ -50,7 +53,7 @@ public sealed class InspectionCoordinator(
                 cancellationToken);
         }
 
-        progress.Report("스피커·디스플레이·충전 상태를 직접 확인해 주세요.");
+        progress.Report("스피커·디스플레이·충전·카메라·마이크 상태를 직접 확인해 주세요.");
         var moduleResults = deviceDiagnostics.Run(owner);
         foreach (var moduleResult in moduleResults)
         {
@@ -61,7 +64,38 @@ public sealed class InspectionCoordinator(
                 cancellationToken);
         }
 
-        await apiClient.CompleteAsync(session.SessionKey, cancellationToken);
-        progress.Report("검사가 완료됐습니다. 웹으로 돌아가 결과를 확인해 주세요.");
+        progress.Report("모든 항목 검사를 마쳤습니다. 필요하면 카메라·마이크를 재검사한 뒤 최종 제출해 주세요.");
+    }
+
+    public async Task RerunCameraAsync(IWin32Window owner, CancellationToken cancellationToken)
+    {
+        var result = deviceDiagnostics.RunCamera(owner);
+        await SubmitSingleModuleAsync(result, cancellationToken);
+    }
+
+    public async Task RerunMicrophoneAsync(IWin32Window owner, CancellationToken cancellationToken)
+    {
+        var result = deviceDiagnostics.RunMicrophone(owner);
+        await SubmitSingleModuleAsync(result, cancellationToken);
+    }
+
+    public async Task CompleteInspectionAsync(CancellationToken cancellationToken)
+    {
+        if (sessionKey is null)
+        {
+            throw new InvalidOperationException("먼저 전체 검사를 완료해야 최종 제출을 할 수 있습니다.");
+        }
+
+        await apiClient.CompleteAsync(sessionKey, cancellationToken);
+    }
+
+    private async Task SubmitSingleModuleAsync(ModuleResult result, CancellationToken cancellationToken)
+    {
+        if (sessionKey is null)
+        {
+            throw new InvalidOperationException("먼저 전체 검사를 완료해야 개별 재검사를 할 수 있습니다.");
+        }
+
+        await apiClient.SubmitTestResultAsync(sessionKey, result, cancellationToken);
     }
 }

@@ -91,8 +91,8 @@ public sealed class DisplayDiagnosticForm : Form
         };
         cardContent.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         cardContent.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        cardContent.RowStyles.Add(new RowStyle(SizeType.Absolute, 54F));
-        cardContent.RowStyles.Add(new RowStyle(SizeType.Absolute, 52F));
+        cardContent.RowStyles.Add(new RowStyle(SizeType.Absolute, 64F));
+        cardContent.RowStyles.Add(new RowStyle(SizeType.Absolute, 60F));
         cardContent.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         cardContent.Controls.Add(new Label
         {
@@ -117,8 +117,8 @@ public sealed class DisplayDiagnosticForm : Form
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 68F));
-        layout.Controls.Add(DiagnosticUi.CreateStepLabel("2 / 3  디스플레이"), 0, 0);
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 90F));
+        layout.Controls.Add(DiagnosticUi.CreateStepLabel("2 / 5  디스플레이"), 0, 0);
         layout.Controls.Add(DiagnosticUi.CreateTitle("전체화면 색상 검사"), 0, 1);
         layout.Controls.Add(DiagnosticUi.CreateGuide(
             "검사를 시작하면 검정 → 흰색 → 빨강 → 초록 → 파랑 화면이 자동으로 전환됩니다. "
@@ -133,6 +133,20 @@ public sealed class DisplayDiagnosticForm : Form
         if (screenComboBox.SelectedItem is not ScreenOption option)
         {
             statusLabel.Text = "검사할 화면을 선택해 주세요.";
+            return;
+        }
+
+        var proceed = MessageBox.Show(
+            this,
+            "확인을 누르면 화면이 전체화면으로 전환되고 검정 → 흰색 → 빨강 → 초록 → 파랑 순서로 표시됩니다.\n"
+                + "화면을 클릭하거나 Space/Enter 키를 누르면 다음 색으로 넘어가고, 가만히 두면 2.5초마다 자동으로 "
+                + "넘어갑니다. 중단하려면 Esc 키를 누르세요.\n\n"
+                + "화면이 갑자기 어두워질 수 있으니 참고해 주세요.",
+            "전체화면 색상 검사 안내",
+            MessageBoxButtons.OKCancel,
+            MessageBoxIcon.Information);
+        if (proceed != DialogResult.OK)
+        {
             return;
         }
 

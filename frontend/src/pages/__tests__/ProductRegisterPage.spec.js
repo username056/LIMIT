@@ -166,6 +166,178 @@ describe('ProductRegisterPage', () => {
       'Windows 11 Pro',
       'Intel Core Ultra 9',
     ]))
+    expect(wrapper.text()).toContain('자동 입력 완료')
+    expect(wrapper.text()).not.toContain('촬영 대기')
+
+    await buttonByText(wrapper, '다음 단계로').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('아직 촬영하지 않은 필수 항목이')
+  })
+
+  it('시스템 진단과 배터리 핵심 정보가 자동 입력되면 촬영 완료로 표시한다', async () => {
+    getProductChecklist.mockResolvedValue([
+      {
+        checklistItemId: 7004,
+        itemCode: 'LAP-SCR-014',
+        name: '시스템 진단 정보',
+        evidenceType: 'DIAGNOSTIC_FILE',
+        automationType: 'FILE_PARSE',
+        parserType: 'DXDIAG',
+        isRequired: true,
+        status: 'PENDING',
+      },
+      {
+        checklistItemId: 7005,
+        itemCode: 'BAT-001',
+        name: '배터리 리포트',
+        evidenceType: 'DIAGNOSTIC_FILE',
+        automationType: 'FILE_PARSE',
+        parserType: 'BATTERY_REPORT',
+        isRequired: true,
+        status: 'PENDING',
+      },
+    ])
+    getDiagnosis.mockImplementation((checklistItemId) => Promise.resolve({
+      itemId: checklistItemId,
+      fields: checklistItemId === 7004
+        ? [
+            { fieldName: 'RAM', fileParseValue: '32 GB' },
+            { fieldName: 'GPU', fileParseValue: 'NVIDIA GeForce RTX 4070' },
+          ]
+        : [
+            { fieldName: 'DESIGN_CAPACITY', fileParseValue: '73,829 mWh' },
+            { fieldName: 'FULL_CHARGE_CAPACITY', fileParseValue: '74,496 mWh' },
+            { fieldName: 'CAPACITY_RATIO', fileParseValue: '100.00' },
+          ],
+    }))
+    confirmDiagnosisValue.mockImplementation((checklistItemId, payload) => Promise.resolve({
+      itemId: checklistItemId,
+      fieldName: payload.fieldName,
+      confirmedValue: payload.confirmedValue,
+    }))
+
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await goToCaptureStep(wrapper)
+
+    expect(wrapper.text().match(/자동 입력 완료/g)).toHaveLength(2)
+    expect(wrapper.text()).not.toContain('촬영 대기')
+
+    await wrapper.find('button[aria-label="RAM 저장"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('저장됐습니다.')
+
+    const batteryItem = wrapper.findAll('[role="button"]')
+      .find((element) => element.text().includes('배터리 리포트'))
+    await batteryItem.trigger('click')
+    await wrapper.find('button[aria-label="배터리 설계 용량 저장"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('저장됐습니다.')
+    expect(confirmDiagnosisValue).toHaveBeenCalledWith(7005, {
+      fieldName: 'DESIGN_CAPACITY',
+      confirmedValue: '73,829 mWh',
+    })
+
+    await buttonByText(wrapper, '다음 단계로').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('아직 촬영하지 않은 필수 항목이')
+  })
+
+  it('시스템 진단과 배터리 항목은 파일이나 자동 진단 결과가 생기기 전에는 입력란을 숨긴다', async () => {
+    getProductChecklist.mockResolvedValue([
+      {
+        checklistItemId: 7004,
+        itemCode: 'LAP-SCR-014',
+        name: '시스템 진단 정보',
+        evidenceType: 'DIAGNOSTIC_FILE',
+        automationType: 'FILE_PARSE',
+        parserType: 'DXDIAG',
+        isRequired: true,
+        status: 'PENDING',
+      },
+      {
+        checklistItemId: 7005,
+        itemCode: 'BAT-001',
+        name: '배터리 리포트',
+        evidenceType: 'DIAGNOSTIC_FILE',
+        automationType: 'FILE_PARSE',
+        parserType: 'BATTERY_REPORT',
+        isRequired: true,
+        status: 'PENDING',
+      },
+    ])
+    getDiagnosis.mockResolvedValue({ fields: [] })
+
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await goToCaptureStep(wrapper)
+
+    expect(wrapper.find('input[aria-label="RAM 값"]').exists()).toBe(false)
+    const batteryItem = wrapper.findAll('[role="button"]')
+      .find((element) => element.text().includes('배터리 리포트'))
+    await batteryItem.trigger('click')
+    expect(wrapper.find('input[aria-label="배터리 설계 용량 값"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('자동 입력 완료')
+    expect(wrapper.text()).not.toContain('인식된 값이 없습니다')
+  })
+
+  it('직접 확정한 값만으로는 자동 입력 완료를 표시하지 않는다', async () => {
+    getProductChecklist.mockResolvedValue([{
+      checklistItemId: 7003,
+      itemCode: 'LAP-SCR-013',
+      name: '기기 정보 화면',
+      evidenceType: 'PHOTO',
+      automationType: 'NONE',
+      isRequired: true,
+      status: 'PENDING',
+    }])
+    getDiagnosis.mockResolvedValue({
+      itemId: 7003,
+      fields: ['MODEL_NAME', 'STORAGE_CAPACITY', 'OS_VERSION', 'CPU'].map((fieldName) => ({
+        fieldName,
+        fileParseValue: null,
+        ocrValue: null,
+        confirmedValue: `직접 입력한 ${fieldName}`,
+      })),
+    })
+
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await goToCaptureStep(wrapper)
+
+    expect(wrapper.text()).not.toContain('자동 입력 완료')
+    expect(wrapper.text()).toContain('촬영 대기')
+  })
+
+  it('시스템 진단 파일을 업로드하면 인식값이 없어도 입력란을 보여준다', async () => {
+    getProductChecklist.mockResolvedValue([{
+      checklistItemId: 7004,
+      itemCode: 'LAP-SCR-014',
+      name: '시스템 진단 정보',
+      evidenceType: 'DIAGNOSTIC_FILE',
+      automationType: 'FILE_PARSE',
+      parserType: 'DXDIAG',
+      isRequired: true,
+      status: 'PENDING',
+    }])
+    getDiagnosis.mockResolvedValue({ fields: [] })
+    completeEvidence.mockResolvedValue({ evidenceId: 9104, mediaUrl: 'https://storage.test/dxdiag', attemptNo: 1 })
+    parseDxdiag.mockResolvedValue({})
+
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await goToCaptureStep(wrapper)
+    expect(wrapper.find('input[aria-label="RAM 값"]').exists()).toBe(false)
+
+    await attachFile(
+      wrapper.find('input[aria-label="검증 항목 파일 업로드"]'),
+      new File(['dxdiag'], 'DxDiag.txt', { type: 'text/plain' }),
+    )
+    await flushPromises()
+
+    expect(parseDxdiag).toHaveBeenCalledWith(9104)
+    expect(wrapper.find('input[aria-label="RAM 값"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('자동 입력 완료')
   })
 
   beforeEach(() => {

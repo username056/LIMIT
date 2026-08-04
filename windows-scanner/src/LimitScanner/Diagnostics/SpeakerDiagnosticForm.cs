@@ -57,7 +57,7 @@ public sealed class SpeakerDiagnosticForm : Form
         cardContent.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         cardContent.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         cardContent.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        cardContent.RowStyles.Add(new RowStyle(SizeType.Absolute, 56F));
+        cardContent.RowStyles.Add(new RowStyle(SizeType.Absolute, 64F));
         cardContent.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         cardContent.Controls.Add(new Label
         {
@@ -88,8 +88,8 @@ public sealed class SpeakerDiagnosticForm : Form
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 68F));
-        layout.Controls.Add(DiagnosticUi.CreateStepLabel("1 / 3  스피커"), 0, 0);
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 90F));
+        layout.Controls.Add(DiagnosticUi.CreateStepLabel("1 / 5  스피커"), 0, 0);
         layout.Controls.Add(DiagnosticUi.CreateTitle("스피커·좌우 채널 검사"), 0, 1);
         layout.Controls.Add(DiagnosticUi.CreateGuide(
             "출력 장치를 선택하고 검사 시작을 한 번 누르세요. 전체 → 왼쪽 → 오른쪽 순서로 "
