@@ -14,6 +14,9 @@ class DxdiagXmlParserTests {
     void parsesAllFieldsFromCompleteDxdiagXml() {
         DxdiagParseResult result = parser.parse(bytes(completeDxdiagXml()));
 
+        assertThat(result.modelName()).isEqualTo("950XDB/951XDB/950XDY");
+        assertThat(result.osVersion()).isEqualTo("Windows 10 Pro 64-bit (10.0, Build 19045)");
+        assertThat(result.storageCapacity()).isEqualTo("475.8 GB");
         assertThat(result.cpu()).isEqualTo("11th Gen Intel(R) Core(TM) i7-1165G7 @ 2.80GHz (8 CPUs), ~2.8GHz");
         assertThat(result.memory()).isEqualTo("16384 MB RAM");
         assertThat(result.gpu()).isEqualTo("Intel(R) Iris(R) Xe Graphics");
@@ -30,6 +33,8 @@ class DxdiagXmlParserTests {
                 """
                 <DxDiag>
                   <SystemInformation>
+                    <SystemModel>Test Model</SystemModel>
+                    <OperatingSystem>Test OS</OperatingSystem>
                     <Processor>Test CPU</Processor>
                     <Memory>8192MB RAM</Memory>
                   </SystemInformation>
@@ -50,6 +55,9 @@ class DxdiagXmlParserTests {
                       <DefaultSoundPlayback>1</DefaultSoundPlayback>
                     </SoundDevice>
                   </SoundDevices>
+                  <LogicalDisks>
+                    <LogicalDisk><TotalSpace>475.8 GB</TotalSpace></LogicalDisk>
+                  </LogicalDisks>
                 </DxDiag>
                 """;
 
@@ -64,6 +72,8 @@ class DxdiagXmlParserTests {
                 """
                 <DxDiag>
                   <SystemInformation>
+                    <SystemModel>Test Model</SystemModel>
+                    <OperatingSystem>Test OS</OperatingSystem>
                     <Processor>Test CPU</Processor>
                     <Memory>8192MB RAM</Memory>
                   </SystemInformation>
@@ -73,6 +83,9 @@ class DxdiagXmlParserTests {
                       <DefaultSoundPlayback>1</DefaultSoundPlayback>
                     </SoundDevice>
                   </SoundDevices>
+                  <LogicalDisks>
+                    <LogicalDisk><TotalSpace>475.8 GB</TotalSpace></LogicalDisk>
+                  </LogicalDisks>
                 </DxDiag>
                 """;
 
@@ -147,6 +160,11 @@ class DxdiagXmlParserTests {
                       <DefaultSoundPlayback>0</DefaultSoundPlayback>
                     </SoundDevice>
                   </SoundDevices>
+                  <LogicalDisks>
+                    <LogicalDisk>
+                      <TotalSpace>475.8GB</TotalSpace>
+                    </LogicalDisk>
+                  </LogicalDisks>
                 </DxDiag>
                 """;
     }

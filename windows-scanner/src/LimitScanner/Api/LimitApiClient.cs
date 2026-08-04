@@ -111,9 +111,10 @@ public sealed class LimitApiClient
         CancellationToken cancellationToken)
     {
         SetAgentAuthorization();
+        var request = SubmitTestResultRequest.From(result);
         using var response = await apiClient.PostAsJsonAsync(
             $"api/v1/inspection-agent/sessions/{sessionKey}/test-results",
-            result,
+            request,
             jsonOptions,
             cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);

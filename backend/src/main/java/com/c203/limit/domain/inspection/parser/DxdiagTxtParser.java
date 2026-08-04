@@ -30,6 +30,7 @@ public class DxdiagTxtParser {
     private static final String SECTION_SYSTEM_INFORMATION = "System Information";
     private static final String SECTION_DISPLAY_DEVICES = "Display Devices";
     private static final String SECTION_SOUND_DEVICES = "Sound Devices";
+    private static final String SECTION_DISK_DRIVES = "Disk & DVD/CD-ROM Drives";
 
     private static final Pattern SECTION_DELIMITER = Pattern.compile("^-{3,}$");
     private static final Pattern LABEL_VALUE = Pattern.compile("^\\s*([^:]+?)\\s*:\\s*(.*)$");
@@ -40,6 +41,9 @@ public class DxdiagTxtParser {
 
             String cpu = null;
             String memory = null;
+            String modelName = null;
+            String osVersion = null;
+            String storageCapacity = null;
             String gpu = null;
             String gpuMemory = null;
             String driverVersion = null;
@@ -64,6 +68,12 @@ public class DxdiagTxtParser {
 
                         switch (currentSection) {
                             case SECTION_SYSTEM_INFORMATION -> {
+                                if (modelName == null && "System Model".equals(label)) {
+                                    modelName = nonBlankValue;
+                                }
+                                if (osVersion == null && "Operating System".equals(label)) {
+                                    osVersion = nonBlankValue;
+                                }
                                 if (cpu == null && "Processor".equals(label)) {
                                     cpu = nonBlankValue;
                                 }
@@ -90,6 +100,11 @@ public class DxdiagTxtParser {
                                     soundIsDefault.set(soundIsDefault.size() - 1, "Yes".equalsIgnoreCase(value));
                                 }
                             }
+                            case SECTION_DISK_DRIVES -> {
+                                if (storageCapacity == null && "Total Space".equals(label)) {
+                                    storageCapacity = UnitNormalizer.normalizeUnitSpacing(nonBlankValue);
+                                }
+                            }
                             default -> {}
                         }
                     }
@@ -98,7 +113,15 @@ public class DxdiagTxtParser {
             }
 
             return new DxdiagParseResult(
-                    cpu, memory, gpu, gpuMemory, driverVersion, resolveDefaultSoundDevice(soundDescriptions, soundIsDefault));
+                    modelName,
+                    osVersion,
+                    storageCapacity,
+                    cpu,
+                    memory,
+                    gpu,
+                    gpuMemory,
+                    driverVersion,
+                    resolveDefaultSoundDevice(soundDescriptions, soundIsDefault));
         } catch (Exception exception) {
             throw new DxdiagParseException("Failed to parse DxDiag.txt", exception);
         }
