@@ -16,7 +16,7 @@ defineEmits(['close', 'apply'])
   >
     <div class="w-full max-w-sm rounded-lg bg-surface p-6 text-center shadow-elevated">
       <h2 class="text-base font-bold text-text-main">
-        판매자 등록을 해주세요!
+        판매자 등록을 해 주세요!
       </h2>
       <p class="mt-2 text-sm leading-6 text-text-sub">
         상품을 등록하려면 판매자 등록이 먼저 필요합니다.

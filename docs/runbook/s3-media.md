@@ -158,6 +158,44 @@ aws logout --profile limit-bootstrap
 GitLab API로 변수를 자동 등록하려면 프로젝트 Maintainer 권한의 `api` scope 토큰이 필요합니다.
 Git 저장소 clone/push용 자격 증명만으로는 CI/CD 변수 API를 변경할 수 없습니다.
 
+## 저장 경로와 IAM 정책
+
+런타임 자격 증명은 아래 prefix에만 접근할 수 있다.
+
+| prefix | 쓰는 곳 |
+| --- | --- |
+| `tmp/` | 상품 이미지 업로드 중간 자리 |
+| `listings/` | 상품 대표·추가 이미지 |
+| `evidence/` | 체크리스트 증빙 |
+| `chat/` | 채팅으로 보낸 사진·영상 |
+| `members/` | 회원 프로필 사진(`members/{memberId}/profile/`) |
+
+새 prefix를 코드에 쓰면 정책에도 반드시 함께 넣는다. 빼먹으면 API·DB·화면은 모두 정상인데
+S3 PUT만 403 AccessDenied로 실패한다. 코드를 봐도 보이지 않아 원인을 찾는 데 시간이 오래 걸린다.
+
+정책은 두 곳에 있고 **쓰는 주체가 다르다**. 둘을 함께 고쳐야 한다.
+
+| 파일 | 붙는 대상 | 언제 쓰이나 |
+| --- | --- | --- |
+| `configure.ps1`의 인라인 정책 | Role `l1mit-<env>-backend` | EC2 Instance Profile로 붙일 때 |
+| `dev-runtime-policy.json`, `prod-runtime-policy.json` | IAM User `l1mit-<env>-runtime` | Access Key 예외로 운영할 때(현재 경로) |
+
+Access Key 예외로 운영하는 동안에는 `configure.ps1 -Action Apply`만으로는 반영되지 않는다.
+User 쪽 인라인 정책을 직접 갱신한다. 기존 정책 이름을 먼저 확인해 같은 이름으로 덮어써야
+같은 내용의 정책이 두 개로 늘어나지 않는다.
+
+```powershell
+aws login --profile limit-bootstrap --region ap-northeast-2
+aws iam list-user-policies --user-name l1mit-dev-runtime --profile limit-bootstrap
+aws iam put-user-policy --user-name l1mit-dev-runtime `
+    --policy-name <위에서 확인한 이름> `
+    --policy-document file://infra/aws/s3-media/dev-runtime-policy.json `
+    --profile limit-bootstrap
+aws logout --profile limit-bootstrap
+```
+
+운영은 `l1mit-prod-runtime`과 `prod-runtime-policy.json`으로 같은 절차를 반복한다.
+
 ## 상품 이미지와 증빙 분리
 
 - 상품 대표·추가 이미지는 `listings/{listingId}/images/`와 `listing_image`에 저장한다.

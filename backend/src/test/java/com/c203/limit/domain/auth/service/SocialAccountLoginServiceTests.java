@@ -69,6 +69,7 @@ class SocialAccountLoginServiceTests {
                                                         1L,
                                                         "member",
                                                         java.util.Set.of("MEMBER"),
+                                                        null,
                                                         null)),
                                         "refresh"));
 
@@ -149,6 +150,7 @@ class SocialAccountLoginServiceTests {
                                                         4L,
                                                         "runner",
                                                         java.util.Set.of("MEMBER"),
+                                                        null,
                                                         null)),
                                         "refresh"));
 

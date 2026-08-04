@@ -11,6 +11,7 @@ import com.c203.limit.domain.seller.dto.response.SellerProfileResponse;
 import com.c203.limit.domain.seller.entity.Seller;
 import com.c203.limit.domain.seller.entity.SellerType;
 import com.c203.limit.domain.seller.repository.SellerRepository;
+import com.c203.limit.domain.product.storage.MediaUrlResolver;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.time.LocalDateTime;
@@ -32,14 +33,17 @@ public class SellerService {
     private final SellerRepository sellerRepository;
     private final MemberRepository memberRepository;
     private final ListingRepository listingRepository;
+    private final MediaUrlResolver mediaUrlResolver;
 
     public SellerService(
             SellerRepository sellerRepository,
             MemberRepository memberRepository,
-            ListingRepository listingRepository) {
+            ListingRepository listingRepository,
+            MediaUrlResolver mediaUrlResolver) {
         this.sellerRepository = sellerRepository;
         this.memberRepository = memberRepository;
         this.listingRepository = listingRepository;
+        this.mediaUrlResolver = mediaUrlResolver;
     }
 
     @Transactional
@@ -108,7 +112,8 @@ public class SellerService {
                 member.getNickname(),
                 seller == null ? null : seller.getSellerType().name(),
                 seller == null ? null : offset(seller.getCreatedAt()),
-                onSaleCount);
+                onSaleCount,
+                mediaUrlResolver.resolve(member.getProfileImageKey(), null));
     }
 
     private OffsetDateTime offset(LocalDateTime value) {

@@ -23,7 +23,22 @@ public class ChatRoomContextReader {
         return jdbcClient.sql("""
                         SELECT room.id AS room_id,
                                counterpart.nickname AS counterpart_nickname,
+                               counterpart.profile_image_key AS counterpart_profile_image_key,
                                listing.title AS listing_title,
+                               /*
+                                 대표 사진은 s3_key와 cdn_url을 함께 읽는다.
+                                 cdn_url만 읽던 시절에는 채팅 목록에 사진이 한 번도
+                                 나오지 않았다. 지금 올라오는 사진은 s3_key만 채우고
+                                 cdn_url은 비어 있어서다(cdn_url은 옛 흔적이다).
+                                 URL 완성은 MediaUrlResolver가 맡는다 —
+                                 다른 화면과 같은 길을 써야 결과가 갈리지 않는다.
+                                */
+                               (SELECT image.s3_key
+                                  FROM listing_image image
+                                 WHERE image.listing_id = listing.id
+                                   AND image.image_type = 'THUMBNAIL'
+                                 ORDER BY image.id
+                                 LIMIT 1) AS listing_thumbnail_key,
                                (SELECT image.cdn_url
                                   FROM listing_image image
                                  WHERE image.listing_id = listing.id
@@ -54,7 +69,9 @@ public class ChatRoomContextReader {
                 .query((resultSet, rowNum) -> new ChatRoomContext(
                         resultSet.getLong("room_id"),
                         resultSet.getString("counterpart_nickname"),
+                        resultSet.getString("counterpart_profile_image_key"),
                         resultSet.getString("listing_title"),
+                        resultSet.getString("listing_thumbnail_key"),
                         resultSet.getString("listing_thumbnail_url"),
                         lastMessagePreview(
                                 resultSet.getString("last_message_type"),
@@ -97,10 +114,18 @@ public class ChatRoomContextReader {
 
     private static final int PREVIEW_MAX_LENGTH = 100;
 
+    /**
+     * @param counterpartProfileImageKey 상대방 프로필 사진 키. 안 올렸으면 null이고, 화면은
+     *     닉네임 첫 글자로 대신한다.
+     * @param listingThumbnailKey S3 오브젝트 키. URL 완성은 MediaUrlResolver가 맡는다.
+     * @param listingThumbnailUrl cdn_url에 남아 있는 옛 값. 키가 없을 때만 쓰인다.
+     */
     public record ChatRoomContext(
             Long roomId,
             String counterpartNickname,
+            String counterpartProfileImageKey,
             String listingTitle,
+            String listingThumbnailKey,
             String listingThumbnailUrl,
             String lastMessagePreview) {}
 }

@@ -36,6 +36,7 @@ import com.c203.limit.domain.chat.repository.ChatRoomRepository;
 import com.c203.limit.domain.chat.repository.ChatRoomSummaryProjection;
 import com.c203.limit.domain.chat.repository.ListingChatReader;
 import com.c203.limit.domain.chat.repository.ListingChatReader.ListingChatInfo;
+import com.c203.limit.domain.product.storage.MediaUrlResolver;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import com.c203.limit.global.response.CursorResponse;
@@ -63,12 +64,17 @@ public class ChatRoomService {
     private final ChatRoomCreator creator;
     private final ChatOutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
+    // 상품 화면과 같은 방식으로 대표 사진 URL을 만든다. 채팅만 cdn_url을 직접 읽던 탓에
+    // 목록에 사진이 한 번도 나오지 않았다.
+    private final MediaUrlResolver mediaUrlResolver;
 
     public ChatRoomService(ListingChatReader listingReader, ChatRoomRepository chatRoomRepository,
             ChatRoomParticipantRepository participantRepository, ChatMessageRepository chatMessageRepository,
             ChatMediaRepository chatMediaRepository, ChatMessageMediaRepository chatMessageMediaRepository,
             ChatRoomContextReader contextReader, ChatRoomCreator creator,
-            ChatOutboxEventRepository outboxEventRepository, ObjectMapper objectMapper) {
+            ChatOutboxEventRepository outboxEventRepository, ObjectMapper objectMapper,
+            MediaUrlResolver mediaUrlResolver) {
+        this.mediaUrlResolver = mediaUrlResolver;
         this.listingReader = listingReader;
         this.chatRoomRepository = chatRoomRepository;
         this.participantRepository = participantRepository;
@@ -303,8 +309,11 @@ public class ChatRoomService {
         return new ChatRoomSummaryResponse(
                 row.getRoomId(), row.getListingId(), counterpartId,
                 context == null ? null : context.counterpartNickname(),
+                context == null ? null : mediaUrlResolver.resolve(
+                        context.counterpartProfileImageKey(), null),
                 context == null ? null : context.listingTitle(),
-                context == null ? null : context.listingThumbnailUrl(),
+                context == null ? null : mediaUrlResolver.resolve(
+                        context.listingThumbnailKey(), context.listingThumbnailUrl()),
                 context == null ? null : context.lastMessagePreview(),
                 row.getStatus().name(),
                 row.getLastMessageId(), row.getLastMessageSeq(), row.getLastMessageAt(),

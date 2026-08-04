@@ -368,7 +368,16 @@ async function logoutMember() {
               class="header-icon-btn flex items-center justify-center"
               @click="isProfileMenuOpen = !isProfileMenuOpen"
             >
+              <!-- 사진을 올린 회원은 사진을, 올리지 않았으면 지금까지의 사람 아이콘을
+                   그대로 씁니다. 여기만 첫 글자 대신 아이콘을 쓰는 건 버튼이 작아서입니다. -->
+              <img
+                v-if="member?.profileImageUrl"
+                :src="member.profileImageUrl"
+                alt=""
+                class="h-7 w-7 rounded-full object-cover"
+              >
               <svg
+                v-else
                 class="h-5 w-5"
                 fill="none"
                 viewBox="0 0 24 24"

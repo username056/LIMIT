@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
+import ProfileAvatar from '../components/ProfileAvatar.vue'
 import { getChatMessages, getChatRooms } from '../api/chat'
 import { createChatSocket } from '../api/chatSocket'
 import {
@@ -55,7 +56,6 @@ const counterpartId = computed(() => (
 const counterpartName = computed(() => {
   return chatRoom.value?.counterpartNickname || `회원 #${counterpartId.value}`
 })
-const counterpartInitial = computed(() => counterpartName.value.trim().charAt(0) || '회')
 const connectionLabel = computed(() => {
   if (status.value === 'connected') return '연결 양호 - HD 1080p'
   if (status.value === 'reconnecting') return '재연결 중'
@@ -472,9 +472,11 @@ onBeforeUnmount(() => {
               data-testid="counterpart-profile"
               class="flex items-center gap-3"
             >
-              <span class="flex h-11 w-11 items-center justify-center rounded-full bg-accent text-sm font-bold text-primary">
-                {{ counterpartInitial }}
-              </span>
+              <ProfileAvatar
+                :src="chatRoom?.counterpartProfileImageUrl"
+                :name="counterpartName"
+                size-class="h-11 w-11"
+              />
               <p
                 data-testid="counterpart-nickname"
                 class="font-bold text-text-main"
