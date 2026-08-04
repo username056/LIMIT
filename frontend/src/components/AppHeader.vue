@@ -5,6 +5,18 @@ import { logout } from '../api/auth'
 import { clearAuthSession, useAuthSession } from '../auth/session'
 import { SELL_ENTRY_PATH, useSellerGate } from '../auth/sellerGate'
 import SellerNoticeModal from './SellerNoticeModal.vue'
+import {
+  doneRecaptureCount,
+  hasNotice,
+  hasUnreadNotification,
+  markNotificationsSeen,
+  pendingRecaptureCount,
+  refreshNotificationDot,
+  startNotificationDotWatch,
+  stopNotificationDotWatch,
+  todayAppointment,
+  unreadChatCount,
+} from '../stores/notificationDot'
 import limitLogo from '../assets/real_limt_logo.png'
 
 const props = defineProps({
@@ -66,9 +78,60 @@ function syncScrolled() {
 onMounted(() => {
   syncScrolled()
   window.addEventListener('scroll', syncScrolled, { passive: true })
+  if (member.value) startNotificationDotWatch()
 })
 
-onBeforeUnmount(() => window.removeEventListener('scroll', syncScrolled))
+onBeforeUnmount(() => {
+  window.removeEventListener('scroll', syncScrolled)
+  if (member.value) stopNotificationDotWatch()
+})
+
+/*
+  로그인 상태가 바뀌면 세는 것도 같이 켜고 끕니다.
+  로그아웃한 채로 계속 부르면 401만 쌓이고, 로그인한 직후에 안 부르면 새로고침할
+  때까지 점이 안 켜집니다.
+*/
+watch(member, (current, previous) => {
+  if (current && !previous) startNotificationDotWatch()
+  else if (!current && previous) stopNotificationDotWatch()
+})
+
+/*
+  채팅과 실시간 확인을 보고 나오면 대개 읽음 처리가 끝나 있습니다.
+  그 화면을 떠날 때 다시 세어, 이미 처리한 일로 점이 남아 있지 않게 합니다.
+*/
+const SIGNAL_PATHS = ['/chat', '/calls']
+
+watch(() => route.path, (current, previous) => {
+  isNoticeOpen.value = false
+  if (!member.value) return
+  if (SIGNAL_PATHS.some((path) => previous?.startsWith(path))) refreshNotificationDot()
+})
+
+/*
+  벨을 누르면 말풍선으로 두 줄만 보여 줍니다.
+  ---------------------------------------------------------------------------
+  알림 페이지는 만들지 않습니다. 여기서 알려 줄 것은 "안 읽은 채팅"과 "오늘 약속"
+  둘뿐이고, 둘 다 누르면 갈 곳이 이미 있는 화면(채팅·실시간 확인)입니다.
+  한 줄 보려고 화면을 하나 더 두면 오히려 손이 늘어납니다.
+
+  열어 본 순간 점을 끕니다. 소식이 바뀌면 다시 켜집니다.
+*/
+const isNoticeOpen = ref(false)
+
+function toggleNotice() {
+  isNoticeOpen.value = !isNoticeOpen.value
+  if (isNoticeOpen.value) markNotificationsSeen()
+}
+
+function closeNotice() {
+  isNoticeOpen.value = false
+}
+
+async function goFromNotice(path) {
+  closeNotice()
+  await router.push(path)
+}
 
 function isActiveNavItem(href) {
   return route.path === href
@@ -209,26 +272,92 @@ async function logoutMember() {
         </nav>
 
         <template v-if="member">
-          <RouterLink
-            :to="{ name: 'coming-soon', params: { feature: 'notifications' } }"
-            aria-label="알림"
-            class="header-icon-btn notification-btn flex items-center justify-center"
-          >
-            <svg
-              class="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              stroke-width="1.5"
-              aria-hidden="true"
+          <div class="relative">
+            <button
+              type="button"
+              :aria-label="hasUnreadNotification ? '알림 (새 소식 있음)' : '알림'"
+              :aria-expanded="isNoticeOpen"
+              class="header-icon-btn notification-btn flex items-center justify-center"
+              :class="{ 'notification-btn--on': hasUnreadNotification }"
+              @click="toggleNotice"
             >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0"
+              <svg
+                class="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                stroke-width="1.5"
+                aria-hidden="true"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0"
+                />
+              </svg>
+            </button>
+
+            <template v-if="isNoticeOpen">
+              <div
+                class="fixed inset-0 z-10"
+                @click="closeNotice"
               />
-            </svg>
-          </RouterLink>
+              <div
+                role="status"
+                class="notice-bubble absolute right-0 top-full z-20 mt-2 w-64 rounded-md border border-border bg-surface p-2 shadow-elevated"
+              >
+                <button
+                  v-if="unreadChatCount"
+                  type="button"
+                  class="block w-full rounded px-2 py-2 text-left text-sm text-text-main hover:bg-bg"
+                  @click="goFromNotice('/chat')"
+                >
+                  안 읽은 채팅이 <strong class="font-bold text-primary">{{ unreadChatCount }}건</strong> 있습니다.
+                </button>
+                <button
+                  v-if="todayAppointment"
+                  type="button"
+                  class="block w-full rounded px-2 py-2 text-left text-sm text-text-main hover:bg-bg"
+                  @click="goFromNotice('/calls')"
+                >
+                  오늘의 검증 약속
+                  <strong class="font-bold text-primary">{{ todayAppointment.timeLabel }}</strong>
+                  <span
+                    v-if="todayAppointment.isWaitingForCounterpart"
+                    class="mt-0.5 block text-xs text-text-sub"
+                  >상대방의 응답을 기다리고 있습니다.</span>
+                </button>
+                <!-- 판매자 입장: 내 상품을 다시 찍어 달라는 요청이 들어왔습니다. -->
+                <button
+                  v-if="pendingRecaptureCount"
+                  type="button"
+                  class="block w-full rounded px-2 py-2 text-left text-sm text-text-main hover:bg-bg"
+                  @click="goFromNotice('/calls')"
+                >
+                  재촬영 요청이
+                  <strong class="font-bold text-primary">{{ pendingRecaptureCount }}건</strong>
+                  들어왔습니다.
+                </button>
+                <!-- 구매자 입장: 내가 요청한 재촬영을 판매자가 끝냈습니다. -->
+                <button
+                  v-if="doneRecaptureCount"
+                  type="button"
+                  class="block w-full rounded px-2 py-2 text-left text-sm text-text-main hover:bg-bg"
+                  @click="goFromNotice('/chat')"
+                >
+                  요청한 재촬영이
+                  <strong class="font-bold text-primary">{{ doneRecaptureCount }}건</strong>
+                  올라왔습니다.
+                </button>
+                <p
+                  v-if="!hasNotice"
+                  class="px-2 py-2 text-sm text-text-sub"
+                >
+                  새로운 소식이 없습니다.
+                </p>
+              </div>
+            </template>
+          </div>
 
           <div class="relative">
             <button
@@ -545,12 +674,19 @@ async function logoutMember() {
   color: #6366f1;
 }
 
-/* 안 읽은 알림이 있다는 표시. 지금은 항상 켜 두고, 알림 API가 붙으면 조건부로 바꿉니다. */
+/*
+  손댈 일이 있다는 표시.
+  ---------------------------------------------------------------------------
+  예전에는 늘 켜져 있었습니다. 항상 켜진 점은 아무것도 알리지 못하고, 눌러도
+  새로운 게 없으니 나중에는 아예 안 보게 됩니다.
+  지금은 stores/notificationDot.js가 안 읽은 채팅과 받은 검증 약속을 세어
+  둘 중 하나라도 있을 때만 켭니다.
+*/
 .notification-btn {
   position: relative;
 }
 
-.notification-btn::after {
+.notification-btn--on::after {
   content: '';
   position: absolute;
   top: 6px;
@@ -560,5 +696,29 @@ async function logoutMember() {
   border-radius: 50%;
   background: linear-gradient(135deg, #6366f1, #93c5fd);
   border: 1.5px solid #fff;
+}
+
+/* 벨에서 톡 튀어나오는 느낌만 줍니다. 길면 누른 뒤 읽기까지 기다리게 됩니다. */
+.notice-bubble {
+  transform-origin: top right;
+  animation: notice-pop 160ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes notice-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notice-bubble {
+    animation: none;
+  }
 }
 </style>
