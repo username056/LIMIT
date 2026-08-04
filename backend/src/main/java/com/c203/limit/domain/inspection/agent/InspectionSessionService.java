@@ -45,7 +45,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class InspectionSessionService {
-    private static final Duration SESSION_TTL = Duration.ofMinutes(10);
+    private static final Duration PAIRING_CODE_TTL = Duration.ofMinutes(10);
+    private static final Duration AGENT_SESSION_TTL = Duration.ofHours(1);
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final Map<TestType, String> CHECKLIST_ITEM_CODES = Map.of(
             TestType.CAMERA, "LAP-FTR-CAM",
@@ -98,7 +99,7 @@ public class InspectionSessionService {
                 hash(code),
                 sellerId,
                 listingId,
-                now.plus(SESSION_TTL),
+                now.plus(PAIRING_CODE_TTL),
                 now);
         sessionRepository.save(session);
         return response(session, code);
@@ -123,7 +124,7 @@ public class InspectionSessionService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.INSPECTION_PAIRING_INVALID));
 
         String token = UUID.randomUUID() + "." + HexFormat.of().formatHex(randomBytes(24));
-        session.pair(hash(token), collectorVersion, now);
+        session.pair(hash(token), collectorVersion, now.plus(AGENT_SESSION_TTL), now);
         return new PairResponse(
                 session.getSessionKey(), token, offset(session.getExpiresAt()));
     }

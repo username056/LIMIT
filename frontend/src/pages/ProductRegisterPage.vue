@@ -330,12 +330,27 @@ async function refreshAutomatedDiagnoses() {
     .map((item) => refreshDiagnosis(item, { revealEmptyFields: true })))
 }
 
+async function refreshDeviceCheckProgress() {
+  if (!currentProductId.value) return
+  const progress = await getProductDraftProgress(currentProductId.value)
+  draftProgressResults.value = progressResultsMap(progress.results) || new Map()
+  draftDeviceResults.value = new Map(Object.entries(progress.deviceResults || {}))
+  checklistItems.value
+    .filter((item) => CHECKABLE_ITEM_CODES[item.itemCode])
+    .forEach((item) => {
+      confirmState[item.checklistItemId]
+        = draftProgressResults.value.get(item.checklistItemId) === 'SUCCESS'
+    })
+}
+
 function beginWindowsInspectionPolling(sessionKey) {
   stopWindowsInspectionPolling()
   windowsInspectionTimer = window.setInterval(async () => {
     try {
       const session = await getInspectionSession(sessionKey)
       windowsInspection.value = { ...windowsInspection.value, ...session }
+      windowsInspectionError.value = ''
+      await refreshDeviceCheckProgress()
       if (session.status === 'COMPLETED') {
         stopWindowsInspectionPolling()
         await refreshAutomatedDiagnoses()
