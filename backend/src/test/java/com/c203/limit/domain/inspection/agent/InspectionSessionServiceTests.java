@@ -92,6 +92,10 @@ class InspectionSessionServiceTests {
 
         assertThat(paired.sessionKey()).isEqualTo(created.sessionKey());
         assertThat(paired.agentToken()).isNotBlank();
+        assertThat(created.expiresAt())
+                .isEqualTo(OffsetDateTime.parse("2026-08-03T01:10:00Z"));
+        assertThat(paired.expiresAt())
+                .isEqualTo(OffsetDateTime.parse("2026-08-03T02:00:00Z"));
         assertThat(service.status(10L, created.sessionKey()).status())
                 .isEqualTo(InspectionSessionStatus.PAIRED);
     }
