@@ -1,12 +1,16 @@
 package com.c203.limit.domain.product.entity;
 
 import com.c203.limit.global.common.BaseTimeEntity;
+import com.c203.limit.domain.inspection.enums.DeviceCheckResult;
+import com.c203.limit.domain.inspection.enums.TestType;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Set;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -115,6 +119,10 @@ public class Listing extends BaseTimeEntity {
 
     @Column(name = "draft_step", nullable = false)
     private int draftStep;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "web_device_check_results")
+    private Map<TestType, DeviceCheckResult> webDeviceCheckResults;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
@@ -267,6 +275,10 @@ public class Listing extends BaseTimeEntity {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
         }
         this.draftStep = draftStep;
+    }
+
+    public void updateWebDeviceCheckResults(Map<TestType, DeviceCheckResult> results) {
+        this.webDeviceCheckResults = results == null ? null : new LinkedHashMap<>(results);
     }
 
     public void hide() {

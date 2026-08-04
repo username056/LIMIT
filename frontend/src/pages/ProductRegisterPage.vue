@@ -50,7 +50,7 @@ import {
 } from '../utils/camera'
 import { MAX_PRICE_DIGITS, formatPriceDigits, toPriceDigits } from '../utils/priceInput'
 import { guideContentFor, guideImageFor } from '../utils/checklistGuideImages'
-import { CHECKABLE_ITEM_CODES } from '../features/deviceCheck/checkableItemCodes'
+import { CHECKABLE_ITEM_CODES, toUniversalCheckItems } from '../features/deviceCheck/checkableItemCodes'
 
 const WIZARD_STEPS = [
   { number: 1, label: '기기 등록' },
@@ -228,6 +228,7 @@ const captureState = reactive({})
 const confirmState = reactive({})
 const DEVICE_CHECK_RESULT = { SUCCESS: 'SUCCESS' }
 const draftProgressResults = ref(new Map())
+const draftDeviceResults = ref(new Map())
 // diagnosisState[checklistItemId] = { status: 'parsing'|'ready'|'error', fields: [...], errorMessage }
 // fields의 각 항목은 취합 응답(fieldName/ocrValue/fileParseValue/conflict/confirmedValue)에
 // draftValue(입력창 값)와 saving(저장 중 여부)을 더한 것입니다.
@@ -311,7 +312,12 @@ function stopWindowsInspectionPolling() {
 
 async function refreshAutomatedDiagnoses() {
   if (!currentProductId.value) return
-  checklistItems.value = await getProductChecklist(currentProductId.value)
+  const [checklist, progress] = await Promise.all([
+    getProductChecklist(currentProductId.value),
+    getProductDraftProgress(currentProductId.value),
+  ])
+  checklistItems.value = checklist
+  draftDeviceResults.value = new Map(Object.entries(progress.deviceResults || {}))
   checklistItems.value
     .filter((item) => CHECKABLE_ITEM_CODES[item.itemCode])
     .forEach((item) => {
@@ -517,9 +523,7 @@ const privacyChecklistItems = computed(
   ),
 )
 const deviceCheckConfirmationItems = computed(
-  () => checklistItems.value.filter(
-    (item) => CHECKABLE_ITEM_CODES[item.itemCode],
-  ),
+  () => toUniversalCheckItems(checklistItems.value),
 )
 const capturedMediaCount = computed(
   () => mediaChecklistItems.value.filter((item) => isCaptureItemComplete(item)).length,
@@ -528,14 +532,27 @@ const confirmedCount = computed(
   () => privacyChecklistItems.value.filter((item) => confirmState[item.checklistItemId]).length,
 )
 const deviceCheckConfirmedCount = computed(
-  () => deviceCheckConfirmationItems.value.filter((item) => confirmState[item.checklistItemId]).length,
+  () => deviceCheckConfirmationItems.value.filter(
+    (item) => deviceCheckStatus(item) === 'COMPLETED',
+  ).length,
 )
 // draft 편집 중에는 draftProgressResults로 FAILED와 미점검을 구분할 수 있지만, 이미 판매 중인
 // 상품을 고칠 때는 서버가 COMPLETED/PENDING만 내려줘 구분할 수 없어 미점검으로만 표시합니다.
 function deviceCheckStatus(item) {
+  const webResult = draftDeviceResults.value.get(item.testType)
+  if (webResult === 'SUCCESS') return 'COMPLETED'
+  if (webResult === 'FAILED') return 'FAILED'
   if (confirmState[item.checklistItemId]) return 'COMPLETED'
   if (draftProgressResults.value.get(item.checklistItemId) === 'FAILED') return 'FAILED'
   return 'PENDING'
+}
+function deviceCheckStatusLabel(item) {
+  const status = deviceCheckStatus(item)
+  if (status === 'FAILED') return '재점검 필요'
+  if (status !== 'COMPLETED') return '직접 점검 가능'
+  return draftDeviceResults.value.get(item.testType) === 'SUCCESS'
+    ? '웹 점검 완료'
+    : '자동 입력 완료'
 }
 const activeCaptureItem = computed(
   () => mediaChecklistItems.value.find((item) => item.checklistItemId === activeCaptureItemId.value)
@@ -757,6 +774,7 @@ function resetForm() {
   isGeneratingChecklist.value = false
   checklistItems.value = []
   draftProgressResults.value = new Map()
+  draftDeviceResults.value = new Map()
   activeCaptureItemId.value = null
   handoverGuide.value = null
   priceRejection.value = ''
@@ -1714,6 +1732,7 @@ async function startEdit(productId) {
       : null
     if (draftProgress) {
       draftProgressResults.value = progressResultsMap(draftProgress.results) || new Map()
+      draftDeviceResults.value = new Map(Object.entries(draftProgress.deviceResults || {}))
       checklistItems.value
         .filter((item) => item.evidenceType === 'SELLER_CONFIRMATION' || CHECKABLE_ITEM_CODES[item.itemCode])
         .forEach((item) => {
@@ -2476,7 +2495,7 @@ onMounted(async () => {
               <ul class="mt-4 max-h-[32rem] space-y-3 overflow-y-auto pr-1">
                 <li
                   v-for="item in mediaChecklistItems"
-                  :key="item.checklistItemId"
+                  :key="item.testType"
                 >
                   <div
                     role="button"
@@ -2898,18 +2917,8 @@ onMounted(async () => {
                       ? 'success'
                       : deviceCheckStatus(item) === 'FAILED' ? 'danger' : 'gray'"
                   >
-                    {{
-                      deviceCheckStatus(item) === 'COMPLETED'
-                        ? '자동 입력 완료'
-                        : deviceCheckStatus(item) === 'FAILED' ? '재점검 필요' : '직접 점검 가능'
-                    }}
+                    {{ deviceCheckStatusLabel(item) }}
                   </BaseBadge>
-                </li>
-                <li
-                  v-if="!deviceCheckConfirmationItems.length"
-                  class="rounded-lg border border-dashed border-border p-4 text-sm text-text-sub md:col-span-2"
-                >
-                  자동으로 연결된 실동작 항목이 없습니다. 필요한 항목은 직접 점검할 수 있습니다.
                 </li>
               </ul>
             </div>

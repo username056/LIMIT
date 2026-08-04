@@ -30,26 +30,48 @@ export function useKeyboardCheck({ includeNumpad = false } = {}) {
   const missingCodes = computed(() => targetCodes.filter((code) => !pressed.has(code)))
   const isComplete = computed(() => pressedCount.value >= total)
 
-  function handleKeydown(event) {
-    if (!targetCodes.includes(event.code)) return
-    pressed.add(event.code)
+  function normalizedCode(event) {
+    if ((event.key === 'Shift' || event.code === 'ShiftLeft') && event.location === 2) {
+      return 'ShiftRight'
+    }
+    if (['HangulMode', 'KoreanMode'].includes(event.key) || event.keyCode === 21) {
+      return 'Lang1'
+    }
+    if (event.key === 'HanjaMode' || event.keyCode === 25) {
+      return 'Lang2'
+    }
+    return event.code
+  }
+
+  function markPressed(code) {
+    if (targetCodes.includes(code)) pressed.add(code)
+  }
+
+  function handleKey(event) {
+    markPressed(normalizedCode(event))
   }
 
   function start() {
     pressed.clear()
     status.value = 'listening'
-    window.addEventListener('keydown', handleKeydown)
+    window.addEventListener('keydown', handleKey)
+    window.addEventListener('keyup', handleKey)
   }
 
   function finish() {
-    window.removeEventListener('keydown', handleKeydown)
+    window.removeEventListener('keydown', handleKey)
+    window.removeEventListener('keyup', handleKey)
     status.value = isComplete.value ? 'passed' : 'passedWithMissing'
     return { pressedCodes: [...pressed], missingCodes: missingCodes.value }
   }
 
   function stop() {
-    window.removeEventListener('keydown', handleKeydown)
+    window.removeEventListener('keydown', handleKey)
+    window.removeEventListener('keyup', handleKey)
   }
 
-  return { status, rows, pressed, pressedCount, total, missingCodes, isComplete, start, finish, stop }
+  return {
+    status, rows, pressed, pressedCount, total, missingCodes, isComplete,
+    start, finish, stop,
+  }
 }

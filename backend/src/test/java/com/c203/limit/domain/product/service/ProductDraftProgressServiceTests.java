@@ -11,9 +11,11 @@ import com.c203.limit.domain.inspection.enums.AutomationType;
 import com.c203.limit.domain.inspection.enums.ChecklistItemCompletionStatus;
 import com.c203.limit.domain.inspection.enums.DeviceCheckResult;
 import com.c203.limit.domain.inspection.enums.EvidenceType;
+import com.c203.limit.domain.inspection.enums.TestType;
 import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
 import com.c203.limit.domain.product.dto.request.UpdateProductDraftProgressRequest;
 import com.c203.limit.domain.product.dto.request.UpdateProductDraftProgressRequest.ChecklistItemResult;
+import com.c203.limit.domain.product.dto.request.UpdateProductDraftProgressRequest.WebDeviceResult;
 import com.c203.limit.domain.product.dto.response.ProductDraftProgressResponse;
 import com.c203.limit.domain.product.entity.Listing;
 import com.c203.limit.domain.product.repository.ListingRepository;
@@ -21,6 +23,7 @@ import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.util.List;
 import java.util.Optional;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -160,6 +163,36 @@ class ProductDraftProgressServiceTests {
         service.update(SELLER_ID, PRODUCT_ID, new UpdateProductDraftProgressRequest(2, List.of()));
 
         assertThat(display.getCompletionStatus()).isEqualTo(ChecklistItemCompletionStatus.COMPLETED);
+    }
+
+    @Test
+    void storesSevenWebChecksWithoutChecklistItems() {
+        when(checklistItems.findByListingIdOrderByDisplayOrderAsc(PRODUCT_ID))
+                .thenReturn(List.of());
+
+        ProductDraftProgressResponse response = service.update(
+                SELLER_ID,
+                PRODUCT_ID,
+                new UpdateProductDraftProgressRequest(
+                        2,
+                        List.of(),
+                        List.of(
+                                new WebDeviceResult(TestType.SPEAKER, DeviceCheckResult.SUCCESS),
+                                new WebDeviceResult(TestType.DISPLAY, DeviceCheckResult.SUCCESS),
+                                new WebDeviceResult(TestType.CHARGING, DeviceCheckResult.SUCCESS),
+                                new WebDeviceResult(TestType.CAMERA, DeviceCheckResult.SUCCESS),
+                                new WebDeviceResult(TestType.MICROPHONE, DeviceCheckResult.SUCCESS),
+                                new WebDeviceResult(TestType.KEYBOARD, DeviceCheckResult.SUCCESS),
+                                new WebDeviceResult(TestType.TOUCHPAD, DeviceCheckResult.SUCCESS))));
+
+        assertThat(response.deviceResults()).containsAllEntriesOf(Map.of(
+                TestType.SPEAKER, DeviceCheckResult.SUCCESS,
+                TestType.DISPLAY, DeviceCheckResult.SUCCESS,
+                TestType.CHARGING, DeviceCheckResult.SUCCESS,
+                TestType.CAMERA, DeviceCheckResult.SUCCESS,
+                TestType.MICROPHONE, DeviceCheckResult.SUCCESS,
+                TestType.KEYBOARD, DeviceCheckResult.SUCCESS,
+                TestType.TOUCHPAD, DeviceCheckResult.SUCCESS));
     }
 
     @Test

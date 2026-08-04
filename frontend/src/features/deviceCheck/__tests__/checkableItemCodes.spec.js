@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { CHECK_KIND, toCheckableItems } from '../checkableItemCodes'
+import { CHECK_KIND, toCheckableItems, toUniversalCheckItems } from '../checkableItemCodes'
 
 describe('toCheckableItems', () => {
   it('7개 웹 점검 itemCode를 evidenceType과 무관하게 골라 checkKind를 붙인다', () => {
@@ -32,5 +32,16 @@ describe('toCheckableItems', () => {
 
   it('대상 목록이 비어 있으면 빈 배열을 반환한다', () => {
     expect(toCheckableItems([])).toEqual([])
+  })
+})
+
+describe('toUniversalCheckItems', () => {
+  it('체크리스트가 비어 있어도 공통 7개 점검을 만든다', () => {
+    const result = toUniversalCheckItems([])
+
+    expect(result).toHaveLength(7)
+    expect(result.map((item) => item.testType)).toEqual([
+      'SPEAKER', 'DISPLAY', 'CHARGING', 'CAMERA', 'MICROPHONE', 'KEYBOARD', 'TOUCHPAD',
+    ])
   })
 })

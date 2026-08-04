@@ -53,9 +53,32 @@ const checklistItem = {
   evidenceType: 'SELLER_CONFIRMATION',
 }
 
+const ALL_TEST_TYPES = ['SPEAKER', 'DISPLAY', 'CHARGING', 'CAMERA', 'MICROPHONE', 'KEYBOARD', 'TOUCHPAD']
+const ITEM_CODE_TEST_TYPE = {
+  'LAP-FTR-SPK': 'SPEAKER',
+  'LAP-DSP-003': 'DISPLAY',
+  'LAP-CHG-007': 'CHARGING',
+  'LAP-FTR-CAM': 'CAMERA',
+  'LAP-FTR-MIC': 'MICROPHONE',
+  'LAP-KBD-005': 'KEYBOARD',
+  'LAP-PAD-006': 'TOUCHPAD',
+}
+
+function withOtherChecksCompleted(progress, activeTypes) {
+  return {
+    ...progress,
+    deviceResults: {
+      ...Object.fromEntries(ALL_TEST_TYPES
+        .filter((testType) => !activeTypes.includes(testType))
+        .map((testType) => [testType, 'SUCCESS'])),
+      ...(progress.deviceResults || {}),
+    },
+  }
+}
+
 async function mountAndLoad(progress) {
   getProductChecklist.mockResolvedValue([checklistItem])
-  getProductDraftProgress.mockResolvedValue(progress)
+  getProductDraftProgress.mockResolvedValue(withOtherChecksCompleted(progress, ['KEYBOARD']))
   updateProductDraftProgress.mockResolvedValue({})
 
   const wrapper = mount(DeviceCheckPage, {
@@ -72,7 +95,8 @@ async function mountAndLoad(progress) {
 
 async function mountWithChecklist(checklist, progress = { step: 2, results: {} }) {
   getProductChecklist.mockResolvedValue(checklist)
-  getProductDraftProgress.mockResolvedValue(progress)
+  const activeTypes = checklist.map((item) => ITEM_CODE_TEST_TYPE[item.itemCode]).filter(Boolean)
+  getProductDraftProgress.mockResolvedValue(withOtherChecksCompleted(progress, activeTypes))
   updateProductDraftProgress.mockResolvedValue({})
   const wrapper = mount(DeviceCheckPage, {
     global: {
@@ -94,13 +118,17 @@ async function runKeyboardStepAndSave(wrapper, missingCodes) {
     await recheckButton.trigger('click')
     await flushPromises()
   }
-  await wrapper.find('button').trigger('click') // 점검 시작
+  await wrapper.findAll('button').find((button) => button.text() === '점검 시작').trigger('click')
   await flushPromises()
-  await wrapper.find('button').trigger('click') // 완료 (finishKeyboard)
+  await wrapper.findAll('button').find((button) => button.text() === '완료').trigger('click')
   await flushPromises()
   await wrapper.findAll('button').find((b) => b.text() === '다음').trigger('click')
   await flushPromises()
-  await wrapper.find('button').trigger('click') // 저장하고 돌아가기
+  for (let index = 0; index < 6; index += 1) {
+    await wrapper.findAll('button').find((b) => b.text() === '다음').trigger('click')
+    await flushPromises()
+  }
+  await wrapper.findAll('button').find((button) => button.text() === '저장하고 돌아가기').trigger('click')
   await flushPromises()
 }
 
@@ -113,12 +141,11 @@ describe('DeviceCheckPage', () => {
     vi.restoreAllMocks()
   })
 
-  it('점검 대상이 없으면 완료로 표시하거나 결과를 저장하지 않는다', async () => {
+  it('체크리스트 점검 항목이 없어도 공통 7개 검사를 표시한다', async () => {
     const wrapper = await mountWithChecklist([])
 
-    expect(wrapper.text()).toContain('직접 점검할 수 있는 항목이 없습니다.')
-    expect(wrapper.text()).not.toContain('점검이 끝났습니다.')
-    expect(wrapper.text()).not.toContain('저장하고 돌아가기')
+    expect(wrapper.text()).toContain('1 / 7')
+    expect(wrapper.text()).toContain('스피커')
     expect(updateProductDraftProgress).not.toHaveBeenCalled()
   })
 
@@ -134,16 +161,22 @@ describe('DeviceCheckPage', () => {
     await wrapper.findAll('button').find((button) => button.text() === '점검 시작').trigger('click')
     await wrapper.findAll('button').find((button) => button.text() === '정상이에요').trigger('click')
     await wrapper.findAll('button').find((button) => button.text() === '다음').trigger('click')
+    for (let index = 0; index < 5; index += 1) {
+      await wrapper.findAll('button').find((button) => button.text() === '다음').trigger('click')
+    }
     await wrapper.findAll('button').find((button) => button.text() === '저장하고 돌아가기').trigger('click')
     await flushPromises()
 
-    expect(updateProductDraftProgress).toHaveBeenCalledWith('1', {
-      step: 2,
-      results: [
+    expect(updateProductDraftProgress).toHaveBeenCalledWith('1', expect.objectContaining({
+      results: expect.arrayContaining([
         { checklistItemId: 21, result: 'SUCCESS' },
         { checklistItemId: 22, result: 'SUCCESS' },
-      ],
-    })
+      ]),
+      deviceResults: expect.arrayContaining([
+        { testType: 'DISPLAY', result: 'SUCCESS' },
+        { testType: 'CHARGING', result: 'SUCCESS' },
+      ]),
+    }))
   })
 
   it('자동 완료된 항목은 웹 점검 없이 다음으로 넘어갈 수 있다', async () => {
@@ -155,15 +188,65 @@ describe('DeviceCheckPage', () => {
     expect(wrapper.text()).toContain('웹 점검을 생략할 수 있습니다.')
   })
 
+  it('포인터 점검 시작을 누르면 입력 감지 상태와 완료 버튼을 표시한다', async () => {
+    const wrapper = await mountWithChecklist([
+      { checklistItemId: 41, itemCode: 'LAP-PAD-006', evidenceType: 'SELLER_CONFIRMATION', status: 'PENDING' },
+    ])
+
+    await wrapper.findAll('button').find((button) => button.text() === '점검 시작').trigger('click')
+    await flushPromises()
+
+    const completeButton = wrapper.findAll('button').find((button) => button.text() === '완료')
+    expect(completeButton.attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('누르기 대기 · 이동/스크롤 대기')
+
+    const pointerArea = wrapper.find('.border-dashed').element
+    const pointerEvent = (type) => {
+      const event = new Event(type)
+      Object.defineProperty(event, 'pointerType', { value: 'mouse' })
+      return event
+    }
+    pointerArea.dispatchEvent(pointerEvent('pointerdown'))
+    for (let index = 0; index < 4; index += 1) {
+      pointerArea.dispatchEvent(pointerEvent('pointermove'))
+    }
+    await flushPromises()
+
+    expect(completeButton.attributes('disabled')).toBeUndefined()
+    expect(wrapper.text()).toContain('누르기 감지 · 이동/스크롤 감지')
+    expect(wrapper.text()).toContain('클릭·드래그·스크롤')
+  })
+
+  it('이전 웹 성공 결과는 자동 입력이 아니라 웹 점검 완료로 안내한다', async () => {
+    const wrapper = await mountWithChecklist([], {
+      step: 2,
+      results: {},
+      deviceResults: { SPEAKER: 'SUCCESS' },
+    })
+
+    expect(wrapper.text()).toContain('웹 점검 완료')
+    expect(wrapper.text()).toContain('이전에 웹에서 정상 점검한 결과')
+    expect(wrapper.text()).not.toContain('Limit 진단 프로그램에서 정상 결과')
+  })
+
+  it('카메라 자동 판정 시간과 동작 방법을 안내한다', async () => {
+    const wrapper = await mountWithChecklist([
+      { checklistItemId: 42, itemCode: 'LAP-FTR-CAM', evidenceType: 'SELLER_CONFIRMATION', status: 'PENDING' },
+    ])
+
+    expect(wrapper.text()).toContain('약 3초 동안 손을 흔들거나 기기를 조금 움직여 주세요.')
+    expect(wrapper.text()).toContain('화면 변화를 감지하면 자동으로 점검이 완료됩니다.')
+  })
+
   it('키보드에 응답 없는 키가 있으면 FAILED로 저장한다', async () => {
     const wrapper = await mountAndLoad({ step: 2, results: {} })
 
     await runKeyboardStepAndSave(wrapper, ['KeyA'])
 
-    expect(updateProductDraftProgress).toHaveBeenCalledWith('1', {
-      step: 2,
-      results: [{ checklistItemId: 5, result: 'FAILED' }],
-    })
+    expect(updateProductDraftProgress).toHaveBeenCalledWith('1', expect.objectContaining({
+      results: expect.arrayContaining([{ checklistItemId: 5, result: 'FAILED' }]),
+      deviceResults: expect.arrayContaining([{ testType: 'KEYBOARD', result: 'FAILED' }]),
+    }))
   })
 
   it('이전에 SUCCESS였던 항목이 이번 점검에서 실패하면 FAILED로 덮어써진다', async () => {
@@ -171,10 +254,9 @@ describe('DeviceCheckPage', () => {
 
     await runKeyboardStepAndSave(wrapper, ['KeyB'])
 
-    expect(updateProductDraftProgress).toHaveBeenCalledWith('1', {
-      step: 2,
-      results: [{ checklistItemId: 5, result: 'FAILED' }],
-    })
+    expect(updateProductDraftProgress).toHaveBeenCalledWith('1', expect.objectContaining({
+      deviceResults: expect.arrayContaining([{ testType: 'KEYBOARD', result: 'FAILED' }]),
+    }))
   })
 
   it('모든 키를 다 누르면 SUCCESS로 저장한다', async () => {
@@ -182,10 +264,9 @@ describe('DeviceCheckPage', () => {
 
     await runKeyboardStepAndSave(wrapper, [])
 
-    expect(updateProductDraftProgress).toHaveBeenCalledWith('1', {
-      step: 2,
-      results: [{ checklistItemId: 5, result: 'SUCCESS' }],
-    })
+    expect(updateProductDraftProgress).toHaveBeenCalledWith('1', expect.objectContaining({
+      deviceResults: expect.arrayContaining([{ testType: 'KEYBOARD', result: 'SUCCESS' }]),
+    }))
   })
 
   it('저장하고 돌아가면 수정 화면이 아니라 상품 등록 2단계로 되돌린다', async () => {
