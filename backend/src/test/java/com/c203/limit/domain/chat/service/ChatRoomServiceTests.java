@@ -49,6 +49,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.c203.limit.domain.chat.dto.response.ChatRoomSummaryResponse;
 import com.c203.limit.domain.chat.domain.MessageStatus;
 import com.c203.limit.domain.chat.domain.MessageType;
+import com.c203.limit.domain.product.storage.MediaUrlResolver;
 
 @ExtendWith(MockitoExtension.class)
 class ChatRoomServiceTests {
@@ -65,6 +66,7 @@ class ChatRoomServiceTests {
     @Mock ChatRoomContextReader contextReader;
     @Mock ChatRoomCreator creator;
     @Mock ChatOutboxEventRepository outboxEventRepository;
+    @Mock MediaUrlResolver mediaUrlResolver;
     ChatRoomService service;
 
     @BeforeEach
@@ -72,7 +74,7 @@ class ChatRoomServiceTests {
         service = new ChatRoomService(
                 listingReader, chatRoomRepository, participantRepository, chatMessageRepository,
                 chatMediaRepository, chatMessageMediaRepository, contextReader, creator,
-                outboxEventRepository, new ObjectMapper());
+                outboxEventRepository, new ObjectMapper(), mediaUrlResolver);
     }
 
     @Test
@@ -243,7 +245,15 @@ class ChatRoomServiceTests {
                 .thenReturn(5L);
         when(contextReader.findAll(List.of(100L), BUYER_ID)).thenReturn(
                 java.util.Map.of(100L, new ChatRoomContext(
-                        100L, "판매자", "상품", "https://cdn/image.jpg", "오늘 오후에 가능하실까요?")));
+                        100L, "판매자", "members/3/profile/abc", "상품",
+                        "listings/1/images/abc", null, "오늘 오후에 가능하실까요?")));
+        // 채팅도 상품 화면과 같은 방식으로 URL을 만든다. cdn_url을 직접 읽던 탓에
+        // 목록에 사진이 한 번도 나오지 않았다.
+        when(mediaUrlResolver.resolve("listings/1/images/abc", null))
+                .thenReturn("https://cdn/image.jpg");
+        // 상대방 프로필 사진도 같은 길로 URL이 된다. 화상 통화 화면이 이 값을 쓴다.
+        when(mediaUrlResolver.resolve("members/3/profile/abc", null))
+                .thenReturn("https://cdn/profile.jpg");
 
         CursorResponse<ChatRoomSummaryResponse> result = service.findRooms(BUYER_ID, null, 1);
 
@@ -251,6 +261,9 @@ class ChatRoomServiceTests {
         assertThat(result.content().get(0).counterpartId()).isEqualTo(SELLER_ID);
         assertThat(result.content().get(0).counterpartNickname()).isEqualTo("판매자");
         assertThat(result.content().get(0).listingTitle()).isEqualTo("상품");
+        assertThat(result.content().get(0).listingThumbnailUrl()).isEqualTo("https://cdn/image.jpg");
+        assertThat(result.content().get(0).counterpartProfileImageUrl())
+                .isEqualTo("https://cdn/profile.jpg");
         assertThat(result.content().get(0).lastMessagePreview()).isEqualTo("오늘 오후에 가능하실까요?");
         assertThat(result.content().get(0).unreadCount()).isEqualTo(5L);
         assertThat(result.content().get(0).counterpartLastReadSequence()).isEqualTo(2L);

@@ -6,6 +6,7 @@ import { apiClient } from './client'
  * @property {number} listingId
  * @property {number} counterpartId
  * @property {string|null} counterpartNickname
+ * @property {string|null} counterpartProfileImageUrl 화상 통화 화면이 쓴다. 목록 썸네일은 상품 사진이다.
  * @property {string|null} listingTitle
  * @property {string|null} listingThumbnailUrl
  * @property {string|null} lastMessagePreview 마지막 메시지 한 줄. 사진·영상은 "사진을 보냈습니다."

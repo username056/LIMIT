@@ -10,6 +10,10 @@ public record ChatRoomSummaryResponse(
         Long listingId,
         Long counterpartId,
         String counterpartNickname,
+        // 화상 통화 화면은 상품이 아니라 사람을 보여 주므로 상대방 프로필 사진이 필요합니다.
+        // 목록 썸네일은 그대로 상품 사진을 씁니다.
+        @Schema(description = "상대방 프로필 사진 주소. 안 올렸으면 null", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+        String counterpartProfileImageUrl,
         String listingTitle,
         String listingThumbnailUrl,
         // 목록에 한 줄로 보여 줄 마지막 메시지. 예전에는 마지막 메시지의 번호·순서·시각만

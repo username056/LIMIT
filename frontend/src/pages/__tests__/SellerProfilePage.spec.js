@@ -95,4 +95,30 @@ describe('SellerProfilePage', () => {
     expect(wrapper.text()).toContain('판매자 정보를 불러오지 못했습니다.')
     expect(wrapper.text()).toContain('전체 상품으로')
   })
+it('판매자 프로필 사진이 있으면 첫 글자 대신 사진을 보여준다', async () => {
+    getSellerProfile.mockResolvedValue({
+      sellerId: 55,
+      nickname: '리미트판매자',
+      sellerType: 'INDIVIDUAL',
+      joinedAt: '2026-07-20T10:00:00+09:00',
+      onSaleCount: 2,
+      profileImageUrl: 'https://cdn.example.com/seller.jpg',
+    })
+
+    const wrapper = mount(SellerProfilePage, { global: globalOptions })
+    await flushPromises()
+
+    expect(wrapper.get('img[alt="리미트판매자 프로필 사진"]').attributes('src'))
+      .toBe('https://cdn.example.com/seller.jpg')
+  })
+
+  // 사진을 올리지 않은 판매자가 많아, 첫 글자로 대신하는 길이 계속 살아 있어야 합니다.
+  it('사진이 없으면 닉네임 첫 글자를 보여준다', async () => {
+    const wrapper = mount(SellerProfilePage, { global: globalOptions })
+    await flushPromises()
+
+    expect(wrapper.find('img[alt="리미트판매자 프로필 사진"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('리')
+  })
 })
+

@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import PageHeader from '../components/PageHeader.vue'
 import BaseButton from '../components/BaseButton.vue'
@@ -149,13 +149,18 @@ const reinspectionRequestKey = computed(
   실동작 점검 화면이 ?step=2로 돌려보냅니다. 1~3만 받습니다 — 주소를 직접 고쳐
   step=9로 들어와도 없는 단계가 열려 화면이 비지 않게 합니다.
 */
-const returnStep = computed(() => {
-  const step = Number(route.query.step)
-  return [1, 2, 3].includes(step) ? step : null
-})
 const resumeProductId = computed(() => {
   const productId = Number(route.query.resumeProductId)
   return Number.isInteger(productId) && productId > 0 ? productId : null
+})
+const returnStep = computed(() => {
+  // 가리키는 상품이 있어야 단계를 되살립니다. 수정 화면은 주소에 productId가 있고,
+  // 점검을 마치고 등록 화면으로 돌아올 때는 resumeProductId가 붙습니다.
+  // 상품이 없는데 3단계를 열면 카테고리·모델도 고르지 않은 채 '판매 준비' 화면이
+  // 떠서, 저장할 수 없는 자리에 갇힙니다.
+  if (!route.params.productId && !resumeProductId.value) return null
+  const step = Number(route.query.step)
+  return [1, 2, 3].includes(step) ? step : null
 })
 const isRegistrationResume = computed(() => Boolean(resumeProductId.value))
 const editingId = ref(null)
@@ -1152,7 +1157,7 @@ function goToStep4() {
     const sections = []
     if (missingPrivacy.length) {
       sections.push(
-        `[개인정보 정리 확인]\n${missingPrivacy.map((item) => `· ${item.name}`).join('\n')}\n개인 정보 보호를 위해 반드시 초기화를 진행해주세요.`,
+        `[개인정보 정리 확인]\n${missingPrivacy.map((item) => `· ${item.name}`).join('\n')}\n개인 정보 보호를 위해 반드시 초기화를 진행해 주세요.`,
       )
     }
     if (missingDeviceCheck.length) {
@@ -1838,13 +1843,46 @@ function closeExpandedImageOnEscape({ key: pressed }) {
   if (pressed === 'Escape') expandedImage.value = ''
 }
 
-onMounted(() => window.addEventListener('keydown', closeExpandedImageOnEscape))
+/*
+  쓰던 내용을 두고 나가려 하면 한 번 붙잡습니다.
+  ---------------------------------------------------------------------------
+  등록은 사진 열 장과 체크리스트까지 채우는 긴 작업인데, '임시저장'을 누르지 않고
+  뒤로 가거나 탭을 닫으면 그대로 사라졌습니다. 눌러야 남는다는 것을 모르면 다 잃습니다.
+
+  저장·완료·점검 화면으로 옮겨 가는 것은 의도한 이동이라 붙잡지 않습니다.
+  그 경로에서는 allowLeave를 먼저 세워 둡니다.
+*/
+const allowLeave = ref(false)
+
+const hasUnsavedWork = computed(() => Boolean(
+  form.name || form.price || form.description
+  || form.categoryId || form.deviceModelId
+  || listingImages.value.length,
+))
+
+function warnBeforeUnload(event) {
+  if (allowLeave.value || !hasUnsavedWork.value) return
+  // 문구는 브라우저가 정합니다. preventDefault만으로 기본 확인창이 뜹니다.
+  event.preventDefault()
+  event.returnValue = ''
+}
+
+onBeforeRouteLeave(() => {
+  if (allowLeave.value || !hasUnsavedWork.value) return true
+  return window.confirm('작성 중인 내용이 저장되지 않았습니다. 이 화면을 떠날까요?')
+})
+
+onMounted(() => {
+  window.addEventListener('keydown', closeExpandedImageOnEscape)
+  window.addEventListener('beforeunload', warnBeforeUnload)
+})
 
 onBeforeUnmount(() => {
   stopChecklistLoading()
   stopWindowsInspectionPolling()
   modelRequestId += 1
   window.removeEventListener('keydown', closeExpandedImageOnEscape)
+  window.removeEventListener('beforeunload', warnBeforeUnload)
 })
 
 onMounted(async () => {
@@ -1942,7 +1980,7 @@ onMounted(async () => {
               판매할 기기를 등록해 주세요.
             </h2>
             <p class="mt-1 text-sm text-text-sub">
-              선택한 모델에 맞는 검증 체크리스트가 자동으로 연결됩니다. 다음 단계에서 항목별로 사진·영상을 등록하게 됩니다.
+              선택한 모델에 맞는 검증 체크리스트가 자동으로 연결됩니다. 다음 단계에서는 항목별로 사진·영상을 등록해요.
             </p>
 
             <!--
@@ -2244,7 +2282,8 @@ onMounted(async () => {
                 v-else-if="!checklistGeneration.aiSuggestions?.length && !checklistGeneration.aiApplied"
                 class="mt-3 rounded-md bg-white/80 px-3 py-2 text-xs leading-5 text-text-sub"
               >
-                AI 연결 없이 검증된 기기별 기본 정책으로 생성했습니다. 상품 등록은 그대로 진행할 수 있습니다.
+                AI 연결 없이 검증된 기기별 기본 정책으로 생성했습니다.
+                상품 등록은 그대로 진행할 수 있습니다.
               </p>
               <p
                 v-if="editingId && editingCustomModel"
@@ -2973,10 +3012,15 @@ onMounted(async () => {
                     진단 프로그램으로 완료된 항목은 자동 반영됩니다. 나머지 항목은 웹에서 직접 점검할 수 있습니다.
                   </p>
                 </div>
+                <!--
+                  점검 화면으로 옮겨 가는 것은 의도한 이동입니다. 이탈 경고를 띄우지 않게
+                  먼저 문을 열어 둡니다(점검을 마치면 ?step=2로 이 화면에 돌아옵니다).
+                -->
                 <BaseButton
                   v-if="currentProductId"
                   variant="outline"
                   :to="{ name: 'seller-product-device-check', params: { productId: currentProductId } }"
+                  @click="allowLeave = true"
                 >
                   카메라·마이크·키보드 등 직접 점검하기
                 </BaseButton>

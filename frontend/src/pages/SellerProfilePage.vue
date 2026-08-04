@@ -7,6 +7,7 @@ import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseBadge from '../components/BaseBadge.vue'
 import BaseButton from '../components/BaseButton.vue'
 import ProductCard from '../components/ProductCard.vue'
+import ProfileAvatar from '../components/ProfileAvatar.vue'
 import { getSellerProfile } from '../api/seller'
 import { getProducts } from '../api/products'
 
@@ -30,7 +31,6 @@ const joinedLabel = computed(() => {
   return new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium' })
     .format(new Date(profile.value.joinedAt))
 })
-const initial = computed(() => (profile.value?.nickname || '판').trim().charAt(0))
 
 async function loadProducts(page = 0) {
   const response = await getProducts({
@@ -86,10 +86,12 @@ onMounted(async () => {
 
       <template v-else-if="profile">
         <section class="flex flex-wrap items-center gap-4 card-soft rounded-lg bg-surface p-6">
-          <span
-            class="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary-gradient text-2xl font-bold text-white"
-            aria-hidden="true"
-          >{{ initial }}</span>
+          <ProfileAvatar
+            :src="profile.profileImageUrl"
+            :name="profile.nickname"
+            size-class="h-16 w-16"
+            text-class="text-2xl"
+          />
           <div class="min-w-0 flex-1">
             <div class="flex flex-wrap items-center gap-2">
               <h1 class="truncate text-xl font-bold text-text-main">

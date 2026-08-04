@@ -41,6 +41,8 @@ const { routerPushMock, routeParams, routeQuery } = vi.hoisted(() => ({
 
 vi.mock('vue-router', () => ({
   useRoute: () => ({ params: routeParams, query: routeQuery }),
+  // 이탈 경고용 가드. 테스트에서는 등록만 두고 콜백은 실행하지 않습니다.
+  onBeforeRouteLeave: vi.fn(),
   useRouter: () => ({ push: routerPushMock, replace: vi.fn() }),
 }))
 
@@ -866,7 +868,7 @@ describe('ProductRegisterPage', () => {
     await buttonByText(wrapper, '다음 단계로').trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('개인 정보 보호를 위해 반드시 초기화를 진행해주세요.')
+    expect(wrapper.text()).toContain('개인 정보 보호를 위해 반드시 초기화를 진행해 주세요.')
     expect(buttonByText(wrapper, '계속 작성하기')).toBeUndefined()
     await buttonByText(wrapper, '확인').trigger('click')
     await flushPromises()

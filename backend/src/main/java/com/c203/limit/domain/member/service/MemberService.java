@@ -8,6 +8,7 @@ import com.c203.limit.domain.member.dto.response.UpdateMemberResponse;
 import com.c203.limit.domain.member.entity.Member;
 import com.c203.limit.domain.member.repository.MemberRepository;
 import com.c203.limit.domain.seller.service.SellerStatusReader;
+import com.c203.limit.domain.product.storage.MediaUrlResolver;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import org.slf4j.Logger;
@@ -23,16 +24,19 @@ public class MemberService {
     private final PasswordEncoder passwordEncoder;
     private final AuthService authService;
     private final SellerStatusReader sellerStatusReader;
+    private final MediaUrlResolver mediaUrlResolver;
 
     public MemberService(
             MemberRepository memberRepository,
             PasswordEncoder passwordEncoder,
             AuthService authService,
-            SellerStatusReader sellerStatusReader) {
+            SellerStatusReader sellerStatusReader,
+            MediaUrlResolver mediaUrlResolver) {
         this.memberRepository = memberRepository;
         this.passwordEncoder = passwordEncoder;
         this.authService = authService;
         this.sellerStatusReader = sellerStatusReader;
+        this.mediaUrlResolver = mediaUrlResolver;
     }
 
     @Transactional(readOnly = true)
@@ -49,7 +53,9 @@ public class MemberService {
                 sellerStatusReader.statusOf(memberId),
                 member.getEmailVerifiedAt(),
                 member.getLastLoginAt(),
-                member.getCreatedAt());
+                member.getCreatedAt(),
+                // 저장된 것은 S3 키다. 주소는 읽을 때 만든다 — 버킷·CDN이 바뀌어도 값이 죽지 않는다.
+                mediaUrlResolver.resolve(member.getProfileImageKey(), null));
     }
 
     @Transactional

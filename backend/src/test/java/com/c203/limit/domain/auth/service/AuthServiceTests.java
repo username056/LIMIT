@@ -17,6 +17,7 @@ import com.c203.limit.domain.auth.dto.request.LoginRequest;
 import com.c203.limit.domain.auth.dto.request.SignupRequest;
 import com.c203.limit.domain.member.entity.Member;
 import com.c203.limit.domain.member.repository.MemberRepository;
+import com.c203.limit.domain.product.storage.MediaUrlResolver;
 import com.c203.limit.domain.seller.service.SellerStatusReader;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
@@ -28,6 +29,7 @@ class AuthServiceTests {
     @Mock MemberRepository memberRepository;
     @Mock TermsAgreementService termsAgreementService;
     @Mock SellerStatusReader sellerStatusReader;
+    @Mock MediaUrlResolver mediaUrlResolver;
     AuthService authService;
     BCryptPasswordEncoder encoder;
     JwtTokenProvider provider;
@@ -44,7 +46,8 @@ class AuthServiceTests {
                         provider,
                         refreshTokens,
                         termsAgreementService,
-                        sellerStatusReader);
+                        sellerStatusReader,
+                        mediaUrlResolver);
     }
 
     @Test void signsUpWithNormalizedEmailAndEncodedPassword() {

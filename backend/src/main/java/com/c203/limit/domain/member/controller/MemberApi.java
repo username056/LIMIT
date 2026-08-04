@@ -100,4 +100,98 @@ public interface MemberApi {
                                                                     "#/components/schemas/ChangePasswordRequest")))
                     @org.springframework.web.bind.annotation.RequestBody(required = false)
                     Object body);
+
+    @Operation(
+            operationId = "member04",
+            summary = "프로필 사진 업로드 URL 발급",
+            description =
+                    "요청\n권한: MEMBER\n검증: image/jpeg·png·webp, 5MB 이하\n"
+                            + "발급받은 presignedUrl로 파일을 PUT 한 뒤 member05로 완료를 알린다.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+        @ApiResponse(
+                responseCode = "200",
+                description = "업로드 URL 발급 성공",
+                content =
+                        @Content(
+                                schema =
+                                        @Schema(
+                                                ref =
+                                                        "#/components/schemas/ProfileImageUploadUrlResponse"))),
+        @ApiResponse(responseCode = "400", description = "MEDIA_UPLOAD_INVALID"),
+        @ApiResponse(responseCode = "401", description = "UNAUTHORIZED")
+    })
+    @RequestMapping(
+            method = RequestMethod.POST,
+            path = "/api/v1/members/me/profile-image/upload-url",
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    ResponseEntity<Void> member04(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            required = false,
+                            content =
+                                    @Content(
+                                            schema =
+                                                    @Schema(
+                                                            ref =
+                                                                    "#/components/schemas/CreateProfileImageUploadUrlRequest")))
+                    @org.springframework.web.bind.annotation.RequestBody(required = false)
+                    Object body);
+
+    @Operation(
+            operationId = "member05",
+            summary = "프로필 사진 등록 완료",
+            description =
+                    "요청\n권한: MEMBER\n검증: 내 자리에 발급된 objectKey인지, 실제로 업로드됐는지 확인",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+        @ApiResponse(
+                responseCode = "200",
+                description = "프로필 사진 등록 성공",
+                content =
+                        @Content(
+                                schema =
+                                        @Schema(
+                                                ref =
+                                                        "#/components/schemas/ProfileImageResponse"))),
+        @ApiResponse(responseCode = "400", description = "MEDIA_UPLOAD_INVALID"),
+        @ApiResponse(responseCode = "401", description = "UNAUTHORIZED")
+    })
+    @RequestMapping(
+            method = RequestMethod.PUT,
+            path = "/api/v1/members/me/profile-image",
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    ResponseEntity<Void> member05(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            required = false,
+                            content =
+                                    @Content(
+                                            schema =
+                                                    @Schema(
+                                                            ref =
+                                                                    "#/components/schemas/CompleteProfileImageRequest")))
+                    @org.springframework.web.bind.annotation.RequestBody(required = false)
+                    Object body);
+
+    @Operation(
+            operationId = "member06",
+            summary = "프로필 사진 삭제",
+            description = "요청\n권한: MEMBER\n사진을 내리면 화면은 닉네임 첫 글자로 돌아간다.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+        @ApiResponse(
+                responseCode = "200",
+                description = "프로필 사진 삭제 성공",
+                content =
+                        @Content(
+                                schema =
+                                        @Schema(
+                                                ref =
+                                                        "#/components/schemas/ProfileImageResponse"))),
+        @ApiResponse(responseCode = "401", description = "UNAUTHORIZED")
+    })
+    @RequestMapping(
+            method = RequestMethod.DELETE,
+            path = "/api/v1/members/me/profile-image",
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    ResponseEntity<Void> member06();
 }

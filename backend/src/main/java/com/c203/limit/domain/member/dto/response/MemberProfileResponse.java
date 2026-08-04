@@ -68,4 +68,10 @@ public class MemberProfileResponse {
             example = "2026-07-01T10:00:00",
             requiredMode = Schema.RequiredMode.REQUIRED)
     private final LocalDateTime createdAt;
+
+    @Schema(
+            description = "프로필 사진 주소. 올리지 않았으면 null이고, 화면은 닉네임 첫 글자로 대신한다.",
+            example = "https://cdn.example.com/members/1/profile/uuid.jpg",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private final String profileImageUrl;
 }

@@ -1,7 +1,10 @@
 package com.c203.limit.domain.member.controller;
 
 import com.c203.limit.domain.member.dto.request.ChangePasswordRequest;
+import com.c203.limit.domain.member.dto.request.CompleteProfileImageRequest;
+import com.c203.limit.domain.member.dto.request.CreateProfileImageUploadUrlRequest;
 import com.c203.limit.domain.member.dto.request.UpdateMemberRequest;
+import com.c203.limit.domain.member.service.MemberProfileImageService;
 import com.c203.limit.domain.member.service.MemberService;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
@@ -15,12 +18,17 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class MemberController implements MemberApi {
     private final MemberService memberService;
+    private final MemberProfileImageService profileImageService;
     private final CurrentUser currentUser;
     private final ObjectMapper objectMapper;
 
     public MemberController(
-            MemberService memberService, CurrentUser currentUser, ObjectMapper objectMapper) {
+            MemberService memberService,
+            MemberProfileImageService profileImageService,
+            CurrentUser currentUser,
+            ObjectMapper objectMapper) {
         this.memberService = memberService;
+        this.profileImageService = profileImageService;
         this.currentUser = currentUser;
         this.objectMapper = objectMapper;
     }
@@ -50,6 +58,35 @@ public class MemberController implements MemberApi {
         return ResponseEntity.noContent().build();
     }
 
+    @Override
+    public ResponseEntity<Void> member04(Object body) {
+        JsonNode json = json(body);
+        var request = new CreateProfileImageUploadUrlRequest(
+                required(json, "contentType"), requiredLong(json, "fileSize"));
+        return response(
+                ResponseEntity.ok(
+                        ApiResponse.ok(
+                                profileImageService.createUploadUrl(
+                                        currentUser.memberId(), request))));
+    }
+
+    @Override
+    public ResponseEntity<Void> member05(Object body) {
+        JsonNode json = json(body);
+        var request = new CompleteProfileImageRequest(required(json, "objectKey"));
+        return response(
+                ResponseEntity.ok(
+                        ApiResponse.ok(
+                                profileImageService.complete(currentUser.memberId(), request))));
+    }
+
+    @Override
+    public ResponseEntity<Void> member06() {
+        return response(
+                ResponseEntity.ok(
+                        ApiResponse.ok(profileImageService.remove(currentUser.memberId()))));
+    }
+
     private JsonNode json(Object body) {
         if (body == null) throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
         return objectMapper.valueToTree(body);
@@ -65,6 +102,14 @@ public class MemberController implements MemberApi {
     private String optional(JsonNode json, String field) {
         JsonNode value = json.get(field);
         return value == null || value.isNull() ? null : value.asText();
+    }
+
+    private Long requiredLong(JsonNode json, String field) {
+        JsonNode value = json.get(field);
+        if (value == null || value.isNull() || !value.canConvertToLong()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+        return value.asLong();
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

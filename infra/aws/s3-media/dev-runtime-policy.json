@@ -7,7 +7,7 @@
       "Action": [
         "s3:ListBucket"
       ],
-      "Resource": "arn:aws:s3:::l1mit-prod-media-0b849303",
+      "Resource": "arn:aws:s3:::l1mit-dev-media-0b849303",
       "Condition": {
         "StringLike": {
           "s3:prefix": [
@@ -31,11 +31,11 @@
         "s3:ListMultipartUploadParts"
       ],
       "Resource": [
-        "arn:aws:s3:::l1mit-prod-media-0b849303/tmp/*",
-        "arn:aws:s3:::l1mit-prod-media-0b849303/listings/*",
-        "arn:aws:s3:::l1mit-prod-media-0b849303/evidence/*",
-        "arn:aws:s3:::l1mit-prod-media-0b849303/chat/*",
-        "arn:aws:s3:::l1mit-prod-media-0b849303/members/*"
+        "arn:aws:s3:::l1mit-dev-media-0b849303/tmp/*",
+        "arn:aws:s3:::l1mit-dev-media-0b849303/listings/*",
+        "arn:aws:s3:::l1mit-dev-media-0b849303/evidence/*",
+        "arn:aws:s3:::l1mit-dev-media-0b849303/chat/*",
+        "arn:aws:s3:::l1mit-dev-media-0b849303/members/*"
       ]
     }
   ]
