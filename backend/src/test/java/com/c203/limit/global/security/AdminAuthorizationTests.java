@@ -83,6 +83,8 @@ class AdminAuthorizationTests {
     @MockitoBean com.c203.limit.domain.chat.repository.ChatMediaRepository chatMediaRepository;
     @MockitoBean com.c203.limit.domain.chat.repository.ChatMessageMediaRepository chatMessageMediaRepository;
     @MockitoBean com.c203.limit.domain.chat.repository.ChatRoomContextReader chatRoomContextReader;
+    // JdbcClient를 쓰는 리더는 DataSource 자동설정을 끈 이 컨텍스트에서 만들 수 없다.
+    @MockitoBean com.c203.limit.domain.product.repository.ProductEngagementReader productEngagementReader;
     @MockitoBean ListingChatReader listingChatReader;
     @MockitoBean
     com.c203.limit.domain.payment.repository.ExpiredReservationCandidateReader

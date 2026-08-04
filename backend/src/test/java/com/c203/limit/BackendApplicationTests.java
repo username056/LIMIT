@@ -119,6 +119,11 @@ class BackendApplicationTests {
     @MockitoBean
     WishlistRepository wishlistRepository;
 
+    // JdbcClient를 쓰는 리더는 DataSource 자동설정을 끈 이 컨텍스트에서 만들 수 없다.
+    // 위 chatRoomContextReader와 같은 이유로 대체 빈을 둔다.
+    @MockitoBean
+    com.c203.limit.domain.product.repository.ProductEngagementReader productEngagementReader;
+
     @MockitoBean
     ProductApplicationService productApplicationService;
 

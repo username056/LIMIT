@@ -3,9 +3,11 @@ package com.c203.limit.domain.product.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -38,6 +40,8 @@ import com.c203.limit.domain.product.repository.ListingImageRepository;
 import com.c203.limit.domain.product.repository.ListingRepository;
 import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
 import com.c203.limit.domain.product.repository.ListingThumbnailProjection;
+import com.c203.limit.domain.product.repository.ProductEngagementReader;
+import com.c203.limit.domain.product.repository.ProductEngagementReader.ProductEngagement;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -67,6 +71,7 @@ class ProductApplicationServiceTests {
     @Mock ListingStatusHistoryRepository statusHistoryRepository;
     @Mock ListingImageRepository imageRepository;
     @Mock ProductViewCountDispatcher viewCountDispatcher;
+    @Mock ProductEngagementReader engagementReader;
     ProductApplicationService service;
 
     @BeforeEach
@@ -74,7 +79,11 @@ class ProductApplicationServiceTests {
         service = new ProductApplicationService(
                 listingRepository, categoryRepository, templateRepository, templateItemRepository,
                 checklistItemRepository, statusHistoryRepository, imageRepository, null,
-                viewCountDispatcher);
+                viewCountDispatcher, engagementReader);
+        // 상세를 만드는 모든 경로가 관심도 수치를 읽는다. 이 테스트들이 확인하는 것은
+        // 그 수치가 아니라 모델명·상태 처리라, 값은 0으로 두고 NPE만 막는다.
+        lenient().when(engagementReader.findByListingId(anyLong()))
+                .thenReturn(new ProductEngagement(0L, 0L));
     }
 
     @Test
