@@ -7,8 +7,13 @@ import com.c203.limit.domain.inspection.agent.InspectionSessionDtos.SessionRespo
 import com.c203.limit.domain.inspection.agent.InspectionSessionDtos.SessionStatusResponse;
 import com.c203.limit.domain.inspection.agent.InspectionSessionDtos.SubmitTestResultRequest;
 import com.c203.limit.domain.inspection.agent.InspectionSessionDtos.TestResultResponse;
+import com.c203.limit.domain.inspection.agent.InspectionSessionDtos.TestResultSubmission;
 import com.c203.limit.domain.inspection.entity.ListingChecklistItem;
 import com.c203.limit.domain.inspection.enums.AutomationType;
+import com.c203.limit.domain.inspection.enums.DeviceCheckResult;
+import com.c203.limit.domain.inspection.enums.InspectionUserResult;
+import com.c203.limit.domain.inspection.enums.MeasurementStatus;
+import com.c203.limit.domain.inspection.enums.TestType;
 import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
 import com.c203.limit.domain.inspection.service.BatteryReportParsingService;
 import com.c203.limit.domain.inspection.service.DxdiagParsingService;
@@ -31,7 +36,9 @@ import java.time.ZoneOffset;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,8 +47,17 @@ import org.springframework.transaction.annotation.Transactional;
 public class InspectionSessionService {
     private static final Duration SESSION_TTL = Duration.ofMinutes(10);
     private static final SecureRandom RANDOM = new SecureRandom();
+    private static final Map<TestType, String> CHECKLIST_ITEM_CODES = Map.of(
+            TestType.CAMERA, "LAP-FTR-CAM",
+            TestType.MICROPHONE, "LAP-FTR-MIC",
+            TestType.KEYBOARD, "LAP-KBD-005",
+            TestType.TOUCHPAD, "LAP-PAD-006",
+            TestType.SPEAKER, "LAP-FTR-SPK",
+            TestType.DISPLAY, "LAP-DSP-003",
+            TestType.CHARGING, "LAP-CHG-007");
 
     private final InspectionSessionRepository sessionRepository;
+    private final InspectionSessionTestResultRepository testResultRepository;
     private final ListingRepository listingRepository;
     private final ListingChecklistItemRepository checklistItemRepository;
     private final EvidenceUploadService evidenceUploadService;
@@ -51,6 +67,7 @@ public class InspectionSessionService {
 
     public InspectionSessionService(
             InspectionSessionRepository sessionRepository,
+            InspectionSessionTestResultRepository testResultRepository,
             ListingRepository listingRepository,
             ListingChecklistItemRepository checklistItemRepository,
             EvidenceUploadService evidenceUploadService,
@@ -58,6 +75,7 @@ public class InspectionSessionService {
             BatteryReportParsingService batteryReportParsingService,
             Clock clock) {
         this.sessionRepository = sessionRepository;
+        this.testResultRepository = testResultRepository;
         this.listingRepository = listingRepository;
         this.checklistItemRepository = checklistItemRepository;
         this.evidenceUploadService = evidenceUploadService;
@@ -163,45 +181,133 @@ public class InspectionSessionService {
         return statusResponse(session);
     }
 
-    /**
-     * TODO(다음 세션): inspection_session_test_result 저장, UNIQUE(session_id, client_result_id)
-     * 멱등성, UNIQUE(session_id, test_type, attempt_no) + TransactionTemplate 기반 재시도,
-     * ListingChecklistItem.applyDeviceCheckResult() 연동을 구현한다. 지금은 세션 상태만 검증하고
-     * 요청을 그대로 echo하는 스텁이다(결과 미저장, attemptNo 항상 1, rawDataSaved 항상 false).
-     */
     @Transactional
-    public TestResultResponse submitTestResult(
+    public TestResultSubmission submitTestResult(
             String authorization, String sessionKey, SubmitTestResultRequest request) {
-        InspectionSession session = authorize(authorization, sessionKey);
+        InspectionSession session = authorizeForUpdate(authorization, sessionKey);
         if (session.getStatus() != InspectionSessionStatus.PAIRED
                 && session.getStatus() != InspectionSessionStatus.UPLOADING) {
             throw new BusinessException(ErrorCode.INSPECTION_SESSION_INVALID_STATE);
         }
-        return new TestResultResponse(
-                request.clientResultId(),
-                request.testType(),
-                request.measurementStatus(),
-                request.userResult(),
-                request.measuredValues(),
-                1,
-                false,
-                request.testedAt(),
-                offset(now()),
-                request.errorCode());
+        validateTestResult(request);
+
+        Optional<InspectionSessionTestResult> existing = testResultRepository
+                .findBySessionKeyAndClientResultId(sessionKey, request.clientResultId());
+        if (existing.isPresent()) {
+            if (!existing.get().hasSamePayload(request)) {
+                throw new BusinessException(
+                        ErrorCode.INSPECTION_TEST_RESULT_IDEMPOTENCY_CONFLICT);
+            }
+            return new TestResultSubmission(
+                    testResultResponse(existing.get(), session.getListingId()), false);
+        }
+
+        Optional<ListingChecklistItem> checklistItem = checklistItemRepository
+                .findByListingIdAndItemCode(
+                        session.getListingId(), CHECKLIST_ITEM_CODES.get(request.testType()));
+        int attemptNo = testResultRepository
+                .findTopBySessionKeyAndTestTypeOrderByAttemptNoDesc(
+                        sessionKey, request.testType())
+                .map(result -> result.getAttemptNo() + 1)
+                .orElse(1);
+        InspectionSessionTestResult result = InspectionSessionTestResult.create(
+                sessionKey,
+                checklistItem.map(ListingChecklistItem::getId).orElse(null),
+                request,
+                attemptNo,
+                now());
+        testResultRepository.save(result);
+        checklistItem.ifPresent(item -> item.applyDeviceCheckResult(deviceCheckResult(request)));
+
+        return new TestResultSubmission(testResultResponse(result, session.getListingId()), true);
     }
 
-    /** TODO(다음 세션): inspection_session_test_result에서 실제 이력을 조회한다. 지금은 빈 목록만 반환한다. */
     @Transactional(readOnly = true)
     public List<TestResultResponse> listTestResults(Long sellerId, String sessionKey) {
         InspectionSession session = requireSession(sessionKey);
         if (!Objects.equals(session.getSellerId(), sellerId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        return List.of();
+        return testResultRepository.findAllBySessionKeyOrderByCreatedAtAscIdAsc(sessionKey).stream()
+                .map(result -> testResultResponse(result, session.getListingId()))
+                .toList();
+    }
+
+    private void validateTestResult(SubmitTestResultRequest request) {
+        MeasurementStatus measurementStatus = request.measurementStatus();
+        InspectionUserResult userResult = request.userResult();
+
+        if (measurementStatus == MeasurementStatus.NOT_EXECUTED) {
+            if (userResult != InspectionUserResult.SKIPPED) {
+                throw invalidTestResult();
+            }
+            return;
+        }
+        if (userResult == InspectionUserResult.SKIPPED) {
+            throw invalidTestResult();
+        }
+        if (userResult == null) {
+            if (request.testType() != TestType.CHARGING) {
+                throw invalidTestResult();
+            }
+            return;
+        }
+        if (userResult == InspectionUserResult.USER_CONFIRMED
+                && measurementStatus != MeasurementStatus.DETECTED) {
+            throw invalidTestResult();
+        }
+    }
+
+    private DeviceCheckResult deviceCheckResult(SubmitTestResultRequest request) {
+        if (request.userResult() == InspectionUserResult.SKIPPED) {
+            return DeviceCheckResult.SKIPPED;
+        }
+        if (request.userResult() == InspectionUserResult.USER_REPORTED_ISSUE) {
+            return DeviceCheckResult.FAILED;
+        }
+        if (request.userResult() == InspectionUserResult.USER_CONFIRMED) {
+            return DeviceCheckResult.SUCCESS;
+        }
+        return request.measurementStatus() == MeasurementStatus.DETECTED
+                ? DeviceCheckResult.SUCCESS
+                : DeviceCheckResult.FAILED;
+    }
+
+    private BusinessException invalidTestResult() {
+        return new BusinessException(ErrorCode.INSPECTION_TEST_RESULT_INVALID);
+    }
+
+    private TestResultResponse testResultResponse(
+            InspectionSessionTestResult result, Long listingId) {
+        return new TestResultResponse(
+                result.getClientResultId(),
+                listingId,
+                result.getChecklistItemId(),
+                result.getTestType(),
+                result.getMeasurementStatus(),
+                result.getUserResult(),
+                result.getMeasuredValues(),
+                result.getAttemptNo(),
+                result.isRawDataSaved(),
+                offset(result.getTestedAt()),
+                offset(result.getCreatedAt()),
+                result.getErrorCode());
     }
 
     private InspectionSession authorize(String authorization, String sessionKey) {
-        InspectionSession session = requireSession(sessionKey);
+        return authorize(authorization, requireSession(sessionKey));
+    }
+
+    private InspectionSession authorizeForUpdate(String authorization, String sessionKey) {
+        InspectionSession session = sessionRepository
+                .findBySessionKeyForUpdate(sessionKey)
+                .orElseThrow(() ->
+                        new BusinessException(ErrorCode.INSPECTION_SESSION_NOT_FOUND));
+        return authorize(authorization, session);
+    }
+
+    private InspectionSession authorize(
+            String authorization, InspectionSession session) {
         expireIfNeeded(session);
         if (session.getStatus() == InspectionSessionStatus.EXPIRED) {
             throw new BusinessException(ErrorCode.INSPECTION_SESSION_EXPIRED);

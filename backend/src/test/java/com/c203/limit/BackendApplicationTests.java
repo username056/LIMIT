@@ -170,6 +170,10 @@ class BackendApplicationTests {
     com.c203.limit.domain.inspection.agent.InspectionSessionRepository inspectionSessionRepository;
 
     @MockitoBean
+    com.c203.limit.domain.inspection.agent.InspectionSessionTestResultRepository
+            inspectionSessionTestResultRepository;
+
+    @MockitoBean
     ReinspectionRequestRepository reinspectionRequestRepository;
 
     @MockitoBean

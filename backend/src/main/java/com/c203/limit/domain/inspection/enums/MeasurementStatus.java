@@ -6,5 +6,6 @@ public enum MeasurementStatus {
     NOT_DETECTED,
     PERMISSION_DENIED,
     UNSUPPORTED,
-    EXECUTION_FAILED
+    EXECUTION_FAILED,
+    NOT_EXECUTED
 }
