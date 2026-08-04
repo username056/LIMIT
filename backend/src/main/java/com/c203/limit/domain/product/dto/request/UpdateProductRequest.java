@@ -1,6 +1,7 @@
 package com.c203.limit.domain.product.dto.request;
 
 import java.math.BigDecimal;
+import java.util.Set;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonSetter;
@@ -8,6 +9,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -63,6 +65,16 @@ public class UpdateProductRequest {
     @Size(max = 100)
     private String customModelName;
 
+    @Schema(
+            description =
+                    "판매자가 확인한 모델별 지원 기능 코드. 최대 5개. 값을 보내면 기존 선택을 대체하고,"
+                            + " 빈 배열을 보내면 선택 기능을 모두 해제한다. 직접 입력 모델에는 적용할 수 없다.")
+    @Size(max = 5)
+    private Set<@NotBlank String> confirmedFeatures;
+
+    @JsonIgnore
+    private boolean confirmedFeaturesSpecified;
+
     @JsonSetter("name")
     public void setName(String name) {
         this.name = name;
@@ -104,5 +116,11 @@ public class UpdateProductRequest {
     @JsonSetter("customModelName")
     public void setCustomModelName(String customModelName) {
         this.customModelName = customModelName;
+    }
+
+    @JsonSetter("confirmedFeatures")
+    public void setConfirmedFeatures(Set<String> confirmedFeatures) {
+        this.confirmedFeatures = confirmedFeatures;
+        this.confirmedFeaturesSpecified = true;
     }
 }

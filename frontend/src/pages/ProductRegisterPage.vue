@@ -125,6 +125,8 @@ const isLoadingModels = ref(false)
 const modelLoadError = ref('')
 let modelRequestId = 0
 const isCustomModelInput = ref(false)
+// 수정 중인 기존 상품이 직접 입력 모델인지 여부. 이 경우 기능 체크리스트는 서버가 수정을 거부한다.
+const editingCustomModel = ref(false)
 const isRequestingModel = ref(false)
 const modelRequestResult = ref(null)
 const customModel = reactive({
@@ -720,6 +722,7 @@ function progressResultsMap(results) {
 function resetForm() {
   editingId.value = null
   editingStatus.value = ''
+  editingCustomModel.value = false
   draftProductId.value = null
   if (pendingThumbnail.value) URL.revokeObjectURL(pendingThumbnail.value.previewUrl)
   pendingThumbnail.value = null
@@ -974,7 +977,10 @@ async function persistSaleInfo() {
   }
   let productId = editingId.value
   if (productId) {
-    await updateProduct(productId, payload)
+    // 직접 입력 모델은 서버가 기능 체크리스트 수정 자체를 거부하므로 아예 보내지 않습니다.
+    await updateProduct(productId, editingCustomModel.value
+      ? payload
+      : { ...payload, confirmedFeatures: confirmedFeatures.value })
   } else {
     const created = await createProduct({
       ...payload,
@@ -1656,6 +1662,7 @@ async function startEdit(productId) {
     listingImages.value = await getProductImages(productId)
     editingId.value = productId
     editingStatus.value = product.status || ''
+    editingCustomModel.value = !!product.customModel
     draftProductId.value = null
     Object.assign(form, {
       categoryId: product.category?.categoryId || '',
@@ -1668,6 +1675,10 @@ async function startEdit(productId) {
     clearCaptureState()
     Object.keys(confirmState).forEach((key) => delete confirmState[key])
     checklistItems.value = await getProductChecklist(productId)
+    // 서버가 확정된 선택 기능 코드를 그대로 내려주므로 itemCode 역추론 없이 바로 복원합니다.
+    if (!editingCustomModel.value) {
+      confirmedFeatures.value = product.confirmedFeatures || []
+    }
     await Promise.all(checklistItems.value.map(async (item) => {
       if (item.evidenceType === 'SELLER_CONFIRMATION') {
         confirmState[item.checklistItemId] = item.status === 'COMPLETED'
@@ -2145,10 +2156,10 @@ onMounted(async () => {
                 AI 연결 없이 검증된 기기별 기본 정책으로 생성했습니다. 상품 등록은 그대로 진행할 수 있습니다.
               </p>
               <p
-                v-if="editingId"
+                v-if="editingId && editingCustomModel"
                 class="mt-3 rounded-md bg-white/80 px-3 py-2 text-xs leading-5 text-text-sub"
               >
-                수정 중인 상품에는 최초 등록 시 고정된 체크리스트 스냅샷이 유지됩니다.
+                직접 입력한 기기는 등록 후 기능 체크리스트를 수정할 수 없습니다.
               </p>
             </div>
 
@@ -2161,6 +2172,9 @@ onMounted(async () => {
               </h3>
               <p class="mt-1 text-xs leading-5 text-text-sub">
                 기본 항목은 항상 적용됩니다. 아래 항목은 실제 기기에 해당하는 경우에만 선택해 주세요.
+                <template v-if="editingId && editingCustomModel">
+                  직접 입력한 기기는 이 목록을 수정할 수 없습니다.
+                </template>
               </p>
               <ul class="mt-3 grid gap-3 sm:grid-cols-2">
                 <li
@@ -2168,11 +2182,15 @@ onMounted(async () => {
                   :key="suggestion.featureCode"
                   class="rounded-md border border-border bg-bg p-3"
                 >
-                  <label class="flex cursor-pointer items-start gap-3">
+                  <label
+                    class="flex items-start gap-3"
+                    :class="editingCustomModel ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'"
+                  >
                     <input
                       v-model="confirmedFeatures"
                       type="checkbox"
                       :value="suggestion.featureCode"
+                      :disabled="editingCustomModel"
                       class="mt-1 h-4 w-4 rounded border-border text-primary"
                     >
                     <span>

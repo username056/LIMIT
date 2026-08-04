@@ -3,15 +3,22 @@ package com.c203.limit.domain.product.service;
 import com.c203.limit.domain.inspection.entity.ChecklistTemplate;
 import com.c203.limit.domain.inspection.entity.ChecklistTemplateItem;
 import com.c203.limit.domain.inspection.entity.ListingChecklistItem;
+import com.c203.limit.domain.inspection.agent.InspectionSessionTestResultRepository;
+import com.c203.limit.domain.inspection.checklist.ChecklistGenerationService;
 import com.c203.limit.domain.inspection.checklist.GeneratedChecklist;
 import com.c203.limit.domain.inspection.checklist.GeneratedChecklistItem;
 import com.c203.limit.domain.inspection.enums.ChecklistItemCompletionStatus;
+import com.c203.limit.domain.inspection.enums.ChecklistItemOrigin;
 import com.c203.limit.domain.inspection.enums.ChecklistTemplateStatus;
 import com.c203.limit.domain.inspection.enums.EvidenceType;
 import com.c203.limit.domain.inspection.repository.ChecklistTemplateItemRepository;
 import com.c203.limit.domain.inspection.repository.ChecklistTemplateRepository;
+import com.c203.limit.domain.inspection.repository.EvidenceRepository;
 import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
 import com.c203.limit.domain.inspection.repository.ListingChecklistCountProjection;
+import com.c203.limit.domain.inspection.repository.ReinspectionRequestItemRepository;
+import com.c203.limit.domain.product.repository.MediaUploadSessionRepository;
+import com.c203.limit.domain.rtc.repository.RtcSessionChecklistResultRepository;
 import com.c203.limit.domain.product.dto.request.CreateProductRequest;
 import com.c203.limit.domain.product.dto.request.TransitionProductStatusRequest;
 import com.c203.limit.domain.product.dto.request.UpdateProductRequest;
@@ -43,11 +50,16 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
@@ -77,6 +89,12 @@ public class ProductApplicationService {
     private final ListingStatusHistoryRepository statusHistoryRepository;
     private final ListingImageRepository imageRepository;
     private final MediaUrlResolver mediaUrlResolver;
+    private final ChecklistGenerationService checklistGenerationService;
+    private final EvidenceRepository evidenceRepository;
+    private final ReinspectionRequestItemRepository reinspectionRequestItemRepository;
+    private final RtcSessionChecklistResultRepository rtcSessionChecklistResultRepository;
+    private final MediaUploadSessionRepository mediaUploadSessionRepository;
+    private final InspectionSessionTestResultRepository inspectionSessionTestResultRepository;
 
     private final ProductViewCountDispatcher viewCountDispatcher;
     private final ProductEngagementReader engagementReader;
@@ -90,6 +108,12 @@ public class ProductApplicationService {
             ListingStatusHistoryRepository statusHistoryRepository,
             ListingImageRepository imageRepository,
             MediaUrlResolver mediaUrlResolver,
+            ChecklistGenerationService checklistGenerationService,
+            EvidenceRepository evidenceRepository,
+            ReinspectionRequestItemRepository reinspectionRequestItemRepository,
+            RtcSessionChecklistResultRepository rtcSessionChecklistResultRepository,
+            MediaUploadSessionRepository mediaUploadSessionRepository,
+            InspectionSessionTestResultRepository inspectionSessionTestResultRepository,
             ProductViewCountDispatcher viewCountDispatcher,
             ProductEngagementReader engagementReader) {
         this.viewCountDispatcher = viewCountDispatcher;
@@ -102,6 +126,12 @@ public class ProductApplicationService {
         this.statusHistoryRepository = statusHistoryRepository;
         this.imageRepository = imageRepository;
         this.mediaUrlResolver = mediaUrlResolver;
+        this.checklistGenerationService = checklistGenerationService;
+        this.evidenceRepository = evidenceRepository;
+        this.reinspectionRequestItemRepository = reinspectionRequestItemRepository;
+        this.rtcSessionChecklistResultRepository = rtcSessionChecklistResultRepository;
+        this.mediaUploadSessionRepository = mediaUploadSessionRepository;
+        this.inspectionSessionTestResultRepository = inspectionSessionTestResultRepository;
     }
 
     @Transactional
@@ -170,8 +200,24 @@ public class ProductApplicationService {
                         null,
                         null));
         Listing listing = listingRepository.saveAndFlush(draft);
+        // 선택 기능 항목은 생성 시점에 출처를 스냅샷으로 고정한다 — confirmedFeatures 수정 시
+        // 삭제 대상을 판별하는 유일한 기준이라 나중에 다시 추론하지 않는다.
+        Map<String, String> featureCodeByItemCode = generatedChecklist == null
+                ? Map.of()
+                : generatedChecklist.items().stream()
+                        .filter(item -> item.featureCode() != null)
+                        .collect(Collectors.toMap(
+                                GeneratedChecklistItem::itemCode,
+                                GeneratedChecklistItem::featureCode,
+                                (a, b) -> a));
         List<ListingChecklistItem> snapshots = templateItems.stream()
-                .map(item -> ListingChecklistItem.createFromTemplateItem(listing.getId(), item))
+                .map(item -> {
+                    String featureCode = featureCodeByItemCode.get(item.getItemCode());
+                    return featureCode == null
+                            ? ListingChecklistItem.createFromTemplateItem(listing.getId(), item)
+                            : ListingChecklistItem.createConfirmedFeatureItem(
+                                    listing.getId(), item, featureCode);
+                })
                 .toList();
         checklistItemRepository.saveAll(snapshots);
         int required = (int) snapshots.stream().filter(ListingChecklistItem::isRequired).count();
@@ -215,6 +261,9 @@ public class ProductApplicationService {
 
     @Transactional
     public ProductDetailResponse update(Long sellerId, Long productId, UpdateProductRequest request) {
+        // 확정 기능 재구성이 필요한 경우의 행 잠금은 reconcileConfirmedFeatures() 안에서, 외부 AI
+        // 호출이 있을 수 있는 계산을 마친 뒤에 건다 — 여기서 먼저 잠그면 그 계산 동안 잠금을
+        // 잡고 있게 된다.
         Listing listing = owned(productId, sellerId);
         listing.updateBySeller(
                 request.getName(),
@@ -236,11 +285,135 @@ public class ProductApplicationService {
                             ? request.getCustomModelName()
                             : listing.getCustomModelName());
         }
+        if (request.isConfirmedFeaturesSpecified()) {
+            reconcileConfirmedFeatures(listing, request.getConfirmedFeatures());
+        }
         log.info(
                 "product updated by seller: productId={}, status={}",
                 productId,
                 listing.getStatus());
         return detail(listing);
+    }
+
+    /**
+     * 선택 기능 체크리스트 항목만 재구성한다. 기본 항목은 손대지 않는다.
+     *
+     * <p>기본/선택 기능 구분은 listing_checklist_item.item_origin 생성 시점 스냅샷을 그대로
+     * 믿는다 — 등록 이후 카테고리 표준 템플릿이 새 버전으로 개정돼도 이 판정은 흔들리지 않는다.
+     * featureCode → 항목 정의는 {@link ChecklistGenerationService#resolveConfirmedFeatureItems}로
+     * 얻는데, 이 메서드는 AI 리서치나 외부 호출이 전혀 없는 결정론적 카탈로그 조회라 잠금 앞뒤
+     * 순서를 신경 쓸 필요가 없다.
+     */
+    private void reconcileConfirmedFeatures(Listing listing, Set<String> confirmedFeatures) {
+        if (listing.hasCustomModel()) {
+            throw new BusinessException(ErrorCode.CUSTOM_MODEL_CHECKLIST_EDIT_NOT_SUPPORTED);
+        }
+
+        Map<String, GeneratedChecklistItem> targetDefinitionsByFeature =
+                checklistGenerationService.resolveConfirmedFeatureItems(
+                        listing.getDeviceModelId(), confirmedFeatures);
+
+        // 동시에 들어온 PATCH가 서로 다른 스냅샷 기준으로 갱신해 항목이 중복·유실되는 것을 막는다.
+        // 위 계산에 외부 호출이 없어 잠금을 곧바로 걸어도 안전하다. 반환값은 같은 영속성
+        // 컨텍스트의 listing과 동일한 인스턴스라 별도로 쓰지 않는다.
+        ownedForUpdate(listing.getId(), listing.getSellerId());
+
+        List<ListingChecklistItem> currentItems =
+                checklistItemRepository.findByListingIdOrderByDisplayOrderAsc(listing.getId());
+        Map<String, ListingChecklistItem> currentFeatureItemsByFeatureCode = currentItems.stream()
+                .filter(item -> item.getItemOrigin() == ChecklistItemOrigin.CONFIRMED_FEATURE)
+                .collect(Collectors.toMap(
+                        ListingChecklistItem::getFeatureCode, item -> item, (a, b) -> a));
+
+        Set<String> toRemoveFeatures = new HashSet<>(currentFeatureItemsByFeatureCode.keySet());
+        toRemoveFeatures.removeAll(targetDefinitionsByFeature.keySet());
+        Set<String> toAddFeatures = new HashSet<>(targetDefinitionsByFeature.keySet());
+        toAddFeatures.removeAll(currentFeatureItemsByFeatureCode.keySet());
+
+        if (toRemoveFeatures.isEmpty() && toAddFeatures.isEmpty()) {
+            return;
+        }
+
+        List<ListingChecklistItem> toRemoveItems = toRemoveFeatures.stream()
+                .map(currentFeatureItemsByFeatureCode::get)
+                .toList();
+        for (ListingChecklistItem item : toRemoveItems) {
+            if (isChecklistItemLocked(item.getId())) {
+                throw new BusinessException(ErrorCode.CHECKLIST_ITEM_LOCKED_BY_EVIDENCE);
+            }
+        }
+
+        if (!toAddFeatures.isEmpty()) {
+            ChecklistTemplate template = templateRepository
+                    .findById(listing.getChecklistTemplateId())
+                    .orElseThrow(() -> new BusinessException(ErrorCode.CHECKLIST_TEMPLATE_NOT_FOUND));
+            if (template.getStatus() != ChecklistTemplateStatus.DRAFT) {
+                // PUBLISHED(공유) 템플릿에 처음 기능을 추가하는 순간 매물 전용 DRAFT로 승격한다.
+                template = templateRepository.saveAndFlush(
+                        ChecklistTemplate.createDraft(template.getCategoryId(), template.getVersion()));
+                listing.changeChecklistTemplate(template.getId());
+            } else if (listingRepository.countByChecklistTemplateId(template.getId()) != 1) {
+                throw new IllegalStateException(
+                        "listing-only DRAFT checklist template is unexpectedly shared: templateId="
+                                + template.getId());
+            }
+            ChecklistTemplate attachTemplate = template;
+
+            // 과거에 같은 기능을 껐다 켰다 반복한 매물은 그 템플릿에 이미 해당 itemCode 정의가
+            // 있을 수 있다 — 매번 새로 만들면 (template, item_code) 유니크 제약을 위반한다.
+            Map<String, ChecklistTemplateItem> templateItemsByCode = new HashMap<>(
+                    templateItemRepository
+                            .findByChecklistTemplateIdOrderByDisplayOrderAsc(attachTemplate.getId())
+                            .stream()
+                            .collect(Collectors.toMap(
+                                    ChecklistTemplateItem::getItemCode, item -> item, (a, b) -> a)));
+
+            int nextDisplayOrder = currentItems.stream()
+                    .mapToInt(ListingChecklistItem::getDisplayOrder)
+                    .max()
+                    .orElse(0) + 1;
+            List<ChecklistTemplateItem> newTemplateItems = new ArrayList<>();
+            for (String feature : toAddFeatures) {
+                GeneratedChecklistItem definition = targetDefinitionsByFeature.get(feature);
+                if (!templateItemsByCode.containsKey(definition.itemCode())) {
+                    newTemplateItems.add(generatedTemplateItem(
+                            attachTemplate, definition.withDisplayOrder(nextDisplayOrder++)));
+                }
+            }
+            if (!newTemplateItems.isEmpty()) {
+                templateItemRepository.saveAllAndFlush(newTemplateItems)
+                        .forEach(item -> templateItemsByCode.put(item.getItemCode(), item));
+            }
+
+            List<ListingChecklistItem> newListingItems = toAddFeatures.stream()
+                    .map(feature -> {
+                        GeneratedChecklistItem definition = targetDefinitionsByFeature.get(feature);
+                        ChecklistTemplateItem templateItem =
+                                templateItemsByCode.get(definition.itemCode());
+                        return ListingChecklistItem.createConfirmedFeatureItem(
+                                listing.getId(), templateItem, feature);
+                    })
+                    .toList();
+            checklistItemRepository.saveAll(newListingItems);
+        }
+
+        if (!toRemoveItems.isEmpty()) {
+            checklistItemRepository.deleteAll(toRemoveItems);
+        }
+
+        log.info(
+                "product checklist features reconciled: productId={}, added={}, removed={}",
+                listing.getId(),
+                toAddFeatures.size(),
+                toRemoveItems.size());
+    }
+
+    private boolean isChecklistItemLocked(Long checklistItemId) {
+        return evidenceRepository.existsByListingChecklistItem_Id(checklistItemId)
+                || reinspectionRequestItemRepository.existsByListingChecklistItem_Id(checklistItemId)
+                || rtcSessionChecklistResultRepository.existsByListingChecklistItemId(checklistItemId)
+                || mediaUploadSessionRepository.existsByChecklistItem_Id(checklistItemId)
+                || inspectionSessionTestResultRepository.existsByChecklistItemId(checklistItemId);
     }
 
     @Transactional
@@ -424,8 +597,22 @@ public class ProductApplicationService {
     }
 
     private Listing owned(Long productId, Long sellerId) {
-        return listingRepository
-                .findByIdAndSellerIdAndDeletedAtIsNull(productId, sellerId)
+        return owned(productId, sellerId, listingRepository::findByIdAndSellerIdAndDeletedAtIsNull);
+    }
+
+    /**
+     * 선택 기능 체크리스트 재구성처럼 listing_checklist_item에 쓰기가 뒤따르는 경로에서 쓴다.
+     * 동시에 들어온 두 PATCH가 같은 매물의 체크리스트를 각자 다른 스냅샷 기준으로 갱신해
+     * 중복·유실 항목을 만드는 것을 막는다.
+     */
+    private Listing ownedForUpdate(Long productId, Long sellerId) {
+        return owned(productId, sellerId, listingRepository::findByIdAndSellerIdAndDeletedAtIsNullForUpdate);
+    }
+
+    private Listing owned(
+            Long productId, Long sellerId, BiFunction<Long, Long, Optional<Listing>> finder) {
+        return finder
+                .apply(productId, sellerId)
                 .orElseGet(
                         () -> {
                             if (listingRepository.findByIdAndDeletedAtIsNull(productId).isPresent()) {
@@ -462,7 +649,14 @@ public class ProductApplicationService {
                 offset(listing.getUpdatedAt()),
                 listing.getViewCount(),
                 engagement.favoriteCount(),
-                engagement.chatRoomCount());
+                engagement.chatRoomCount(),
+                listing.hasCustomModel(),
+                checklistItemRepository
+                        .findByListingIdAndItemOrigin(
+                                listing.getId(), ChecklistItemOrigin.CONFIRMED_FEATURE)
+                        .stream()
+                        .map(ListingChecklistItem::getFeatureCode)
+                        .toList());
     }
 
     private ProductSummaryResponse summary(Listing listing, ProductMetrics metrics) {

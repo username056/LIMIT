@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface RtcSessionChecklistResultRepository
         extends JpaRepository<RtcSessionChecklistResult, Long> {
     List<RtcSessionChecklistResult> findByRtcSessionId(Long rtcSessionId);
+
+    boolean existsByListingChecklistItemId(Long listingChecklistItemId);
 }

@@ -2,6 +2,7 @@ package com.c203.limit.domain.inspection.repository;
 
 import com.c203.limit.domain.inspection.entity.ListingChecklistItem;
 import com.c203.limit.domain.inspection.enums.ChecklistItemCompletionStatus;
+import com.c203.limit.domain.inspection.enums.ChecklistItemOrigin;
 import com.c203.limit.domain.inspection.enums.EvidenceType;
 import java.util.List;
 import java.util.Optional;
@@ -18,6 +19,9 @@ public interface ListingChecklistItemRepository
     Optional<ListingChecklistItem> findByIdAndListingId(Long id, Long listingId);
 
     Optional<ListingChecklistItem> findByListingIdAndItemCode(Long listingId, String itemCode);
+
+    List<ListingChecklistItem> findByListingIdAndItemOrigin(
+            Long listingId, ChecklistItemOrigin itemOrigin);
 
     List<ListingChecklistItem> findAllByIdInAndListingId(List<Long> ids, Long listingId);
 

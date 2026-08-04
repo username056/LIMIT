@@ -6,6 +6,7 @@ import org.apache.catalina.connector.ClientAbortException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -93,6 +94,20 @@ public class GlobalExceptionHandler {
     })
     public ResponseEntity<ApiErrorResponse> handleMissingRequiredValue(Exception exception) {
         return errorResponse(ErrorCode.MISSING_REQUEST_PARAMETER);
+    }
+
+    /**
+     * 사전 검증(existsBy 체크 등)을 통과한 뒤에도 동시성 경합으로 FK 제약을 건드린 경우의
+     * 백스톱이다. 서비스 코드에서 직접 잡아 트랜잭션 중간에 복구를 시도하지 않는다 — flush 시점
+     * 예외로 트랜잭션이 이미 rollback-only가 된 뒤 계속 작업하면 UnexpectedRollbackException으로
+     * 이어질 수 있어서, 롤백이 끝난 뒤 이 핸들러에서만 응답을 매핑한다.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiErrorResponse> handleDataIntegrityViolation(
+            DataIntegrityViolationException exception) {
+        // DB 드라이버 메시지에는 테이블·제약명 등 내부 정보가 섞여 있어 로그에도 그대로 남기지 않는다.
+        log.warn("data integrity violation");
+        return errorResponse(ErrorCode.DATA_CONFLICT);
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
