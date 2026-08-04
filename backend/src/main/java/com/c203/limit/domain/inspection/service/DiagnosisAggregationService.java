@@ -9,6 +9,7 @@ import com.c203.limit.domain.inspection.entity.ListingChecklistItem;
 import com.c203.limit.domain.inspection.entity.OcrResult;
 import com.c203.limit.domain.inspection.enums.DiagnosisFieldName;
 import com.c203.limit.domain.inspection.enums.DiagnosisSourceType;
+import com.c203.limit.domain.inspection.enums.AutomationType;
 import com.c203.limit.domain.inspection.enums.EvidenceType;
 import com.c203.limit.domain.inspection.repository.BatteryReportResultRepository;
 import com.c203.limit.domain.inspection.repository.DxdiagResultRepository;
@@ -25,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -38,6 +40,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class DiagnosisAggregationService {
 
     private static final Logger log = LoggerFactory.getLogger(DiagnosisAggregationService.class);
+    private static final Set<DiagnosisFieldName> DEVICE_INFO_FIELDS =
+            Set.of(
+                    DiagnosisFieldName.MODEL_NAME,
+                    DiagnosisFieldName.STORAGE_CAPACITY,
+                    DiagnosisFieldName.OS_VERSION,
+                    DiagnosisFieldName.CPU);
 
     private final ListingChecklistItemRepository listingChecklistItemRepository;
     private final EvidenceRepository evidenceRepository;
@@ -70,8 +78,8 @@ public class DiagnosisAggregationService {
 
         verifyOwnership(item, sellerId);
 
-        Map<DiagnosisFieldName, FieldSource> ocrValues = collectOcrValues(itemId);
-        Map<DiagnosisFieldName, FieldSource> fileParseValues = collectFileParseValues(itemId);
+        Map<DiagnosisFieldName, FieldSource> ocrValues = collectOcrValues(item);
+        Map<DiagnosisFieldName, FieldSource> fileParseValues = collectFileParseValues(item);
 
         List<DiagnosisFieldResponse> fields = buildFields(ocrValues, fileParseValues);
 
@@ -89,8 +97,9 @@ public class DiagnosisAggregationService {
      */
     @Transactional(readOnly = true)
     public DiagnosisFieldValue getFieldValue(Long itemId, DiagnosisFieldName fieldName) {
-        FieldSource ocr = collectOcrValues(itemId).get(fieldName);
-        FieldSource fileParse = collectFileParseValues(itemId).get(fieldName);
+        ListingChecklistItem item = listingChecklistItemRepository.findById(itemId).orElse(null);
+        FieldSource ocr = item == null ? null : collectOcrValues(item).get(fieldName);
+        FieldSource fileParse = item == null ? null : collectFileParseValues(item).get(fieldName);
         FieldSource primary = fileParse != null ? fileParse : ocr;
         if (primary == null) {
             primary = fallbackEditTarget(itemId);
@@ -147,8 +156,8 @@ public class DiagnosisAggregationService {
         }
     }
 
-    private Map<DiagnosisFieldName, FieldSource> collectOcrValues(Long itemId) {
-        List<Long> photoEvidenceIds = evidenceIdsOfType(itemId, EvidenceType.PHOTO);
+    private Map<DiagnosisFieldName, FieldSource> collectOcrValues(ListingChecklistItem item) {
+        List<Long> photoEvidenceIds = evidenceIdsOfType(item.getId(), EvidenceType.PHOTO);
 
         Map<DiagnosisFieldName, FieldSource> values = new EnumMap<>(DiagnosisFieldName.class);
         if (photoEvidenceIds.isEmpty()) {
@@ -159,18 +168,20 @@ public class DiagnosisAggregationService {
                 .forEach(
                         result -> {
                             DiagnosisFieldName fieldName = DiagnosisFieldName.fromOcrFieldType(result.getFieldType());
-                            putIfPresent(
-                                    values,
-                                    fieldName,
-                                    result.getParsedValue(),
-                                    result.getEvidenceId(),
-                                    DiagnosisSourceType.OCR);
+                            if (isFieldVisibleFor(item, fieldName)) {
+                                putIfPresent(
+                                        values,
+                                        fieldName,
+                                        result.getParsedValue(),
+                                        result.getEvidenceId(),
+                                        DiagnosisSourceType.OCR);
+                            }
                         });
         return values;
     }
 
-    private Map<DiagnosisFieldName, FieldSource> collectFileParseValues(Long itemId) {
-        List<Long> diagnosticFileEvidenceIds = evidenceIdsOfType(itemId, EvidenceType.DIAGNOSTIC_FILE);
+    private Map<DiagnosisFieldName, FieldSource> collectFileParseValues(ListingChecklistItem item) {
+        List<Long> diagnosticFileEvidenceIds = diagnosticEvidenceIdsFor(item);
 
         Map<DiagnosisFieldName, FieldSource> values = new EnumMap<>(DiagnosisFieldName.class);
         if (diagnosticFileEvidenceIds.isEmpty()) {
@@ -182,47 +193,23 @@ public class DiagnosisAggregationService {
                 .forEach(
                         result -> {
                             Long evidenceId = result.getEvidenceId();
-                            putIfPresent(
-                                    values,
-                                    DiagnosisFieldName.MODEL_NAME,
-                                    result.getModelName(),
-                                    evidenceId,
-                                    DiagnosisSourceType.DXDIAG);
-                            putIfPresent(
-                                    values,
-                                    DiagnosisFieldName.OS_VERSION,
-                                    result.getOsVersion(),
-                                    evidenceId,
-                                    DiagnosisSourceType.DXDIAG);
-                            putIfPresent(
-                                    values,
-                                    DiagnosisFieldName.STORAGE_CAPACITY,
-                                    result.getStorageCapacity(),
-                                    evidenceId,
-                                    DiagnosisSourceType.DXDIAG);
-                            putIfPresent(values, DiagnosisFieldName.CPU, result.getCpu(), evidenceId, DiagnosisSourceType.DXDIAG);
-                            putIfPresent(
-                                    values, DiagnosisFieldName.RAM, result.getMemory(), evidenceId, DiagnosisSourceType.DXDIAG);
-                            putIfPresent(values, DiagnosisFieldName.GPU, result.getGpu(), evidenceId, DiagnosisSourceType.DXDIAG);
-                            putIfPresent(
-                                    values,
-                                    DiagnosisFieldName.GPU_MEMORY,
-                                    result.getGpuMemory(),
-                                    evidenceId,
-                                    DiagnosisSourceType.DXDIAG);
-                            putIfPresent(
-                                    values,
-                                    DiagnosisFieldName.DRIVER_VERSION,
-                                    result.getDriverVersion(),
-                                    evidenceId,
-                                    DiagnosisSourceType.DXDIAG);
-                            putIfPresent(
-                                    values,
-                                    DiagnosisFieldName.SOUND_DEVICE,
-                                    result.getSoundDevice(),
-                                    evidenceId,
-                                    DiagnosisSourceType.DXDIAG);
+                            putDxdiagValue(values, item, DiagnosisFieldName.MODEL_NAME, result.getModelName(), evidenceId);
+                            putDxdiagValue(values, item, DiagnosisFieldName.OS_VERSION, result.getOsVersion(), evidenceId);
+                            putDxdiagValue(
+                                    values, item, DiagnosisFieldName.STORAGE_CAPACITY, result.getStorageCapacity(), evidenceId);
+                            putDxdiagValue(values, item, DiagnosisFieldName.CPU, result.getCpu(), evidenceId);
+                            putDxdiagValue(values, item, DiagnosisFieldName.RAM, result.getMemory(), evidenceId);
+                            putDxdiagValue(values, item, DiagnosisFieldName.GPU, result.getGpu(), evidenceId);
+                            putDxdiagValue(values, item, DiagnosisFieldName.GPU_MEMORY, result.getGpuMemory(), evidenceId);
+                            putDxdiagValue(
+                                    values, item, DiagnosisFieldName.DRIVER_VERSION, result.getDriverVersion(), evidenceId);
+                            putDxdiagValue(
+                                    values, item, DiagnosisFieldName.SOUND_DEVICE, result.getSoundDevice(), evidenceId);
                         });
+
+        if (item.getAutomationType() == AutomationType.OCR) {
+            return values;
+        }
 
         batteryReportResultRepository.findAllByEvidenceIdIn(diagnosticFileEvidenceIds).stream()
                 .sorted(Comparator.comparing(BatteryReportResult::getParsedAt))
@@ -261,6 +248,37 @@ public class DiagnosisAggregationService {
                                     DiagnosisSourceType.BATTERY_REPORT);
                         });
         return values;
+    }
+
+    private List<Long> diagnosticEvidenceIdsFor(ListingChecklistItem item) {
+        if (item.getAutomationType() == AutomationType.OCR) {
+            return evidenceRepository.findAllByListingId(item.getListingId()).stream()
+                    .filter(evidence -> evidence.getEvidenceType() == EvidenceType.DIAGNOSTIC_FILE)
+                    .map(Evidence::getId)
+                    .toList();
+        }
+        return evidenceIdsOfType(item.getId(), EvidenceType.DIAGNOSTIC_FILE);
+    }
+
+    private void putDxdiagValue(
+            Map<DiagnosisFieldName, FieldSource> values,
+            ListingChecklistItem item,
+            DiagnosisFieldName fieldName,
+            String value,
+            Long evidenceId) {
+        if (isFieldVisibleFor(item, fieldName)) {
+            putIfPresent(values, fieldName, value, evidenceId, DiagnosisSourceType.DXDIAG);
+        }
+    }
+
+    private boolean isFieldVisibleFor(ListingChecklistItem item, DiagnosisFieldName fieldName) {
+        if (item.getAutomationType() == AutomationType.OCR) {
+            return DEVICE_INFO_FIELDS.contains(fieldName);
+        }
+        if (item.getAutomationType() == AutomationType.FILE_PARSE && "DXDIAG".equals(item.getParserType())) {
+            return !DEVICE_INFO_FIELDS.contains(fieldName);
+        }
+        return true;
     }
 
     private List<Long> evidenceIdsOfType(Long itemId, EvidenceType evidenceType) {

@@ -69,10 +69,16 @@ DxDiag는 `MODEL_NAME`/`OS_VERSION`/`STORAGE_CAPACITY`/`CPU`/`RAM`(`memory`)/`GP
 이 필드 이름들은 `DiagnosisFieldName` enum으로 통일되어 있어, OCR과 DxDiag가 겹치는 필드(`MODEL_NAME`/`OS_VERSION`/`STORAGE_CAPACITY`/`CPU`/`RAM`/`GPU`
 등)는 같은 이름으로 취합·비교된다.
 
+화면에서는 DxDiag 결과를 체크리스트 목적에 맞게 나눈다. `OCR` 기기 정보 화면 항목은 같은 매물의 DxDiag
+결과에서도 `MODEL_NAME`/`STORAGE_CAPACITY`/`OS_VERSION`/`CPU`만 가져오며, 사진 OCR 값과 비교하거나
+빈 입력칸에 판매자가 직접 확정할 수 있다. `DXDIAG` Windows 시스템 진단 항목에는
+`RAM`/`GPU`/`GPU_MEMORY`/`DRIVER_VERSION`/`SOUND_DEVICE`만 표시한다.
+
 ### 취합 조회 (`GET .../diagnosis`)
 
-같은 체크리스트 항목에 딸린 증거들 중 `PHOTO` 타입은 OCR 결과에서, `DIAGNOSTIC_FILE` 타입은 DxDiag/배터리
-리포트 파싱 결과에서 값을 모아 필드 이름 기준으로 합친다. 한 필드에 OCR 값과 파일 파싱 값이 둘 다 있고
+같은 체크리스트 항목에 딸린 증거들 중 `PHOTO` 타입은 OCR 결과에서 값을 모은다. 기기 정보 화면은 같은
+매물의 Windows 시스템 진단 증거에서도 위의 네 필드를 가져오고, 그 밖의 `DIAGNOSTIC_FILE` 항목은 자신의
+DxDiag/배터리 리포트 파싱 결과를 모아 필드 이름 기준으로 합친다. 한 필드에 OCR 값과 파일 파싱 값이 둘 다 있고
 서로 다르면 `conflict: true`를 반환한다.
 
 ```json
@@ -127,8 +133,8 @@ DxDiag는 `MODEL_NAME`/`OS_VERSION`/`STORAGE_CAPACITY`/`CPU`/`RAM`(`memory`)/`GP
 `frontend/src/api/inspection.js`가 위 6개 API를 그대로 감싼다. `ProductRegisterPage.vue`의 체크리스트
 촬영 단계에서, 업로드가 끝나는 즉시(`handleCaptureFile` 안에서) 항목의 `automationType`/`parserType`을 보고
 해당 파싱 API를 호출한 뒤 취합 조회로 결과를 받아 "촬영 또는 파일 업로드" 버튼 아래에 필드별 입력창으로
-보여준다. 자동 인식에 실패했거나 일부 필드만 인식된 경우에도, 그 항목이 다룰 수 있는 필드 전체(예: OCR이면
-`MODEL_NAME`/`CPU`/`RAM`/`GPU`/`OS_VERSION`/`STORAGE_CAPACITY`)를 빈 입력칸으로 함께 보여줘 드롭다운 없이
+보여준다. 자동 인식에 실패했거나 일부 필드만 인식된 경우에도, 그 항목이 다룰 수 있는 필드 전체(기기 정보
+화면이면 `MODEL_NAME`/`STORAGE_CAPACITY`/`OS_VERSION`/`CPU`)를 빈 입력칸으로 함께 보여줘 드롭다운 없이
 바로 타이핑해 저장할 수 있다. 저장에 성공하면 입력칸 아래에 "저장됐습니다" 표시가 2.5초간 나타났다 사라지고,
 그 값을 다시 고치기 시작하면 바로 사라진다.
 

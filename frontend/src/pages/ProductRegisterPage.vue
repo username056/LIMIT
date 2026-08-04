@@ -250,8 +250,8 @@ function diagnosisFieldLabel(fieldName) {
 // 항목의 자동화 종류가 다룰 수 있는 필드 전체 목록입니다. 자동 인식이 실패했거나(값 없음)
 // 일부만 인식됐을 때도, 인식 못한 필드까지 빈 입력 칸으로 미리 보여줘서 드롭다운 없이
 // 바로 타이핑해 저장할 수 있게 합니다.
-const OCR_FIELD_NAMES = ['MODEL_NAME', 'CPU', 'RAM', 'GPU', 'OS_VERSION', 'STORAGE_CAPACITY']
-const DXDIAG_FIELD_NAMES = ['CPU', 'RAM', 'GPU', 'GPU_MEMORY', 'DRIVER_VERSION', 'SOUND_DEVICE']
+const OCR_FIELD_NAMES = ['MODEL_NAME', 'STORAGE_CAPACITY', 'OS_VERSION', 'CPU']
+const DXDIAG_FIELD_NAMES = ['RAM', 'GPU', 'GPU_MEMORY', 'DRIVER_VERSION', 'SOUND_DEVICE']
 const BATTERY_REPORT_FIELD_NAMES = [
   'DESIGN_CAPACITY', 'FULL_CHARGE_CAPACITY', 'CYCLE_COUNT', 'BATTERY_MANUFACTURER', 'CAPACITY_RATIO',
 ]
@@ -273,7 +273,7 @@ async function refreshAutomatedDiagnoses() {
   if (!currentProductId.value) return
   checklistItems.value = await getProductChecklist(currentProductId.value)
   await Promise.allSettled(checklistItems.value
-    .filter((item) => item.automationType === 'FILE_PARSE')
+    .filter((item) => item.automationType && item.automationType !== 'NONE')
     .map((item) => refreshDiagnosis(item)))
 }
 
@@ -1609,7 +1609,7 @@ async function startEdit(productId) {
           restored: true,
         })),
       }
-      if (item.automationType && item.automationType !== 'NONE' && history.length) {
+      if (item.automationType && item.automationType !== 'NONE') {
         try {
           await refreshDiagnosis(item)
         } catch {

@@ -724,10 +724,11 @@ describe('ProductRegisterPage', () => {
     expect(wrapper.text()).not.toContain('저장 중…')
     expect(wrapper.text()).toContain('저장됐습니다')
 
-    // CPU 외에 인식되지 않은 필드(RAM 등)도 드롭다운 없이 바로 타이핑할 수 있는 빈 입력으로 보인다.
-    const ramInput = wrapper.find('input[aria-label="RAM 값"]')
-    expect(ramInput.exists()).toBe(true)
-    expect(ramInput.element.value).toBe('')
+    // 기기 정보 화면에는 모델명·저장 용량·OS 버전·CPU만 표시하고, 미인식 항목은 빈칸으로 둔다.
+    expect(wrapper.find('input[aria-label="RAM 값"]').exists()).toBe(false)
+    const storageInput = wrapper.find('input[aria-label="저장용량 값"]')
+    expect(storageInput.exists()).toBe(true)
+    expect(storageInput.element.value).toBe('')
 
     // 저장 후 값을 다시 고치기 시작하면, 방금 본 "저장됐습니다"는 이제 그 값 얘기가 아니므로 사라진다.
     await valueInput.setValue('Intel i7-1165G7 (다시 수정)')
