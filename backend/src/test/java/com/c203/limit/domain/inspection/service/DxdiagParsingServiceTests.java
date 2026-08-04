@@ -67,6 +67,7 @@ class DxdiagParsingServiceTests {
         Evidence evidence = readyEvidence(EvidenceType.DIAGNOSTIC_FILE);
         DxdiagParseResult parsed =
                 new DxdiagParseResult(
+                        "950XDB", "Windows 11 Pro", "475.8 GB",
                         "i7-1165G7", "16384 MB RAM", "Iris Xe", "8156 MB", "27.20.100.9415", "Realtek Audio");
         when(evidenceRepository.findById(EVIDENCE_ID)).thenReturn(Optional.of(evidence));
         stubOwnedListing();
@@ -81,13 +82,16 @@ class DxdiagParsingServiceTests {
         assertThat(result.getParseStatus()).isEqualTo(ParseStatus.SUCCESS);
         assertThat(result.getCpu()).isEqualTo("i7-1165G7");
         assertThat(result.getGpu()).isEqualTo("Iris Xe");
+        assertThat(result.getModelName()).isEqualTo("950XDB");
     }
 
     @Test
     void parseSavesPartialResultWhenSomeFieldsMissing() {
         Evidence evidence = readyEvidence(EvidenceType.DIAGNOSTIC_FILE);
         DxdiagParseResult parsed =
-                new DxdiagParseResult("i7-1165G7", "16384 MB RAM", null, null, null, "Realtek Audio");
+                new DxdiagParseResult(
+                        "950XDB", "Windows 11 Pro", "475.8 GB",
+                        "i7-1165G7", "16384 MB RAM", null, null, null, "Realtek Audio");
         when(evidenceRepository.findById(EVIDENCE_ID)).thenReturn(Optional.of(evidence));
         stubOwnedListing();
         when(dxdiagFileFetcher.fetch(CDN_URL)).thenReturn("<DxDiag/>".getBytes());
@@ -104,7 +108,7 @@ class DxdiagParsingServiceTests {
     @Test
     void parseSavesFailedResultWhenNoFieldsAreFound() {
         Evidence evidence = readyEvidence(EvidenceType.DIAGNOSTIC_FILE);
-        DxdiagParseResult parsed = new DxdiagParseResult(null, null, null, null, null, null);
+        DxdiagParseResult parsed = new DxdiagParseResult(null, null, null, null, null, null, null, null, null);
         when(evidenceRepository.findById(EVIDENCE_ID)).thenReturn(Optional.of(evidence));
         stubOwnedListing();
         when(dxdiagFileFetcher.fetch(CDN_URL)).thenReturn("garbage".getBytes());

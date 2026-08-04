@@ -3,6 +3,8 @@ package com.c203.limit.domain.inspection.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 import com.c203.limit.domain.inspection.dto.response.DiagnosisFieldListResponse;
@@ -14,6 +16,7 @@ import com.c203.limit.domain.inspection.entity.ListingChecklistItem;
 import com.c203.limit.domain.inspection.entity.OcrResult;
 import com.c203.limit.domain.inspection.enums.DiagnosisFieldName;
 import com.c203.limit.domain.inspection.enums.DiagnosisSourceType;
+import com.c203.limit.domain.inspection.enums.AutomationType;
 import com.c203.limit.domain.inspection.enums.EvidenceType;
 import com.c203.limit.domain.inspection.enums.OcrFieldType;
 import com.c203.limit.domain.inspection.enums.ParseStatus;
@@ -58,6 +61,7 @@ class DiagnosisAggregationServiceTests {
 
     @BeforeEach
     void setUp() {
+        lenient().when(listingChecklistItem.getId()).thenReturn(ITEM_ID);
         service =
                 new DiagnosisAggregationService(
                         listingChecklistItemRepository,
@@ -252,6 +256,85 @@ class DiagnosisAggregationServiceTests {
         assertThat(driverVersion.getOcrValue()).isNull();
         assertThat(driverVersion.getFileParseValue()).isEqualTo("32.0.101.7084");
         assertThat(driverVersion.isConflict()).isFalse();
+    }
+
+    @Test
+    void mapsDxdiagSystemFieldsIntoFileParseValues() {
+        stubItemAndOwnership();
+        // 기존에 생성된 체크리스트 스냅샷의 automationType이 NONE이어도 itemCode를 기준으로
+        // Windows 진단 결과를 기기 정보 화면에 연결해야 한다.
+        when(listingChecklistItem.getItemCode()).thenReturn("LAP-SCR-013");
+        when(evidenceRepository.findAllByListingChecklistItem_Id(ITEM_ID)).thenReturn(List.of(photoEvidence()));
+        when(evidenceRepository.findAllByListingId(LISTING_ID)).thenReturn(List.of(diagnosticFileEvidence()));
+        DxdiagResult result =
+                DxdiagResult.builder()
+                        .evidenceId(DIAGNOSTIC_FILE_EVIDENCE_ID)
+                        .modelName("960XFH")
+                        .osVersion("Windows 11 Enterprise 64-bit")
+                        .storageCapacity("975.7 GB")
+                        .parserVersion("dxdiag-v1")
+                        .parseStatus(ParseStatus.SUCCESS)
+                        .parsedAt(LocalDateTime.now())
+                        .build();
+        when(dxdiagResultRepository.findAllByEvidenceIdIn(anyList())).thenReturn(List.of(result));
+
+        DiagnosisFieldListResponse response = service.getDiagnosis(ITEM_ID, SELLER_ID);
+
+        assertThat(fieldNamed(response, "MODEL_NAME").getFileParseValue()).isEqualTo("960XFH");
+        assertThat(fieldNamed(response, "OS_VERSION").getFileParseValue())
+                .isEqualTo("Windows 11 Enterprise 64-bit");
+        assertThat(fieldNamed(response, "STORAGE_CAPACITY").getFileParseValue()).isEqualTo("975.7 GB");
+    }
+
+    @Test
+    void separatesDeviceInfoFieldsFromWindowsSystemDiagnosis() {
+        stubItemAndOwnership();
+        when(listingChecklistItem.getAutomationType()).thenReturn(AutomationType.FILE_PARSE);
+        when(listingChecklistItem.getParserType()).thenReturn("DXDIAG");
+        when(evidenceRepository.findAllByListingChecklistItem_Id(ITEM_ID))
+                .thenReturn(List.of(diagnosticFileEvidence()));
+        DxdiagResult result =
+                DxdiagResult.builder()
+                        .evidenceId(DIAGNOSTIC_FILE_EVIDENCE_ID)
+                        .modelName("960XFH")
+                        .osVersion("Windows 11 Enterprise 64-bit")
+                        .storageCapacity("975.7 GB")
+                        .cpu("Intel Core Ultra 9 185H")
+                        .memory("32768 MB RAM")
+                        .gpu("Intel Arc Graphics")
+                        .gpuMemory("16291 MB")
+                        .driverVersion("32.0.101.7084")
+                        .soundDevice("Realtek Audio")
+                        .parserVersion("dxdiag-v1")
+                        .parseStatus(ParseStatus.SUCCESS)
+                        .parsedAt(LocalDateTime.now())
+                        .build();
+        when(dxdiagResultRepository.findAllByEvidenceIdIn(anyList())).thenReturn(List.of(result));
+        when(batteryReportResultRepository.findAllByEvidenceIdIn(anyList())).thenReturn(List.of());
+
+        DiagnosisFieldListResponse response = service.getDiagnosis(ITEM_ID, SELLER_ID);
+
+        assertThat(response.getFields())
+                .extracting(DiagnosisFieldResponse::getFieldName)
+                .containsExactlyInAnyOrder("RAM", "GPU", "GPU_MEMORY", "DRIVER_VERSION", "SOUND_DEVICE");
+    }
+
+    @Test
+    void exposesManualDeviceInfoWithoutAnyEvidence() {
+        stubItemAndOwnership();
+        when(listingChecklistItem.getItemCode()).thenReturn("LAP-SCR-013");
+        when(listingChecklistItem.manualDiagnosisValue(any(DiagnosisFieldName.class)))
+                .thenAnswer(
+                        invocation ->
+                                invocation.getArgument(0) == DiagnosisFieldName.MODEL_NAME
+                                        ? "Galaxy Book4 Ultra"
+                                        : null);
+        when(evidenceRepository.findAllByListingChecklistItem_Id(ITEM_ID)).thenReturn(List.of());
+        when(evidenceRepository.findAllByListingId(LISTING_ID)).thenReturn(List.of());
+
+        DiagnosisFieldListResponse response = service.getDiagnosis(ITEM_ID, SELLER_ID);
+
+        assertThat(fieldNamed(response, "MODEL_NAME").getConfirmedValue()).isEqualTo("Galaxy Book4 Ultra");
     }
 
     @Test

@@ -11,7 +11,7 @@ import java.util.List;
 /** DxdiagParseResult(DTO) ↔ DxdiagResult(Entity) ↔ DxdiagResultResponse(DTO) 변환. */
 public final class DxdiagResultMapper {
 
-    private static final int TRACKED_FIELD_COUNT = 6;
+    private static final int TRACKED_FIELD_COUNT = 9;
 
     private DxdiagResultMapper() {}
 
@@ -19,6 +19,9 @@ public final class DxdiagResultMapper {
             Long evidenceId, DxdiagParseResult parsed, String parserVersion, LocalDateTime parsedAt) {
         return DxdiagResult.builder()
                 .evidenceId(evidenceId)
+                .modelName(parsed.modelName())
+                .osVersion(parsed.osVersion())
+                .storageCapacity(parsed.storageCapacity())
                 .cpu(parsed.cpu())
                 .memory(parsed.memory())
                 .gpu(parsed.gpu())
@@ -34,6 +37,9 @@ public final class DxdiagResultMapper {
     public static DxdiagResultResponse toResponse(DxdiagResult entity) {
         return new DxdiagResultResponse(
                 entity.getId(),
+                entity.getModelName(),
+                entity.getOsVersion(),
+                entity.getStorageCapacity(),
                 entity.getCpu(),
                 entity.getMemory(),
                 entity.getGpu(),
@@ -55,6 +61,9 @@ public final class DxdiagResultMapper {
 
     private static List<String> missingFields(DxdiagResult entity) {
         List<String> missing = new ArrayList<>();
+        if (entity.getModelName() == null) missing.add("modelName");
+        if (entity.getOsVersion() == null) missing.add("osVersion");
+        if (entity.getStorageCapacity() == null) missing.add("storageCapacity");
         if (entity.getCpu() == null) missing.add("cpu");
         if (entity.getMemory() == null) missing.add("memory");
         if (entity.getGpu() == null) missing.add("gpu");
