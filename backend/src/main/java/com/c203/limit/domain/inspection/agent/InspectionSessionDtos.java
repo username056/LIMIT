@@ -4,11 +4,14 @@ import com.c203.limit.domain.inspection.enums.InspectionUserResult;
 import com.c203.limit.domain.inspection.enums.MeasurementStatus;
 import com.c203.limit.domain.inspection.enums.TestType;
 import com.c203.limit.domain.product.dto.response.EvidenceUploadUrlResponse;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -61,20 +64,32 @@ public final class InspectionSessionDtos {
             @NotNull UUID clientResultId,
             @NotNull TestType testType,
             @NotNull MeasurementStatus measurementStatus,
-            InspectionUserResult userResult,
-            Map<String, Object> measuredValues,
+            @Schema(nullable = true) InspectionUserResult userResult,
+            @Schema(nullable = true) Map<String, Object> measuredValues,
             @NotNull OffsetDateTime testedAt,
-            String errorCode) {}
+            @Schema(nullable = true) @Size(max = 100) String errorCode) {}
 
     public record TestResultResponse(
             UUID clientResultId,
+            Long listingId,
+            @Schema(nullable = true) Long checklistItemId,
             TestType testType,
             MeasurementStatus measurementStatus,
-            InspectionUserResult userResult,
-            Map<String, Object> measuredValues,
+            @Schema(nullable = true) InspectionUserResult userResult,
+            @Schema(nullable = true) Map<String, Object> measuredValues,
             int attemptNo,
             boolean rawDataSaved,
             OffsetDateTime testedAt,
             OffsetDateTime createdAt,
-            String errorCode) {}
+            @Schema(nullable = true) String errorCode) {}
+
+    public record TestResultSubmission(TestResultResponse response, boolean created) {}
+
+    @Schema(name = "TestResultApiResponse", description = "Windows 선택검사 단건 공통 응답")
+    public record TestResultApiResponse(
+            TestResultResponse data, @Schema(nullable = true) Object meta) {}
+
+    @Schema(name = "TestResultListApiResponse", description = "Windows 선택검사 이력 공통 응답")
+    public record TestResultListApiResponse(
+            List<TestResultResponse> data, @Schema(nullable = true) Object meta) {}
 }
