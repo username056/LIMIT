@@ -44,12 +44,17 @@ export function usePointerInteractionCheck({ pointerTypes, requirePressure = fal
   }
 
   function finish() {
-    target?.removeEventListener('pointerdown', onPointerDown)
-    target?.removeEventListener('pointermove', onPointerMove)
-    target?.removeEventListener('wheel', onWheel)
+    stop()
     status.value = passed.value ? 'passed' : 'failed'
     return passed.value
   }
 
-  return { status, seen, passed, start, finish }
+  function stop() {
+    target?.removeEventListener('pointerdown', onPointerDown)
+    target?.removeEventListener('pointermove', onPointerMove)
+    target?.removeEventListener('wheel', onWheel)
+    target = null
+  }
+
+  return { status, seen, passed, start, finish, stop }
 }

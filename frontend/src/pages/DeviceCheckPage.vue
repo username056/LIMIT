@@ -1,12 +1,12 @@
 <script setup>
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, shallowRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import PageHeader from '../components/PageHeader.vue'
 import BaseCard from '../components/BaseCard.vue'
 import BaseButton from '../components/BaseButton.vue'
 import { getProductChecklist, getProductDraftProgress, updateProductDraftProgress } from '../api/products'
-import { CHECK_KIND, toCheckableItems } from '../features/deviceCheck/checkableItemCodes'
+import { CHECK_KIND, toUniversalCheckItems } from '../features/deviceCheck/checkableItemCodes'
 import { useCameraCheck } from '../features/deviceCheck/useCameraCheck'
 import { useMicCheck } from '../features/deviceCheck/useMicCheck'
 import { useSpeakerCheck } from '../features/deviceCheck/useSpeakerCheck'
@@ -17,6 +17,8 @@ const CHECK_KIND_LABEL = {
   [CHECK_KIND.CAMERA]: '카메라',
   [CHECK_KIND.MIC]: '마이크',
   [CHECK_KIND.SPEAKER]: '스피커',
+  [CHECK_KIND.DISPLAY]: '디스플레이',
+  [CHECK_KIND.CHARGING]: '충전',
   [CHECK_KIND.KEYBOARD]: '키보드',
   [CHECK_KIND.NUMPAD]: '숫자 키패드',
   [CHECK_KIND.POINTER]: '마우스/터치패드',
@@ -68,16 +70,20 @@ const items = ref([])
 const stepIndex = ref(0)
 const itemResults = ref(new Map())
 const existingResults = ref(new Map())
+const existingDeviceResults = ref(new Map())
 const draftStep = ref(1)
 const finished = ref(false)
 const videoEl = ref(null)
 const pointerAreaEl = ref(null)
 const keyboardMissing = ref([])
+const displayStarted = ref(false)
+const chargingStarted = ref(false)
+const forceRecheckIds = reactive(new Set())
 
 /*
-  돌아갈 곳은 3단계입니다.
+  돌아갈 곳은 2단계입니다.
   ---------------------------------------------------------------------------
-  이 화면은 등록 3단계의 '실동작 자동 점검하기'로 들어옵니다. 그런데 돌아가면 늘
+  이 화면은 등록 2단계의 '직접 점검하기'로 들어옵니다. 그런데 돌아가면 늘
   1단계가 열렸습니다. 등록 화면의 startEdit이 "수정은 기기 정보부터 훑는다"는 뜻으로
   activeStep을 1로 못 박고 있어서입니다.
 
@@ -86,22 +92,39 @@ const keyboardMissing = ref([])
   엽니다).
 */
 const backToRegister = {
-  name: 'seller-product-edit',
-  params: { productId },
-  query: { step: '3' },
+  name: 'seller-product-new',
+  query: { step: '2', resumeProductId: String(productId) },
 }
 
 const camera = useCameraCheck()
 const mic = useMicCheck()
 const speaker = useSpeakerCheck()
 let keyboard = null
-let pointer = null
+const pointer = shallowRef(null)
 
 const currentItem = computed(() => items.value[stepIndex.value] || null)
 const currentLabel = computed(() =>
   currentItem.value ? CHECK_KIND_LABEL[currentItem.value.checkKind] : '',
 )
+const currentAlreadyCompleted = computed(() => {
+  const item = currentItem.value
+  if (!item) return false
+  if (forceRecheckIds.has(item.testType)) return false
+  return item.status === 'COMPLETED'
+    || existingResults.value.get(item.checklistItemId) === RESULT.SUCCESS
+    || existingDeviceResults.value.get(item.testType) === RESULT.SUCCESS
+})
+const currentCompletionSource = computed(() => {
+  const item = currentItem.value
+  if (!item) return null
+  if (existingDeviceResults.value.get(item.testType) === RESULT.SUCCESS) return 'WEB'
+  if (item.status === 'COMPLETED'
+    || existingResults.value.get(item.checklistItemId) === RESULT.SUCCESS) return 'AUTO'
+  return null
+})
 const isNumpadCheck = computed(() => currentItem.value?.checkKind === CHECK_KIND.NUMPAD)
+const canMoveNext = computed(() => currentAlreadyCompleted.value
+  || itemResults.value.has(currentItem.value?.testType))
 
 async function load() {
   loading.value = true
@@ -111,12 +134,12 @@ async function load() {
       getProductChecklist(productId),
       getProductDraftProgress(productId),
     ])
-    items.value = toCheckableItems(checklist)
+    items.value = toUniversalCheckItems(checklist)
     existingResults.value = new Map(
       Object.entries(progress.results || {}).map(([itemId, result]) => [Number(itemId), result]),
     )
+    existingDeviceResults.value = new Map(Object.entries(progress.deviceResults || {}))
     draftStep.value = progress.step
-    if (items.value.length === 0) finished.value = true
   } catch {
     loadError.value = '점검 대상 체크리스트를 불러오지 못했습니다.'
   } finally {
@@ -125,23 +148,29 @@ async function load() {
 }
 load()
 
-function markResult(itemId, passed) {
-  itemResults.value.set(itemId, passed ? RESULT.SUCCESS : RESULT.FAILED)
+function markResult(testType, passed) {
+  itemResults.value.set(testType, passed ? RESULT.SUCCESS : RESULT.FAILED)
 }
 
 async function runCurrent() {
   const item = currentItem.value
   if (!item) return
   keyboardMissing.value = []
+  displayStarted.value = false
+  chargingStarted.value = false
 
   if (item.checkKind === CHECK_KIND.CAMERA) {
     const passed = await camera.start(videoEl.value)
-    markResult(item.checklistItemId, passed)
+    markResult(item.testType, passed)
   } else if (item.checkKind === CHECK_KIND.MIC) {
     const passed = await mic.start()
-    markResult(item.checklistItemId, passed)
+    markResult(item.testType, passed)
   } else if (item.checkKind === CHECK_KIND.SPEAKER) {
     speaker.playTone()
+  } else if (item.checkKind === CHECK_KIND.DISPLAY) {
+    displayStarted.value = true
+  } else if (item.checkKind === CHECK_KIND.CHARGING) {
+    chargingStarted.value = true
   } else if (item.checkKind === CHECK_KIND.KEYBOARD) {
     keyboard = useKeyboardCheck({ includeNumpad: false })
     keyboard.start()
@@ -149,31 +178,39 @@ async function runCurrent() {
     keyboard = useKeyboardCheck({ includeNumpad: true })
     keyboard.start()
   } else if (item.checkKind === CHECK_KIND.POINTER) {
-    pointer = usePointerInteractionCheck({ pointerTypes: ['mouse'] })
-    pointer.start(pointerAreaEl.value)
+    pointer.value = usePointerInteractionCheck({ pointerTypes: ['mouse', 'touch', 'pen'] })
+    pointer.value.start(pointerAreaEl.value)
   } else if (item.checkKind === CHECK_KIND.TOUCHSCREEN) {
-    pointer = usePointerInteractionCheck({ pointerTypes: ['touch'] })
-    pointer.start(pointerAreaEl.value)
+    pointer.value = usePointerInteractionCheck({ pointerTypes: ['touch'] })
+    pointer.value.start(pointerAreaEl.value)
   } else if (item.checkKind === CHECK_KIND.STYLUS) {
-    pointer = usePointerInteractionCheck({ pointerTypes: ['pen'], requirePressure: true })
-    pointer.start(pointerAreaEl.value)
+    pointer.value = usePointerInteractionCheck({ pointerTypes: ['pen'], requirePressure: true })
+    pointer.value.start(pointerAreaEl.value)
   }
+}
+
+function confirmManualCheck(passed) {
+  markResult(currentItem.value.testType, passed)
+}
+
+function forceRecheckCurrent() {
+  forceRecheckIds.add(currentItem.value.testType)
 }
 
 function confirmSpeakerHeard(heard) {
   speaker.confirmHeard(heard)
-  markResult(currentItem.value.checklistItemId, heard)
+  markResult(currentItem.value.testType, heard)
 }
 
 function finishKeyboard() {
   const result = keyboard.finish()
   keyboardMissing.value = result.missingCodes
-  markResult(currentItem.value.checklistItemId, result.missingCodes.length === 0)
+  markResult(currentItem.value.testType, result.missingCodes.length === 0)
 }
 
 function finishPointer() {
-  const passed = pointer.finish()
-  markResult(currentItem.value.checklistItemId, passed)
+  const passed = pointer.value.finish()
+  markResult(currentItem.value.testType, passed)
 }
 
 function retryCurrent() {
@@ -185,9 +222,26 @@ function next() {
   mic.stop()
   keyboard?.stop()
   keyboard = null
-  pointer = null
+  pointer.value?.stop()
+  pointer.value = null
   stepIndex.value += 1
   if (stepIndex.value >= items.value.length) finished.value = true
+}
+
+function previous() {
+  camera.stop()
+  mic.stop()
+  keyboard?.stop()
+  keyboard = null
+  pointer.value?.stop()
+  pointer.value = null
+  finished.value = false
+  stepIndex.value = Math.max(0, stepIndex.value - 1)
+}
+
+function skipCurrent() {
+  if (currentItem.value) itemResults.value.delete(currentItem.value.testType)
+  next()
 }
 
 async function save() {
@@ -196,15 +250,22 @@ async function save() {
   try {
     // 이번 세션에서 다시 점검한 항목은 이전 결과를 덮어쓴다 — 예전에 성공했던 항목이라도
     // 재점검에서 실패하면 그 실패가 최종값이 되도록, existingResults 위에 itemResults를 얹는다.
-    const merged = new Map(existingResults.value)
-    itemResults.value.forEach((result, itemId) => merged.set(itemId, result))
-    const results = [...merged.entries()].map(([checklistItemId, result]) => ({
-      checklistItemId,
+    const merged = new Map(existingDeviceResults.value)
+    itemResults.value.forEach((result, testType) => merged.set(testType, result))
+    const deviceResults = [...merged.entries()].map(([testType, result]) => ({
+      testType,
       result,
     }))
+    const results = items.value
+      .filter((item) => item.checklistItemId && merged.has(item.testType))
+      .map((item) => ({
+        checklistItemId: item.checklistItemId,
+        result: merged.get(item.testType),
+      }))
     await updateProductDraftProgress(productId, {
       step: draftStep.value,
       results,
+      deviceResults,
     })
     router.push(backToRegister)
   } catch {
@@ -218,6 +279,7 @@ onBeforeUnmount(() => {
   camera.stop()
   mic.stop()
   keyboard?.stop()
+  pointer.value?.stop()
 })
 </script>
 
@@ -264,6 +326,12 @@ onBeforeUnmount(() => {
           </p>
           <div class="mt-6 flex gap-3">
             <BaseButton
+              variant="outline"
+              @click="previous"
+            >
+              이전
+            </BaseButton>
+            <BaseButton
               :disabled="saving"
               @click="save"
             >
@@ -289,9 +357,56 @@ onBeforeUnmount(() => {
             {{ currentLabel }}
           </h2>
 
+          <div class="mt-4 flex flex-wrap gap-3 border-b border-border pb-4">
+            <BaseButton
+              variant="outline"
+              :disabled="stepIndex === 0"
+              @click="previous"
+            >
+              이전
+            </BaseButton>
+            <BaseButton
+              variant="outline"
+              @click="skipCurrent"
+            >
+              건너뛰기
+            </BaseButton>
+            <BaseButton
+              :disabled="!canMoveNext"
+              @click="next"
+            >
+              다음
+            </BaseButton>
+          </div>
+
+          <div
+            v-if="currentAlreadyCompleted"
+            class="mt-4 rounded-md border border-primary/30 bg-accent p-4"
+          >
+            <p class="font-semibold text-primary-dark">
+              {{ currentCompletionSource === 'WEB' ? '웹 점검 완료' : '자동 입력 완료' }}
+            </p>
+            <p class="mt-1 text-sm text-text-sub">
+              {{ currentCompletionSource === 'WEB'
+                ? '이전에 웹에서 정상 점검한 결과가 저장되어 있습니다.'
+                : 'Limit 진단 프로그램에서 정상 결과를 받아 웹 점검을 생략할 수 있습니다.' }}
+            </p>
+            <div class="mt-4 flex gap-3">
+              <BaseButton @click="next">
+                다음
+              </BaseButton>
+              <BaseButton
+                variant="outline"
+                @click="forceRecheckCurrent"
+              >
+                다시 점검
+              </BaseButton>
+            </div>
+          </div>
+
           <!-- 카메라 -->
           <div
-            v-if="currentItem.checkKind === 'CAMERA'"
+            v-else-if="currentItem.checkKind === 'CAMERA'"
             class="mt-4"
           >
             <video
@@ -302,6 +417,10 @@ onBeforeUnmount(() => {
             />
             <p class="mt-3 text-sm text-text-sub">
               {{ camera.detail.value }}
+            </p>
+            <p class="mt-2 text-sm leading-6 text-text-sub">
+              카메라가 켜지면 약 3초 동안 손을 흔들거나 기기를 조금 움직여 주세요.
+              화면 변화를 감지하면 자동으로 점검이 완료됩니다.
             </p>
             <div class="mt-4 flex gap-3">
               <BaseButton
@@ -405,6 +524,83 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
+          <!-- 디스플레이 -->
+          <div
+            v-else-if="currentItem.checkKind === 'DISPLAY'"
+            class="mt-4"
+          >
+            <p class="text-sm text-text-sub">
+              점검을 시작한 뒤 흰색·검은색·빨강·초록·파랑 영역에서 멍, 줄, 깜빡임과 불량 화소를 확인하세요.
+            </p>
+            <div
+              v-if="displayStarted"
+              class="mt-4 grid h-48 grid-cols-5 overflow-hidden rounded-md border border-border"
+            >
+              <span class="bg-white" /><span class="bg-black" /><span class="bg-red-600" />
+              <span class="bg-green-600" /><span class="bg-blue-600" />
+            </div>
+            <div class="mt-4 flex flex-wrap gap-3">
+              <BaseButton
+                v-if="!displayStarted"
+                @click="runCurrent"
+              >
+                점검 시작
+              </BaseButton>
+              <template v-else-if="!itemResults.has(currentItem.testType)">
+                <BaseButton @click="confirmManualCheck(true)">
+                  정상이에요
+                </BaseButton>
+                <BaseButton
+                  variant="outline"
+                  @click="confirmManualCheck(false)"
+                >
+                  이상이 있어요
+                </BaseButton>
+              </template>
+              <BaseButton
+                v-else
+                @click="next"
+              >
+                다음
+              </BaseButton>
+            </div>
+          </div>
+
+          <!-- 충전 -->
+          <div
+            v-else-if="currentItem.checkKind === 'CHARGING'"
+            class="mt-4"
+          >
+            <p class="text-sm text-text-sub">
+              충전기를 연결하거나 분리하고 운영체제의 배터리 아이콘과 충전 표시가 바뀌는지 확인하세요.
+            </p>
+            <div class="mt-4 flex flex-wrap gap-3">
+              <BaseButton
+                v-if="!chargingStarted"
+                @click="runCurrent"
+              >
+                점검 시작
+              </BaseButton>
+              <template v-else-if="!itemResults.has(currentItem.testType)">
+                <BaseButton @click="confirmManualCheck(true)">
+                  정상이에요
+                </BaseButton>
+                <BaseButton
+                  variant="outline"
+                  @click="confirmManualCheck(false)"
+                >
+                  인식되지 않아요
+                </BaseButton>
+              </template>
+              <BaseButton
+                v-else
+                @click="next"
+              >
+                다음
+              </BaseButton>
+            </div>
+          </div>
+
           <!-- 키보드 / 숫자패드 -->
           <div
             v-else-if="currentItem.checkKind === 'KEYBOARD' || currentItem.checkKind === 'NUMPAD'"
@@ -486,6 +682,13 @@ onBeforeUnmount(() => {
             >
               여기에서 클릭·드래그·스크롤(또는 터치·펜)을 해보세요.
             </div>
+            <p
+              v-if="pointer"
+              class="mt-3 text-sm text-text-sub"
+            >
+              누르기 {{ pointer.seen.down ? '감지' : '대기' }} ·
+              이동/스크롤 {{ pointer.seen.move || pointer.seen.wheel ? '감지' : '대기' }}
+            </p>
             <div class="mt-4 flex gap-3">
               <BaseButton
                 v-if="!pointer"
@@ -495,6 +698,7 @@ onBeforeUnmount(() => {
               </BaseButton>
               <BaseButton
                 v-else-if="pointer.status.value === 'listening'"
+                :disabled="!pointer.passed.value"
                 @click="finishPointer"
               >
                 완료
