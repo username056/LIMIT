@@ -8,7 +8,6 @@ import com.c203.limit.domain.inspection.entity.ListingChecklistItem;
 import com.c203.limit.domain.inspection.entity.OcrResult;
 import com.c203.limit.domain.inspection.enums.DiagnosisFieldName;
 import com.c203.limit.domain.inspection.enums.DiagnosisSourceType;
-import com.c203.limit.domain.inspection.enums.AutomationType;
 import com.c203.limit.domain.inspection.enums.OcrFieldType;
 import com.c203.limit.domain.inspection.enums.ParseStatus;
 import com.c203.limit.domain.inspection.repository.BatteryReportResultRepository;
@@ -71,7 +70,7 @@ public class DiagnosisValueConfirmationService {
 
         DiagnosisAggregationService.DiagnosisFieldValue current = diagnosisAggregationService.getFieldValue(itemId, fieldName);
         if (current.sourceEvidenceId() == null || current.sourceType() == null) {
-            if (item.getAutomationType() != AutomationType.OCR
+            if (item.getItemCode() == null
                     || !DEVICE_INFO_ITEM_CODES.contains(item.getItemCode())
                     || !isDeviceInfoField(fieldName)) {
                 throw new BusinessException(ErrorCode.FIELD_NOT_EDITABLE);

@@ -261,7 +261,8 @@ class DiagnosisAggregationServiceTests {
     @Test
     void mapsDxdiagSystemFieldsIntoFileParseValues() {
         stubItemAndOwnership();
-        when(listingChecklistItem.getAutomationType()).thenReturn(AutomationType.OCR);
+        // 기존에 생성된 체크리스트 스냅샷의 automationType이 NONE이어도 itemCode를 기준으로
+        // Windows 진단 결과를 기기 정보 화면에 연결해야 한다.
         when(listingChecklistItem.getItemCode()).thenReturn("LAP-SCR-013");
         when(evidenceRepository.findAllByListingChecklistItem_Id(ITEM_ID)).thenReturn(List.of(photoEvidence()));
         when(evidenceRepository.findAllByListingId(LISTING_ID)).thenReturn(List.of(diagnosticFileEvidence()));
@@ -321,7 +322,6 @@ class DiagnosisAggregationServiceTests {
     @Test
     void exposesManualDeviceInfoWithoutAnyEvidence() {
         stubItemAndOwnership();
-        when(listingChecklistItem.getAutomationType()).thenReturn(AutomationType.OCR);
         when(listingChecklistItem.getItemCode()).thenReturn("LAP-SCR-013");
         when(listingChecklistItem.manualDiagnosisValue(any(DiagnosisFieldName.class)))
                 .thenAnswer(

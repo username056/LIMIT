@@ -131,6 +131,41 @@ const templateItems = [
 ]
 
 describe('ProductRegisterPage', () => {
+  it('기존 체크리스트의 자동화 유형이 NONE이어도 기기 정보 진단값을 표시한다', async () => {
+    getProductChecklist.mockResolvedValue([{
+      checklistItemId: 7003,
+      itemCode: 'LAP-SCR-013',
+      name: '기기 정보 화면',
+      evidenceType: 'PHOTO',
+      automationType: 'NONE',
+      isRequired: true,
+      status: 'PENDING',
+    }])
+    getDiagnosis.mockResolvedValue({
+      itemId: 7003,
+      fields: [
+        { fieldName: 'MODEL_NAME', fileParseValue: 'Galaxy Book4 Ultra', ocrValue: null, conflict: false, confirmedValue: null },
+        { fieldName: 'STORAGE_CAPACITY', fileParseValue: '975.7 GB', ocrValue: null, conflict: false, confirmedValue: null },
+        { fieldName: 'OS_VERSION', fileParseValue: 'Windows 11 Pro', ocrValue: null, conflict: false, confirmedValue: null },
+        { fieldName: 'CPU', fileParseValue: 'Intel Core Ultra 9', ocrValue: null, conflict: false, confirmedValue: null },
+      ],
+    })
+
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await goToCaptureStep(wrapper)
+
+    expect(getDiagnosis).toHaveBeenCalledWith(7003)
+    const diagnosisValues = wrapper.findAll('input[type="text"]')
+      .map((input) => input.element.value)
+    expect(diagnosisValues).toEqual(expect.arrayContaining([
+      'Galaxy Book4 Ultra',
+      '975.7 GB',
+      'Windows 11 Pro',
+      'Intel Core Ultra 9',
+    ]))
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     delete routeParams.productId

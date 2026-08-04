@@ -224,7 +224,6 @@ class DiagnosisValueConfirmationServiceTests {
     @Test
     void savesDeviceInfoValueWithoutEvidence() {
         stubItemAndOwnership();
-        when(listingChecklistItem.getAutomationType()).thenReturn(AutomationType.OCR);
         when(listingChecklistItem.getItemCode()).thenReturn("LAP-SCR-013");
         when(diagnosisAggregationService.getFieldValue(ITEM_ID, DiagnosisFieldName.MODEL_NAME))
                 .thenReturn(new DiagnosisAggregationService.DiagnosisFieldValue(null, null, null, null));

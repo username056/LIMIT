@@ -262,7 +262,7 @@ function isDeviceInfoItem(item) {
 
 function allDiagnosisFieldNamesFor(item) {
   if (!item) return []
-  if (item.automationType === 'OCR' && isDeviceInfoItem(item)) return OCR_FIELD_NAMES
+  if (isDeviceInfoItem(item)) return OCR_FIELD_NAMES
   if (item.automationType === 'FILE_PARSE' && item.parserType === 'BATTERY_REPORT') return BATTERY_REPORT_FIELD_NAMES
   if (item.automationType === 'FILE_PARSE' && item.parserType === 'DXDIAG') return DXDIAG_FIELD_NAMES
   return []
@@ -277,7 +277,7 @@ async function refreshAutomatedDiagnoses() {
   if (!currentProductId.value) return
   checklistItems.value = await getProductChecklist(currentProductId.value)
   await Promise.allSettled(checklistItems.value
-    .filter((item) => item.automationType && item.automationType !== 'NONE')
+    .filter((item) => allDiagnosisFieldNamesFor(item).length > 0)
     .map((item) => refreshDiagnosis(item)))
 }
 

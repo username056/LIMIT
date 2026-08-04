@@ -284,7 +284,9 @@ public class DiagnosisAggregationService {
     }
 
     private boolean isDeviceInfoItem(ListingChecklistItem item) {
-        return item.getAutomationType() == AutomationType.OCR && DEVICE_INFO_ITEM_CODES.contains(item.getItemCode());
+        return item != null
+                && item.getItemCode() != null
+                && DEVICE_INFO_ITEM_CODES.contains(item.getItemCode());
     }
 
     private List<Long> evidenceIdsOfType(Long itemId, EvidenceType evidenceType) {
