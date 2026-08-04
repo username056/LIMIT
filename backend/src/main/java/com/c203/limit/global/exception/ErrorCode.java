@@ -20,6 +20,8 @@ public enum ErrorCode {
     MISSING_REQUEST_PARAMETER("CMN005", HttpStatus.BAD_REQUEST, "필수 요청 값이 누락되었습니다."),
     UNAUTHORIZED("CMN006", HttpStatus.UNAUTHORIZED, "인증이 필요합니다."),
     TOO_MANY_REQUEST("CMN007", HttpStatus.TOO_MANY_REQUESTS, "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요."),
+    DATA_CONFLICT(
+            "CMN008", HttpStatus.CONFLICT, "다른 요청과 충돌하여 처리하지 못했습니다. 잠시 후 다시 시도해 주세요."),
 
     // ========== 인증 에러 ==========
     INVALID_CREDENTIALS("AUTH001", HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다."),
@@ -123,6 +125,12 @@ public enum ErrorCode {
             "PRD022", HttpStatus.CONFLICT, "현재 상태에서는 기기 모델 요청을 검토할 수 없습니다."),
     LISTING_RESERVATION_MISMATCH(
             "PRD017", HttpStatus.CONFLICT, "예약이 만료되었거나 다른 구매자에게 재배정되어 처리할 수 없습니다."),
+    CHECKLIST_ITEM_LOCKED_BY_EVIDENCE(
+            "PRD023",
+            HttpStatus.CONFLICT,
+            "이미 증빙이나 점검 기록이 있는 항목은 기능 선택을 해제할 수 없습니다."),
+    CUSTOM_MODEL_CHECKLIST_EDIT_NOT_SUPPORTED(
+            "PRD024", HttpStatus.BAD_REQUEST, "직접 입력한 모델은 등록 후 기능 체크리스트를 수정할 수 없습니다."),
 
     // ========== 결제 에러 ==========
     PAYMENT_NOT_FOUND("PAY001", HttpStatus.NOT_FOUND, "결제 내역을 찾을 수 없습니다."),

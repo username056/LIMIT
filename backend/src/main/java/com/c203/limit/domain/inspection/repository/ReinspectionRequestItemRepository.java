@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface ReinspectionRequestItemRepository
         extends JpaRepository<ReinspectionRequestItem, Long> {
     List<ReinspectionRequestItem> findByReinspectionRequestIdOrderByDisplayOrderAsc(Long requestId);
+
+    boolean existsByListingChecklistItem_Id(Long listingChecklistItemId);
 }
