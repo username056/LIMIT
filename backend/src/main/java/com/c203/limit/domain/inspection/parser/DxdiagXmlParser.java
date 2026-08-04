@@ -20,6 +20,9 @@ public class DxdiagXmlParser {
         Element root = parseDocument(xmlBytes);
 
         Element systemInformation = firstElement(root, "SystemInformation");
+        String modelName = text(systemInformation, "SystemModel");
+        String osVersion = text(systemInformation, "OperatingSystem");
+        String storageCapacity = extractStorageCapacity(root);
         String cpu = text(systemInformation, "Processor");
         String memory = UnitNormalizer.normalizeUnitSpacing(text(systemInformation, "Memory"));
 
@@ -31,7 +34,14 @@ public class DxdiagXmlParser {
         Element soundDevice = firstDefaultSoundDevice(root);
         String soundDeviceName = text(soundDevice, "Description");
 
-        return new DxdiagParseResult(cpu, memory, gpu, gpuMemory, driverVersion, soundDeviceName);
+        return new DxdiagParseResult(
+                modelName, osVersion, storageCapacity, cpu, memory, gpu, gpuMemory, driverVersion, soundDeviceName);
+    }
+
+    private String extractStorageCapacity(Element root) {
+        Element logicalDisk = firstElement(root, "LogicalDisk");
+        String value = text(logicalDisk, "TotalSpace");
+        return UnitNormalizer.normalizeUnitSpacing(value);
     }
 
     private Element parseDocument(byte[] xmlBytes) {

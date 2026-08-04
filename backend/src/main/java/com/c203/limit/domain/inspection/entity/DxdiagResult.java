@@ -24,6 +24,15 @@ public class DxdiagResult {
     @Column(name = "evidence_id", nullable = false)
     private Long evidenceId;
 
+    @Column(name = "model_name", length = 100)
+    private String modelName;
+
+    @Column(name = "os_version", length = 200)
+    private String osVersion;
+
+    @Column(name = "storage_capacity", length = 30)
+    private String storageCapacity;
+
     @Column(name = "cpu", length = 100)
     private String cpu;
 
@@ -53,10 +62,14 @@ public class DxdiagResult {
     private LocalDateTime parsedAt;
 
     @Builder
-    private DxdiagResult(Long evidenceId, String cpu, String memory, String gpu, String gpuMemory,
+    private DxdiagResult(Long evidenceId, String modelName, String osVersion, String storageCapacity,
+                         String cpu, String memory, String gpu, String gpuMemory,
                          String driverVersion, String soundDevice, String parserVersion,
                          ParseStatus parseStatus, LocalDateTime parsedAt) {
         this.evidenceId = evidenceId;
+        this.modelName = modelName;
+        this.osVersion = osVersion;
+        this.storageCapacity = storageCapacity;
         this.cpu = cpu;
         this.memory = memory;
         this.gpu = gpu;
@@ -75,6 +88,9 @@ public class DxdiagResult {
      */
     public void correctField(DiagnosisFieldName fieldName, String value) {
         switch (fieldName) {
+            case MODEL_NAME -> this.modelName = value;
+            case OS_VERSION -> this.osVersion = value;
+            case STORAGE_CAPACITY -> this.storageCapacity = value;
             case CPU -> this.cpu = value;
             case RAM -> this.memory = value;
             case GPU -> this.gpu = value;
