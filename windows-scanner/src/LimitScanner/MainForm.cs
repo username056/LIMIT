@@ -14,6 +14,12 @@ public sealed class MainForm : Form
     private readonly Button startButton = new() { Text = "검사 시작", Enabled = false };
     private readonly Label statusLabel = new() { AutoSize = true, Text = "웹의 6자리 코드를 입력해 주세요." };
     private readonly ProgressBar progressBar = new() { Style = ProgressBarStyle.Marquee, Visible = false };
+    private readonly Button rerunCameraButton = new() { Text = "카메라만 다시 검사", Enabled = false, AutoSize = true };
+    private readonly Button rerunMicrophoneButton = new() { Text = "마이크만 다시 검사", Enabled = false, AutoSize = true };
+    private readonly Label rerunStatusLabel = new() { AutoSize = true, MaximumSize = new Size(750, 0) };
+    private readonly Button finalSubmitButton = new() { Text = "최종 제출", Enabled = false, AutoSize = true };
+    private bool hasCompletedFullRun;
+    private bool hasFinalized;
 
     public MainForm(InspectionCoordinator coordinator)
     {
@@ -40,8 +46,8 @@ public sealed class MainForm : Form
             AutoSize = true,
             MaximumSize = new Size(750, 0),
             Font = new Font(Font.FontFamily, 10F),
-            Text = "CPU, RAM, GPU, 사운드 장치와 배터리 상태를 수집합니다. "
-                + "비밀번호, 개인 파일, 브라우저 기록과 Windows 제품 키는 수집하지 않습니다.",
+            Text = "CPU, RAM, GPU, 사운드 장치, 배터리, 카메라·마이크 상태를 수집합니다. "
+                + "비밀번호, 개인 파일, 브라우저 기록, Windows 제품 키, 촬영된 영상·음성 원본은 수집하지 않습니다.",
             Margin = new Padding(3, 0, 3, 18)
         };
         var pairingCodeLabel = new Label
@@ -67,6 +73,14 @@ public sealed class MainForm : Form
         pairingCodeTextBox.TextChanged += (_, _) => UpdateStartButton();
         consentCheckBox.CheckedChanged += (_, _) => UpdateStartButton();
         startButton.Click += StartButton_Click;
+        rerunCameraButton.Click += RerunCameraButton_Click;
+        rerunMicrophoneButton.Click += RerunMicrophoneButton_Click;
+        finalSubmitButton.Click += FinalSubmitButton_Click;
+        rerunCameraButton.Margin = new Padding(3, 22, 3, 4);
+        rerunMicrophoneButton.Margin = new Padding(3, 4, 3, 4);
+        rerunStatusLabel.Margin = new Padding(3, 4, 3, 12);
+        finalSubmitButton.Padding = new Padding(18, 8, 18, 8);
+        finalSubmitButton.Margin = new Padding(3, 4, 3, 4);
 
         var layout = new FlowLayoutPanel
         {
@@ -84,6 +98,10 @@ public sealed class MainForm : Form
         layout.Controls.Add(startButton);
         layout.Controls.Add(progressBar);
         layout.Controls.Add(statusLabel);
+        layout.Controls.Add(rerunCameraButton);
+        layout.Controls.Add(rerunMicrophoneButton);
+        layout.Controls.Add(rerunStatusLabel);
+        layout.Controls.Add(finalSubmitButton);
         Controls.Add(layout);
     }
 
@@ -107,12 +125,7 @@ public sealed class MainForm : Form
                 this,
                 progress,
                 CancellationToken.None);
-            MessageBox.Show(
-                this,
-                "검사가 완료됐습니다. 웹으로 돌아가 결과를 확인해 주세요.",
-                "검사 완료",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+            hasCompletedFullRun = true;
         }
         catch (HttpRequestException)
         {
@@ -144,12 +157,78 @@ public sealed class MainForm : Form
         }
     }
 
+    private async void RerunCameraButton_Click(object? sender, EventArgs eventArgs)
+    {
+        await RerunSingleModuleAsync(coordinator.RerunCameraAsync, "카메라");
+    }
+
+    private async void RerunMicrophoneButton_Click(object? sender, EventArgs eventArgs)
+    {
+        await RerunSingleModuleAsync(coordinator.RerunMicrophoneAsync, "마이크");
+    }
+
+    private async Task RerunSingleModuleAsync(
+        Func<IWin32Window, CancellationToken, Task> rerunAsync,
+        string moduleName)
+    {
+        SetRerunControlsEnabled(false);
+        rerunStatusLabel.Text = $"{moduleName} 재검사를 진행하고 있습니다.";
+        try
+        {
+            await rerunAsync(this, CancellationToken.None);
+            rerunStatusLabel.Text = $"{moduleName} 재검사 결과를 전송했습니다.";
+        }
+        catch (Exception)
+        {
+            rerunStatusLabel.Text = $"{moduleName} 재검사 결과를 전송하지 못했습니다. 다시 시도해 주세요.";
+        }
+        finally
+        {
+            SetRerunControlsEnabled(true);
+        }
+    }
+
+    private async void FinalSubmitButton_Click(object? sender, EventArgs eventArgs)
+    {
+        SetRerunControlsEnabled(false);
+        rerunStatusLabel.Text = "최종 제출을 진행하고 있습니다.";
+        try
+        {
+            await coordinator.CompleteInspectionAsync(CancellationToken.None);
+            hasFinalized = true;
+            MessageBox.Show(
+                this,
+                "검사가 완료됐습니다. 웹으로 돌아가 결과를 확인해 주세요.",
+                "검사 완료",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            rerunStatusLabel.Text = "최종 제출을 완료했습니다.";
+        }
+        catch (Exception)
+        {
+            rerunStatusLabel.Text = "최종 제출에 실패했습니다. 다시 시도해 주세요.";
+        }
+        finally
+        {
+            SetRerunControlsEnabled(true);
+        }
+    }
+
+    private void SetRerunControlsEnabled(bool enabled)
+    {
+        var available = enabled && hasCompletedFullRun && !hasFinalized;
+        rerunCameraButton.Enabled = available;
+        rerunMicrophoneButton.Enabled = available;
+        finalSubmitButton.Enabled = available;
+    }
+
     private void SetBusy(bool busy)
     {
         progressBar.Visible = busy;
         pairingCodeTextBox.Enabled = !busy;
         consentCheckBox.Enabled = !busy;
         startButton.Enabled = false;
+        SetRerunControlsEnabled(!busy);
         if (!busy)
         {
             UpdateStartButton();

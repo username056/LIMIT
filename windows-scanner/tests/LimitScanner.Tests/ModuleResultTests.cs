@@ -28,6 +28,26 @@ public sealed class ModuleResultTests
     }
 
     [Fact]
+    public void SerializesCameraAndMicrophonePermissionDeniedStatus()
+    {
+        var cameraResult = ModuleResult.Create(
+            ModuleTestTypes.Camera,
+            ModuleMeasurementStatuses.PermissionDenied,
+            ModuleUserResults.ReportedIssue,
+            new Dictionary<string, object?> { ["deviceName"] = "내장 카메라" },
+            "CAMERA_PERMISSION_DENIED");
+
+        var json = JsonSerializer.Serialize(cameraResult, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+
+        Assert.Equal("CAMERA", root.GetProperty("testType").GetString());
+        Assert.Equal("PERMISSION_DENIED", root.GetProperty("measurementStatus").GetString());
+        Assert.Equal("CAMERA_PERMISSION_DENIED", root.GetProperty("errorCode").GetString());
+        Assert.Equal("MICROPHONE", ModuleTestTypes.Microphone);
+    }
+
+    [Fact]
     public void PowerStateTrackerCountsOnlyActualStateChanges()
     {
         var tracker = new PowerStateTracker("CONNECTED");

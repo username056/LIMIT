@@ -5,6 +5,8 @@ public static class ModuleTestTypes
     public const string Speaker = "SPEAKER";
     public const string Display = "DISPLAY";
     public const string Charging = "CHARGING";
+    public const string Camera = "CAMERA";
+    public const string Microphone = "MICROPHONE";
 }
 
 public static class ModuleMeasurementStatuses
@@ -12,6 +14,7 @@ public static class ModuleMeasurementStatuses
     public const string Detected = "DETECTED";
     public const string NotDetected = "NOT_DETECTED";
     public const string ExecutionFailed = "EXECUTION_FAILED";
+    public const string PermissionDenied = "PERMISSION_DENIED";
 }
 
 public static class ModuleUserResults

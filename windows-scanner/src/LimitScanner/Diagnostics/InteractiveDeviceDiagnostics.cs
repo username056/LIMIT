@@ -1,10 +1,13 @@
 namespace LimitScanner.Diagnostics;
 
-public sealed class InteractiveDeviceDiagnostics(AudioOutputService audioOutputService)
+public sealed class InteractiveDeviceDiagnostics(
+    AudioOutputService audioOutputService,
+    CameraCaptureService cameraCaptureService,
+    MicrophoneInputService microphoneInputService)
 {
     public IReadOnlyList<ModuleResult> Run(IWin32Window owner)
     {
-        var results = new List<ModuleResult>(3);
+        var results = new List<ModuleResult>(5);
 
         using (var speakerForm = new SpeakerDiagnosticForm(audioOutputService))
         {
@@ -24,6 +27,23 @@ public sealed class InteractiveDeviceDiagnostics(AudioOutputService audioOutputS
             results.Add(chargingForm.Result);
         }
 
+        results.Add(RunCamera(owner));
+        results.Add(RunMicrophone(owner));
+
         return results;
+    }
+
+    public ModuleResult RunCamera(IWin32Window owner)
+    {
+        using var cameraForm = new CameraDiagnosticForm(cameraCaptureService);
+        cameraForm.ShowDialog(owner);
+        return cameraForm.Result;
+    }
+
+    public ModuleResult RunMicrophone(IWin32Window owner)
+    {
+        using var microphoneForm = new MicrophoneDiagnosticForm(microphoneInputService);
+        microphoneForm.ShowDialog(owner);
+        return microphoneForm.Result;
     }
 }
