@@ -193,7 +193,7 @@ class InspectionSessionTestResultIntegrationTests extends AbstractMySqlIntegrati
                 listingId,
                 now.plusMinutes(10),
                 now);
-        session.pair(hash(token), "integration-test", now);
+        session.pair(hash(token), "integration-test", now.plusHours(1), now);
         return sessionRepository.saveAndFlush(session).getSessionKey();
     }
 
