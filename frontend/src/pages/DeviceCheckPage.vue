@@ -74,6 +74,23 @@ const videoEl = ref(null)
 const pointerAreaEl = ref(null)
 const keyboardMissing = ref([])
 
+/*
+  돌아갈 곳은 3단계입니다.
+  ---------------------------------------------------------------------------
+  이 화면은 등록 3단계의 '실동작 자동 점검하기'로 들어옵니다. 그런데 돌아가면 늘
+  1단계가 열렸습니다. 등록 화면의 startEdit이 "수정은 기기 정보부터 훑는다"는 뜻으로
+  activeStep을 1로 못 박고 있어서입니다.
+
+  점검을 마치고 온 사람은 고치러 온 것이 아니라 하던 일을 이어서 합니다. 주소에
+  단계를 실어 보내 그 자리로 돌아가게 합니다(재검수 요청도 같은 방식으로 2단계를
+  엽니다).
+*/
+const backToRegister = {
+  name: 'seller-product-edit',
+  params: { productId },
+  query: { step: '3' },
+}
+
 const camera = useCameraCheck()
 const mic = useMicCheck()
 const speaker = useSpeakerCheck()
@@ -189,7 +206,7 @@ async function save() {
       step: draftStep.value,
       results,
     })
-    router.push({ name: 'seller-product-edit', params: { productId } })
+    router.push(backToRegister)
   } catch {
     saveError.value = '점검 결과를 저장하지 못했습니다. 다시 시도해 주세요.'
   } finally {
@@ -254,7 +271,7 @@ onBeforeUnmount(() => {
             </BaseButton>
             <BaseButton
               variant="outline"
-              :to="{ name: 'seller-product-edit', params: { productId } }"
+              :to="backToRegister"
             >
               건너뛰기
             </BaseButton>
