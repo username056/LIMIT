@@ -15,4 +15,6 @@ public interface InspectionSessionTestResultRepository
             String sessionKey, TestType testType);
 
     List<InspectionSessionTestResult> findAllBySessionKeyOrderByCreatedAtAscIdAsc(String sessionKey);
+
+    boolean existsByChecklistItemId(Long checklistItemId);
 }

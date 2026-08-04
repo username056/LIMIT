@@ -2,6 +2,7 @@ package com.c203.limit.domain.inspection.entity;
 
 import com.c203.limit.domain.inspection.enums.AutomationType;
 import com.c203.limit.domain.inspection.enums.ChecklistItemCompletionStatus;
+import com.c203.limit.domain.inspection.enums.ChecklistItemOrigin;
 import com.c203.limit.domain.inspection.enums.DeviceCheckResult;
 import com.c203.limit.domain.inspection.enums.DiagnosisFieldName;
 import com.c203.limit.domain.inspection.enums.EvidenceType;
@@ -33,6 +34,19 @@ public class ListingChecklistItem {
 
     @Column(name = "item_code", nullable = false, length = 30)
     private String itemCode;
+
+    /**
+     * 이 항목이 기본 항목인지 판매자가 선택한 기능 항목인지의 생성 시점 스냅샷. 등록 이후
+     * 카테고리 표준 템플릿이 개정돼도 이 값은 바뀌지 않는다 — confirmedFeatures 수정 시 삭제
+     * 대상을 판별하는 유일한 기준이다.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "item_origin", nullable = false, length = 30)
+    private ChecklistItemOrigin itemOrigin;
+
+    /** item_origin이 CONFIRMED_FEATURE일 때만 값이 있다. */
+    @Column(name = "feature_code", length = 30)
+    private String featureCode;
 
     @Column(nullable = false, length = 100)
     private String name;
@@ -102,10 +116,26 @@ public class ListingChecklistItem {
     private String manualCpu;
 
     public static ListingChecklistItem createFromTemplateItem(Long listingId, ChecklistTemplateItem templateItem) {
+        return create(listingId, templateItem, ChecklistItemOrigin.BASE, null);
+    }
+
+    /** 판매자가 확정한 선택 기능에 대응하는 항목을 만든다. */
+    public static ListingChecklistItem createConfirmedFeatureItem(
+            Long listingId, ChecklistTemplateItem templateItem, String featureCode) {
+        return create(listingId, templateItem, ChecklistItemOrigin.CONFIRMED_FEATURE, featureCode);
+    }
+
+    private static ListingChecklistItem create(
+            Long listingId,
+            ChecklistTemplateItem templateItem,
+            ChecklistItemOrigin origin,
+            String featureCode) {
         ListingChecklistItem item = new ListingChecklistItem();
         item.listingId = listingId;
         item.templateItem = templateItem;
         item.itemCode = templateItem.getItemCode();
+        item.itemOrigin = origin;
+        item.featureCode = featureCode;
         item.name = templateItem.getName();
         item.captureGuide = templateItem.getCaptureGuide();
         item.evidenceType = templateItem.getEvidenceType();

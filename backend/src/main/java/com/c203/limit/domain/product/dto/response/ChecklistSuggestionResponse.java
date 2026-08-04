@@ -17,7 +17,9 @@ public record ChecklistSuggestionResponse(
         @Schema(
                         description = "선택 시 생성되는 항목의 증빙 유형",
                         allowableValues = {"PHOTO", "VIDEO", "DIAGNOSTIC_FILE", "SELLER_CONFIRMATION"})
-                String evidenceType) {
+                String evidenceType,
+        @Schema(description = "이 기능을 선택하면 생성되는 체크리스트 항목 코드. 상품 수정 시 기존 항목과 대조해 선택 상태를 복원하는 데 사용한다.")
+                String itemCode) {
 
     public static ChecklistSuggestionResponse from(ChecklistSuggestion suggestion) {
         return new ChecklistSuggestionResponse(
@@ -28,6 +30,7 @@ public record ChecklistSuggestionResponse(
                 suggestion.checkGuide(),
                 suggestion.sourceUrl(),
                 suggestion.sourceTitle(),
-                suggestion.evidenceType().name());
+                suggestion.evidenceType().name(),
+                suggestion.itemCode());
     }
 }

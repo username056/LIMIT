@@ -3,7 +3,9 @@ package com.c203.limit.domain.product.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -14,19 +16,26 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.c203.limit.domain.inspection.repository.ListingChecklistCountProjection;
+import com.c203.limit.domain.inspection.agent.InspectionSessionTestResultRepository;
+import com.c203.limit.domain.inspection.checklist.ChecklistGenerationService;
 import com.c203.limit.domain.inspection.checklist.GeneratedChecklist;
+import com.c203.limit.domain.inspection.checklist.GeneratedChecklistItem;
 import com.c203.limit.domain.inspection.checklist.LaptopChecklistPolicy;
 import com.c203.limit.domain.inspection.checklist.LaptopFeatureCode;
 import com.c203.limit.domain.inspection.entity.ChecklistTemplate;
 import com.c203.limit.domain.inspection.entity.ChecklistTemplateItem;
+import com.c203.limit.domain.inspection.entity.ListingChecklistItem;
 import com.c203.limit.domain.inspection.enums.AutomationType;
 import com.c203.limit.domain.inspection.enums.ChecklistItemCompletionStatus;
+import com.c203.limit.domain.inspection.enums.ChecklistItemOrigin;
 import com.c203.limit.domain.inspection.enums.ChecklistTemplateStatus;
 import com.c203.limit.domain.inspection.enums.DeviceType;
 import com.c203.limit.domain.inspection.enums.EvidenceType;
 import com.c203.limit.domain.inspection.repository.ChecklistTemplateItemRepository;
 import com.c203.limit.domain.inspection.repository.ChecklistTemplateRepository;
+import com.c203.limit.domain.inspection.repository.EvidenceRepository;
 import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
+import com.c203.limit.domain.inspection.repository.ReinspectionRequestItemRepository;
 import com.c203.limit.domain.product.dto.request.CreateProductRequest;
 import com.c203.limit.domain.product.dto.request.TransitionProductStatusRequest;
 import com.c203.limit.domain.product.dto.request.UpdateProductRequest;
@@ -40,8 +49,10 @@ import com.c203.limit.domain.product.repository.ListingImageRepository;
 import com.c203.limit.domain.product.repository.ListingRepository;
 import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
 import com.c203.limit.domain.product.repository.ListingThumbnailProjection;
+import com.c203.limit.domain.product.repository.MediaUploadSessionRepository;
 import com.c203.limit.domain.product.repository.ProductEngagementReader;
 import com.c203.limit.domain.product.repository.ProductEngagementReader.ProductEngagement;
+import com.c203.limit.domain.rtc.repository.RtcSessionChecklistResultRepository;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -49,6 +60,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
@@ -72,6 +84,12 @@ class ProductApplicationServiceTests {
     @Mock ListingImageRepository imageRepository;
     @Mock ProductViewCountDispatcher viewCountDispatcher;
     @Mock ProductEngagementReader engagementReader;
+    @Mock ChecklistGenerationService checklistGenerationService;
+    @Mock EvidenceRepository evidenceRepository;
+    @Mock ReinspectionRequestItemRepository reinspectionRequestItemRepository;
+    @Mock RtcSessionChecklistResultRepository rtcSessionChecklistResultRepository;
+    @Mock MediaUploadSessionRepository mediaUploadSessionRepository;
+    @Mock InspectionSessionTestResultRepository inspectionSessionTestResultRepository;
     ProductApplicationService service;
 
     @BeforeEach
@@ -79,7 +97,9 @@ class ProductApplicationServiceTests {
         service = new ProductApplicationService(
                 listingRepository, categoryRepository, templateRepository, templateItemRepository,
                 checklistItemRepository, statusHistoryRepository, imageRepository, null,
-                viewCountDispatcher, engagementReader);
+                checklistGenerationService, evidenceRepository, reinspectionRequestItemRepository,
+                rtcSessionChecklistResultRepository, mediaUploadSessionRepository,
+                inspectionSessionTestResultRepository, viewCountDispatcher, engagementReader);
         // 상세를 만드는 모든 경로가 관심도 수치를 읽는다. 이 테스트들이 확인하는 것은
         // 그 수치가 아니라 모델명·상태 처리라, 값은 0으로 두고 NPE만 막는다.
         lenient().when(engagementReader.findByListingId(anyLong()))
@@ -570,6 +590,285 @@ class ProductApplicationServiceTests {
                         BusinessException.class,
                         exception -> assertThat(exception.getErrorCode())
                                 .isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+    }
+
+    @Test
+    void updateAddsConfirmedFeatureItemToOwnedDraftTemplate() {
+        Listing listing = listingWithDeviceModel();
+        ChecklistTemplate draftTemplate = ChecklistTemplate.createDraft(101L, 3);
+        ReflectionTestUtils.setField(draftTemplate, "id", 501L);
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNullForUpdate(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(checklistGenerationService.resolveConfirmedFeatureItems(eq(101L), eq(Set.of("FINGERPRINT"))))
+                .thenReturn(Map.of("FINGERPRINT", generatedItem("PHN-FTR-FP", "FINGERPRINT")));
+        when(checklistItemRepository.findByListingIdOrderByDisplayOrderAsc(1001L))
+                .thenReturn(List.of());
+        when(templateRepository.findById(501L)).thenReturn(Optional.of(draftTemplate));
+        when(listingRepository.countByChecklistTemplateId(501L)).thenReturn(1L);
+        when(templateItemRepository.saveAllAndFlush(anyList()))
+                .thenAnswer(invocation -> {
+                    List<ChecklistTemplateItem> items = invocation.getArgument(0);
+                    items.forEach(item -> ReflectionTestUtils.setField(item, "id", 9001L));
+                    return items;
+                });
+
+        service.update(55L, 1001L, updateRequestWithFeatures(Set.of("FINGERPRINT")));
+
+        verify(templateRepository, never()).saveAndFlush(any(ChecklistTemplate.class));
+        verify(checklistItemRepository).saveAll(argThat((List<ListingChecklistItem> saved) ->
+                saved.size() == 1
+                        && saved.get(0).getItemCode().equals("PHN-FTR-FP")
+                        && saved.get(0).getItemOrigin() == ChecklistItemOrigin.CONFIRMED_FEATURE
+                        && saved.get(0).getFeatureCode().equals("FINGERPRINT")));
+        verify(checklistItemRepository, never()).deleteAll(anyList());
+    }
+
+    @Test
+    void updatePromotesSharedPublishedTemplateToBespokeDraftWhenFeatureAdded() {
+        Listing listing = listingWithDeviceModel();
+        ChecklistTemplate publishedTemplate = template();
+        ChecklistTemplate bespokeDraft = ChecklistTemplate.createDraft(101L, 3);
+        ReflectionTestUtils.setField(bespokeDraft, "id", 901L);
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNullForUpdate(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(checklistGenerationService.resolveConfirmedFeatureItems(eq(101L), eq(Set.of("FINGERPRINT"))))
+                .thenReturn(Map.of("FINGERPRINT", generatedItem("PHN-FTR-FP", "FINGERPRINT")));
+        when(checklistItemRepository.findByListingIdOrderByDisplayOrderAsc(1001L))
+                .thenReturn(List.of());
+        when(templateRepository.findById(501L)).thenReturn(Optional.of(publishedTemplate));
+        when(templateRepository.saveAndFlush(any(ChecklistTemplate.class))).thenReturn(bespokeDraft);
+        when(templateItemRepository.saveAllAndFlush(anyList()))
+                .thenAnswer(invocation -> {
+                    List<ChecklistTemplateItem> items = invocation.getArgument(0);
+                    items.forEach(item -> ReflectionTestUtils.setField(item, "id", 9002L));
+                    return items;
+                });
+
+        service.update(55L, 1001L, updateRequestWithFeatures(Set.of("FINGERPRINT")));
+
+        verify(templateRepository).saveAndFlush(argThat(
+                (ChecklistTemplate candidate) -> candidate.getStatus() == ChecklistTemplateStatus.DRAFT));
+        assertThat(listing.getChecklistTemplateId()).isEqualTo(901L);
+        verify(listingRepository, never()).countByChecklistTemplateId(any());
+        // 새 전용 템플릿에는 이번에 추가되는 기능 정의만 필요하다 — 기본 항목은
+        // listing_checklist_item.item_origin 스냅샷이 이미 보존한다.
+        verify(templateItemRepository).saveAllAndFlush(argThat((List<ChecklistTemplateItem> items) ->
+                items.size() == 1 && items.get(0).getItemCode().equals("PHN-FTR-FP")));
+        verify(checklistItemRepository).saveAll(argThat((List<ListingChecklistItem> saved) ->
+                saved.size() == 1
+                        && saved.get(0).getItemCode().equals("PHN-FTR-FP")
+                        && saved.get(0).getItemOrigin() == ChecklistItemOrigin.CONFIRMED_FEATURE));
+    }
+
+    @Test
+    void updateRemovesUncheckedFeatureItemWithoutEvidence() {
+        Listing listing = listingWithDeviceModel();
+        ChecklistTemplateItem templateItem = ChecklistTemplateItem.create(
+                template(), "PHN-FTR-FP", "지문 인식", "확인", "가이드", EvidenceType.VIDEO,
+                AutomationType.NONE, true, 2);
+        ListingChecklistItem existing = ListingChecklistItem.createConfirmedFeatureItem(
+                1001L, templateItem, "FINGERPRINT");
+        ReflectionTestUtils.setField(existing, "id", 7001L);
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNullForUpdate(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(checklistGenerationService.resolveConfirmedFeatureItems(eq(101L), eq(Set.of())))
+                .thenReturn(Map.of());
+        when(checklistItemRepository.findByListingIdOrderByDisplayOrderAsc(1001L))
+                .thenReturn(List.of(existing));
+
+        service.update(55L, 1001L, updateRequestWithFeatures(Set.of()));
+
+        verify(checklistItemRepository).deleteAll(List.of(existing));
+        verify(checklistItemRepository, never()).saveAll(anyList());
+        // toAddFeatures가 비어 있으면 템플릿을 건드릴 필요가 없다.
+        verify(templateRepository, never()).findById(any());
+    }
+
+    @Test
+    void updateBlocksRemovalWhenChecklistItemHasEvidence() {
+        Listing listing = listingWithDeviceModel();
+        ChecklistTemplateItem templateItem = ChecklistTemplateItem.create(
+                template(), "PHN-FTR-FP", "지문 인식", "확인", "가이드", EvidenceType.VIDEO,
+                AutomationType.NONE, true, 2);
+        ListingChecklistItem existing = ListingChecklistItem.createConfirmedFeatureItem(
+                1001L, templateItem, "FINGERPRINT");
+        ReflectionTestUtils.setField(existing, "id", 7002L);
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNullForUpdate(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(checklistGenerationService.resolveConfirmedFeatureItems(eq(101L), eq(Set.of())))
+                .thenReturn(Map.of());
+        when(checklistItemRepository.findByListingIdOrderByDisplayOrderAsc(1001L))
+                .thenReturn(List.of(existing));
+        when(evidenceRepository.existsByListingChecklistItem_Id(7002L)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.update(55L, 1001L, updateRequestWithFeatures(Set.of())))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.CHECKLIST_ITEM_LOCKED_BY_EVIDENCE));
+        verify(checklistItemRepository, never()).deleteAll(anyList());
+        verify(checklistItemRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    void updateBlocksRemovalWhenMediaUploadSessionReferencesItem() {
+        Listing listing = listingWithDeviceModel();
+        ChecklistTemplateItem templateItem = ChecklistTemplateItem.create(
+                template(), "PHN-FTR-FP", "지문 인식", "확인", "가이드", EvidenceType.VIDEO,
+                AutomationType.NONE, true, 2);
+        ListingChecklistItem existing = ListingChecklistItem.createConfirmedFeatureItem(
+                1001L, templateItem, "FINGERPRINT");
+        ReflectionTestUtils.setField(existing, "id", 7003L);
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNullForUpdate(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(checklistGenerationService.resolveConfirmedFeatureItems(eq(101L), eq(Set.of())))
+                .thenReturn(Map.of());
+        when(checklistItemRepository.findByListingIdOrderByDisplayOrderAsc(1001L))
+                .thenReturn(List.of(existing));
+        when(mediaUploadSessionRepository.existsByChecklistItem_Id(7003L)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.update(55L, 1001L, updateRequestWithFeatures(Set.of())))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.CHECKLIST_ITEM_LOCKED_BY_EVIDENCE));
+    }
+
+    @Test
+    void updateBlocksRemovalWhenInspectionSessionTestResultReferencesItem() {
+        Listing listing = listingWithDeviceModel();
+        ChecklistTemplateItem templateItem = ChecklistTemplateItem.create(
+                template(), "PHN-FTR-FP", "지문 인식", "확인", "가이드", EvidenceType.VIDEO,
+                AutomationType.NONE, true, 2);
+        ListingChecklistItem existing = ListingChecklistItem.createConfirmedFeatureItem(
+                1001L, templateItem, "FINGERPRINT");
+        ReflectionTestUtils.setField(existing, "id", 7005L);
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNullForUpdate(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(checklistGenerationService.resolveConfirmedFeatureItems(eq(101L), eq(Set.of())))
+                .thenReturn(Map.of());
+        when(checklistItemRepository.findByListingIdOrderByDisplayOrderAsc(1001L))
+                .thenReturn(List.of(existing));
+        when(inspectionSessionTestResultRepository.existsByChecklistItemId(7005L)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.update(55L, 1001L, updateRequestWithFeatures(Set.of())))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.CHECKLIST_ITEM_LOCKED_BY_EVIDENCE));
+    }
+
+    @Test
+    void updateIsNoOpWhenConfirmedFeaturesUnchanged() {
+        Listing listing = listingWithDeviceModel();
+        ChecklistTemplateItem templateItem = ChecklistTemplateItem.create(
+                template(), "PHN-FTR-FP", "지문 인식", "확인", "가이드", EvidenceType.VIDEO,
+                AutomationType.NONE, true, 2);
+        ListingChecklistItem existing = ListingChecklistItem.createConfirmedFeatureItem(
+                1001L, templateItem, "FINGERPRINT");
+        ReflectionTestUtils.setField(existing, "id", 7004L);
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNullForUpdate(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(checklistGenerationService.resolveConfirmedFeatureItems(eq(101L), eq(Set.of("FINGERPRINT"))))
+                .thenReturn(Map.of("FINGERPRINT", generatedItem("PHN-FTR-FP", "FINGERPRINT")));
+        when(checklistItemRepository.findByListingIdOrderByDisplayOrderAsc(1001L))
+                .thenReturn(List.of(existing));
+
+        service.update(55L, 1001L, updateRequestWithFeatures(Set.of("FINGERPRINT")));
+
+        verify(checklistItemRepository, never()).saveAll(anyList());
+        verify(checklistItemRepository, never()).deleteAll(anyList());
+        verify(templateRepository, never()).findById(any());
+    }
+
+    @Test
+    void updateAssignsNewFeatureItemDisplayOrderPastExistingGaps() {
+        Listing listing = listingWithDeviceModel();
+        ChecklistTemplate draftTemplate = ChecklistTemplate.createDraft(101L, 3);
+        ReflectionTestUtils.setField(draftTemplate, "id", 501L);
+        ChecklistTemplateItem baseTemplateItem = ChecklistTemplateItem.create(
+                draftTemplate, "EXT-01", "외관", "확인", "가이드", EvidenceType.PHOTO,
+                AutomationType.NONE, true, 5);
+        ListingChecklistItem baseItem =
+                ListingChecklistItem.createFromTemplateItem(1001L, baseTemplateItem);
+        ReflectionTestUtils.setField(baseItem, "id", 7010L);
+        ChecklistTemplateItem featureTemplateItem = ChecklistTemplateItem.create(
+                draftTemplate, "PHN-FTR-FP", "지문 인식", "확인", "가이드", EvidenceType.VIDEO,
+                AutomationType.NONE, true, 9);
+        ListingChecklistItem featureItem = ListingChecklistItem.createConfirmedFeatureItem(
+                1001L, featureTemplateItem, "FINGERPRINT");
+        ReflectionTestUtils.setField(featureItem, "id", 7011L);
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNullForUpdate(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(checklistGenerationService.resolveConfirmedFeatureItems(eq(101L), eq(Set.of("CAMERA"))))
+                .thenReturn(Map.of("CAMERA", generatedItem("PHN-FTR-CAM", "CAMERA")));
+        when(checklistItemRepository.findByListingIdOrderByDisplayOrderAsc(1001L))
+                .thenReturn(List.of(baseItem, featureItem));
+        when(templateRepository.findById(501L)).thenReturn(Optional.of(draftTemplate));
+        when(listingRepository.countByChecklistTemplateId(501L)).thenReturn(1L);
+        when(templateItemRepository.saveAllAndFlush(anyList()))
+                .thenAnswer(invocation -> {
+                    List<ChecklistTemplateItem> items = invocation.getArgument(0);
+                    items.forEach(item -> ReflectionTestUtils.setField(item, "id", 9010L));
+                    return items;
+                });
+
+        service.update(55L, 1001L, updateRequestWithFeatures(Set.of("CAMERA")));
+
+        // 기존 항목의 최댓값(9)보다 큰 순번을 받아야 한다 — 개수 기반(currentItems.size()+1=3)이면
+        // 기존 displayOrder 9와 겹칠 수 있다.
+        verify(checklistItemRepository).saveAll(argThat((List<ListingChecklistItem> saved) ->
+                saved.size() == 1 && saved.get(0).getDisplayOrder() == 10));
+        verify(checklistItemRepository).deleteAll(List.of(featureItem));
+    }
+
+    @Test
+    void updateRejectsConfirmedFeaturesForCustomModelListing() {
+        Listing listing = listingWithDeviceModel();
+        listing.applyCustomModel("Samsung", "직접 입력 모델");
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+
+        assertThatThrownBy(() -> service.update(55L, 1001L, updateRequestWithFeatures(Set.of("FINGERPRINT"))))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.CUSTOM_MODEL_CHECKLIST_EDIT_NOT_SUPPORTED));
+        verify(checklistGenerationService, never()).resolveConfirmedFeatureItems(any(), any());
+    }
+
+    private UpdateProductRequest updateRequestWithFeatures(Set<String> features) {
+        UpdateProductRequest request = new UpdateProductRequest();
+        request.setConfirmedFeatures(features);
+        return request;
+    }
+
+    private Listing listingWithDeviceModel() {
+        Listing listing = listing();
+        ReflectionTestUtils.setField(listing, "deviceModelId", 101L);
+        return listing;
+    }
+
+    private GeneratedChecklistItem generatedItem(String itemCode, String featureCode) {
+        return new GeneratedChecklistItem(
+                itemCode, "지문 인식", "확인", "가이드", EvidenceType.VIDEO, AutomationType.NONE, null,
+                true, 1, featureCode, null, null, null);
     }
 
     private Category model() {

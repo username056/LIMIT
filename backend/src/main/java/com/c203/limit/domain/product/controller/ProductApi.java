@@ -53,12 +53,13 @@ public interface ProductApi {
     @PostMapping(path = "/api/v1/products", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     ResponseEntity<ApiResponse<ProductCreatedResponse>> createProduct(@Valid @RequestBody CreateProductRequest request);
 
-    @Operation(operationId = "product02", summary = "상품 수정", description = "본인 상품을 부분 수정합니다. 초안·판매 중·숨김 상태에서 수정할 수 있고, 예약 이후에는 수정할 수 없습니다.", security = @SecurityRequirement(name = "bearerAuth"))
+    @Operation(operationId = "product02", summary = "상품 수정", description = "본인 상품을 부분 수정합니다. 초안·판매 중·숨김 상태에서 수정할 수 있고, 예약 이후에는 수정할 수 없습니다. confirmedFeatures를 보내면 선택 기능 체크리스트 항목도 함께 반영합니다.", security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "상품 수정 성공", content = @Content(schema = @Schema(implementation = ProductDetailApiResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "VALIDATION_FAILED / CUSTOM_MODEL_CHECKLIST_EDIT_NOT_SUPPORTED"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "FORBIDDEN"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "PRODUCT_NOT_FOUND"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "PRODUCT_EDIT_NOT_ALLOWED")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "PRODUCT_EDIT_NOT_ALLOWED / CHECKLIST_ITEM_LOCKED_BY_EVIDENCE")
     })
     @PatchMapping(path = "/api/v1/products/{productId}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     ResponseEntity<ApiResponse<ProductDetailResponse>> updateProduct(

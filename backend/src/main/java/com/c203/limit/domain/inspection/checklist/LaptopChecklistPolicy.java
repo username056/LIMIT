@@ -51,6 +51,14 @@ public class LaptopChecklistPolicy {
         return definition.evidenceType();
     }
 
+    public String itemCode(LaptopFeatureCode featureCode) {
+        ItemDefinition definition = featureItems.get(featureCode);
+        if (definition == null) {
+            throw new IllegalArgumentException("unsupported laptop feature");
+        }
+        return definition.code();
+    }
+
     public boolean supports(LaptopFeatureCode featureCode) {
         return featureItems.containsKey(featureCode);
     }

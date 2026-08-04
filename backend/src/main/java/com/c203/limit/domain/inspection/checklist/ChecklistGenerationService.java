@@ -60,6 +60,47 @@ public class ChecklistGenerationService {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * confirmedFeatures 각각에 대응하는 체크리스트 항목 정의를 결정론적으로 돌려준다. AI 리서치나
+     * 외부 호출이 전혀 없다 — 카탈로그/정책(DeviceChecklistFeatureCatalog, LaptopChecklistPolicy)만
+     * 사용해서, 상품 수정 시 선택 기능을 반영하는 짧은 트랜잭션 안에서 안전하게 호출할 수 있다.
+     * "추천 기능 목록을 새로 만드는" 책임은 generateForModel/generateSnapshotForModel에 남긴다.
+     */
+    public Map<String, GeneratedChecklistItem> resolveConfirmedFeatureItems(
+            Long deviceModelId, Set<String> confirmedFeatures) {
+        Category model = activeModel(deviceModelId);
+        Set<String> normalized = normalizeFeatureCodes(model.getDeviceType(), confirmedFeatures);
+        if (normalized.isEmpty()) {
+            return Map.of();
+        }
+        List<GeneratedChecklistItem> items = additionalItems(model, normalized, 1);
+        if (items.size() != normalized.size()) {
+            // 카탈로그가 지원하지 않는 feature 코드가 섞여 있었다.
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+        return items.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        GeneratedChecklistItem::featureCode, item -> item));
+    }
+
+    private Set<String> normalizeFeatureCodes(DeviceType deviceType, Set<String> confirmedFeatures) {
+        if (confirmedFeatures == null || confirmedFeatures.isEmpty()) {
+            return Set.of();
+        }
+        Set<String> normalized = new LinkedHashSet<>();
+        for (String value : confirmedFeatures) {
+            if (value == null || value.isBlank()) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+            }
+            normalized.add(value.trim().toUpperCase(Locale.ROOT));
+        }
+        if (normalized.size() > DeviceChecklistFeatureCatalog.MAX_ADDITIONAL_ITEMS
+                || normalized.stream().anyMatch(code -> !featureCatalog.supports(deviceType, code))) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+        return normalized;
+    }
+
     public GeneratedChecklist generateForModel(
             Long deviceModelId, Set<String> confirmedFeatures) {
         Category model = activeModel(deviceModelId);
@@ -408,8 +449,11 @@ public class ChecklistGenerationService {
                 .limit(DeviceChecklistFeatureCatalog.MAX_ADDITIONAL_ITEMS)
                 .forEach(suggestion -> unique.putIfAbsent(
                         suggestion.featureCode().trim().toUpperCase(Locale.ROOT),
-                        suggestion.withEvidenceType(evidenceType(
-                                deviceType, suggestion.featureCode()))));
+                        suggestion
+                                .withEvidenceType(evidenceType(
+                                        deviceType, suggestion.featureCode()))
+                                .withItemCode(itemCode(
+                                        deviceType, suggestion.featureCode()))));
         return List.copyOf(unique.values());
     }
 
@@ -421,6 +465,18 @@ public class ChecklistGenerationService {
         return featureCatalog
                 .find(deviceType, normalized)
                 .map(DeviceChecklistFeatureCatalog.FeatureDefinition::evidenceType)
+                .orElseThrow();
+    }
+
+    /** 이 feature를 확정했을 때 실제로 생성되는 체크리스트 항목 코드. 카탈로그/정책에서 결정론적으로 파생한다. */
+    private String itemCode(DeviceType deviceType, String featureCode) {
+        String normalized = featureCode.trim().toUpperCase(Locale.ROOT);
+        if (deviceType == DeviceType.LAPTOP) {
+            return laptopPolicy.itemCode(LaptopFeatureCode.valueOf(normalized));
+        }
+        return featureCatalog
+                .find(deviceType, normalized)
+                .map(DeviceChecklistFeatureCatalog.FeatureDefinition::itemCode)
                 .orElseThrow();
     }
 
