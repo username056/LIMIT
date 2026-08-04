@@ -200,6 +200,10 @@ public enum ErrorCode {
     INSPECTION_AGENT_UNAUTHORIZED("INS037", HttpStatus.UNAUTHORIZED, "진단 프로그램 인증이 유효하지 않습니다."),
     INSPECTION_TARGET_NOT_FOUND("INS038", HttpStatus.NOT_FOUND, "자동 진단 대상 체크리스트 항목을 찾을 수 없습니다."),
     INSPECTION_SESSION_INVALID_STATE("INS039", HttpStatus.CONFLICT, "현재 상태에서는 자동 검사를 처리할 수 없습니다."),
+    INSPECTION_TEST_RESULT_INVALID(
+            "INS040", HttpStatus.BAD_REQUEST, "선택검사 측정 상태와 사용자 결과 조합이 유효하지 않습니다."),
+    INSPECTION_TEST_RESULT_IDEMPOTENCY_CONFLICT(
+            "INS041", HttpStatus.CONFLICT, "동일한 선택검사 결과 ID로 다른 내용이 이미 제출되었습니다."),
     LISTING_IMAGE_NOT_FOUND("PRD015", HttpStatus.NOT_FOUND, "상품 이미지를 찾을 수 없습니다."),
     LISTING_IMAGE_LIMIT_EXCEEDED(
             "PRD016", HttpStatus.UNPROCESSABLE_ENTITY, "상품 이미지는 최대 10개까지 등록할 수 있습니다.");

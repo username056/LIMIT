@@ -42,6 +42,7 @@ class DatabaseSchemaIntegrationTests extends AbstractMySqlIntegrationTest {
         assertThat(tableExists("admin_action_log")).isTrue();
         assertThat(tableExists("listing")).isTrue();
         assertThat(tableExists("checklist_template_item")).isTrue();
+        assertThat(tableExists("inspection_session_test_result")).isTrue();
     }
 
     @Test

@@ -6,8 +6,9 @@
 프로그램이 Windows의 `dxdiag.exe`와 `powercfg.exe`로 진단 파일을 생성해 기존 증거·파싱
 흐름으로 업로드한다. 판매자 JWT는 프로그램에 전달하지 않는다.
 
-검사 세션은 `inspection_session` 테이블에 저장한다. 연결 코드와 에이전트 토큰은 원문 대신
-SHA-256 해시만 저장하며 세션 상태 변경에는 JPA 낙관적 락을 사용한다.
+검사 세션은 `inspection_session`, 선택검사 이력은 `inspection_session_test_result` 테이블에
+저장한다. 연결 코드와 에이전트 토큰은 원문 대신 SHA-256 해시만 저장한다. 선택검사 제출은
+세션 행을 잠가 같은 세션의 멱등성 확인과 재검사 차수 계산을 직렬화한다.
 
 ## 웹 API
 
@@ -44,13 +45,12 @@ SHA-256 해시만 저장하며 세션 상태 변경에는 JPA 낙관적 락을 �
 항목 ID를 신뢰하지 않고 해당 매물에서 `FILE_PARSE`와 parserType이 일치하는 항목을 직접
 찾는다.
 
-### 선택검사 결과 제출 (현재 스텁)
+### 선택검사 결과 제출
 
-`test-results` 제출 API는 요청 계약(필드·enum)만 확정된 상태이며, 결과를 저장하지
-않는다. 세션 인증과 상태(PAIRED/UPLOADING)만 검증한 뒤 요청을 그대로 echo해서
-`200 OK`로 응답하고, 조회 API는 항상 빈 목록을 반환한다. 실제 저장·멱등성·재시도·
-체크리스트 반영(`ListingChecklistItem.applyDeviceCheckResult()`)은 별도 세션에서
-구현하며, 그 전까지는 이 API를 "결과가 영구 저장된다"는 근거로 쓰지 않는다.
+`test-results` 제출 API는 세션 인증과 상태(`PAIRED`/`UPLOADING`)를 검증한 뒤 결과와
+재검사 이력을 영구 저장한다. 원본 영상·음성은 저장하지 않으며 `rawDataSaved`는 항상
+`false`다. `testedAt`은 동일 시각을 유지한 채 UTC 마이크로초 정밀도로 정규화한다. 조회
+API는 서버 저장 순서대로 전체 시도 이력을 반환한다.
 
 요청:
 
@@ -69,6 +69,41 @@ SHA-256 해시만 저장하며 세션 상태 변경에는 JPA 낙관적 락을 �
 `testType`은 `CAMERA`, `MICROPHONE`, `KEYBOARD`, `TOUCHPAD`, `SPEAKER`, `DISPLAY`,
 `CHARGING` 중 하나다. `attemptNo`, `checklistItemId`, `listingId`, `rawDataSaved`는
 서버가 결정하므로 요청에 포함하지 않는다.
+
+`measurementStatus`는 `DETECTED`, `NOT_DETECTED`, `PERMISSION_DENIED`, `UNSUPPORTED`,
+`EXECUTION_FAILED`, `NOT_EXECUTED` 중 하나다. 상태와 사용자 결과 조합은 다음 규칙을
+따른다.
+
+- `NOT_EXECUTED`는 `SKIPPED`와 함께만 사용할 수 있다.
+- `SKIPPED`는 `NOT_EXECUTED`와 함께만 사용할 수 있다.
+- `USER_CONFIRMED`는 `DETECTED`와 함께만 사용할 수 있다.
+- `userResult: null`은 `CHARGING`만 허용한다. 이 경우 `DETECTED`는 체크리스트
+  `SUCCESS`, 그 외 측정 상태는 `FAILED`로 반영한다.
+- 실행된 검사에서 `USER_REPORTED_ISSUE`는 체크리스트 `FAILED`로 반영한다.
+
+서버는 `(session_key, client_result_id)`로 멱등 처리한다.
+
+- 최초 UUID 제출: 결과 생성 후 `201 Created`
+- 같은 UUID와 같은 payload 재전송: 기존 결과를 반환하고 `200 OK`
+- 같은 UUID와 다른 payload 재전송: `409 INSPECTION_TEST_RESULT_IDEMPOTENCY_CONFLICT`
+- 새 UUID로 같은 `testType` 재검사: `(session_key, test_type)` 기준 `attemptNo` 증가
+
+응답에는 서버가 결정한 `listingId`와 nullable `checklistItemId`가 포함된다. 매물에 매핑된
+선택 기능 항목이 없으면 이력만 저장하고 `checklistItemId`는 `null`로 반환한다.
+
+| testType | checklist itemCode |
+| --- | --- |
+| CAMERA | `LAP-FTR-CAM` |
+| MICROPHONE | `LAP-FTR-MIC` |
+| KEYBOARD | `LAP-KBD-005` |
+| TOUCHPAD | `LAP-PAD-006` |
+| SPEAKER | `LAP-FTR-SPK` |
+| DISPLAY | `LAP-DSP-003` |
+| CHARGING | `LAP-CHG-007` |
+
+`DISPLAY`, `CHARGING` 결과는 Scanner 제출값으로 기존 영상 증빙을 대체해 최신 체크리스트
+상태에 반영한다. 구매자에게 선택검사 상세 측정값을 제공하는 별도 통합 API는 MVP 범위에
+포함하지 않는다.
 
 ## 프로그램 빌드
 
