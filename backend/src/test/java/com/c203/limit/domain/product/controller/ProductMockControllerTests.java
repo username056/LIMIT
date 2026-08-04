@@ -130,6 +130,10 @@ class ProductMockControllerTests {
     @MockitoBean
     com.c203.limit.domain.chat.repository.ChatRoomContextReader chatRoomContextReader;
 
+    // JdbcClient를 쓰는 리더는 DataSource 자동설정을 끈 이 컨텍스트에서 만들 수 없다.
+    @MockitoBean
+    com.c203.limit.domain.product.repository.ProductEngagementReader productEngagementReader;
+
     @MockitoBean
     ListingChatReader listingChatReader;
 
@@ -326,12 +330,16 @@ class ProductMockControllerTests {
         when(productApplicationService.findPublicDetail(1001L))
                 .thenReturn(new ProductDetailResponse(
                         1001L, 55L, null, null, "테스트 상품", null, null, "ON_SALE", null,
-                        null, null, null, null));
+                        null, null, null, null, 128L, 12L, 3L));
         mockMvc.perform(get("/api/v1/products/1001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.productId").value(1001))
                 .andExpect(jsonPath("$.data.name").value("테스트 상품"))
-                .andExpect(jsonPath("$.data.status").value("ON_SALE"));
+                .andExpect(jsonPath("$.data.status").value("ON_SALE"))
+                // 구매자가 관심도를 가늠하는 값 셋도 상세에 함께 실어 보낸다.
+                .andExpect(jsonPath("$.data.viewCount").value(128))
+                .andExpect(jsonPath("$.data.favoriteCount").value(12))
+                .andExpect(jsonPath("$.data.chatRoomCount").value(3));
     }
 
     @Test

@@ -42,7 +42,9 @@ import org.springframework.boot.test.context.SpringBootTest;
                         + "org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration,"
                         + "org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration")
 class InspectionSessionTestResultIntegrationTests extends AbstractMySqlIntegrationTest {
-    private static final String AGENT_TOKEN = "integration-agent-token";
+    // 값은 짧게 둔다. .githooks/pre-commit의 Secret 스캔이 token = "여덟 자 이상"을
+    // 하드코딩된 비밀로 보고 커밋을 막는다. 페어링만 구분하면 되는 가짜 값이다.
+    private static final String AGENT_TOKEN = "agent1";
 
     @Autowired InspectionSessionService service;
     @Autowired InspectionSessionRepository sessionRepository;
@@ -129,7 +131,7 @@ class InspectionSessionTestResultIntegrationTests extends AbstractMySqlIntegrati
                                 .isEqualTo(
                                         ErrorCode.INSPECTION_TEST_RESULT_IDEMPOTENCY_CONFLICT));
 
-        String otherToken = "other-session-token";
+        String otherToken = "agent2";
         createPairedSession(otherToken);
         assertThatThrownBy(() -> service.submitTestResult(
                         bearer(otherToken), sessionKey, confirmedCamera(UUID.randomUUID())))

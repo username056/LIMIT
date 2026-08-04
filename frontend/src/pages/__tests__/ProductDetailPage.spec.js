@@ -415,16 +415,67 @@ describe('ProductDetailPage', () => {
 
     expect(getSellerProfile).toHaveBeenCalledWith(55)
     expect(wrapper.text()).toContain('리미트판매자')
-    expect(wrapper.text()).toContain('개인 판매자')
-    // 판매 중 개수와 '판매자' 라벨은 이 화면에 두지 않습니다(프로필 페이지에서 봅니다).
+    // 판매 중 개수·'판매자' 라벨·개인/사업자 구분은 이 화면에 두지 않습니다.
+    // 이 카드가 답하는 것은 "누구에게 사는가"뿐이고, 나머지는 판매자 페이지에서 봅니다.
     expect(wrapper.text()).not.toContain('판매 중 3개')
+    expect(wrapper.text()).not.toContain('개인 판매자')
+    expect(wrapper.text()).not.toContain('사업자 판매자')
 
-    const link = wrapper.findAll('[data-to]')
+    const sellerLink = wrapper.findAll('[data-to]')
       .find((node) => node.text().includes('리미트판매자'))
-    expect(JSON.parse(link.attributes('data-to'))).toEqual({
+    expect(JSON.parse(sellerLink.attributes('data-to'))).toEqual({
       name: 'seller-profile',
       params: { sellerId: 55 },
     })
+  })
+
+  it('조회·좋아요·문의 수를 한 줄에 보여준다', async () => {
+    getProduct.mockResolvedValue({
+      productId: 1001,
+      name: 'Galaxy S24',
+      price: 650000,
+      status: 'ON_SALE',
+      device: {},
+      checklistSummary: {},
+      viewCount: 1284,
+      favoriteCount: 12,
+      chatRoomCount: 3,
+    })
+
+    const wrapper = mount(ProductDetailPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('조회')
+    expect(wrapper.text()).toContain('1,284')
+    expect(wrapper.text()).toContain('좋아요')
+    expect(wrapper.text()).toContain('12')
+    expect(wrapper.text()).toContain('문의')
+    expect(wrapper.text()).toContain('3')
+  })
+
+  it('서버가 관심도 수치를 안 내려주면 0으로 채운다', async () => {
+    // 구버전 서버에 붙어도 undefined가 그대로 찍히지 않아야 합니다.
+    const wrapper = mount(ProductDetailPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    const stats = wrapper.findAll('dd').map((node) => node.text())
+    expect(stats.slice(0, 3)).toEqual(['0', '0', '0'])
   })
 
   it('판매자 프로필 조회가 실패해도 상품 화면은 그대로 보여준다', async () => {
