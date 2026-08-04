@@ -33,6 +33,8 @@ import com.c203.limit.domain.product.repository.CategoryRepository;
 import com.c203.limit.domain.product.repository.ListingImageRepository;
 import com.c203.limit.domain.product.repository.ListingRepository;
 import com.c203.limit.domain.product.repository.ListingStatusHistoryRepository;
+import com.c203.limit.domain.product.repository.ProductEngagementReader;
+import com.c203.limit.domain.product.repository.ProductEngagementReader.ProductEngagement;
 import com.c203.limit.domain.product.repository.ListingThumbnailProjection;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
@@ -77,6 +79,7 @@ public class ProductApplicationService {
     private final MediaUrlResolver mediaUrlResolver;
 
     private final ProductViewCountDispatcher viewCountDispatcher;
+    private final ProductEngagementReader engagementReader;
 
     public ProductApplicationService(
             ListingRepository listingRepository,
@@ -87,8 +90,10 @@ public class ProductApplicationService {
             ListingStatusHistoryRepository statusHistoryRepository,
             ListingImageRepository imageRepository,
             MediaUrlResolver mediaUrlResolver,
-            ProductViewCountDispatcher viewCountDispatcher) {
+            ProductViewCountDispatcher viewCountDispatcher,
+            ProductEngagementReader engagementReader) {
         this.viewCountDispatcher = viewCountDispatcher;
+        this.engagementReader = engagementReader;
         this.listingRepository = listingRepository;
         this.categoryRepository = categoryRepository;
         this.templateRepository = templateRepository;
@@ -434,6 +439,7 @@ public class ProductApplicationService {
         Category model = listing.getCategory();
         Category parent = model.getParent();
         ProductMetrics metrics = loadMetrics(List.of(listing)).get(listing.getId());
+        ProductEngagement engagement = engagementReader.findByListingId(listing.getId());
         return new ProductDetailResponse(
                 listing.getId(),
                 listing.getSellerId(),
@@ -453,7 +459,10 @@ public class ProductApplicationService {
                 checklistSummary(metrics),
                 metrics.thumbnailUrl(),
                 offset(listing.getCreatedAt()),
-                offset(listing.getUpdatedAt()));
+                offset(listing.getUpdatedAt()),
+                listing.getViewCount(),
+                engagement.favoriteCount(),
+                engagement.chatRoomCount());
     }
 
     private ProductSummaryResponse summary(Listing listing, ProductMetrics metrics) {

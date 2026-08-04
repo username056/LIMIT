@@ -47,4 +47,15 @@ public class ProductDetailResponse {
 
     @Schema(example = "2026-07-22T11:00:00+09:00")
     private final OffsetDateTime updatedAt;
+
+    // 아래 셋은 구매자가 이 매물에 얼마나 관심이 몰렸는지 가늠하는 값이다.
+    // 조회수는 listing.view_count, 나머지 둘은 wishlist·chat_room의 행 수다.
+    @Schema(description = "상세 조회 수", example = "128")
+    private final Long viewCount;
+
+    @Schema(description = "좋아요한 회원 수", example = "12")
+    private final Long favoriteCount;
+
+    @Schema(description = "이 매물로 열린 문의 채팅방 수", example = "3")
+    private final Long chatRoomCount;
 }
