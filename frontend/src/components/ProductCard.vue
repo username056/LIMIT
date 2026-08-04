@@ -33,10 +33,20 @@ function formatViewCount(viewCount) {
     class="card-lift group block overflow-hidden rounded-lg bg-surface"
   >
     <div class="relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-slate-50">
+      <!--
+        목록에 카드가 스무 개면 화면에 안 보이는 것까지 사진을 스무 장 받습니다.
+        브라우저에 맡겨(loading=lazy) 눈에 들어올 때 받게 합니다.
+
+        이 카드는 목록·홈·관심상품에서만 씁니다. 첫 화면 맨 위에 오는 큰 사진
+        (상품 상세의 대표 사진)에는 붙이지 않습니다 — 그건 빨리 떠야 하는 사진이라
+        미루면 오히려 늦게 보입니다.
+      -->
       <img
         v-if="product.thumbnailUrl"
         :src="product.thumbnailUrl"
         :alt="product.name"
+        loading="lazy"
+        decoding="async"
         class="card-zoom-img h-full w-full object-cover"
       >
       <div

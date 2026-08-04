@@ -251,7 +251,7 @@ const canMarkSold = computed(
 async function markSold() {
   const confirmed = window.confirm(
     '판매 완료로 바꿀까요?\n\n'
-    + '구매자에게 더 이상 노출되지 않습니다. 거래가 깨지면 다시 판매 중으로 되돌릴 수 있습니다.',
+    + '구매자에게 더 이상 노출되지 않습니다. 거래가 무산되면 다시 판매 중으로 되돌릴 수 있습니다.',
   )
   if (!confirmed) return
   isMarkingSold.value = true
