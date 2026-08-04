@@ -479,8 +479,25 @@ describe('ProductRegisterPage', () => {
     expect(downloadLink.attributes('href')).toBe('/downloads/LimitScanner.exe')
     expect(downloadLink.text()).toContain('진단 프로그램 다운로드')
     expect(wrapper.text()).toContain(
-      'Limit 진단 프로그램으로 모델명·저장 용량·OS 버전·CPU·RAM·GPU와 배터리 정보를 자동으로 채울 수 있습니다.',
+      'Limit 진단 프로그램으로 기기 정보와 점검 결과를 자동으로 입력할 수 있습니다.',
     )
+  })
+
+  it('연결된 실동작 항목이 없어도 2단계에서 직접 점검 진입점을 보여준다', async () => {
+    getProductChecklist.mockResolvedValue([])
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await goToCaptureStep(wrapper)
+
+    expect(wrapper.text()).toContain('실동작 점검')
+    expect(wrapper.text()).toContain('카메라·마이크·키보드 등 직접 점검하기')
+    expect(wrapper.text()).toContain('스피커')
+    expect(wrapper.text()).toContain('디스플레이')
+    expect(wrapper.text()).toContain('충전')
+    expect(wrapper.text()).toContain('카메라')
+    expect(wrapper.text()).toContain('마이크')
+    expect(wrapper.text()).toContain('키보드')
+    expect(wrapper.text()).toContain('포인터')
   })
 
   it('AI 체크리스트 조사 중 진행률과 움직이는 점을 표시한다', async () => {
@@ -1460,14 +1477,32 @@ describe('ProductRegisterPage', () => {
       expect(wrapper.text()).toContain('판매할 기기를 등록해 주세요.')
     })
 
-    // 실동작 점검 화면에서 저장하고 돌아오면 ?step=3으로 옵니다. 하던 자리를 잃지 않아야 합니다.
+    // 실동작 점검 화면에서 저장하고 돌아오면 ?step=2로 옵니다. 하던 자리를 잃지 않아야 합니다.
     it('주소에 step이 실려 오면 그 단계로 되돌린다', async () => {
-      routeQuery.step = '3'
+      routeQuery.step = '2'
+      getProductChecklist.mockResolvedValue([
+        { checklistItemId: 7003, itemCode: 'LAP-KBD-005', name: '키보드 실동작 확인', evidenceType: 'SELLER_CONFIRMATION', isRequired: true, status: 'PENDING' },
+      ])
       const wrapper = mount(ProductRegisterPage, { global: globalOptions })
       await flushPromises()
 
       expect(wrapper.text()).not.toContain('판매할 기기를 등록해 주세요.')
-      expect(wrapper.text()).toContain('실동작 자동 점검하기')
+      expect(wrapper.text()).toContain('카메라·마이크·키보드 등 직접 점검하기')
+    })
+
+    it('직접 점검에서 new 주소로 돌아오면 상품 등록 제목과 초안 2단계를 복구한다', async () => {
+      delete routeParams.productId
+      routeQuery.step = '2'
+      routeQuery.resumeProductId = '1001'
+      getProductChecklist.mockResolvedValue([])
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+
+      expect(getMyProduct).toHaveBeenCalledWith(1001)
+      expect(wrapper.text()).toContain('상품 등록')
+      expect(wrapper.text()).not.toContain('상품 수정')
+      expect(wrapper.text()).toContain('실동작 점검')
     })
 
     it('없는 단계를 주소로 넣으면 1단계로 연다', async () => {
@@ -1512,6 +1547,9 @@ describe('ProductRegisterPage', () => {
 
       await buttonByText(wrapper, '다음 단계').trigger('click')
       await flushPromises()
+      expect(wrapper.text()).toContain('키보드 실동작 확인')
+      expect(wrapper.text()).toContain('재점검 필요')
+
       await buttonByText(wrapper, '다음 단계로').trigger('click')
       await flushPromises()
       expect(wrapper.text()).toContain('개인정보를 정리했는지 확인해 주세요.')
@@ -1519,8 +1557,7 @@ describe('ProductRegisterPage', () => {
       // 실동작 항목(키보드)은 체크박스가 아니라 읽기 전용 상태로만 보입니다.
       const checkboxes = wrapper.findAll('input[type="checkbox"]')
       expect(checkboxes).toHaveLength(1)
-      expect(wrapper.text()).toContain('키보드 실동작 확인')
-      expect(wrapper.text()).toContain('재점검 필요')
+      expect(wrapper.text()).not.toContain('키보드 실동작 확인')
 
       // 관련 없는 개인정보 체크박스만 체크합니다.
       await checkboxes[0].setValue(true)
@@ -1533,6 +1570,38 @@ describe('ProductRegisterPage', () => {
         { checklistItemId: 7003, result: 'FAILED' },
       ]))
       expect(payload.results).toHaveLength(2)
+    })
+
+    it('진단 프로그램이 완료한 실동작 항목은 2단계에서 자동 입력 완료로 표시한다', async () => {
+      getProductChecklist.mockResolvedValue([
+        { checklistItemId: 7003, itemCode: 'LAP-KBD-005', name: '키보드 실동작 확인', evidenceType: 'SELLER_CONFIRMATION', isRequired: true, status: 'COMPLETED' },
+      ])
+      getProductDraftProgress.mockResolvedValue({ step: 2, results: {} })
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await buttonByText(wrapper, '다음 단계').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('키보드 실동작 확인')
+      expect(wrapper.text()).toContain('자동 입력 완료')
+      expect(wrapper.text()).toContain('카메라·마이크·키보드 등 직접 점검하기')
+    })
+
+    it('웹에서 완료한 실동작 항목은 웹 점검 완료로 구분한다', async () => {
+      getProductChecklist.mockResolvedValue([])
+      getProductDraftProgress.mockResolvedValue({
+        step: 2,
+        results: {},
+        deviceResults: { KEYBOARD: 'SUCCESS' },
+      })
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await buttonByText(wrapper, '다음 단계').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('웹 점검 완료')
     })
 
     // goToStep4는 개인정보·실동작 점검 둘 다 필수 완료를 요구하고, 안내 문구는 어디로 가야
@@ -1557,7 +1626,7 @@ describe('ProductRegisterPage', () => {
       await buttonByText(wrapper, '다음 단계로').trigger('click')
       await flushPromises()
 
-      expect(wrapper.text()).toContain('실동작 자동 점검')
+      expect(wrapper.text()).toContain('실동작 점검')
       expect(wrapper.text()).toContain('키보드 실동작 확인')
       expect(wrapper.text()).not.toContain('체크리스트 등록이 완료되었습니다.')
     })

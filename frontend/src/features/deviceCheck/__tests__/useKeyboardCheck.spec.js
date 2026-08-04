@@ -6,6 +6,10 @@ function press(code) {
   window.dispatchEvent(new KeyboardEvent('keydown', { code }))
 }
 
+function pressWithOptions(options) {
+  window.dispatchEvent(new KeyboardEvent('keydown', options))
+}
+
 describe('useKeyboardCheck', () => {
   let check
 
@@ -66,4 +70,18 @@ describe('useKeyboardCheck', () => {
 
     expect(check.pressedCount.value).toBe(0)
   })
+
+  it('오른쪽 Shift 위치값과 한영·한자 별칭을 표준 코드로 표시한다', () => {
+    check = useKeyboardCheck()
+    check.start()
+
+    pressWithOptions({ code: 'ShiftLeft', key: 'Shift', location: 2 })
+    pressWithOptions({ code: 'AltRight', key: 'HangulMode' })
+    pressWithOptions({ code: 'ControlRight', key: 'HanjaMode' })
+
+    expect(check.pressed.has('ShiftRight')).toBe(true)
+    expect(check.pressed.has('Lang1')).toBe(true)
+    expect(check.pressed.has('Lang2')).toBe(true)
+  })
+
 })
