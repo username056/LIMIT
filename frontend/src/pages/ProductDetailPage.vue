@@ -19,7 +19,6 @@ import { getProductDiagnosisSummary } from '../api/inspection'
 import { getSellerProfile } from '../api/seller'
 import { getAccessToken, getSessionMember } from '../auth/session'
 import { canSellerMarkSold, canSellerReopen, isSoldOut } from '../utils/productStatus'
-import { formatStorage } from '../utils/storage'
 
 const route = useRoute()
 const router = useRouter()
@@ -205,6 +204,19 @@ async function submitRecaptureRequest() {
 function formatPrice(price) {
   return Number(price || 0).toLocaleString('ko-KR')
 }
+
+/*
+  이 매물에 몰린 관심도 셋.
+  ---------------------------------------------------------------------------
+  조회수는 listing.view_count, 좋아요는 wishlist, 문의는 chat_room의 행 수입니다.
+  서버가 아직 안 내려주는 상황(구버전 배포)에서도 0으로 떨어지게 두어, 숫자 자리가
+  비거나 undefined가 그대로 찍히지 않게 합니다.
+*/
+const engagementStats = computed(() => [
+  { label: '조회', value: Number(product.value?.viewCount || 0).toLocaleString('ko-KR') },
+  { label: '좋아요', value: Number(product.value?.favoriteCount || 0).toLocaleString('ko-KR') },
+  { label: '문의', value: Number(product.value?.chatRoomCount || 0).toLocaleString('ko-KR') },
+])
 
 async function requireLogin() {
   if (getAccessToken()) return true
@@ -432,7 +444,14 @@ onMounted(async () => {
 
       <template v-else>
         <!-- 상단: 사진을 크게 보고, 옆에서 바로 살 수 있게 둡니다. -->
-        <div class="grid gap-8 lg:grid-cols-[6fr_4fr]">
+        <!--
+          첫 줄에 대표 사진과 오른쪽 정보를, 둘째 줄에 추가 사진 목록을 둡니다.
+          -------------------------------------------------------------------------
+          추가 사진 줄을 왼쪽 칸 안에 두면 그 높이까지 첫 줄에 더해져, 오른쪽 정보가
+          사진 바닥이 아니라 썸네일 바닥까지 늘어납니다. 줄을 나누면 오른쪽 열의
+          높이가 대표 사진 하나에 맞춰집니다.
+        -->
+        <div class="grid gap-x-8 gap-y-3 lg:grid-cols-[6fr_4fr]">
           <section aria-label="상품 이미지">
             <!--
               4:3을 그대로 두면 넓은 화면에서 사진 높이가 600px를 넘어, 오른쪽 정보 카드가 끝난
@@ -460,35 +479,16 @@ onMounted(async () => {
                 <span class="text-xl font-bold text-white">판매 완료</span>
               </div>
             </div>
-            <ul
-              v-if="productImages.length > 1"
-              class="mt-3 grid grid-cols-5 gap-2"
-              aria-label="상품 추가 이미지"
-            >
-              <li
-                v-for="image in productImages"
-                :key="image.imageId"
-              >
-                <button
-                  type="button"
-                  class="aspect-square w-full overflow-hidden rounded-md border"
-                  :class="activeImageUrl === image.imageUrl ? 'border-primary' : 'border-border'"
-                  @click="activeImageUrl = image.imageUrl"
-                >
-                  <img
-                    :src="image.imageUrl"
-                    :alt="`${product.name} 추가 이미지`"
-                    class="h-full w-full object-cover"
-                  >
-                </button>
-              </li>
-            </ul>
           </section>
 
           <div class="space-y-4">
             <!--
               바깥 카드는 두지 않습니다. 사진 옆이라 테두리를 한 겹 더 두르면 답답해 보이고,
               안에 판매자 카드가 또 들어가 상자가 겹칩니다.
+
+              위에서부터 차례로 쌓습니다. 아래로 밀어 사진 바닥에 맞춰 본 적이 있는데,
+              제목·가격과 판매자 사이가 크게 벌어져 오른쪽 열이 두 조각으로 읽혔습니다.
+              사진보다 짧아 남는 자리는 그대로 둡니다.
             -->
             <section>
               <div class="flex items-start justify-between gap-3">
@@ -520,64 +520,72 @@ onMounted(async () => {
               </p>
 
               <!--
-              가격 바로 아래에 판매자를 둡니다. 누구에게 사는지가 기기 옵션보다 먼저 읽혀야 합니다.
+              가격 바로 아래에 판매자를 둡니다. 누구에게 사는지가 수치보다 먼저 읽혀야 합니다.
               누르면 그 판매자의 판매 목록으로 갑니다.
               판매 중 개수는 여기서 보여주지 않습니다 — 이 화면의 관심은 '이 상품'이고, 판매자의
               재고 규모는 프로필 페이지에서 볼 내용입니다.
               정산 계좌 같은 값은 공개 프로필에 담기지 않습니다.
             -->
-              <RouterLink
-                v-if="sellerProfile"
-                :to="{ name: 'seller-profile', params: { sellerId: sellerProfile.sellerId } }"
-                class="card-soft card-soft--hover mt-6 flex items-center gap-3 rounded-lg bg-surface p-3"
-              >
-                <span
-                  class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-gradient text-sm font-bold text-white"
-                  aria-hidden="true"
-                >{{ (sellerProfile.nickname || '판').trim().charAt(0) }}</span>
-                <span class="min-w-0 flex-1">
-                  <span class="block truncate text-sm font-semibold text-text-main">
+              <div class="mt-6">
+                <RouterLink
+                  v-if="sellerProfile"
+                  :to="{ name: 'seller-profile', params: { sellerId: sellerProfile.sellerId } }"
+                  class="card-soft card-soft--hover flex items-center gap-3 rounded-lg bg-surface p-3"
+                >
+                  <span
+                    class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-gradient text-sm font-bold text-white"
+                    aria-hidden="true"
+                  >{{ (sellerProfile.nickname || '판').trim().charAt(0) }}</span>
+                  <!--
+                    개인/사업자 구분은 빼 두었습니다. 구매자가 이 화면에서 판단하는
+                    것은 "누구에게 사는가"이고, 사업자 여부는 그 이름을 눌러 들어간
+                    판매자 페이지에서 확인할 값입니다.
+                  -->
+                  <span class="min-w-0 flex-1 truncate text-sm font-semibold text-text-main">
                     {{ sellerProfile.nickname }}
                   </span>
-                  <!-- 판매자 등록 행이 없는 회원이면 sellerType이 비어 옵니다. -->
-                  <span
-                    v-if="sellerProfile.sellerType"
-                    class="mt-0.5 block text-xs text-text-sub"
+                  <span class="shrink-0 text-xs font-semibold text-primary">판매자 상품 보기 →</span>
+                </RouterLink>
+                <p
+                  v-else
+                  class="text-xs text-text-sub"
+                >
+                  판매자 정보를 불러오지 못했습니다.
+                </p>
+
+                <!--
+                  색상·저장 용량이 있던 자리입니다.
+                  ---------------------------------------------------------------
+                  등록 화면에서 두 값을 더 이상 받지 않아 계속 '미입력'으로 남았습니다.
+                  대신 이 매물에 얼마나 관심이 몰렸는지를 보여 줍니다. 중고 거래에서는
+                  기기 옵션보다 "다른 사람도 보고 있나"가 사는 판단에 더 붙습니다.
+                  저장 용량은 아래 '자동 인식 사양'에서 검수 결과로 보여 줍니다.
+                -->
+                <dl class="mt-6 grid grid-cols-3 border-t border-border pt-5">
+                  <!--
+                    가운데 정렬입니다. 왼쪽 정렬로 두면 세 값이 왼쪽 2/3에 몰리고
+                    오른쪽 1/3이 비어, 줄 전체가 왼쪽으로 쏠려 보입니다.
+                    칸을 셋으로 똑같이 나눠 두면 세로선 없이도 각자 한 칸으로 읽힙니다.
+                  -->
+                  <div
+                    v-for="stat in engagementStats"
+                    :key="stat.label"
+                    class="text-center"
                   >
-                    {{ sellerProfile.sellerType === 'BUSINESS' ? '사업자 판매자' : '개인 판매자' }}
-                  </span>
-                </span>
-                <span class="shrink-0 text-xs font-semibold text-primary">판매자 상품 보기 →</span>
-              </RouterLink>
-              <p
-                v-else
-                class="mt-4 text-xs text-text-sub"
-              >
-                판매자 정보를 불러오지 못했습니다.
-              </p>
+                    <dt class="text-xs text-text-sub">
+                      {{ stat.label }}
+                    </dt>
+                    <dd class="mt-1 text-base font-bold text-text-main">
+                      {{ stat.value }}
+                    </dd>
+                  </div>
+                </dl>
 
-              <dl class="mt-6 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-border pt-5 text-sm">
-                <div>
-                  <dt class="text-xs text-text-sub">
-                    색상
-                  </dt>
-                  <dd class="mt-1 font-semibold text-text-main">
-                    {{ product.device?.color || '미입력' }}
-                  </dd>
-                </div>
-                <div>
-                  <dt class="text-xs text-text-sub">
-                    저장 용량
-                  </dt>
-                  <dd class="mt-1 font-semibold text-text-main">
-                    {{ formatStorage(product.device?.storageGb) || '미입력' }}
-                  </dd>
-                </div>
-              </dl>
-
-              <!-- 내 상품에서는 구매·문의처럼 자기 자신을 향하는 행동 대신 수정 동선만 보여줍니다. -->
-              <div class="mt-5 space-y-3">
-                <template v-if="isOwner">
+                <!-- 구매자 쪽과 같이 한 줄에 하나씩 쌓습니다. 폭이 같아 눌 곳이 분명합니다. -->
+                <div
+                  v-if="isOwner"
+                  class="mt-5 space-y-3"
+                >
                   <BaseButton
                     block
                     :to="{ name: 'seller-product-edit', params: { productId: product.productId } }"
@@ -604,9 +612,13 @@ onMounted(async () => {
                   >
                     {{ isMarkingSold ? '처리 중…' : '다시 판매하기' }}
                   </BaseButton>
-                </template>
-                <!-- 구매하기와 문의하기 두 개만 둡니다. 영상 확인은 채팅방 안에서 요청합니다. -->
-                <template v-else>
+                </div>
+
+                <div
+                  v-else
+                  class="mt-5 space-y-3"
+                >
+                  <!-- 구매하기와 문의하기 두 개만 둡니다. 영상 확인은 채팅방 안에서 요청합니다. -->
                   <BaseButton
                     block
                     :to="canPurchase ? { name: 'purchase', params: { productId: product.productId } } : ''"
@@ -622,7 +634,7 @@ onMounted(async () => {
                   >
                     {{ isOpeningChat ? '채팅방 여는 중…' : '판매자에게 문의하기' }}
                   </BaseButton>
-                </template>
+                </div>
               </div>
 
               <p
@@ -634,6 +646,31 @@ onMounted(async () => {
               </p>
             </section>
           </div>
+
+          <!-- 추가 사진은 둘째 줄 왼쪽 칸입니다. 대표 사진 바로 아래에 붙습니다. -->
+          <ul
+            v-if="productImages.length > 1"
+            class="grid grid-cols-5 gap-2 lg:col-start-1"
+            aria-label="상품 추가 이미지"
+          >
+            <li
+              v-for="image in productImages"
+              :key="image.imageId"
+            >
+              <button
+                type="button"
+                class="aspect-square w-full overflow-hidden rounded-md border"
+                :class="activeImageUrl === image.imageUrl ? 'border-primary' : 'border-border'"
+                @click="activeImageUrl = image.imageUrl"
+              >
+                <img
+                  :src="image.imageUrl"
+                  :alt="`${product.name} 추가 이미지`"
+                  class="h-full w-full object-cover"
+                >
+              </button>
+            </li>
+          </ul>
         </div>
 
         <!-- 중단: 설명은 테두리 없이 두되 한 줄이 너무 길지 않게 폭을 제한합니다. -->
