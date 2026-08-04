@@ -54,9 +54,9 @@ public sealed class ChargingDiagnosticForm : Form
             Margin = new Padding(0)
         };
         cardContent.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        cardContent.RowStyles.Add(new RowStyle(SizeType.Absolute, 78F));
-        cardContent.RowStyles.Add(new RowStyle(SizeType.Absolute, 58F));
-        cardContent.RowStyles.Add(new RowStyle(SizeType.Absolute, 54F));
+        cardContent.RowStyles.Add(new RowStyle(SizeType.Absolute, 100F));
+        cardContent.RowStyles.Add(new RowStyle(SizeType.Absolute, 75F));
+        cardContent.RowStyles.Add(new RowStyle(SizeType.Absolute, 64F));
         cardContent.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         cardContent.Controls.Add(new Label
         {
@@ -82,8 +82,8 @@ public sealed class ChargingDiagnosticForm : Form
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 68F));
-        layout.Controls.Add(DiagnosticUi.CreateStepLabel("3 / 3  충전"), 0, 0);
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 90F));
+        layout.Controls.Add(DiagnosticUi.CreateStepLabel("3 / 5  충전"), 0, 0);
         layout.Controls.Add(DiagnosticUi.CreateTitle("AC 연결·분리 감지"), 0, 1);
         layout.Controls.Add(DiagnosticUi.CreateGuide(
             "충전기를 한 번 연결하거나 분리해 상태가 바뀌는지 확인해 주세요. "
