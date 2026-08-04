@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseCard from '../components/BaseCard.vue'
+import ProfileAvatar from '../components/ProfileAvatar.vue'
 import { addFavorite, getFavoriteStatus, removeFavorite } from '../api/favorites'
 import {
   createReinspectionRequest,
@@ -559,10 +560,10 @@ onMounted(async () => {
                   :to="{ name: 'seller-profile', params: { sellerId: sellerProfile.sellerId } }"
                   class="card-soft card-soft--hover flex items-center gap-3 rounded-lg bg-surface p-3"
                 >
-                  <span
-                    class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-gradient text-sm font-bold text-white"
-                    aria-hidden="true"
-                  >{{ (sellerProfile.nickname || '판').trim().charAt(0) }}</span>
+                  <ProfileAvatar
+                    :src="sellerProfile.profileImageUrl"
+                    :name="sellerProfile.nickname"
+                  />
                   <!--
                     개인/사업자 구분은 빼 두었습니다. 구매자가 이 화면에서 판단하는
                     것은 "누구에게 사는가"이고, 사업자 여부는 그 이름을 눌러 들어간

@@ -21,4 +21,8 @@ public record PublicSellerProfileResponse(
         @Schema(description = "개인/사업자 구분. 판매자 등록 행이 없는 회원이면 null.", example = "INDIVIDUAL")
                 String sellerType,
         @Schema(description = "판매자 등록 시각. 판매자 등록 행이 없으면 null.") OffsetDateTime joinedAt,
-        @Schema(description = "현재 판매 중인 상품 수", example = "3") long onSaleCount) {}
+        @Schema(description = "현재 판매 중인 상품 수", example = "3") long onSaleCount,
+        @Schema(
+                        description = "판매자 프로필 사진. 올리지 않았으면 null이고 화면은 닉네임 첫 글자로 대신한다.",
+                        example = "https://cdn.example.com/members/20/profile/uuid.jpg")
+                String profileImageUrl) {}

@@ -298,4 +298,32 @@ describe('AppHeader', () => {
     expect(getMyRtcCalls).not.toHaveBeenCalled()
     expect(getMyReinspectionRequests).not.toHaveBeenCalled()
   })
+it('프로필 사진을 올린 회원은 계정 버튼에 사진이 보인다', async () => {
+    signedIn({ nickname: '회원', profileImageUrl: 'https://cdn/me.jpg' })
+    getChatRooms.mockResolvedValue({ content: [] })
+    getMyRtcCalls.mockResolvedValue([])
+    getMyReinspectionRequests.mockResolvedValue([])
+
+    const wrapper = mountHeader()
+    await flushPromises()
+
+    const button = wrapper.get('[aria-label="내 계정"]')
+    expect(button.find('img').attributes('src')).toBe('https://cdn/me.jpg')
+    expect(button.find('svg').exists()).toBe(false)
+  })
+
+  it('사진을 올리지 않으면 지금까지의 사람 아이콘을 그대로 쓴다', async () => {
+    signedIn({ nickname: '회원' })
+    getChatRooms.mockResolvedValue({ content: [] })
+    getMyRtcCalls.mockResolvedValue([])
+    getMyReinspectionRequests.mockResolvedValue([])
+
+    const wrapper = mountHeader()
+    await flushPromises()
+
+    const button = wrapper.get('[aria-label="내 계정"]')
+    expect(button.find('img').exists()).toBe(false)
+    expect(button.find('svg').exists()).toBe(true)
+  })
 })
+

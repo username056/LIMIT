@@ -64,7 +64,7 @@ class SellerSecurityControllerTests {
     void publicSellerProfileIsReadableWithoutToken() throws Exception {
         when(sellerService.publicProfile(anyLong()))
                 .thenReturn(new PublicSellerProfileResponse(
-                        55L, "리미트판매자", "INDIVIDUAL", null, 3L));
+                        55L, "리미트판매자", "INDIVIDUAL", null, 3L, null));
 
         mockMvc.perform(get("/api/v1/sellers/{sellerId}", 55L))
                 .andExpect(status().isOk())

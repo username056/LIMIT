@@ -13,6 +13,7 @@ import com.c203.limit.domain.seller.dto.request.CreateSellerRequest;
 import com.c203.limit.domain.seller.entity.Seller;
 import com.c203.limit.domain.seller.entity.SellerType;
 import com.c203.limit.domain.seller.repository.SellerRepository;
+import com.c203.limit.domain.product.storage.MediaUrlResolver;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.util.Optional;
@@ -29,12 +30,13 @@ class SellerServiceTests {
     @Mock SellerRepository sellerRepository;
     @Mock MemberRepository memberRepository;
     @Mock ListingRepository listingRepository;
+    @Mock MediaUrlResolver mediaUrlResolver;
 
     SellerService service;
 
     @BeforeEach
     void setUp() {
-        service = new SellerService(sellerRepository, memberRepository, listingRepository);
+        service = new SellerService(sellerRepository, memberRepository, listingRepository, mediaUrlResolver);
     }
 
     @Test

@@ -81,7 +81,7 @@ class ChatRoomControllerTests {
     @Test
     void returnsCurrentMembersChatRooms() throws Exception {
         ChatRoomSummaryResponse summary = new ChatRoomSummaryResponse(
-                ROOM_ID, LISTING_ID, SELLER_ID, "판매자", "상품", "https://cdn/image.jpg",
+                ROOM_ID, LISTING_ID, SELLER_ID, "판매자", null, "상품", "https://cdn/image.jpg",
                 "오늘 오후에 가능하실까요?", "ACTIVE", 50L, 7L, null, 2L, 5L, null);
         when(currentUser.memberId()).thenReturn(BUYER_ID);
         when(chatRoomService.findRooms(BUYER_ID, 100L, 10))

@@ -8,10 +8,20 @@ import BaseButton from '../components/BaseButton.vue'
 import BaseCard from '../components/BaseCard.vue'
 import BaseInput from '../components/BaseInput.vue'
 import BaseAddressInput from '../components/BaseAddressInput.vue'
-import { changeMyPassword, getMyProfile, updateMyProfile } from '../api/member'
+import ProfileAvatar from '../components/ProfileAvatar.vue'
+import {
+  changeMyPassword,
+  completeProfileImage,
+  createProfileImageUploadUrl,
+  deleteProfileImage,
+  getMyProfile,
+  updateMyProfile,
+} from '../api/member'
+import { uploadToPresignedUrl } from '../api/products'
+import { compressImage } from '../utils/mediaOptimize'
 import { getSocialAccounts, unlinkSocialAccount } from '../api/auth'
 import { startOAuthLink } from '../auth/oauth'
-import { clearAuthSession, getAccessToken } from '../auth/session'
+import { clearAuthSession, getAccessToken, setSessionProfileImage } from '../auth/session'
 import { formatAddress } from '../utils/daumPostcode'
 import { addressBook } from '../stores/addressBook'
 
@@ -23,6 +33,64 @@ const isSaving = ref(false)
 const isChangingPassword = ref(false)
 const errorMessage = ref('')
 const profileMessage = ref('')
+
+/*
+  프로필 사진 올리기.
+  ---------------------------------------------------------------------------
+  상품 사진과 같은 세 단계입니다 — 자리 요청 → 그 주소로 직접 PUT → 완료 통보.
+  올리기 전에 Canvas로 줄입니다. 요즘 휴대폰 사진은 한 장이 5MB를 쉽게 넘는데,
+  프로필은 작게 보여 주는 그림이라 원본을 그대로 올릴 이유가 없습니다.
+*/
+const MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024
+const isSavingProfileImage = ref(false)
+const profileImageError = ref('')
+
+async function onProfileImageInput(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file || isSavingProfileImage.value) return
+
+  isSavingProfileImage.value = true
+  profileImageError.value = ''
+  try {
+    const optimized = await compressImage(file)
+    if (optimized.size > MAX_PROFILE_IMAGE_BYTES) {
+      profileImageError.value = '5MB 이하 사진만 올릴 수 있습니다. 더 작은 사진을 골라 주세요.'
+      return
+    }
+    const upload = await createProfileImageUploadUrl({
+      contentType: optimized.type || 'image/jpeg',
+      fileSize: optimized.size,
+    })
+    await uploadToPresignedUrl(upload.presignedUrl, optimized, upload.requiredHeaders || {})
+    const result = await completeProfileImage(upload.objectKey)
+    profile.value = { ...profile.value, profileImageUrl: result.profileImageUrl }
+    setSessionProfileImage(result.profileImageUrl)
+    profileMessage.value = '프로필 사진을 변경했습니다.'
+  } catch (error) {
+    profileImageError.value = error.message || '프로필 사진을 올리지 못했습니다.'
+  } finally {
+    isSavingProfileImage.value = false
+  }
+}
+
+async function removeProfileImage() {
+  if (isSavingProfileImage.value) return
+  if (!window.confirm('프로필 사진을 삭제할까요?')) return
+
+  isSavingProfileImage.value = true
+  profileImageError.value = ''
+  try {
+    await deleteProfileImage()
+    profile.value = { ...profile.value, profileImageUrl: null }
+    setSessionProfileImage(null)
+    profileMessage.value = '프로필 사진을 삭제했습니다.'
+  } catch (error) {
+    profileImageError.value = error.message || '프로필 사진을 삭제하지 못했습니다.'
+  } finally {
+    isSavingProfileImage.value = false
+  }
+}
 const passwordError = ref('')
 const isEditingProfile = ref(false)
 const isPasswordSectionOpen = ref(false)
@@ -335,15 +403,72 @@ onMounted(() => {
         <section class="p-6">
           <div class="flex flex-wrap items-start justify-between gap-4">
             <div class="flex items-center gap-4">
-              <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary-gradient text-lg font-bold text-white">
-                {{ profile.nickname?.charAt(0) || '?' }}
-              </div>
+              <!--
+                사진을 눌러도 바꿀 수 있게 파일 입력을 사진 위에 덮어 둡니다.
+                아래 '사진 변경' 글자만 두면 사진 자체는 눌러도 반응이 없어, 눌러 본
+                사람은 고장난 줄 압니다.
+              -->
+              <label
+                class="relative shrink-0"
+                :class="isSavingProfileImage ? 'cursor-wait opacity-60' : 'cursor-pointer'"
+              >
+                <ProfileAvatar
+                  :src="profile.profileImageUrl"
+                  :name="profile.nickname"
+                  size-class="h-14 w-14"
+                  text-class="text-lg"
+                />
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  class="sr-only"
+                  :disabled="isSavingProfileImage"
+                  aria-label="프로필 사진 변경"
+                  @change="onProfileImageInput"
+                >
+              </label>
               <div>
                 <h2 class="text-lg font-bold text-text-main">
                   {{ profile.nickname }}
                 </h2>
                 <p class="text-sm text-text-sub">
                   {{ profile.email }}
+                </p>
+                <div class="mt-1.5 flex items-center gap-2 text-[13px]">
+                  <label
+                    class="font-semibold text-primary hover:underline"
+                    :class="isSavingProfileImage ? 'cursor-wait opacity-60' : 'cursor-pointer'"
+                  >
+                    {{ isSavingProfileImage ? '사진 올리는 중…' : '사진 변경' }}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      class="sr-only"
+                      :disabled="isSavingProfileImage"
+                      @change="onProfileImageInput"
+                    >
+                  </label>
+                  <template v-if="profile.profileImageUrl">
+                    <span
+                      class="text-border"
+                      aria-hidden="true"
+                    >|</span>
+                    <button
+                      type="button"
+                      class="text-text-sub hover:text-red-600"
+                      :disabled="isSavingProfileImage"
+                      @click="removeProfileImage"
+                    >
+                      사진 삭제
+                    </button>
+                  </template>
+                </div>
+                <p
+                  v-if="profileImageError"
+                  role="alert"
+                  class="mt-1 text-xs text-red-600"
+                >
+                  {{ profileImageError }}
                 </p>
               </div>
             </div>

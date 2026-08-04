@@ -20,6 +20,7 @@ import com.c203.limit.domain.member.dto.request.UpdateMemberRequest;
 import com.c203.limit.domain.member.entity.Member;
 import com.c203.limit.domain.member.repository.MemberRepository;
 import com.c203.limit.domain.seller.service.SellerStatusReader;
+import com.c203.limit.domain.product.storage.MediaUrlResolver;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import com.c203.limit.global.security.JwtTokenProvider;
@@ -30,6 +31,7 @@ class MemberServiceTests {
     @Mock MemberRepository repository;
     @Mock TermsAgreementService termsAgreementService;
     @Mock SellerStatusReader sellerStatusReader;
+    @Mock MediaUrlResolver mediaUrlResolver;
     MemberService service;
 
     @BeforeEach void setUp() {
@@ -38,8 +40,9 @@ class MemberServiceTests {
                 new JwtTokenProvider(new ObjectMapper(), "unit-test-secret-with-at-least-32-bytes", Duration.ofMinutes(30), Duration.ofDays(14)),
                 new InMemoryRefreshTokenStore(),
                 termsAgreementService,
-                sellerStatusReader);
-        service = new MemberService(repository, encoder, auth, sellerStatusReader);
+                sellerStatusReader,
+                mediaUrlResolver);
+        service = new MemberService(repository, encoder, auth, sellerStatusReader, mediaUrlResolver);
     }
 
     @Test void masksPhoneInProfile() {

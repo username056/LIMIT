@@ -24,6 +24,15 @@ public class Member extends BaseTimeEntity {
     @Column(length = 20)
     private String phone;
 
+    /**
+     * 프로필 사진의 S3 오브젝트 키. 사진을 올리지 않은 회원은 null이다.
+     *
+     * <p>URL이 아니라 키를 담는다. 버킷이나 CDN 주소가 바뀌어도 저장된 값이 죽지 않는다.
+     * 읽는 쪽에서 MediaUrlResolver가 URL을 만든다.
+     */
+    @Column(name = "profile_image_key", length = 500)
+    private String profileImageKey;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private MemberStatus status;
@@ -79,6 +88,16 @@ public class Member extends BaseTimeEntity {
         if (phone != null) this.phone = phone;
     }
 
+    /**
+     * 프로필 사진을 바꾼다. null을 넘기면 사진을 내려 첫 글자 표시로 돌아간다.
+     *
+     * <p>updateProfile과 나눠 둔다. 그쪽은 "null이면 안 바꾼다"는 규칙이라 사진 삭제를 표현할 수
+     * 없다. 사진은 지우는 것도 정상 동작이므로 따로 받는다.
+     */
+    public void changeProfileImage(String profileImageKey) {
+        this.profileImageKey = profileImageKey;
+    }
+
     public void changePassword(String encodedPassword) {
         this.password = encodedPassword;
         this.passwordChangedAt = LocalDateTime.now();
@@ -124,6 +143,10 @@ public class Member extends BaseTimeEntity {
 
     public String getPhone() {
         return phone;
+    }
+
+    public String getProfileImageKey() {
+        return profileImageKey;
     }
 
     public MemberStatus getStatus() {

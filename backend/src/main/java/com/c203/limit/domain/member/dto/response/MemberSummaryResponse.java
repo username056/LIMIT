@@ -31,4 +31,10 @@ public class MemberSummaryResponse {
             example = "ACTIVE",
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private final String sellerStatus;
+
+    @Schema(
+            description = "프로필 사진 주소. 올리지 않았으면 null",
+            example = "https://cdn.example.com/members/1/profile/abc.webp",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private final String profileImageUrl;
 }

@@ -170,7 +170,7 @@ function Apply-Configuration {
                     Resource = "arn:aws:s3:::$bucketName"
                     Condition = @{
                         StringLike = @{
-                            "s3:prefix" = @("tmp/*", "listings/*", "evidence/*")
+                            "s3:prefix" = @("tmp/*", "listings/*", "evidence/*", "chat/*", "members/*")
                         }
                     }
                 },
@@ -187,7 +187,9 @@ function Apply-Configuration {
                     Resource = @(
                         "arn:aws:s3:::$bucketName/tmp/*",
                         "arn:aws:s3:::$bucketName/listings/*",
-                        "arn:aws:s3:::$bucketName/evidence/*"
+                        "arn:aws:s3:::$bucketName/evidence/*",
+                        "arn:aws:s3:::$bucketName/chat/*",
+                        "arn:aws:s3:::$bucketName/members/*"
                     )
                 }
             )

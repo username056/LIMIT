@@ -17,6 +17,7 @@ import com.c203.limit.global.exception.ErrorCode;
 import com.c203.limit.global.security.JwtTokenProvider;
 import java.util.Locale;
 import java.util.Set;
+import com.c203.limit.domain.product.storage.MediaUrlResolver;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,6 +37,7 @@ public class AuthService {
     private final RefreshTokenStore refreshTokenStore;
     private final TermsAgreementService termsAgreementService;
     private final SellerStatusReader sellerStatusReader;
+    private final MediaUrlResolver mediaUrlResolver;
 
     public AuthService(
             MemberRepository memberRepository,
@@ -43,13 +45,15 @@ public class AuthService {
             JwtTokenProvider tokenProvider,
             RefreshTokenStore refreshTokenStore,
             TermsAgreementService termsAgreementService,
-            SellerStatusReader sellerStatusReader) {
+            SellerStatusReader sellerStatusReader,
+            MediaUrlResolver mediaUrlResolver) {
         this.memberRepository = memberRepository;
         this.passwordEncoder = passwordEncoder;
         this.tokenProvider = tokenProvider;
         this.refreshTokenStore = refreshTokenStore;
         this.termsAgreementService = termsAgreementService;
         this.sellerStatusReader = sellerStatusReader;
+        this.mediaUrlResolver = mediaUrlResolver;
     }
 
     @Transactional(readOnly = true)
@@ -200,7 +204,8 @@ public class AuthService {
                 member.getId(),
                 member.getNickname(),
                 sellerStatusReader.rolesFor(member.getId()),
-                sellerStatusReader.statusOf(member.getId()));
+                sellerStatusReader.statusOf(member.getId()),
+                mediaUrlResolver.resolve(member.getProfileImageKey(), null));
     }
 
     private TermsAgreementService.TermsConsent consent(SignupRequest request) {

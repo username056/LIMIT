@@ -25,6 +25,19 @@ export function getSessionMember() {
   return session.value?.member || null
 }
 
+/*
+  프로필 사진을 바꾸면 헤더 아이콘도 바로 따라가야 합니다.
+  헤더는 세션의 member만 보고 그리므로, 마이페이지에서 사진을 바꾼 뒤 이 함수로
+  세션 쪽 주소도 같이 갈아 줍니다. 이게 없으면 새로고침할 때까지 예전 사진이 남습니다.
+*/
+export function setSessionProfileImage(profileImageUrl) {
+  if (!session.value?.member) return
+  session.value = {
+    ...session.value,
+    member: { ...session.value.member, profileImageUrl: profileImageUrl || null },
+  }
+}
+
 export function hasRole(role) {
   return getSessionMember()?.roles?.includes(role) || false
 }
@@ -54,7 +67,12 @@ export async function restoreAuthSession() {
         const profile = await getMyProfile()
         session.value = {
           ...tokens,
-          member: { memberId: profile.memberId, nickname: profile.nickname, roles: profile.roles },
+          member: {
+            memberId: profile.memberId,
+            nickname: profile.nickname,
+            roles: profile.roles,
+            profileImageUrl: profile.profileImageUrl || null,
+          },
         }
       } catch {
         // 프로필 조회 실패는 세션 자체를 무효화하지 않습니다(헤더 표시에만 영향).
