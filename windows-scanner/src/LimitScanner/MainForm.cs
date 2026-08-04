@@ -104,6 +104,7 @@ public sealed class MainForm : Form
             var progress = new Progress<string>(message => statusLabel.Text = message);
             await coordinator.RunAsync(
                 pairingCodeTextBox.Text.Trim(),
+                this,
                 progress,
                 CancellationToken.None);
             MessageBox.Show(
