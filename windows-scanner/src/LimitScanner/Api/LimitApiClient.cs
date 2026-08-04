@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using LimitScanner.Diagnostics;
 
 namespace LimitScanner.Api;
 
@@ -100,6 +101,20 @@ public sealed class LimitApiClient
         using var response = await apiClient.PostAsJsonAsync(
             $"api/v1/inspection-agent/sessions/{sessionKey}/complete",
             new { },
+            cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+    }
+
+    public async Task SubmitTestResultAsync(
+        string sessionKey,
+        ModuleResult result,
+        CancellationToken cancellationToken)
+    {
+        SetAgentAuthorization();
+        using var response = await apiClient.PostAsJsonAsync(
+            $"api/v1/inspection-agent/sessions/{sessionKey}/test-results",
+            result,
+            jsonOptions,
             cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
     }

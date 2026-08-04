@@ -1,5 +1,6 @@
 using LimitScanner.Api;
 using LimitScanner.Collectors;
+using LimitScanner.Diagnostics;
 using LimitScanner.Services;
 using System.Reflection;
 
@@ -27,7 +28,8 @@ internal static class Program
         var coordinator = new InspectionCoordinator(
             apiClient,
             new DxDiagCollector(commandRunner),
-            new BatteryReportCollector(commandRunner));
+            new BatteryReportCollector(commandRunner),
+            new InteractiveDeviceDiagnostics(new AudioOutputService()));
 
         Application.Run(new MainForm(coordinator));
     }
