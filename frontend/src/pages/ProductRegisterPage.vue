@@ -643,6 +643,14 @@ function guidePurposeFor(item) {
   return guideContentFor(item, selectedCategoryName.value)?.purpose || ''
 }
 
+function guideTitleFor(item) {
+  return guideContentFor(item, selectedCategoryName.value)?.title || item?.name || ''
+}
+
+function guideSummaryFor(item) {
+  return guideContentFor(item, selectedCategoryName.value)?.summary || guideFor(item)
+}
+
 function guideStepsFor(item) {
   return guideContentFor(item, selectedCategoryName.value)?.guide || guideFor(item)
 }
@@ -2351,7 +2359,7 @@ onMounted(async () => {
                   {{ evidenceTypeLabel(item.evidenceType) }}
                 </BaseBadge>
                 <span class="text-text-main">
-                  {{ item.name }}<span
+                  {{ guideTitleFor(item) }}<span
                     v-if="isRequiredItem(item)"
                     class="text-red-500"
                   >*</span>
@@ -2609,7 +2617,7 @@ onMounted(async () => {
                               d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
                             />
                           </svg>
-                          {{ item.name }}
+                          {{ guideTitleFor(item) }}
                           <span
                             v-if="item.evidenceType === 'VIDEO'"
                             class="rounded-pill bg-accent px-1.5 py-0.5 text-[10px] font-bold text-primary"
@@ -2622,14 +2630,14 @@ onMounted(async () => {
                           <button
                             type="button"
                             class="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border border-primary text-[9px] font-bold text-primary transition hover:bg-accent"
-                            :aria-label="`${item.name} 촬영 가이드 보기`"
+                            :aria-label="`${guideTitleFor(item)} 촬영 가이드 보기`"
                             @click.stop="openGuideModal(item)"
                           >
                             i
                           </button>
                         </p>
                         <p class="mt-1 text-xs text-text-sub">
-                          {{ guideFor(item) }}
+                          {{ guideSummaryFor(item) }}
                         </p>
                       </div>
                       <span
@@ -2660,7 +2668,7 @@ onMounted(async () => {
 
             <div class="card-soft rounded-lg bg-surface p-6">
               <h2 class="text-base font-bold text-text-main">
-                {{ activeCaptureItem ? `${activeCaptureItem.name} 촬영 프리뷰` : '촬영 프리뷰' }}
+                {{ activeCaptureItem ? `${guideTitleFor(activeCaptureItem)} 촬영 프리뷰` : '촬영 프리뷰' }}
               </h2>
 
               <div class="relative mt-4 flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg border border-border bg-bg">
@@ -2696,7 +2704,7 @@ onMounted(async () => {
                 <template v-else-if="activeItemLatestMedia && activeItemLatestMedia.evidenceType === 'PHOTO'">
                   <img
                     :src="activeItemLatestMedia.previewUrl"
-                    :alt="activeCaptureItem.name"
+                    :alt="guideTitleFor(activeCaptureItem)"
                     class="h-full w-full object-cover"
                   >
                 </template>
@@ -2827,7 +2835,7 @@ onMounted(async () => {
                     <span
                       class="block h-1.5 w-full overflow-hidden rounded-full bg-border"
                       role="progressbar"
-                      :aria-label="`${activeCaptureItem.name} 처리 진행률`"
+                      :aria-label="`${guideTitleFor(activeCaptureItem)} 처리 진행률`"
                       :aria-valuenow="progressOf(activeCaptureItem.checklistItemId)"
                       aria-valuemin="0"
                       aria-valuemax="100"
@@ -2857,7 +2865,7 @@ onMounted(async () => {
                     <button
                       type="button"
                       class="block h-12 w-12 overflow-hidden rounded-md border border-border transition hover:border-primary"
-                      :aria-label="`${activeCaptureItem.name} ${index + 1}번째 첨부 파일 확인`"
+                      :aria-label="`${guideTitleFor(activeCaptureItem)} ${index + 1}번째 첨부 파일 확인`"
                       @click="openMediaPreview(activeCaptureItem, index)"
                     >
                       <video
@@ -2973,8 +2981,8 @@ onMounted(async () => {
                 <p class="mb-1 font-bold text-text-main">
                   촬영 꿀팁 가이드
                 </p>
-                <p v-if="guideFor(activeCaptureItem)">
-                  • {{ guideFor(activeCaptureItem) }}
+                <p v-if="guideStepsFor(activeCaptureItem)">
+                  • {{ guideStepsFor(activeCaptureItem) }}
                 </p>
                 <p>• 흔들림을 줄이려면 촬영 순간 잠시 호흡을 멈추고 1초간 유지해 주세요.</p>
               </div>
@@ -3356,7 +3364,7 @@ onMounted(async () => {
         <div class="w-full max-w-md rounded-lg bg-surface p-5 shadow-elevated">
           <div class="flex items-start justify-between gap-3">
             <h2 class="text-base font-bold text-text-main">
-              {{ guideModalItem.name }}
+              {{ guideTitleFor(guideModalItem) }}
             </h2>
             <button
               type="button"
@@ -3372,7 +3380,7 @@ onMounted(async () => {
             <img
               v-if="guideImageFor(guideModalItem, selectedCategoryName)"
               :src="guideImageFor(guideModalItem, selectedCategoryName)"
-              :alt="`${guideModalItem.name} 촬영 예시`"
+              :alt="`${guideTitleFor(guideModalItem)} 촬영 예시`"
               class="h-full w-full object-contain"
             >
             <p

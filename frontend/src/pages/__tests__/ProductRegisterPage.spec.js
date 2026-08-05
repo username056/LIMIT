@@ -428,6 +428,32 @@ describe('ProductRegisterPage', () => {
     ])
   })
 
+  it('1단계 기본 체크리스트에서도 DSP-002를 디스플레이·스피커 확인으로 표시한다', async () => {
+    getDeviceCategories.mockResolvedValue([{ categoryId: 10, name: 'Windows 노트북' }])
+    generateChecklist.mockResolvedValue({
+      deviceModelId: 101,
+      manufacturer: 'Samsung',
+      modelName: 'Galaxy Book',
+      osFamily: 'WINDOWS',
+      aiApplied: true,
+      items: [{
+        itemCode: 'DSP-002',
+        name: '화면 전체 터치',
+        evidenceType: 'VIDEO',
+        required: true,
+      }],
+      aiSuggestions: [],
+      reviewCandidates: [],
+    })
+
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await fillDeviceStep(wrapper)
+
+    expect(wrapper.text()).toContain('디스플레이·스피커 확인')
+    expect(wrapper.text()).not.toContain('화면 전체 터치')
+  })
+
   it('기기 등록 정보를 입력하면 상품을 생성하고 촬영 단계로 진행한다', async () => {
     const wrapper = mount(ProductRegisterPage, { global: globalOptions })
     await flushPromises()
@@ -1783,6 +1809,31 @@ describe('ProductRegisterPage', () => {
       const modal = wrapper.find('[role="dialog"][aria-label="촬영 가이드"]')
       expect(modal.text()).toContain('비필수 항목의 서버 기본 가이드 문구')
       expect(modal.text()).not.toContain('사면 테두리가 모두 잘 보이도록')
+    })
+
+    it('DSP-002 카드는 서버의 터치 문구 대신 디스플레이·스피커 안내를 표시한다', async () => {
+      getDeviceCategories.mockResolvedValueOnce([{ categoryId: 10, name: 'Windows 노트북' }])
+      getProductChecklist.mockResolvedValue([
+        {
+          checklistItemId: 7003,
+          itemCode: 'DSP-002',
+          name: '화면 전체 터치',
+          guide: '화면 전체 격자를 끊김 없이 드래그하는 과정을 촬영하세요.',
+          evidenceType: 'VIDEO',
+          isRequired: true,
+          status: 'PENDING',
+        },
+      ])
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await goToCaptureStep(wrapper)
+
+      expect(wrapper.text()).toContain('디스플레이·스피커 확인')
+      expect(wrapper.text()).toContain('화면 표시 상태와 좌우 스피커의 소리 출력을 영상으로 확인해 주세요.')
+      expect(wrapper.text()).not.toContain('화면 전체 터치')
+      expect(wrapper.text()).not.toContain('화면 전체 격자를 끊김 없이 드래그')
+      expect(wrapper.find('button[aria-label="디스플레이·스피커 확인 촬영 가이드 보기"]').exists()).toBe(true)
     })
 
     // 영상 녹화는 지원하지 않습니다. 촬영 버튼을 보여주면 눌러도 할 수 있는 게 없습니다.
