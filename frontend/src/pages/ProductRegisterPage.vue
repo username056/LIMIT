@@ -72,6 +72,27 @@ const DEFAULT_MAX_MEDIA_PER_ITEM = 3
 // ListingImageUploadService.MAX_IMAGE_BYTES와 같은 값입니다. 서버가 거절하기 전에 안내하려고 둡니다.
 const MAX_LISTING_IMAGE_BYTES = 15 * 1024 * 1024
 
+/*
+  '다 올렸다'는 통보만 한 번에 하나씩 보냅니다.
+  ---------------------------------------------------------------------------
+  여러 장을 한꺼번에 올리면 그 통보들이 동시에 도착하는데, 서버는 그때 같은 항목·상품
+  줄을 함께 고칩니다. 그러다 DB에서 교착이 나서 한 장만 저장되고 나머지는 실패했습니다
+  (운영 로그: Deadlock found when trying to get lock).
+
+  그래서 압축과 전송은 지금처럼 동시에 두고 — 시간이 걸리는 건 이쪽입니다 — 마지막
+  통보만 줄을 세웁니다. 통보는 짧아서 줄을 서도 체감이 거의 없고, 여러 장을 한꺼번에
+  고르는 사용 방식은 그대로 유지됩니다.
+
+  앞 통보가 실패해도 줄이 끊기지 않게 성공·실패 양쪽에서 이어 붙입니다.
+*/
+let completionQueue = Promise.resolve()
+
+function queueCompletion(run) {
+  const result = completionQueue.then(run, run)
+  completionQueue = result.then(() => undefined, () => undefined)
+  return result
+}
+
 // 대표 이미지는 1단계에서 받습니다(pendingThumbnail 참고). 아직 '최소 1장 필수'로는 두지 않았습니다 —
 // 이미 이미지 없이 임시저장된 상품들이 있어서, 필수로 바꾸면 그 상품들이 수정 저장조차 못 하게 됩니다.
 // 필수로 올릴 때는 기존 초안 처리 방침을 먼저 정하고 validateSaleInfo에 규칙을 붙이세요.
@@ -1411,11 +1432,11 @@ async function handleCaptureFile(item, file) {
       uploadUrl.requiredHeaders || {},
       (progress) => { captureState[itemId].progress = progress },
     ))
-    const completed = await completeEvidence(
+    const completed = await queueCompletion(() => completeEvidence(
       currentProductId.value,
       item.checklistItemId,
       { uploadId: uploadUrl.uploadId },
-    )
+    ))
     mediaKeySeq += 1
     captureState[itemId].media.push({
       key: completed.evidenceId || mediaKeySeq,
@@ -1463,11 +1484,11 @@ async function handleListingImage(file, displayOrder = listingImages.value.lengt
       upload.requiredHeaders || {},
       (progress) => { listingImageProgress.value = progress },
     ))
-    const image = await completeProductImage(currentProductId.value, {
+    const image = await queueCompletion(() => completeProductImage(currentProductId.value, {
       uploadId: upload.uploadId,
       imageType: displayOrder === 0 ? 'THUMBNAIL' : 'DETAIL',
       displayOrder,
-    })
+    }))
     listingImages.value.push({
       ...image,
       previewUrl: URL.createObjectURL(optimizedFile),
