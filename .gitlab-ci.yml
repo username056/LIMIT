@@ -229,6 +229,7 @@ backend_unit_test:
     expire_in: 7 days
     paths:
       - backend/build/openapi/current.json
+      - backend/build/jacoco/test.exec
     reports:
       junit: backend/build/test-results/test/TEST-*.xml
   rules:
@@ -263,6 +264,8 @@ backend_integration_core_test:
   artifacts:
     when: always
     expire_in: 7 days
+    paths:
+      - backend/build/jacoco/integrationTest-core.exec
     reports:
       junit: backend/build/test-results/integrationTest/TEST-*.xml
   rules:
@@ -300,6 +303,8 @@ backend_integration_support_test:
   artifacts:
     when: always
     expire_in: 7 days
+    paths:
+      - backend/build/jacoco/integrationTest-support.exec
     reports:
       junit: backend/build/test-results/integrationTest/TEST-*.xml
   rules:
@@ -453,12 +458,52 @@ terraform_operations_validate:
         - infra/terraform/operations/**/*
         - .gitlab-ci.yml
 
+backend_coverage_report:
+  extends: .backend_gradle_job_pull
+  stage: quality
+  needs:
+    - job: backend_unit_test
+      artifacts: true
+      optional: true
+    - job: backend_integration_core_test
+      artifacts: true
+      optional: true
+    - job: backend_integration_support_test
+      artifacts: true
+      optional: true
+  allow_failure: true
+  script:
+    - cd backend
+    - ./gradlew classes jacocoTestReport -x test -x integrationTest --no-daemon
+    - test -s build/reports/jacoco/test/jacocoTestReport.xml
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths:
+      - backend/build/classes
+      - backend/build/reports/jacoco/test/jacocoTestReport.xml
+    reports:
+      coverage_report:
+        coverage_format: jacoco
+        path: backend/build/reports/jacoco/test/jacocoTestReport.xml
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *backend_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
+      changes: *backend_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
+      changes: *backend_changes
+
 sonarqube:
   stage: quality
   image:
     name: sonarsource/sonar-scanner-cli:11
     entrypoint: [""]
-  needs: []
+  needs:
+    - job: backend_coverage_report
+      artifacts: true
+      optional: true
+  allow_failure: true
   cache:
     key: sonar
     paths: [.sonar/cache]
@@ -466,7 +511,12 @@ sonarqube:
     SONAR_USER_HOME: "$CI_PROJECT_DIR/.sonar"
   script: ["sh scripts/ci-quality.sh"]
   rules:
-    - when: never
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *backend_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
+      changes: *backend_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
+      changes: *backend_changes
 
 pr_agent_review:
   stage: quality
