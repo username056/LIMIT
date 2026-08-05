@@ -7,8 +7,6 @@ public static class ModuleTestTypes
     public const string Charging = "CHARGING";
     public const string Camera = "CAMERA";
     public const string Microphone = "MICROPHONE";
-    public const string Keyboard = "KEYBOARD";
-    public const string Pointer = "TOUCHPAD";
 }
 
 public static class ModuleMeasurementStatuses
