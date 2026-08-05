@@ -26,11 +26,15 @@ run_backend_integration() {
 run_backend_integration_core() {
   cd "$root_dir/backend"
   ./gradlew integrationTest -PintegrationSuite=core --no-daemon
+  test -s build/jacoco/integrationTest.exec \
+    && cp build/jacoco/integrationTest.exec build/jacoco/integrationTest-core.exec
 }
 
 run_backend_integration_support() {
   cd "$root_dir/backend"
   ./gradlew integrationTest -PintegrationSuite=support --no-daemon
+  test -s build/jacoco/integrationTest.exec \
+    && cp build/jacoco/integrationTest.exec build/jacoco/integrationTest-support.exec
 }
 
 run_backend_infrastructure() {
