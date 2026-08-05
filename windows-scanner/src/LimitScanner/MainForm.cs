@@ -69,9 +69,8 @@ public sealed class MainForm : Form
         statusLabel.Margin = new Padding(3, 0, 3, 12);
         finalSubmitButton.Padding = new Padding(18, 8, 18, 8);
         finalSubmitButton.Margin = new Padding(3, 4, 3, 4);
-
-        pairingCodeTextBox.TextChanged += (_, _) => UpdateStartButton();
-        consentCheckBox.CheckedChanged += (_, _) => UpdateStartButton();
+        pairingCodeTextBox.TextChanged += (_, _) => UpdatePreparationState();
+        consentCheckBox.CheckedChanged += (_, _) => UpdatePreparationState();
         startButton.Click += StartButton_Click;
         finalSubmitButton.Click += FinalSubmitButton_Click;
 
@@ -102,6 +101,26 @@ public sealed class MainForm : Form
             && code.Length == 6
             && code.All(char.IsDigit)
             && !progressBar.Visible;
+    }
+
+    private void UpdatePreparationState()
+    {
+        UpdateStartButton();
+        var code = pairingCodeTextBox.Text.Trim();
+        var canPrepare = consentCheckBox.Checked
+            && code.Length == 6
+            && code.All(char.IsDigit)
+            && !progressBar.Visible;
+
+        if (canPrepare)
+        {
+            coordinator.StartPreparation();
+            statusLabel.Text = "시스템 정보를 미리 준비하고 있습니다. 진단 시작을 눌러 전송해 주세요.";
+        }
+        else
+        {
+            _ = coordinator.CancelPreparationAsync();
+        }
     }
 
     private async void StartButton_Click(object? sender, EventArgs eventArgs)
@@ -186,5 +205,11 @@ public sealed class MainForm : Form
     {
         base.OnLoad(eventArgs);
         DiagnosticFormSizing.FitToWorkingArea(this);
+    }
+
+    protected override async void OnFormClosed(FormClosedEventArgs eventArgs)
+    {
+        await coordinator.CancelPreparationAsync();
+        base.OnFormClosed(eventArgs);
     }
 }
