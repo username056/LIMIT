@@ -89,11 +89,10 @@ describe('CallsPage', () => {
     getProductImages.mockResolvedValue([])
   })
 
-  it('대기, 진행 중, 완료, 종료 상태 필터를 유지하고 요청 카드 디자인으로 표시한다', async () => {
+  it('대기, 진행 중, 종료 상태 필터를 유지하고 요청 카드 디자인으로 표시한다', async () => {
     getMyRtcCalls.mockResolvedValue([
       { ...outgoingCall, callId: 20, chatRoomId: 7, status: 'PROPOSED' },
       { ...outgoingCall, callId: 21, chatRoomId: 7, status: 'ACCEPTED' },
-      { ...outgoingCall, callId: 22, chatRoomId: 7, status: 'COMPLETED' },
       { ...outgoingCall, callId: 23, chatRoomId: 7, status: 'REJECTED' },
       { ...outgoingCall, callId: 24, chatRoomId: 7, status: 'CANCELED' },
       {
@@ -102,6 +101,7 @@ describe('CallsPage', () => {
         chatRoomId: 7,
         status: 'ACCEPTED',
         scheduledAt: '2020-01-01T00:00:00',
+        inspectionSubmittedAt: '2020-01-01T00:10:00',
       },
       {
         ...outgoingCall,
@@ -116,12 +116,11 @@ describe('CallsPage', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('갤럭시 테스트 상품')
-    expect(wrapper.text()).toContain('전체 목록 (7)')
+    expect(wrapper.text()).toContain('전체 목록 (6)')
     expect(wrapper.text()).toContain('대기 (1)')
     expect(wrapper.text()).toContain('진행 중 (1)')
-    expect(wrapper.text()).toContain('완료 (1)')
     expect(wrapper.text()).toContain('종료 (4)')
-    expect(wrapper.findAll('[data-testid="rtc-request-card"]')).toHaveLength(7)
+    expect(wrapper.findAll('[data-testid="rtc-request-card"]')).toHaveLength(6)
     expect(wrapper.get('[data-testid="rtc-request-card"]').classes()).toContain('request-card')
 
     await wrapper.findAll('button').find((button) => button.text() === '대기 (1)').trigger('click')
@@ -134,16 +133,12 @@ describe('CallsPage', () => {
     expect(wrapper.findAll('[data-testid="rtc-request-card"]')).toHaveLength(1)
     expect(wrapper.text()).toContain('일정 확정')
 
-    await wrapper.findAll('button').find((button) => button.text() === '완료 (1)').trigger('click')
-
-    expect(wrapper.findAll('[data-testid="rtc-request-card"]')).toHaveLength(1)
-    expect(wrapper.text()).toContain('검수 완료')
-
     await wrapper.findAll('button').find((button) => button.text() === '종료 (4)').trigger('click')
 
     expect(wrapper.findAll('[data-testid="rtc-request-card"]')).toHaveLength(4)
     expect(wrapper.text()).toContain('거절됨')
     expect(wrapper.text()).toContain('취소됨')
+    expect(wrapper.text()).toContain('검수 완료')
     expect(wrapper.text()).toContain('세션 만료')
     expect(wrapper.text()).not.toContain('시간 만료')
   })
@@ -315,7 +310,7 @@ describe('CallsPage', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('종료 (1)')
-    expect(wrapper.text()).toContain('완료 (0)')
+    expect(wrapper.text()).not.toContain('완료 (')
     expect(wrapper.text()).toContain('세션 만료')
     expect(wrapper.findAll('button').some((button) => button.text() === '통화 입장')).toBe(false)
 
@@ -323,6 +318,23 @@ describe('CallsPage', () => {
 
     expect(wrapper.text()).not.toContain('시간 만료')
     expect(wrapper.text()).toContain('갤럭시 테스트 상품')
+  })
+
+  it('검수 결과를 제출한 세션은 만료 후에도 검수 완료로 표시한다', async () => {
+    getMyRtcCalls.mockResolvedValue([{
+      ...outgoingCall,
+      chatRoomId: 7,
+      status: 'ACCEPTED',
+      scheduledAt: '2020-01-01T00:00:00',
+      sessionExpiresAt: '2020-01-01T00:30:00',
+      inspectionSubmittedAt: '2020-01-01T00:10:00',
+    }])
+
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('검수 완료')
+    expect(wrapper.text()).not.toContain('세션 만료')
   })
 
   it('응답 대기 중 예정 시각에서 30분이 지나면 종료로 분류하고 응답 버튼을 숨긴다', async () => {

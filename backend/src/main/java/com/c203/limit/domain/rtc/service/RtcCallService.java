@@ -346,7 +346,7 @@ public class RtcCallService {
         } catch (IllegalArgumentException exception) {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
         }
-        session.disconnect(reason, request.memo(), LocalDateTime.now().plusMinutes(30));
+        session.disconnectAfterInspection(reason, request.memo(), LocalDateTime.now());
         log.info(
                 "RTC inspection session disconnected: sessionId={}, expiresAt={}",
                 sessionId,
@@ -432,7 +432,8 @@ public class RtcCallService {
                                         : appointment.getProposerId())
                         .map(member -> member.getNickname())
                         .orElse(null),
-                session == null ? null : session.getExpiresAt());
+                session == null ? null : session.getExpiresAt(),
+                session == null ? null : session.getInspectionSubmittedAt());
     }
 
     private String memberNickname(Long memberId) {
@@ -475,6 +476,7 @@ public class RtcCallService {
                 session.getStatus().name(),
                 session.getExpiresAt(),
                 session.getConnectedAt(),
+                session.getInspectionSubmittedAt(),
                 session.getEndedAt(),
                 session.getVerificationMemo(),
                 checklistItems);

@@ -64,10 +64,12 @@ async function load() {
     calls.value = await Promise.all(loadedCalls.map(async (call) => {
       const room = rooms.find(({ roomId }) => Number(roomId) === Number(call.chatRoomId))
       let sessionExpiresAt = call.sessionExpiresAt
+      let inspectionSubmittedAt = call.inspectionSubmittedAt
       if (!sessionExpiresAt && call.rtcSessionId) {
         try {
           const session = await getRtcSession(call.rtcSessionId)
           sessionExpiresAt = session.expiresAt
+          inspectionSubmittedAt = session.inspectionSubmittedAt
         } catch {
           // 통화 목록은 유지하고, 세션 만료 정보만 표시하지 않는다.
         }
@@ -76,6 +78,7 @@ async function load() {
         ...call,
         counterpartName: call.counterpartName || room?.counterpartNickname || null,
         sessionExpiresAt,
+        inspectionSubmittedAt,
         productId: room?.listingId || null,
         productName: room?.listingTitle || (room?.listingId ? `상품 #${room.listingId}` : '상품 정보 없음'),
         productThumbnailUrl: room?.listingThumbnailUrl
@@ -223,11 +226,12 @@ function sessionCountdownLabel(call) {
   if (!hasSessionStarted(call)) return `시작까지 ${remainingTime(call.scheduledAt)}`
   const expiresAt = callExpirationAt(call)
   if (!expiresAt) return null
-  return isSessionExpired(call) ? '세션 만료' : `만료까지 ${remainingTime(expiresAt)}`
+  if (isSessionExpired(call)) return call.inspectionSubmittedAt ? null : '세션 만료'
+  return `만료까지 ${remainingTime(expiresAt)}`
 }
 
 function callExpirationAt(call) {
-  if (!call.scheduledAt || !['PROPOSED', 'ACCEPTED', 'COMPLETED'].includes(call.status)) return null
+  if (!call.scheduledAt || !['PROPOSED', 'ACCEPTED'].includes(call.status)) return null
   return new Date(new Date(call.scheduledAt).getTime() + 30 * 60 * 1000)
 }
 
@@ -237,10 +241,6 @@ function isCallPending(call) {
 
 function isCallInProgress(call) {
   return call.status === 'ACCEPTED' && !isSessionExpired(call)
-}
-
-function isCallCompleted(call) {
-  return call.status === 'COMPLETED'
 }
 
 function isCallEnded(call) {
@@ -253,32 +253,28 @@ const callCounts = computed(() => ({
   전체: calls.value.length,
   대기: calls.value.filter(isCallPending).length,
   진행중: calls.value.filter(isCallInProgress).length,
-  완료: calls.value.filter(isCallCompleted).length,
   종료: calls.value.filter(isCallEnded).length,
 }))
 const callTabs = computed(() => [
   { key: '전체 목록', label: `전체 목록 (${callCounts.value.전체})` },
   { key: '대기', label: `대기 (${callCounts.value.대기})` },
   { key: '진행 중', label: `진행 중 (${callCounts.value.진행중})` },
-  { key: '완료', label: `완료 (${callCounts.value.완료})` },
   { key: '종료', label: `종료 (${callCounts.value.종료})` },
 ])
 const filteredCalls = computed(() => {
   if (callFilter.value === '대기') return calls.value.filter(isCallPending)
   if (callFilter.value === '진행 중') return calls.value.filter(isCallInProgress)
-  if (callFilter.value === '완료') return calls.value.filter(isCallCompleted)
   if (callFilter.value === '종료') return calls.value.filter(isCallEnded)
   return calls.value
 })
 
 function callTone(call) {
-  if (isCallCompleted(call)) return 'done'
   if (isCallEnded(call)) return 'cancelled'
   return 'scheduled'
 }
 
 function callStatusLabel(call) {
-  if (isCallCompleted(call)) return '검수 완료'
+  if (isSessionExpired(call) && call.inspectionSubmittedAt) return '검수 완료'
   if (call.status === 'REJECTED') return '거절됨'
   if (call.status === 'CANCELED') return '취소됨'
   if (isSessionExpired(call)) return null

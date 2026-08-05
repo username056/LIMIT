@@ -169,26 +169,30 @@ class ProductDraftProgressServiceTests {
         assertThat(item.getDeviceCheckResult()).isNull();
     }
 
+    // 디스플레이·충전은 EvidenceType.VIDEO라 실제 영상 증빙으로만 완료돼야 한다. 이 경로로
+    // device-check 결과를 보내 완료 처리를 우회할 수 없도록, 체크리스트 항목 목록에 없는
+    // ID로 취급해 요청 자체를 거부한다.
     @Test
-    void displayAndChargingVideoItemsAcceptWebDeviceCheckResults() {
+    void displayAndChargingVideoItemsRejectWebDeviceCheckResults() {
         ListingChecklistItem display = videoItem(21L, "LAP-DSP-003");
         ListingChecklistItem charging = videoItem(22L, "LAP-CHG-007");
         when(checklistItems.findByListingIdOrderByDisplayOrderAsc(PRODUCT_ID))
                 .thenReturn(List.of(display, charging));
 
-        ProductDraftProgressResponse response = service.update(
-                SELLER_ID,
-                PRODUCT_ID,
-                new UpdateProductDraftProgressRequest(
-                        2,
-                        List.of(
-                                new ChecklistItemResult(21L, DeviceCheckResult.SUCCESS),
-                                new ChecklistItemResult(22L, DeviceCheckResult.SUCCESS))));
+        assertThatThrownBy(() -> service.update(
+                        SELLER_ID,
+                        PRODUCT_ID,
+                        new UpdateProductDraftProgressRequest(
+                                2,
+                                List.of(
+                                        new ChecklistItemResult(21L, DeviceCheckResult.SUCCESS),
+                                        new ChecklistItemResult(22L, DeviceCheckResult.SUCCESS)))))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).getErrorCode())
+                .isEqualTo(ErrorCode.ITEM_NOT_FOUND);
 
-        assertThat(display.getCompletionStatus()).isEqualTo(ChecklistItemCompletionStatus.COMPLETED);
-        assertThat(charging.getCompletionStatus()).isEqualTo(ChecklistItemCompletionStatus.COMPLETED);
-        assertThat(response.results()).containsEntry(21L, DeviceCheckResult.SUCCESS)
-                .containsEntry(22L, DeviceCheckResult.SUCCESS);
+        assertThat(display.getCompletionStatus()).isEqualTo(ChecklistItemCompletionStatus.PENDING);
+        assertThat(charging.getCompletionStatus()).isEqualTo(ChecklistItemCompletionStatus.PENDING);
     }
 
     @Test

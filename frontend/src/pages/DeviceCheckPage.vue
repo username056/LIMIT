@@ -7,20 +7,12 @@ import BaseCard from '../components/BaseCard.vue'
 import BaseButton from '../components/BaseButton.vue'
 import { getProductChecklist, getProductDraftProgress, updateProductDraftProgress } from '../api/products'
 import { CHECK_KIND, toUniversalCheckItems } from '../features/deviceCheck/checkableItemCodes'
-import { useCameraCheck } from '../features/deviceCheck/useCameraCheck'
-import { useMicCheck } from '../features/deviceCheck/useMicCheck'
-import { useSpeakerCheck } from '../features/deviceCheck/useSpeakerCheck'
 import { AMBIGUOUS_CODES, OS_RESERVED_CODES, useKeyboardCheck } from '../features/deviceCheck/useKeyboardCheck'
 import { usePointerInteractionCheck } from '../features/deviceCheck/usePointerInteractionCheck'
 
 const POINTER_TIMEOUT_MS = 10000
 
 const CHECK_KIND_LABEL = {
-  [CHECK_KIND.CAMERA]: '카메라',
-  [CHECK_KIND.MIC]: '마이크',
-  [CHECK_KIND.SPEAKER]: '스피커',
-  [CHECK_KIND.DISPLAY]: '디스플레이',
-  [CHECK_KIND.CHARGING]: '충전',
   [CHECK_KIND.KEYBOARD]: '키보드',
   [CHECK_KIND.NUMPAD]: '숫자 키패드',
   [CHECK_KIND.POINTER]: '마우스/터치패드',
@@ -86,12 +78,9 @@ const existingDeviceResults = ref(new Map())
 const existingAutomaticDeviceResults = ref(new Map())
 const draftStep = ref(1)
 const finished = ref(false)
-const videoEl = ref(null)
 const pointerAreaEl = ref(null)
 const keyboardMissing = ref([])
 const keyboardMissingUnreliable = ref([])
-const displayStarted = ref(false)
-const chargingStarted = ref(false)
 const forceRecheckIds = reactive(new Set())
 
 /*
@@ -110,9 +99,6 @@ const backToRegister = {
   query: { step: '2', resumeProductId: String(productId) },
 }
 
-const camera = useCameraCheck()
-const mic = useMicCheck()
-const speaker = useSpeakerCheck()
 let keyboard = null
 const pointer = shallowRef(null)
 let pointerTimeoutId = null
@@ -184,23 +170,9 @@ async function runCurrent() {
   if (!item) return
   keyboardMissing.value = []
   keyboardMissingUnreliable.value = []
-  displayStarted.value = false
-  chargingStarted.value = false
   clearTimeout(pointerTimeoutId)
 
-  if (item.checkKind === CHECK_KIND.CAMERA) {
-    const passed = await camera.start(videoEl.value)
-    markResult(item.testType, passed)
-  } else if (item.checkKind === CHECK_KIND.MIC) {
-    const passed = await mic.start()
-    markResult(item.testType, passed)
-  } else if (item.checkKind === CHECK_KIND.SPEAKER) {
-    speaker.playTone()
-  } else if (item.checkKind === CHECK_KIND.DISPLAY) {
-    displayStarted.value = true
-  } else if (item.checkKind === CHECK_KIND.CHARGING) {
-    chargingStarted.value = true
-  } else if (item.checkKind === CHECK_KIND.KEYBOARD) {
+  if (item.checkKind === CHECK_KIND.KEYBOARD) {
     keyboard = useKeyboardCheck({ includeNumpad: false })
     keyboard.start()
   } else if (item.checkKind === CHECK_KIND.NUMPAD) {
@@ -221,17 +193,8 @@ async function runCurrent() {
   }
 }
 
-function confirmManualCheck(passed) {
-  markResult(currentItem.value.testType, passed)
-}
-
 function forceRecheckCurrent() {
   forceRecheckIds.add(currentItem.value.testType)
-}
-
-function confirmSpeakerHeard(heard) {
-  speaker.confirmHeard(heard)
-  markResult(currentItem.value.testType, heard)
 }
 
 function finishKeyboard() {
@@ -252,8 +215,6 @@ function retryCurrent() {
 }
 
 function next() {
-  camera.stop()
-  mic.stop()
   keyboard?.stop()
   keyboard = null
   clearTimeout(pointerTimeoutId)
@@ -264,8 +225,6 @@ function next() {
 }
 
 function previous() {
-  camera.stop()
-  mic.stop()
   keyboard?.stop()
   keyboard = null
   pointer.value?.stop()
@@ -311,8 +270,6 @@ async function save() {
 }
 
 onBeforeUnmount(() => {
-  camera.stop()
-  mic.stop()
   keyboard?.stop()
   clearTimeout(pointerTimeoutId)
   pointer.value?.stop()
@@ -436,203 +393,6 @@ onBeforeUnmount(() => {
                 @click="forceRecheckCurrent"
               >
                 다시 점검
-              </BaseButton>
-            </div>
-          </div>
-
-          <!-- 카메라 -->
-          <div
-            v-else-if="currentItem.checkKind === 'CAMERA'"
-            class="mt-4"
-          >
-            <video
-              ref="videoEl"
-              class="w-full rounded-md bg-black"
-              muted
-              playsinline
-            />
-            <p class="mt-3 text-sm text-text-sub">
-              {{ camera.detail.value }}
-            </p>
-            <p class="mt-2 text-sm leading-6 text-text-sub">
-              카메라가 켜지면 약 3초 동안 손을 흔들거나 기기를 조금 움직여 주세요.
-              화면 변화를 감지하면 자동으로 점검이 완료됩니다.
-            </p>
-            <div class="mt-4 flex gap-3">
-              <BaseButton
-                v-if="camera.status.value === 'idle'"
-                @click="runCurrent"
-              >
-                점검 시작
-              </BaseButton>
-              <BaseButton
-                v-else-if="camera.status.value === 'failed'"
-                variant="outline"
-                @click="retryCurrent"
-              >
-                다시 시도
-              </BaseButton>
-              <BaseButton
-                v-if="camera.status.value === 'passed' || camera.status.value === 'failed'"
-                @click="next"
-              >
-                다음
-              </BaseButton>
-            </div>
-          </div>
-
-          <!-- 마이크 -->
-          <div
-            v-else-if="currentItem.checkKind === 'MIC'"
-            class="mt-4"
-          >
-            <p class="text-sm text-text-sub">
-              마이크에 대고 말해 주세요. (입력 레벨: {{ mic.level.value }})
-            </p>
-            <p
-              v-if="mic.detail.value"
-              class="mt-2 text-sm text-red-600"
-            >
-              {{ mic.detail.value }}
-            </p>
-            <div class="mt-4 flex gap-3">
-              <BaseButton
-                v-if="mic.status.value === 'idle'"
-                @click="runCurrent"
-              >
-                점검 시작
-              </BaseButton>
-              <BaseButton
-                v-else-if="mic.status.value === 'failed'"
-                variant="outline"
-                @click="retryCurrent"
-              >
-                다시 시도
-              </BaseButton>
-              <BaseButton
-                v-if="mic.status.value === 'passed' || mic.status.value === 'failed'"
-                @click="next"
-              >
-                다음
-              </BaseButton>
-            </div>
-          </div>
-
-          <!-- 스피커 -->
-          <div
-            v-else-if="currentItem.checkKind === 'SPEAKER'"
-            class="mt-4"
-          >
-            <p class="text-sm text-text-sub">
-              테스트음이 재생됩니다. 소리가 들렸는지 확인해 주세요.
-            </p>
-            <div class="mt-4 flex gap-3">
-              <BaseButton
-                v-if="speaker.status.value === 'idle'"
-                @click="runCurrent"
-              >
-                테스트음 재생
-              </BaseButton>
-              <template v-else-if="speaker.status.value === 'awaitingConfirmation'">
-                <BaseButton @click="confirmSpeakerHeard(true)">
-                  들렸어요
-                </BaseButton>
-                <BaseButton
-                  variant="outline"
-                  @click="confirmSpeakerHeard(false)"
-                >
-                  안 들렸어요
-                </BaseButton>
-              </template>
-              <BaseButton
-                v-if="speaker.status.value === 'failed'"
-                variant="outline"
-                @click="retryCurrent"
-              >
-                다시 시도
-              </BaseButton>
-              <BaseButton
-                v-if="speaker.status.value === 'passed' || speaker.status.value === 'failed'"
-                @click="next"
-              >
-                다음
-              </BaseButton>
-            </div>
-          </div>
-
-          <!-- 디스플레이 -->
-          <div
-            v-else-if="currentItem.checkKind === 'DISPLAY'"
-            class="mt-4"
-          >
-            <p class="text-sm text-text-sub">
-              점검을 시작한 뒤 흰색·검은색·빨강·초록·파랑 영역에서 멍, 줄, 깜빡임과 불량 화소를 확인하세요.
-            </p>
-            <div
-              v-if="displayStarted"
-              class="mt-4 grid h-48 grid-cols-5 overflow-hidden rounded-md border border-border"
-            >
-              <span class="bg-white" /><span class="bg-black" /><span class="bg-red-600" />
-              <span class="bg-green-600" /><span class="bg-blue-600" />
-            </div>
-            <div class="mt-4 flex flex-wrap gap-3">
-              <BaseButton
-                v-if="!displayStarted"
-                @click="runCurrent"
-              >
-                점검 시작
-              </BaseButton>
-              <template v-else-if="!itemResults.has(currentItem.testType)">
-                <BaseButton @click="confirmManualCheck(true)">
-                  정상이에요
-                </BaseButton>
-                <BaseButton
-                  variant="outline"
-                  @click="confirmManualCheck(false)"
-                >
-                  이상이 있어요
-                </BaseButton>
-              </template>
-              <BaseButton
-                v-else
-                @click="next"
-              >
-                다음
-              </BaseButton>
-            </div>
-          </div>
-
-          <!-- 충전 -->
-          <div
-            v-else-if="currentItem.checkKind === 'CHARGING'"
-            class="mt-4"
-          >
-            <p class="text-sm text-text-sub">
-              충전기를 연결하거나 분리하고 운영체제의 배터리 아이콘과 충전 표시가 바뀌는지 확인하세요.
-            </p>
-            <div class="mt-4 flex flex-wrap gap-3">
-              <BaseButton
-                v-if="!chargingStarted"
-                @click="runCurrent"
-              >
-                점검 시작
-              </BaseButton>
-              <template v-else-if="!itemResults.has(currentItem.testType)">
-                <BaseButton @click="confirmManualCheck(true)">
-                  정상이에요
-                </BaseButton>
-                <BaseButton
-                  variant="outline"
-                  @click="confirmManualCheck(false)"
-                >
-                  인식되지 않아요
-                </BaseButton>
-              </template>
-              <BaseButton
-                v-else
-                @click="next"
-              >
-                다음
               </BaseButton>
             </div>
           </div>

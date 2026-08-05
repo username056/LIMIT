@@ -29,14 +29,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ProductDraftProgressService {
     private static final Logger log = LoggerFactory.getLogger(ProductDraftProgressService.class);
+    // 스피커·디스플레이·충전·카메라·마이크는 실동작 점검에서 빠졌다. 특히 디스플레이·충전은
+    // EvidenceType.VIDEO라 실제 영상 증빙 없이 이 목록에 있으면 device-check 결과만으로
+    // COMPLETED 처리가 되어 영상 업로드를 우회할 수 있었다. 키보드·포인터만 남긴다.
     private static final Set<String> WEB_DEVICE_CHECK_ITEM_CODES = Set.of(
-            "LAP-FTR-SPK",
-            "LAP-DSP-003",
-            "LAP-CHG-007",
-            "LAP-FTR-CAM",
-            "LAP-FTR-MIC",
             "LAP-KBD-005",
-            "LAP-PAD-006");
+            "LAP-PAD-006",
+            "LAP-FTR-NUM");
 
     private final ListingRepository listings;
     private final ListingChecklistItemRepository checklistItems;

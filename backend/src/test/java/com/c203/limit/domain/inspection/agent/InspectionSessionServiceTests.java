@@ -195,16 +195,16 @@ class InspectionSessionServiceTests {
         var paired = service.pair(created.pairingCode(), "0.1.0");
         when(sessionRepository.findBySessionKeyForUpdate(created.sessionKey()))
                 .thenReturn(Optional.of(stored));
-        ListingChecklistItem cameraItem = mock(ListingChecklistItem.class);
-        when(cameraItem.getId()).thenReturn(7001L);
-        when(checklistItemRepository.findByListingIdAndItemCode(1001L, "LAP-FTR-CAM"))
-                .thenReturn(Optional.of(cameraItem));
+        ListingChecklistItem keyboardItem = mock(ListingChecklistItem.class);
+        when(keyboardItem.getId()).thenReturn(7001L);
+        when(checklistItemRepository.findByListingIdAndItemCode(1001L, "LAP-KBD-005"))
+                .thenReturn(Optional.of(keyboardItem));
 
         UUID clientResultId = UUID.randomUUID();
         OffsetDateTime testedAt = OffsetDateTime.parse("2026-08-03T01:00:00Z");
         var request = new SubmitTestResultRequest(
                 clientResultId,
-                TestType.CAMERA,
+                TestType.KEYBOARD,
                 MeasurementStatus.DETECTED,
                 InspectionUserResult.USER_CONFIRMED,
                 java.util.Map.of("width", 1280, "height", 720),
@@ -219,12 +219,45 @@ class InspectionSessionServiceTests {
         assertThat(response.clientResultId()).isEqualTo(clientResultId);
         assertThat(response.listingId()).isEqualTo(1001L);
         assertThat(response.checklistItemId()).isEqualTo(7001L);
-        assertThat(response.testType()).isEqualTo(TestType.CAMERA);
+        assertThat(response.testType()).isEqualTo(TestType.KEYBOARD);
         assertThat(response.measurementStatus()).isEqualTo(MeasurementStatus.DETECTED);
         assertThat(response.attemptNo()).isEqualTo(1);
         assertThat(response.rawDataSaved()).isFalse();
         assertThat(response.testedAt()).isEqualTo(testedAt);
-        verify(cameraItem).applyDeviceCheckResult(DeviceCheckResult.SUCCESS);
+        verify(keyboardItem).applyDeviceCheckResult(DeviceCheckResult.SUCCESS);
+    }
+
+    // 디스플레이·충전은 실동작 점검에서 빠졌고 EvidenceType.VIDEO라, 이 경로로 device-check
+    // 결과가 와도 체크리스트 항목을 완료 처리해선 안 된다(영상 증빙 우회 방지).
+    @Test
+    void chargingResultDoesNotCompleteAnyChecklistItem() {
+        var created = service.create(10L, 1001L);
+        InspectionSession stored = captureCreatedSession(created.sessionKey());
+        when(sessionRepository
+                        .findFirstByPairingCodeHashAndStatusAndExpiresAtAfterOrderByCreatedAtDesc(
+                                any(byte[].class),
+                                eq(InspectionSessionStatus.CREATED),
+                                any()))
+                .thenReturn(Optional.of(stored));
+        when(sessionRepository.findById(created.sessionKey())).thenReturn(Optional.of(stored));
+
+        var paired = service.pair(created.pairingCode(), "0.1.0");
+        when(sessionRepository.findBySessionKeyForUpdate(created.sessionKey()))
+                .thenReturn(Optional.of(stored));
+
+        var request = new SubmitTestResultRequest(
+                UUID.randomUUID(),
+                TestType.CHARGING,
+                MeasurementStatus.DETECTED,
+                null,
+                java.util.Map.of("acConnected", true),
+                OffsetDateTime.parse("2026-08-03T01:00:00Z"),
+                null);
+
+        var submission = service.submitTestResult(
+                "Bearer " + paired.agentToken(), created.sessionKey(), request);
+
+        assertThat(submission.response().checklistItemId()).isNull();
     }
 
     @Test

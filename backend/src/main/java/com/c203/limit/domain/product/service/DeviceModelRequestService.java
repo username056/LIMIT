@@ -248,6 +248,7 @@ public class DeviceModelRequestService {
                         item.getAutomationType(),
                         item.getParserType(),
                         item.isRequired(),
+                        item.isVisibleToBuyer(),
                         item.getDisplayOrder()))
                 .toList());
         template.publish();
