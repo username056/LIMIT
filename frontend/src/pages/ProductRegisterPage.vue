@@ -3211,8 +3211,11 @@ onMounted(async () => {
             <h2 class="mt-4 text-lg font-bold text-text-main">
               체크리스트 등록이 완료되었습니다.
             </h2>
+            <!-- 끝났다는 사실과 다음에 할 일을 각각 한 줄로 둡니다. 한 줄로 이으면
+                 '완료를 누르면'이라는 안내가 축하 문구에 묻힙니다. -->
             <p class="mt-2 text-sm text-text-sub">
-              ‘{{ form.name }}’ 등록이 끝났어요. 완료를 누르면 바로 판매가 시작되고 상품 상세 페이지로 이동합니다.
+              ‘{{ form.name }}’ 등록이 끝났어요.<br>
+              완료를 누르면 바로 판매가 시작되고 상품 상세 페이지로 이동합니다.
             </p>
 
             <dl class="mt-6 grid grid-cols-2 gap-4 rounded-lg border border-border bg-bg p-6 text-left text-sm">
