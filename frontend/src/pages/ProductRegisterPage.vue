@@ -236,6 +236,7 @@ const confirmState = reactive({})
 const DEVICE_CHECK_RESULT = { SUCCESS: 'SUCCESS' }
 const draftProgressResults = ref(new Map())
 const draftDeviceResults = ref(new Map())
+const automaticDeviceResults = ref(new Map())
 // diagnosisState[checklistItemId] = { status: 'parsing'|'ready'|'error', fields: [...], errorMessage }
 // fields의 각 항목은 취합 응답(fieldName/ocrValue/fileParseValue/conflict/confirmedValue)에
 // draftValue(입력창 값)와 saving(저장 중 여부)을 더한 것입니다.
@@ -325,6 +326,7 @@ async function refreshAutomatedDiagnoses() {
   ])
   checklistItems.value = checklist
   draftDeviceResults.value = new Map(Object.entries(progress.deviceResults || {}))
+  automaticDeviceResults.value = new Map(Object.entries(progress.automaticDeviceResults || {}))
   checklistItems.value
     .filter((item) => CHECKABLE_ITEM_CODES[item.itemCode])
     .forEach((item) => {
@@ -340,6 +342,7 @@ async function refreshDeviceCheckProgress() {
   const progress = await getProductDraftProgress(currentProductId.value)
   draftProgressResults.value = progressResultsMap(progress.results) || new Map()
   draftDeviceResults.value = new Map(Object.entries(progress.deviceResults || {}))
+  automaticDeviceResults.value = new Map(Object.entries(progress.automaticDeviceResults || {}))
   checklistItems.value
     .filter((item) => CHECKABLE_ITEM_CODES[item.itemCode])
     .forEach((item) => {
@@ -359,12 +362,12 @@ function beginWindowsInspectionPolling(sessionKey) {
       if (session.status === 'COMPLETED') {
         stopWindowsInspectionPolling()
         await refreshAutomatedDiagnoses()
-        notice.value = 'Windows 자동 검사 결과가 체크리스트에 반영되었습니다.'
+        notice.value = 'Windows 자동 진단 결과가 체크리스트에 반영되었습니다.'
       } else if (['FAILED', 'EXPIRED'].includes(session.status)) {
         stopWindowsInspectionPolling()
         windowsInspectionError.value = session.status === 'EXPIRED'
           ? '연결 코드가 만료됐습니다. 새 코드를 발급해 주세요.'
-          : 'Windows 자동 검사를 완료하지 못했습니다.'
+          : 'Windows 자동 진단을 완료하지 못했습니다.'
       }
     } catch (error) {
       stopWindowsInspectionPolling()
@@ -382,7 +385,7 @@ async function startWindowsInspection() {
     windowsInspection.value = await createInspectionSession(currentProductId.value)
     beginWindowsInspectionPolling(windowsInspection.value.sessionKey)
   } catch (error) {
-    windowsInspectionError.value = error.message || 'Windows 자동 검사를 시작하지 못했습니다.'
+    windowsInspectionError.value = error.message || 'Windows 자동 진단을 시작하지 못했습니다.'
   } finally {
     windowsInspectionBusy.value = false
   }
@@ -468,12 +471,12 @@ function progressOf(checklistItemId) {
 function captureStatusOf(checklistItemId) {
   const busy = busyOf(checklistItemId)
   if (busy) return busy
-  if (mediaOf(checklistItemId).length) return 'captured'
 
   const item = checklistItems.value.find(
     (candidate) => candidate.checklistItemId === checklistItemId,
   )
-  return isAutomatedDiagnosisComplete(item) ? 'auto-completed' : 'idle'
+  if (isAutomatedDiagnosisComplete(item)) return 'auto-completed'
+  return mediaOf(checklistItemId).length ? 'captured' : 'idle'
 }
 
 function maxMediaFor(item) {
@@ -561,6 +564,9 @@ const deviceCheckConfirmedCount = computed(
 // draft 편집 중에는 draftProgressResults로 FAILED와 미점검을 구분할 수 있지만, 이미 판매 중인
 // 상품을 고칠 때는 서버가 COMPLETED/PENDING만 내려줘 구분할 수 없어 미점검으로만 표시합니다.
 function deviceCheckStatus(item) {
+  const automaticResult = automaticDeviceResults.value.get(item.testType)
+  if (automaticResult === 'SUCCESS') return 'COMPLETED'
+  if (automaticResult === 'FAILED') return 'FAILED'
   const webResult = draftDeviceResults.value.get(item.testType)
   if (webResult === 'SUCCESS') return 'COMPLETED'
   if (webResult === 'FAILED') return 'FAILED'
@@ -572,9 +578,8 @@ function deviceCheckStatusLabel(item) {
   const status = deviceCheckStatus(item)
   if (status === 'FAILED') return '재점검 필요'
   if (status !== 'COMPLETED') return '직접 점검 가능'
-  return draftDeviceResults.value.get(item.testType) === 'SUCCESS'
-    ? '웹 점검 완료'
-    : '자동 입력 완료'
+  if (automaticDeviceResults.value.get(item.testType) === 'SUCCESS') return '자동 점검 완료'
+  return draftDeviceResults.value.get(item.testType) === 'SUCCESS' ? '웹 점검 완료' : '자동 점검 완료'
 }
 const activeCaptureItem = computed(
   () => mediaChecklistItems.value.find((item) => item.checklistItemId === activeCaptureItemId.value)
@@ -636,6 +641,14 @@ const selectedCategoryName = computed(
 // 등록돼 있을 때만 이 값을 쓰고, 그 외에는 서버가 내려준 guide 문구로 채웁니다.
 function guidePurposeFor(item) {
   return guideContentFor(item, selectedCategoryName.value)?.purpose || ''
+}
+
+function guideTitleFor(item) {
+  return guideContentFor(item, selectedCategoryName.value)?.title || item?.name || ''
+}
+
+function guideSummaryFor(item) {
+  return guideContentFor(item, selectedCategoryName.value)?.summary || guideFor(item)
 }
 
 function guideStepsFor(item) {
@@ -800,6 +813,7 @@ function resetForm() {
   checklistItems.value = []
   draftProgressResults.value = new Map()
   draftDeviceResults.value = new Map()
+  automaticDeviceResults.value = new Map()
   activeCaptureItemId.value = null
   handoverGuide.value = null
   priceRejection.value = ''
@@ -1797,6 +1811,9 @@ async function startEdit(productId) {
     if (draftProgress) {
       draftProgressResults.value = progressResultsMap(draftProgress.results) || new Map()
       draftDeviceResults.value = new Map(Object.entries(draftProgress.deviceResults || {}))
+      automaticDeviceResults.value = new Map(
+        Object.entries(draftProgress.automaticDeviceResults || {}),
+      )
       checklistItems.value
         .filter((item) => item.evidenceType === 'SELLER_CONFIRMATION' || CHECKABLE_ITEM_CODES[item.itemCode])
         .forEach((item) => {
@@ -2342,7 +2359,7 @@ onMounted(async () => {
                   {{ evidenceTypeLabel(item.evidenceType) }}
                 </BaseBadge>
                 <span class="text-text-main">
-                  {{ item.name }}<span
+                  {{ guideTitleFor(item) }}<span
                     v-if="isRequiredItem(item)"
                     class="text-red-500"
                   >*</span>
@@ -2515,7 +2532,7 @@ onMounted(async () => {
                   id="windows-inspection-title"
                   class="text-sm font-bold text-text-main"
                 >
-                  Windows 자동 검사
+                  Windows 자동 진단
                 </h3>
                 <p class="mt-1 text-xs leading-5 text-text-sub">
                   Limit 진단 프로그램으로 기기 정보와 점검 결과를 자동으로 입력할 수 있습니다.
@@ -2600,7 +2617,7 @@ onMounted(async () => {
                               d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
                             />
                           </svg>
-                          {{ item.name }}
+                          {{ guideTitleFor(item) }}
                           <span
                             v-if="item.evidenceType === 'VIDEO'"
                             class="rounded-pill bg-accent px-1.5 py-0.5 text-[10px] font-bold text-primary"
@@ -2613,14 +2630,14 @@ onMounted(async () => {
                           <button
                             type="button"
                             class="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border border-primary text-[9px] font-bold text-primary transition hover:bg-accent"
-                            :aria-label="`${item.name} 촬영 가이드 보기`"
+                            :aria-label="`${guideTitleFor(item)} 촬영 가이드 보기`"
                             @click.stop="openGuideModal(item)"
                           >
                             i
                           </button>
                         </p>
                         <p class="mt-1 text-xs text-text-sub">
-                          {{ guideFor(item) }}
+                          {{ guideSummaryFor(item) }}
                         </p>
                       </div>
                       <span
@@ -2651,7 +2668,7 @@ onMounted(async () => {
 
             <div class="card-soft rounded-lg bg-surface p-6">
               <h2 class="text-base font-bold text-text-main">
-                {{ activeCaptureItem ? `${activeCaptureItem.name} 촬영 프리뷰` : '촬영 프리뷰' }}
+                {{ activeCaptureItem ? `${guideTitleFor(activeCaptureItem)} 촬영 프리뷰` : '촬영 프리뷰' }}
               </h2>
 
               <div class="relative mt-4 flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg border border-border bg-bg">
@@ -2687,7 +2704,7 @@ onMounted(async () => {
                 <template v-else-if="activeItemLatestMedia && activeItemLatestMedia.evidenceType === 'PHOTO'">
                   <img
                     :src="activeItemLatestMedia.previewUrl"
-                    :alt="activeCaptureItem.name"
+                    :alt="guideTitleFor(activeCaptureItem)"
                     class="h-full w-full object-cover"
                   >
                 </template>
@@ -2818,7 +2835,7 @@ onMounted(async () => {
                     <span
                       class="block h-1.5 w-full overflow-hidden rounded-full bg-border"
                       role="progressbar"
-                      :aria-label="`${activeCaptureItem.name} 처리 진행률`"
+                      :aria-label="`${guideTitleFor(activeCaptureItem)} 처리 진행률`"
                       :aria-valuenow="progressOf(activeCaptureItem.checklistItemId)"
                       aria-valuemin="0"
                       aria-valuemax="100"
@@ -2848,7 +2865,7 @@ onMounted(async () => {
                     <button
                       type="button"
                       class="block h-12 w-12 overflow-hidden rounded-md border border-border transition hover:border-primary"
-                      :aria-label="`${activeCaptureItem.name} ${index + 1}번째 첨부 파일 확인`"
+                      :aria-label="`${guideTitleFor(activeCaptureItem)} ${index + 1}번째 첨부 파일 확인`"
                       @click="openMediaPreview(activeCaptureItem, index)"
                     >
                       <video
@@ -2964,8 +2981,8 @@ onMounted(async () => {
                 <p class="mb-1 font-bold text-text-main">
                   촬영 꿀팁 가이드
                 </p>
-                <p v-if="guideFor(activeCaptureItem)">
-                  • {{ guideFor(activeCaptureItem) }}
+                <p v-if="guideStepsFor(activeCaptureItem)">
+                  • {{ guideStepsFor(activeCaptureItem) }}
                 </p>
                 <p>• 흔들림을 줄이려면 촬영 순간 잠시 호흡을 멈추고 1초간 유지해 주세요.</p>
               </div>
@@ -2986,7 +3003,7 @@ onMounted(async () => {
                   variant="outline"
                   :to="{ name: 'seller-product-device-check', params: { productId: currentProductId } }"
                 >
-                  카메라·마이크·키보드 등 직접 점검하기
+                  키보드·포인터 직접 점검하기
                 </BaseButton>
               </div>
 
@@ -3347,7 +3364,7 @@ onMounted(async () => {
         <div class="w-full max-w-md rounded-lg bg-surface p-5 shadow-elevated">
           <div class="flex items-start justify-between gap-3">
             <h2 class="text-base font-bold text-text-main">
-              {{ guideModalItem.name }}
+              {{ guideTitleFor(guideModalItem) }}
             </h2>
             <button
               type="button"
@@ -3363,7 +3380,7 @@ onMounted(async () => {
             <img
               v-if="guideImageFor(guideModalItem, selectedCategoryName)"
               :src="guideImageFor(guideModalItem, selectedCategoryName)"
-              :alt="`${guideModalItem.name} 촬영 예시`"
+              :alt="`${guideTitleFor(guideModalItem)} 촬영 예시`"
               class="h-full w-full object-contain"
             >
             <p
