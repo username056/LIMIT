@@ -8,23 +8,50 @@ public sealed class InspectionCoordinator(
     DxDiagCollector dxDiagCollector,
     BatteryReportCollector batteryReportCollector)
 {
+    private readonly object preparationLock = new();
+    private PreparedInspection? preparedInspection;
     private string? sessionKey;
+
+    public void StartPreparation()
+    {
+        lock (preparationLock)
+        {
+            preparedInspection ??= new PreparedInspection(
+                dxDiagCollector,
+                batteryReportCollector);
+        }
+    }
+
+    public async Task CancelPreparationAsync()
+    {
+        PreparedInspection? preparation;
+        lock (preparationLock)
+        {
+            preparation = preparedInspection;
+            preparedInspection = null;
+        }
+
+        if (preparation is not null)
+        {
+            await preparation.CancelAndDisposeAsync();
+        }
+    }
 
     public async Task RunAsync(
         string pairingCode,
         IProgress<string> progress,
         CancellationToken cancellationToken)
     {
-        using var workspace = new InspectionWorkspace();
         using var pipelineCancellation =
             CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var pipelineToken = pipelineCancellation.Token;
+        var preparation = TakeOrCreatePreparation();
+        await using var preparationScope = preparation;
 
-        progress.Report("웹 연결과 시스템 정보 수집을 동시에 시작합니다.");
+        progress.Report("웹에 연결하고 준비된 시스템 정보를 확인하고 있습니다.");
         var pairingTask = apiClient.PairAsync(pairingCode, pipelineToken);
-        var dxdiagTask = dxDiagCollector.CollectAsync(workspace.DirectoryPath, pipelineToken);
-        var batteryReportTask =
-            batteryReportCollector.CollectAsync(workspace.DirectoryPath, pipelineToken);
+        var dxdiagTask = preparation.DxdiagTask;
+        var batteryReportTask = preparation.BatteryReportTask;
 
         try
         {
@@ -45,6 +72,7 @@ public sealed class InspectionCoordinator(
         catch
         {
             await pipelineCancellation.CancelAsync();
+            await preparation.CancelAsync();
             await ObservePipelineTasksAsync(pairingTask, dxdiagTask, batteryReportTask);
             throw;
         }
@@ -97,6 +125,17 @@ public sealed class InspectionCoordinator(
         }
     }
 
+    private PreparedInspection TakeOrCreatePreparation()
+    {
+        lock (preparationLock)
+        {
+            var preparation = preparedInspection
+                ?? new PreparedInspection(dxDiagCollector, batteryReportCollector);
+            preparedInspection = null;
+            return preparation;
+        }
+    }
+
     public async Task CompleteInspectionAsync(CancellationToken cancellationToken)
     {
         if (sessionKey is null)
@@ -105,5 +144,52 @@ public sealed class InspectionCoordinator(
         }
 
         await apiClient.CompleteAsync(sessionKey, cancellationToken);
+    }
+
+    private sealed class PreparedInspection : IAsyncDisposable
+    {
+        private readonly InspectionWorkspace workspace = new();
+        private readonly CancellationTokenSource cancellation = new();
+        private bool isDisposed;
+
+        public PreparedInspection(
+            DxDiagCollector dxDiagCollector,
+            BatteryReportCollector batteryReportCollector)
+        {
+            DxdiagTask = dxDiagCollector.CollectAsync(
+                workspace.DirectoryPath,
+                cancellation.Token);
+            BatteryReportTask = batteryReportCollector.CollectAsync(
+                workspace.DirectoryPath,
+                cancellation.Token);
+        }
+
+        public Task<string> DxdiagTask { get; }
+
+        public Task<string?> BatteryReportTask { get; }
+
+        public async Task CancelAsync()
+        {
+            await cancellation.CancelAsync();
+        }
+
+        public async Task CancelAndDisposeAsync()
+        {
+            await CancelAsync();
+            await DisposeAsync();
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            if (isDisposed)
+            {
+                return;
+            }
+
+            isDisposed = true;
+            await ObservePipelineTasksAsync(DxdiagTask, BatteryReportTask);
+            cancellation.Dispose();
+            workspace.Dispose();
+        }
     }
 }
