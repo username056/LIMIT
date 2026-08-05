@@ -490,12 +490,7 @@ describe('ProductRegisterPage', () => {
     await goToCaptureStep(wrapper)
 
     expect(wrapper.text()).toContain('실동작 점검')
-    expect(wrapper.text()).toContain('카메라·마이크·키보드 등 직접 점검하기')
-    expect(wrapper.text()).toContain('스피커')
-    expect(wrapper.text()).toContain('디스플레이')
-    expect(wrapper.text()).toContain('충전')
-    expect(wrapper.text()).toContain('카메라')
-    expect(wrapper.text()).toContain('마이크')
+    expect(wrapper.text()).toContain('키보드·포인터 직접 점검하기')
     expect(wrapper.text()).toContain('키보드')
     expect(wrapper.text()).toContain('포인터')
   })
@@ -1487,7 +1482,7 @@ describe('ProductRegisterPage', () => {
       await flushPromises()
 
       expect(wrapper.text()).not.toContain('판매할 기기를 등록해 주세요.')
-      expect(wrapper.text()).toContain('카메라·마이크·키보드 등 직접 점검하기')
+      expect(wrapper.text()).toContain('키보드·포인터 직접 점검하기')
     })
 
     it('직접 점검에서 new 주소로 돌아오면 상품 등록 제목과 초안 2단계를 복구한다', async () => {
@@ -1572,7 +1567,7 @@ describe('ProductRegisterPage', () => {
       expect(payload.results).toHaveLength(2)
     })
 
-    it('진단 프로그램이 완료한 실동작 항목은 2단계에서 자동 입력 완료로 표시한다', async () => {
+    it('진단 프로그램이 완료한 실동작 항목은 2단계에서 자동 점검 완료로 표시한다', async () => {
       getProductChecklist.mockResolvedValue([
         { checklistItemId: 7003, itemCode: 'LAP-KBD-005', name: '키보드 실동작 확인', evidenceType: 'SELLER_CONFIRMATION', isRequired: true, status: 'COMPLETED' },
       ])
@@ -1584,8 +1579,8 @@ describe('ProductRegisterPage', () => {
       await flushPromises()
 
       expect(wrapper.text()).toContain('키보드 실동작 확인')
-      expect(wrapper.text()).toContain('자동 입력 완료')
-      expect(wrapper.text()).toContain('카메라·마이크·키보드 등 직접 점검하기')
+      expect(wrapper.text()).toContain('자동 점검 완료')
+      expect(wrapper.text()).toContain('키보드·포인터 직접 점검하기')
     })
 
     it('웹에서 완료한 실동작 항목은 웹 점검 완료로 구분한다', async () => {

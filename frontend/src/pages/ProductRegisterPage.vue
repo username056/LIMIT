@@ -574,7 +574,7 @@ function deviceCheckStatusLabel(item) {
   if (status !== 'COMPLETED') return '직접 점검 가능'
   return draftDeviceResults.value.get(item.testType) === 'SUCCESS'
     ? '웹 점검 완료'
-    : '자동 입력 완료'
+    : '자동 점검 완료'
 }
 const activeCaptureItem = computed(
   () => mediaChecklistItems.value.find((item) => item.checklistItemId === activeCaptureItemId.value)
@@ -2986,7 +2986,7 @@ onMounted(async () => {
                   variant="outline"
                   :to="{ name: 'seller-product-device-check', params: { productId: currentProductId } }"
                 >
-                  카메라·마이크·키보드 등 직접 점검하기
+                  키보드·포인터 직접 점검하기
                 </BaseButton>
               </div>
 

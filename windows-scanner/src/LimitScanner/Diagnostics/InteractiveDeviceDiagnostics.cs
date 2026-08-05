@@ -1,9 +1,6 @@
 namespace LimitScanner.Diagnostics;
 
-public sealed class InteractiveDeviceDiagnostics(
-    AudioOutputService audioOutputService,
-    CameraCaptureService cameraCaptureService,
-    MicrophoneInputService microphoneInputService)
+public sealed class InteractiveDeviceDiagnostics
 {
     public IReadOnlyList<ModuleResult> Run(IWin32Window owner)
     {
@@ -11,10 +8,6 @@ public sealed class InteractiveDeviceDiagnostics(
         form.ShowDialog(owner);
         return form.Results;
     }
-
-    public ModuleResult RunCamera(IWin32Window owner) => RunDialog(owner, new CameraDiagnosticForm(cameraCaptureService));
-
-    public ModuleResult RunMicrophone(IWin32Window owner) => RunDialog(owner, new MicrophoneDiagnosticForm(microphoneInputService));
 
     public ModuleResult RunModule(string testType, IWin32Window owner)
     {
@@ -25,11 +18,6 @@ public sealed class InteractiveDeviceDiagnostics(
 
     private IReadOnlyList<InspectionModule> CreateModules() =>
     [
-        new("스피커", ModuleTestTypes.Speaker, owner => RunDialog(owner, new SpeakerDiagnosticForm(audioOutputService))),
-        new("디스플레이", ModuleTestTypes.Display, owner => RunDialog(owner, new DisplayDiagnosticForm())),
-        new("충전", ModuleTestTypes.Charging, owner => RunDialog(owner, new ChargingDiagnosticForm())),
-        new("카메라", ModuleTestTypes.Camera, RunCamera),
-        new("마이크", ModuleTestTypes.Microphone, RunMicrophone),
         new("키보드", ModuleTestTypes.Keyboard, owner => RunDialog(owner, new KeyboardDiagnosticForm())),
         new("포인터", ModuleTestTypes.Pointer, owner => RunDialog(owner, new PointerDiagnosticForm()))
     ];

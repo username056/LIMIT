@@ -46,7 +46,7 @@ public sealed class MainForm : Form
             AutoSize = true,
             MaximumSize = new Size(750, 0),
             Font = new Font(Font.FontFamily, 10F),
-            Text = "CPU, RAM, GPU, 사운드 장치, 배터리, 카메라·마이크 상태를 수집합니다. "
+            Text = "CPU, RAM, GPU, 저장 장치, 배터리 정보와 키보드·포인터 점검 결과를 수집합니다. "
                 + "비밀번호, 개인 파일, 브라우저 기록, Windows 제품 키, 촬영된 영상·음성 원본은 수집하지 않습니다.",
             Margin = new Padding(3, 0, 3, 18)
         };
@@ -156,11 +156,6 @@ public sealed class MainForm : Form
     {
         var modules = new[]
         {
-            ("스피커", ModuleTestTypes.Speaker),
-            ("디스플레이", ModuleTestTypes.Display),
-            ("충전", ModuleTestTypes.Charging),
-            ("카메라", ModuleTestTypes.Camera),
-            ("마이크", ModuleTestTypes.Microphone),
             ("키보드", ModuleTestTypes.Keyboard),
             ("포인터", ModuleTestTypes.Pointer)
         };

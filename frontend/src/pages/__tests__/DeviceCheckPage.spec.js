@@ -57,7 +57,7 @@ const checklistItem = {
   evidenceType: 'SELLER_CONFIRMATION',
 }
 
-const ALL_TEST_TYPES = ['SPEAKER', 'DISPLAY', 'CHARGING', 'CAMERA', 'MICROPHONE', 'KEYBOARD', 'TOUCHPAD']
+const ALL_TEST_TYPES = ['KEYBOARD', 'TOUCHPAD']
 const ITEM_CODE_TEST_TYPE = {
   'LAP-FTR-SPK': 'SPEAKER',
   'LAP-DSP-003': 'DISPLAY',
@@ -128,7 +128,7 @@ async function runKeyboardStepAndSave(wrapper, missingCodes) {
   await flushPromises()
   await wrapper.findAll('button').find((b) => b.text() === '다음').trigger('click')
   await flushPromises()
-  for (let index = 0; index < 6; index += 1) {
+  for (let index = 0; index < 1; index += 1) {
     await wrapper.findAll('button').find((b) => b.text() === '다음').trigger('click')
     await flushPromises()
   }
@@ -145,50 +145,20 @@ describe('DeviceCheckPage', () => {
     vi.restoreAllMocks()
   })
 
-  it('체크리스트 점검 항목이 없어도 공통 7개 검사를 표시한다', async () => {
+  it('체크리스트 점검 항목이 없어도 키보드와 포인터 검사를 표시한다', async () => {
     const wrapper = await mountWithChecklist([])
 
-    expect(wrapper.text()).toContain('1 / 7')
-    expect(wrapper.text()).toContain('스피커')
+    expect(wrapper.text()).toContain('1 / 2')
+    expect(wrapper.text()).toContain('키보드')
     expect(updateProductDraftProgress).not.toHaveBeenCalled()
-  })
-
-  it('디스플레이와 충전을 웹에서 직접 점검해 결과를 저장한다', async () => {
-    const wrapper = await mountWithChecklist([
-      { checklistItemId: 21, itemCode: 'LAP-DSP-003', evidenceType: 'VIDEO', status: 'PENDING' },
-      { checklistItemId: 22, itemCode: 'LAP-CHG-007', evidenceType: 'VIDEO', status: 'PENDING' },
-    ])
-
-    await wrapper.findAll('button').find((button) => button.text() === '점검 시작').trigger('click')
-    await wrapper.findAll('button').find((button) => button.text() === '정상이에요').trigger('click')
-    await wrapper.findAll('button').find((button) => button.text() === '다음').trigger('click')
-    await wrapper.findAll('button').find((button) => button.text() === '점검 시작').trigger('click')
-    await wrapper.findAll('button').find((button) => button.text() === '정상이에요').trigger('click')
-    await wrapper.findAll('button').find((button) => button.text() === '다음').trigger('click')
-    for (let index = 0; index < 5; index += 1) {
-      await wrapper.findAll('button').find((button) => button.text() === '다음').trigger('click')
-    }
-    await wrapper.findAll('button').find((button) => button.text() === '저장하고 돌아가기').trigger('click')
-    await flushPromises()
-
-    expect(updateProductDraftProgress).toHaveBeenCalledWith('1', expect.objectContaining({
-      results: expect.arrayContaining([
-        { checklistItemId: 21, result: 'SUCCESS' },
-        { checklistItemId: 22, result: 'SUCCESS' },
-      ]),
-      deviceResults: expect.arrayContaining([
-        { testType: 'DISPLAY', result: 'SUCCESS' },
-        { testType: 'CHARGING', result: 'SUCCESS' },
-      ]),
-    }))
   })
 
   it('자동 완료된 항목은 웹 점검 없이 다음으로 넘어갈 수 있다', async () => {
     const wrapper = await mountWithChecklist([
-      { checklistItemId: 31, itemCode: 'LAP-DSP-003', evidenceType: 'VIDEO', status: 'COMPLETED' },
+      { checklistItemId: 31, itemCode: 'LAP-KBD-005', evidenceType: 'SELLER_CONFIRMATION', status: 'COMPLETED' },
     ], { step: 2, results: { 31: 'SUCCESS' } })
 
-    expect(wrapper.text()).toContain('자동 입력 완료')
+    expect(wrapper.text()).toContain('자동 점검 완료')
     expect(wrapper.text()).toContain('웹 점검을 생략할 수 있습니다.')
   })
 
@@ -269,21 +239,12 @@ describe('DeviceCheckPage', () => {
     const wrapper = await mountWithChecklist([], {
       step: 2,
       results: {},
-      deviceResults: { SPEAKER: 'SUCCESS' },
+      deviceResults: { KEYBOARD: 'SUCCESS' },
     })
 
     expect(wrapper.text()).toContain('웹 점검 완료')
     expect(wrapper.text()).toContain('이전에 웹에서 정상 점검한 결과')
     expect(wrapper.text()).not.toContain('Limit 진단 프로그램에서 정상 결과')
-  })
-
-  it('카메라 자동 판정 시간과 동작 방법을 안내한다', async () => {
-    const wrapper = await mountWithChecklist([
-      { checklistItemId: 42, itemCode: 'LAP-FTR-CAM', evidenceType: 'SELLER_CONFIRMATION', status: 'PENDING' },
-    ])
-
-    expect(wrapper.text()).toContain('약 3초 동안 손을 흔들거나 기기를 조금 움직여 주세요.')
-    expect(wrapper.text()).toContain('화면 변화를 감지하면 자동으로 점검이 완료됩니다.')
   })
 
   it('키보드 점검은 시작 전부터 좌우를 밝힌 감지 불확실 키 안내를 보여준다', async () => {

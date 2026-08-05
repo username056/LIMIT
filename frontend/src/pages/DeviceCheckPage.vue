@@ -323,7 +323,7 @@ onBeforeUnmount(() => {
       <PageHeader
         eyebrow="DEVICE CHECK"
         title="장치 실동작 점검"
-        description="카메라·마이크·키보드 등이 실제로 동작하는지 이 화면에서 바로 확인합니다."
+        description="키보드와 포인터 입력이 실제로 감지되는지 이 화면에서 바로 확인합니다."
       />
 
       <!-- 점검 항목은 한 줄이 길면 읽기 어렵습니다. 안쪽만 좁게 둡니다. -->
@@ -414,7 +414,7 @@ onBeforeUnmount(() => {
             class="mt-4 rounded-md border border-primary/30 bg-accent p-4"
           >
             <p class="font-semibold text-primary-dark">
-              {{ currentCompletionSource === 'WEB' ? '웹 점검 완료' : '자동 입력 완료' }}
+              {{ currentCompletionSource === 'WEB' ? '웹 점검 완료' : '자동 점검 완료' }}
             </p>
             <p class="mt-1 text-sm text-text-sub">
               {{ currentCompletionSource === 'WEB'

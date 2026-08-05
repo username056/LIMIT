@@ -27,11 +27,6 @@ export const CHECKABLE_ITEM_CODES = {
 }
 
 export const WEB_DEVICE_CHECKS = [
-  { testType: 'SPEAKER', checkKind: CHECK_KIND.SPEAKER, itemCode: 'LAP-FTR-SPK', name: '스피커' },
-  { testType: 'DISPLAY', checkKind: CHECK_KIND.DISPLAY, itemCode: 'LAP-DSP-003', name: '디스플레이' },
-  { testType: 'CHARGING', checkKind: CHECK_KIND.CHARGING, itemCode: 'LAP-CHG-007', name: '충전' },
-  { testType: 'CAMERA', checkKind: CHECK_KIND.CAMERA, itemCode: 'LAP-FTR-CAM', name: '카메라' },
-  { testType: 'MICROPHONE', checkKind: CHECK_KIND.MIC, itemCode: 'LAP-FTR-MIC', name: '마이크' },
   { testType: 'KEYBOARD', checkKind: CHECK_KIND.KEYBOARD, itemCode: 'LAP-KBD-005', name: '키보드' },
   { testType: 'TOUCHPAD', checkKind: CHECK_KIND.POINTER, itemCode: 'LAP-PAD-006', name: '포인터' },
 ]
