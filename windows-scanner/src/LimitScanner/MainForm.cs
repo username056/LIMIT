@@ -12,13 +12,11 @@ public sealed class MainForm : Form
         AutoSize = true,
         Text = "위 시스템 정보 수집 및 전송에 동의합니다."
     };
-    private readonly Button startButton = new() { Text = "검사 시작", Enabled = false };
-    private readonly Label statusLabel = new() { AutoSize = true, Text = "웹의 6자리 코드를 입력해 주세요." };
+    private readonly Button startButton = new() { Text = "진단 시작", Enabled = false };
+    private readonly Label statusLabel = new() { AutoSize = true, Text = "웹의 6자리 연결 코드를 입력해 주세요." };
     private readonly ProgressBar progressBar = new() { Style = ProgressBarStyle.Marquee, Visible = false };
-    private readonly List<Button> rerunButtons = [];
-    private readonly Label rerunStatusLabel = new() { AutoSize = true, MaximumSize = new Size(750, 0) };
     private readonly Button finalSubmitButton = new() { Text = "최종 제출", Enabled = false, AutoSize = true };
-    private bool hasCompletedFullRun;
+    private bool hasCompletedRun;
     private bool hasFinalized;
 
     public MainForm(InspectionCoordinator coordinator)
@@ -27,8 +25,8 @@ public sealed class MainForm : Form
         Text = "Limit Windows 자동 진단";
         AutoScaleMode = AutoScaleMode.Dpi;
         Font = new Font("Segoe UI", 10F);
-        ClientSize = new Size(860, 960);
-        MinimumSize = new Size(800, 900);
+        ClientSize = new Size(860, 760);
+        MinimumSize = new Size(800, 700);
         FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = true;
         StartPosition = FormStartPosition.CenterScreen;
@@ -45,9 +43,8 @@ public sealed class MainForm : Form
         {
             AutoSize = true,
             MaximumSize = new Size(750, 0),
-            Font = new Font(Font.FontFamily, 10F),
-            Text = "CPU, RAM, GPU, 저장 장치, 배터리 정보와 키보드·포인터 점검 결과를 수집합니다. "
-                + "비밀번호, 개인 파일, 브라우저 기록, Windows 제품 키, 촬영된 영상·음성 원본은 수집하지 않습니다.",
+            Text = "CPU, RAM, GPU, 저장 장치와 배터리 정보를 수집합니다. "
+                + "비밀번호, 개인 파일, 브라우저 기록, Windows 제품 키, 촬영·영상·음성 원본은 수집하지 않습니다.",
             Margin = new Padding(3, 0, 3, 18)
         };
         var pairingCodeLabel = new Label
@@ -69,14 +66,14 @@ public sealed class MainForm : Form
         progressBar.Width = 750;
         progressBar.Margin = new Padding(3, 0, 3, 14);
         statusLabel.MaximumSize = new Size(750, 0);
-        statusLabel.Margin = new Padding(3, 0, 3, 3);
+        statusLabel.Margin = new Padding(3, 0, 3, 12);
+        finalSubmitButton.Padding = new Padding(18, 8, 18, 8);
+        finalSubmitButton.Margin = new Padding(3, 4, 3, 4);
+
         pairingCodeTextBox.TextChanged += (_, _) => UpdateStartButton();
         consentCheckBox.CheckedChanged += (_, _) => UpdateStartButton();
         startButton.Click += StartButton_Click;
         finalSubmitButton.Click += FinalSubmitButton_Click;
-        rerunStatusLabel.Margin = new Padding(3, 4, 3, 12);
-        finalSubmitButton.Padding = new Padding(18, 8, 18, 8);
-        finalSubmitButton.Margin = new Padding(3, 4, 3, 4);
 
         var layout = new FlowLayoutPanel
         {
@@ -94,8 +91,6 @@ public sealed class MainForm : Form
         layout.Controls.Add(startButton);
         layout.Controls.Add(progressBar);
         layout.Controls.Add(statusLabel);
-        layout.Controls.Add(CreateRerunPanel());
-        layout.Controls.Add(rerunStatusLabel);
         layout.Controls.Add(finalSubmitButton);
         Controls.Add(layout);
     }
@@ -115,12 +110,8 @@ public sealed class MainForm : Form
         try
         {
             var progress = new Progress<string>(message => statusLabel.Text = message);
-            await coordinator.RunAsync(
-                pairingCodeTextBox.Text.Trim(),
-                this,
-                progress,
-                CancellationToken.None);
-            hasCompletedFullRun = true;
+            await coordinator.RunAsync(pairingCodeTextBox.Text.Trim(), progress, CancellationToken.None);
+            hasCompletedRun = true;
         }
         catch (HttpRequestException)
         {
@@ -128,7 +119,7 @@ public sealed class MainForm : Form
         }
         catch (TaskCanceledException)
         {
-            statusLabel.Text = "검사 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.";
+            statusLabel.Text = "진단 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.";
         }
         catch (TimeoutException)
         {
@@ -140,11 +131,11 @@ public sealed class MainForm : Form
         }
         catch (IOException)
         {
-            statusLabel.Text = "검사 결과 파일을 처리하지 못했습니다. 저장 공간을 확인해 주세요.";
+            statusLabel.Text = "진단 결과 파일을 처리하지 못했습니다. 저장 공간을 확인해 주세요.";
         }
         catch (Exception)
         {
-            statusLabel.Text = "검사를 완료하지 못했습니다. 연결 코드를 확인하고 다시 시도해 주세요.";
+            statusLabel.Text = "진단을 완료하지 못했습니다. 연결 코드를 확인하고 다시 시도해 주세요.";
         }
         finally
         {
@@ -152,97 +143,30 @@ public sealed class MainForm : Form
         }
     }
 
-    private Control CreateRerunPanel()
-    {
-        // 스피커·디스플레이·충전·카메라·마이크는 실동작 재검사 대상에서 빠졌다(카메라·마이크·스피커는
-        // 판매자 확인 스펙으로만 남고, 디스플레이·충전은 영상 증빙으로만 확인한다).
-        var modules = new[]
-        {
-            ("키보드", ModuleTestTypes.Keyboard),
-            ("포인터", ModuleTestTypes.Pointer)
-        };
-        var panel = new FlowLayoutPanel
-        {
-            AutoSize = true,
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = true,
-            MaximumSize = new Size(750, 0),
-            Margin = new Padding(3, 22, 3, 4)
-        };
-
-        foreach (var (name, testType) in modules)
-        {
-            var button = new Button
-            {
-                Text = $"{name} 재검사",
-                Enabled = false,
-                AutoSize = true,
-                Padding = new Padding(12, 6, 12, 6),
-                Margin = new Padding(3, 3, 6, 3)
-            };
-            button.Click += async (_, _) => await RerunSingleModuleAsync(testType, name);
-            rerunButtons.Add(button);
-            panel.Controls.Add(button);
-        }
-
-        return panel;
-    }
-
-    private async Task RerunSingleModuleAsync(
-        string testType,
-        string moduleName)
-    {
-        SetRerunControlsEnabled(false);
-        rerunStatusLabel.Text = $"{moduleName} 재검사를 진행하고 있습니다.";
-        try
-        {
-            await coordinator.RerunModuleAsync(testType, this, CancellationToken.None);
-            rerunStatusLabel.Text = $"{moduleName} 재검사 결과를 전송했습니다.";
-        }
-        catch (Exception)
-        {
-            rerunStatusLabel.Text = $"{moduleName} 재검사 결과를 전송하지 못했습니다. 다시 시도해 주세요.";
-        }
-        finally
-        {
-            SetRerunControlsEnabled(true);
-        }
-    }
-
     private async void FinalSubmitButton_Click(object? sender, EventArgs eventArgs)
     {
-        SetRerunControlsEnabled(false);
-        rerunStatusLabel.Text = "최종 제출을 진행하고 있습니다.";
+        finalSubmitButton.Enabled = false;
+        statusLabel.Text = "최종 제출을 진행하고 있습니다.";
         try
         {
             await coordinator.CompleteInspectionAsync(CancellationToken.None);
             hasFinalized = true;
             MessageBox.Show(
                 this,
-                "검사가 완료됐습니다. 웹으로 돌아가 결과를 확인해 주세요.",
-                "검사 완료",
+                "진단이 완료되었습니다. 웹으로 돌아가 결과를 확인해 주세요.",
+                "진단 완료",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
-            rerunStatusLabel.Text = "최종 제출을 완료했습니다.";
+            statusLabel.Text = "최종 제출이 완료되었습니다.";
         }
         catch (Exception)
         {
-            rerunStatusLabel.Text = "최종 제출에 실패했습니다. 다시 시도해 주세요.";
+            statusLabel.Text = "최종 제출에 실패했습니다. 다시 시도해 주세요.";
         }
         finally
         {
-            SetRerunControlsEnabled(true);
+            finalSubmitButton.Enabled = hasCompletedRun && !hasFinalized;
         }
-    }
-
-    private void SetRerunControlsEnabled(bool enabled)
-    {
-        var available = enabled && hasCompletedFullRun && !hasFinalized;
-        foreach (var button in rerunButtons)
-        {
-            button.Enabled = available;
-        }
-        finalSubmitButton.Enabled = available;
     }
 
     private void SetBusy(bool busy)
@@ -251,7 +175,7 @@ public sealed class MainForm : Form
         pairingCodeTextBox.Enabled = !busy;
         consentCheckBox.Enabled = !busy;
         startButton.Enabled = false;
-        SetRerunControlsEnabled(!busy);
+        finalSubmitButton.Enabled = !busy && hasCompletedRun && !hasFinalized;
         if (!busy)
         {
             UpdateStartButton();
