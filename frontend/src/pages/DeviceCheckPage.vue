@@ -646,8 +646,8 @@ onBeforeUnmount(() => {
               v-if="currentItem.checkKind === 'KEYBOARD'"
               class="mb-2 text-sm text-text-sub"
             >
-              {{ KEYBOARD_UNRELIABLE_CODES.map(unreliableKeyLabel).join(', ') }}는 브라우저·OS가 가로채거나
-              좌우를 구분할 정보를 주지 않아 정상 키여도 감지가 보장되지 않습니다.
+              {{ KEYBOARD_UNRELIABLE_CODES.map(unreliableKeyLabel).join(', ') }} 키는 브라우저나 OS의 제약으로 인해
+              <strong class="font-semibold">정상 입력되어도 감지되지 않을 수 있습니다.</strong>
             </p>
             <p
               v-if="!keyboard"
