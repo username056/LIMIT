@@ -761,7 +761,12 @@ async function persistDraftProgress() {
     })
     draftProgressResults.value = progressResultsMap(response?.results) || resultsByItemId
   } catch {
-    notice.value = '임시저장 상태를 서버에 반영하지 못했습니다.'
+    /*
+      자동 저장은 단계를 옮길 때 화면이 스스로 부르는 것이라, 실패를 알리면 사용자는
+      누르지도 않은 '임시저장'이 실패했다는 문구를 보게 됩니다. 특히 상품이 이미 없어져
+      404가 오는 경우가 그렇습니다. 조용히 넘기고, 사용자가 직접 누르는 임시저장에서만
+      결과를 알립니다.
+    */
   }
 }
 
@@ -1343,6 +1348,27 @@ async function handleCaptureFile(item, file) {
     return
   }
   errorMessage.value = ''
+
+  /*
+    영상 길이는 압축하기 전에 원본에서 읽습니다.
+    ---------------------------------------------------------------------------
+    서버는 영상에 길이를 반드시 요구하는데, 압축 결과물에서 길이를 못 읽는 경우가 있어
+    null이 되면 422로 거절당했습니다. 한참 압축한 끝에 이유 없이 실패하던 원인입니다.
+    길이는 압축해도 그대로이므로 원본에서 읽는 편이 정확합니다.
+
+    제한을 넘긴 영상은 여기서 바로 알립니다. 압축부터 시작하면 수십 초를 기다린 뒤에야
+    거절당합니다.
+  */
+  let durationSeconds = null
+  if (item.evidenceType === 'VIDEO') {
+    durationSeconds = await readVideoDuration(file)
+    const maxDuration = Number(item.maxDurationSec) || null
+    if (maxDuration && durationSeconds && durationSeconds > maxDuration) {
+      openAlert(`‘${item.name}’ 항목은 ${maxDuration}초 이내 영상만 올릴 수 있습니다.`)
+      return
+    }
+  }
+
   // 영상은 한 번에 하나씩 줄이므로, 차례가 오기 전에는 '대기 중'입니다.
   captureState[itemId].busy = item.evidenceType === 'VIDEO' ? 'queued' : 'optimizing'
   captureState[itemId].progress = 0
@@ -1373,7 +1399,6 @@ async function handleCaptureFile(item, file) {
   captureState[itemId].progress = 0
 
   try {
-    const durationSeconds = item.evidenceType === 'VIDEO' ? await readVideoDuration(optimizedFile) : null
     const uploadUrl = await createEvidenceUploadUrl(currentProductId.value, item.checklistItemId, {
       filename: optimizedFile.name,
       contentType: optimizedFile.type || 'application/octet-stream',
@@ -1526,9 +1551,14 @@ async function flushPendingThumbnail() {
 }
 
 async function onListingImageInput(event) {
-  const files = [...(event.target.files || [])].slice(0, 10 - listingImages.value.length)
+  const picked = [...(event.target.files || [])]
+  const files = picked.slice(0, 10 - listingImages.value.length)
   const startOrder = listingImages.value.length
   event.target.value = ''
+  // 자리가 부족해 잘린 파일을 알립니다. 그냥 버리면 사진이 사라진 것처럼 보입니다.
+  if (picked.length > files.length) {
+    openAlert(`${picked.length - files.length}개는 최대 개수(10개)를 넘어 올리지 못했습니다.`)
+  }
   await Promise.allSettled(files.map(
     (file, index) => handleListingImage(file, startOrder + index),
   ))
@@ -1602,8 +1632,14 @@ async function makeListingThumbnail(image) {
 }
 
 async function onCaptureInput(event, item) {
-  const files = [...(event.target.files || [])].slice(0, remainingSlots(item.checklistItemId))
+  const picked = [...(event.target.files || [])]
+  const files = picked.slice(0, remainingSlots(item.checklistItemId))
   event.target.value = ''
+  if (picked.length > files.length) {
+    openAlert(
+      `${picked.length - files.length}개는 이 항목의 최대 개수(${maxMediaFor(item)}개)를 넘어 올리지 못했습니다.`,
+    )
+  }
   if (files.length) await Promise.allSettled(files.map((file) => handleCaptureFile(item, file)))
 }
 
@@ -2957,7 +2993,7 @@ onMounted(async () => {
                 파일은 자동으로 압축됩니다.
               </p>
               <p class="mt-1 text-center text-[11px] text-text-sub">
-                영상은 60초 이내, 100MB 이하만 가능하며 최대 6개까지 가능합니다.
+                영상은 항목마다 1개씩, 60초 이내·100MB 이하만 올릴 수 있습니다. (판매글 전체로는 최대 6개)
               </p>
 
               <div class="mt-5 rounded-lg bg-bg p-4 text-xs leading-6 text-text-sub">
