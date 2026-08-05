@@ -3,13 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import RtcCallPage from '../RtcCallPage.vue'
 import { getChatMessages, getChatRooms } from '../../api/chat'
 import { createChatSocket } from '../../api/chatSocket'
-import { getRtcCall, getRtcSession } from '../../api/rtc'
+import { endRtcSession, getRtcCall, getRtcSession, issueRtcJoinToken } from '../../api/rtc'
 import { createReinspectionRequest } from '../../api/products'
 import { clearAuthSession, setAuthSession } from '../../auth/session'
 
+const routerPushMock = vi.fn()
+
 vi.mock('vue-router', () => ({
   useRoute: () => ({ params: { callId: '20' } }),
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: routerPushMock }),
 }))
 
 vi.mock('../../api/chat', () => ({
@@ -37,11 +39,47 @@ vi.mock('../../api/products', () => ({
 
 const layoutStub = { template: '<main><slot /></main>' }
 let chatSocketOptions
+let rtcSocket
+let peer
+
+class MockWebSocket {
+  static OPEN = 1
+
+  constructor() {
+    this.readyState = MockWebSocket.OPEN
+    this.send = vi.fn()
+    this.close = vi.fn()
+    rtcSocket = this
+  }
+}
+
+class MockPeerConnection {
+  constructor() {
+    this.addTrack = vi.fn()
+    this.addTransceiver = vi.fn()
+    this.close = vi.fn()
+    this.connectionState = 'new'
+    peer = this
+  }
+}
 
 describe('RtcCallPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     chatSocketOptions = null
+    rtcSocket = null
+    peer = null
+    vi.stubGlobal('WebSocket', MockWebSocket)
+    vi.stubGlobal('RTCPeerConnection', MockPeerConnection)
+    Object.defineProperty(HTMLMediaElement.prototype, 'srcObject', {
+      configurable: true,
+      writable: true,
+      value: null,
+    })
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia: vi.fn() },
+    })
     setAuthSession({ member: { memberId: 1, nickname: '판매자' } })
     getRtcCall.mockResolvedValue({
       callId: 20,
@@ -78,6 +116,12 @@ describe('RtcCallPage', () => {
     })
     getChatRooms.mockResolvedValue({
       content: [{ roomId: 10, counterpartId: 2, counterpartNickname: '구매자닉네임' }],
+    })
+    issueRtcJoinToken.mockResolvedValue({
+      signalingUrl: 'ws://localhost/rtc',
+      token: '${TEST_RTC_TOKEN}',
+      offerer: false,
+      iceServers: [],
     })
     createChatSocket.mockImplementation((options) => {
       chatSocketOptions = options
@@ -264,7 +308,99 @@ describe('RtcCallPage', () => {
     wrapper.unmount()
   })
 
+  it('판매자는 카메라만 필수로 연결하고 마이크 거부를 허용한다', async () => {
+    const videoTrack = { stop: vi.fn() }
+    navigator.mediaDevices.getUserMedia
+      .mockResolvedValueOnce({ getTracks: () => [videoTrack] })
+      .mockRejectedValueOnce(new DOMException('denied', 'NotAllowedError'))
+    getRtcSession.mockResolvedValue({
+      sessionId: 30,
+      sellerId: 1,
+      buyerId: 2,
+      status: 'ACTIVE',
+      checklistItems: [],
+    })
+
+    const wrapper = mount(RtcCallPage, {
+      global: { stubs: { DefaultLayout: layoutStub } },
+    })
+    await flushPromises()
+
+    expect(navigator.mediaDevices.getUserMedia).toHaveBeenNthCalledWith(
+      1,
+      { video: true, audio: false },
+    )
+    expect(navigator.mediaDevices.getUserMedia).toHaveBeenNthCalledWith(
+      2,
+      { video: false, audio: true },
+    )
+    expect(peer.addTrack).toHaveBeenCalledWith(videoTrack, expect.anything())
+    expect(wrapper.text()).not.toContain('통화 연결 중 오류가 발생했습니다.')
+
+    wrapper.unmount()
+  })
+
+  it('구매자는 카메라와 마이크 권한 없이 판매자 미디어를 수신한다', async () => {
+    setAuthSession({ member: { memberId: 2, nickname: '구매자' } })
+    getRtcSession.mockResolvedValue({
+      sessionId: 30,
+      sellerId: 1,
+      buyerId: 2,
+      status: 'ACTIVE',
+      checklistItems: [],
+    })
+
+    const wrapper = mount(RtcCallPage, {
+      global: { stubs: { DefaultLayout: layoutStub } },
+    })
+    await flushPromises()
+
+    expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled()
+    expect(peer.addTransceiver).toHaveBeenCalledWith('video', { direction: 'recvonly' })
+    expect(peer.addTransceiver).toHaveBeenCalledWith('audio', { direction: 'recvonly' })
+
+    wrapper.unmount()
+  })
+
+  it('세션 종료 시 영상을 비우고 바로 채팅으로 이동한다', async () => {
+    const videoTrack = { stop: vi.fn() }
+    navigator.mediaDevices.getUserMedia
+      .mockResolvedValueOnce({ getTracks: () => [videoTrack] })
+      .mockRejectedValueOnce(new DOMException('denied', 'NotAllowedError'))
+    getRtcSession.mockResolvedValue({
+      sessionId: 30,
+      sellerId: 1,
+      buyerId: 2,
+      status: 'ACTIVE',
+      checklistItems: [],
+    })
+    endRtcSession.mockResolvedValue({
+      sessionId: 30,
+      sellerId: 1,
+      buyerId: 2,
+      status: 'ENDED',
+      checklistItems: [],
+    })
+    const wrapper = mount(RtcCallPage, {
+      global: { stubs: { DefaultLayout: layoutStub } },
+    })
+    await flushPromises()
+    const video = wrapper.get('video').element
+    expect(video.srcObject).not.toBeNull()
+
+    await wrapper.get('button').trigger('click')
+    await flushPromises()
+
+    expect(endRtcSession).toHaveBeenCalled()
+    expect(videoTrack.stop).toHaveBeenCalled()
+    expect(video.srcObject).toBeNull()
+    expect(routerPushMock).toHaveBeenCalledWith({ name: 'chat', params: { roomId: 10 } })
+
+    wrapper.unmount()
+  })
+
   afterEach(() => {
     clearAuthSession()
+    vi.unstubAllGlobals()
   })
 })

@@ -44,6 +44,7 @@ class RtcCallControllerTests {
                 null,
                 false,
                 "상대방",
+                null,
                 null);
         when(service.request(10L, 20L, request)).thenReturn(response);
 

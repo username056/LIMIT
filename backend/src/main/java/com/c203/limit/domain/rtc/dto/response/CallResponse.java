@@ -14,4 +14,5 @@ public record CallResponse(
         Long rtcSessionId,
         boolean incoming,
         String counterpartName,
-        LocalDateTime sessionExpiresAt) {}
+        LocalDateTime sessionExpiresAt,
+        LocalDateTime inspectionSubmittedAt) {}

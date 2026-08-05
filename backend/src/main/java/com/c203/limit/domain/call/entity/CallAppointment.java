@@ -115,14 +115,6 @@ public class CallAppointment {
         canceledAt = LocalDateTime.now();
     }
 
-    public void complete() {
-        if (status != AppointmentStatus.ACCEPTED) {
-            throw new IllegalStateException("only accepted appointment can complete");
-        }
-        status = AppointmentStatus.COMPLETED;
-        completedAt = LocalDateTime.now();
-    }
-
     public boolean isParticipant(Long memberId) {
         return proposerId.equals(memberId) || respondentId.equals(memberId);
     }
