@@ -516,6 +516,8 @@ describe('ProductRegisterPage', () => {
     await goToCaptureStep(wrapper)
 
     expect(wrapper.text()).toContain('실동작 점검')
+    expect(wrapper.text()).toContain('진단 프로그램은 시스템 정보만 수집합니다.')
+    expect(wrapper.text()).not.toContain('진단 프로그램으로 완료된 항목은 자동 반영됩니다.')
     expect(wrapper.text()).toContain('키보드·포인터 직접 점검하기')
     expect(wrapper.text()).toContain('키보드')
     expect(wrapper.text()).toContain('포인터')
