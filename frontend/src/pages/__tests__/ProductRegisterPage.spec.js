@@ -41,8 +41,6 @@ const { routerPushMock, routeParams, routeQuery } = vi.hoisted(() => ({
 
 vi.mock('vue-router', () => ({
   useRoute: () => ({ params: routeParams, query: routeQuery }),
-  // 이탈 경고용 가드. 테스트에서는 등록만 두고 콜백은 실행하지 않습니다.
-  onBeforeRouteLeave: vi.fn(),
   useRouter: () => ({ push: routerPushMock, replace: vi.fn() }),
 }))
 
