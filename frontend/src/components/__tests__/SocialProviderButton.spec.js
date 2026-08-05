@@ -20,12 +20,14 @@ describe('SocialProviderButton', () => {
     expect(image.attributes('alt')).toBe(label)
   })
 
-  // 원본 크기가 저마다 달라(180x40, 366x90, 840x192) 높이만 맞추고 폭은 비율대로 둡니다.
-  // 폭을 억지로 맞추면 로고가 늘어나 각 회사 규정을 벗어납니다.
-  it('높이만 맞추고 폭은 비율대로 둔다', () => {
+  /*
+    폭을 가장 작은 파일(google 180px)의 원본에 맞춥니다. 그보다 크게 잡으면 그 파일을
+    늘리게 되어 로고가 뭉개집니다. 이 값이면 세 파일 모두 원본 이하로만 줄어듭니다.
+  */
+  it('폭을 180px로 맞추고 높이는 비율대로 둔다', () => {
     const wrapper = mount(SocialProviderButton, { props: { provider: 'kakao' } })
 
-    expect(wrapper.get('img').classes()).toEqual(expect.arrayContaining(['h-11', 'w-auto']))
+    expect(wrapper.get('img').classes()).toEqual(expect.arrayContaining(['w-[180px]', 'h-auto']))
   })
 
   it('연결 중에는 다시 누를 수 없고 상태를 읽어 준다', () => {
