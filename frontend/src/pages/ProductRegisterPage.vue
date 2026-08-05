@@ -2572,7 +2572,7 @@ onMounted(async () => {
                        aria-label이 읽어 줍니다. -->
                   <button
                     type="button"
-                    class="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-[11px] leading-none text-white transition hover:bg-black/80"
+                    class="absolute right-1 top-1 flex h-[15px] w-[15px] items-center justify-center rounded-full bg-black/60 text-[9px] leading-none text-white transition hover:bg-black/80"
                     aria-label="상품 이미지 삭제"
                     :disabled="listingImageBusy"
                     @click="removeListingImage(image)"
