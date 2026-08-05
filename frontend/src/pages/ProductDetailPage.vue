@@ -812,8 +812,7 @@ onMounted(async () => {
               <li
                 v-for="item in buyerChecklist"
                 :key="item.checklistItemId"
-                class="checklist-row flex items-center gap-3"
-                :class="isEvidenceExpanded(item) ? 'py-3' : 'h-20'"
+                class="checklist-row flex h-20 items-center gap-3"
               >
                 <span
                   class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold"
@@ -836,8 +835,8 @@ onMounted(async () => {
                 </div>
                 <ul
                   v-if="item.evidence.length"
-                  class="flex shrink-0 items-center gap-1.5"
-                  :class="isEvidenceExpanded(item) ? 'max-w-[15rem] flex-wrap justify-end' : ''"
+                  class="flex items-center gap-1.5"
+                  :class="isEvidenceExpanded(item) ? 'min-w-0 overflow-x-auto' : 'shrink-0'"
                 >
                   <li
                     v-for="evidence in visibleEvidence(item)"
