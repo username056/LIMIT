@@ -1083,7 +1083,7 @@ describe('ProductRegisterPage', () => {
     })
     expect(wrapper.text()).toContain('대표')
 
-    await wrapper.find('button[aria-label="상품 이미지 삭제"]').trigger('click')
+    await wrapper.find('button[aria-label="대표 이미지 삭제"]').trigger('click')
     await flushPromises()
     expect(deleteProductImage).toHaveBeenCalledWith(1001, 1)
   })
@@ -1119,9 +1119,8 @@ describe('ProductRegisterPage', () => {
     await attachFile(imageInput, new File(['b'], 'b.jpg', { type: 'image/jpeg' }))
     await flushPromises()
 
-    const moveLeft = wrapper.findAll('button[aria-label="이미지 순서를 앞으로 이동"]')
-      .find((button) => button.attributes('disabled') === undefined)
-    await moveLeft.trigger('click')
+    const makeThumbnail = wrapper.findAll('button').find((button) => button.text() === '대표로')
+    await makeThumbnail.trigger('click')
     await flushPromises()
 
     // 서버가 돌려준 목록을 그대로 씁니다. 2번이 앞으로 오고 대표도 2번이 됩니다.
@@ -1129,9 +1128,9 @@ describe('ProductRegisterPage', () => {
       imageIds: [2, 1],
       thumbnailImageId: 2,
     })
-    const badgeOwners = wrapper.findAll('li')
-      .filter((card) => card.findAll('span').some((node) => node.text() === '대표'))
-    expect(badgeOwners).toHaveLength(1)
+    // 대표 배지는 전용 칸에만 하나 있습니다. 추가 사진 목록에는 붙지 않습니다.
+    const badges = wrapper.findAll('span').filter((node) => node.text() === '대표')
+    expect(badges).toHaveLength(1)
     expect(wrapper.text()).not.toContain('상품 이미지 순서를 변경하지 못했습니다.')
   })
 
@@ -1147,7 +1146,7 @@ describe('ProductRegisterPage', () => {
     await flushPromises()
 
     // 목록은 정사각으로 잘라 보여 주므로, 무엇이 찍혔는지는 확대로만 확인됩니다.
-    await wrapper.get('button[aria-label="1번째 상품 이미지 확대 보기"]').trigger('click')
+    await wrapper.get('button[aria-label="대표 이미지 확대 보기"]').trigger('click')
     expect(wrapper.find('[aria-label="상품 이미지 확대 보기"]').exists()).toBe(true)
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
@@ -1155,7 +1154,7 @@ describe('ProductRegisterPage', () => {
     expect(wrapper.find('[aria-label="상품 이미지 확대 보기"]').exists()).toBe(false)
   })
 
-  it('순서를 옮길 때는 업로드 진행 막대를 띄우지 않는다', async () => {
+  it('대표를 바꿀 때는 업로드 진행 막대를 띄우지 않는다', async () => {
     completeProductImage
       .mockResolvedValueOnce({
         imageId: 1, imageType: 'THUMBNAIL', displayOrder: 0,
@@ -1181,9 +1180,8 @@ describe('ProductRegisterPage', () => {
     await attachFile(imageInput, new File(['b'], 'b.jpg', { type: 'image/jpeg' }))
     await flushPromises()
 
-    const moveLeft = wrapper.findAll('button[aria-label="이미지 순서를 앞으로 이동"]')
-      .find((button) => button.attributes('disabled') === undefined)
-    await moveLeft.trigger('click')
+    const makeThumbnail = wrapper.findAll('button').find((button) => button.text() === '대표로')
+    await makeThumbnail.trigger('click')
 
     // 올릴 것이 없으니 0% 막대가 깜빡이지 않아야 합니다.
     expect(wrapper.find('[role="progressbar"]').exists()).toBe(false)
@@ -1192,7 +1190,7 @@ describe('ProductRegisterPage', () => {
     await flushPromises()
   })
 
-  it('순서를 옮기면 맨 왼쪽 사진이 대표가 된다', async () => {
+  it('추가 사진의 대표로를 누르면 그 사진이 대표가 된다', async () => {
     completeProductImage
       .mockResolvedValueOnce({
         imageId: 1, imageType: 'THUMBNAIL', displayOrder: 0,
@@ -1214,10 +1212,9 @@ describe('ProductRegisterPage', () => {
     await attachFile(imageInput, new File(['b'], 'b.jpg', { type: 'image/jpeg' }))
     await flushPromises()
 
-    // 두 번째 사진을 앞으로 보냅니다. 예전에는 순서만 바뀌고 대표는 1번에 남았습니다.
-    const moveLeft = wrapper.findAll('button[aria-label="이미지 순서를 앞으로 이동"]')
-      .find((button) => button.attributes('disabled') === undefined)
-    await moveLeft.trigger('click')
+    // 추가 사진의 대표로를 누릅니다. 그 사진이 대표 자리로 올라가야 합니다.
+    const makeThumbnail = wrapper.findAll('button').find((button) => button.text() === '대표로')
+    await makeThumbnail.trigger('click')
     await flushPromises()
 
     expect(updateProductImageOrder).toHaveBeenCalledWith(1001, {
@@ -1249,18 +1246,17 @@ describe('ProductRegisterPage', () => {
     await flushPromises()
 
     /*
-      나중에 도착한 displayOrder 0이 맨 왼쪽에 와야 합니다.
-      화면에는 blob 미리보기가 걸려 있어 URL로는 구분할 수 없으므로, 대표 배지가
-      첫 칸에 붙었는지로 확인합니다. 정렬하지 않으면 먼저 도착한 1번이 앞에 서서
-      배지가 둘째 칸에 붙습니다.
+      displayOrder 0으로 올라간 사진이 대표 칸에 들어가야 합니다.
+      업로드가 동시에 돌아 도착 순서가 뒤바뀌어도, 대표는 순서 0인 사진이어야 합니다.
+      화면에는 blob 미리보기가 걸려 있어 URL로는 구분할 수 없으므로, 대표 배지가 목록이
+      아닌 전용 칸에 하나만 붙었는지로 확인합니다.
     */
-    const hasThumbnailBadge = (card) => card.findAll('span')
-      .some((node) => node.text() === '대표')
+    const badges = wrapper.findAll('span').filter((node) => node.text() === '대표')
+    expect(badges).toHaveLength(1)
 
+    // 나머지 한 장은 추가 사진 목록에 남습니다.
     const cards = wrapper.findAll('li').filter((node) => node.find('img').exists())
-    expect(cards.length).toBeGreaterThanOrEqual(2)
-    expect(hasThumbnailBadge(cards[0])).toBe(true)
-    expect(hasThumbnailBadge(cards[1])).toBe(false)
+    expect(cards).toHaveLength(1)
   })
 
   it('등록을 완료하면 판매 상태로 올리고 등록한 상품 상세로 이동한다', async () => {
