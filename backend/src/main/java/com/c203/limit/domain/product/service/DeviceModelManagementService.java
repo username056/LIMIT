@@ -581,6 +581,7 @@ public class DeviceModelManagementService {
                         item.getAutomationType(),
                         item.getParserType(),
                         item.isRequired(),
+                        item.isVisibleToBuyer(),
                         item.getDisplayOrder()))
                 .toList());
         target.publish();

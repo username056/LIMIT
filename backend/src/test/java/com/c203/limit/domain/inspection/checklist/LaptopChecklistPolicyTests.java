@@ -181,13 +181,20 @@ class LaptopChecklistPolicyTests {
                                 "LAP-FTR-CAM", "LAP-FTR-MIC", "LAP-FTR-SPK", "LAP-FTR-TOUCH", "LAP-FTR-PEN")
                         .contains(item.itemCode()))
                 .hasSize(5)
-                .allSatisfy(item -> assertThat(item.required()).isFalse());
+                .allSatisfy(item -> {
+                    assertThat(item.required()).isFalse();
+                    // 검증한 적 없는 항목이 구매자 체크리스트에 미완료로 비치지 않도록 buyer 화면에서도 숨긴다.
+                    assertThat(item.visibleToBuyer()).isFalse();
+                });
 
         var portsItems = policy.generate(OsFamily.WINDOWS, Set.of(LaptopFeatureCode.PORTS));
         assertThat(portsItems)
                 .filteredOn(item -> item.itemCode().equals("LAP-FTR-PORT"))
                 .singleElement()
-                .satisfies(item -> assertThat(item.required()).isTrue());
+                .satisfies(item -> {
+                    assertThat(item.required()).isTrue();
+                    assertThat(item.visibleToBuyer()).isTrue();
+                });
     }
 
     // 숫자 키패드는 셋과 달리 웹 점검(useKeyboardCheck includeNumpad)으로 실제 완료가

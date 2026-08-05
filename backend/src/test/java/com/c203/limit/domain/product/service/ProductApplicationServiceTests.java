@@ -869,7 +869,7 @@ class ProductApplicationServiceTests {
     private GeneratedChecklistItem generatedItem(String itemCode, String featureCode) {
         return new GeneratedChecklistItem(
                 itemCode, "지문 인식", "확인", "가이드", EvidenceType.VIDEO, AutomationType.NONE, null,
-                true, 1, featureCode, null, null, null);
+                true, true, 1, featureCode, null, null, null);
     }
 
     private Category model() {

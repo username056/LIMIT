@@ -275,6 +275,7 @@ public class DeviceChecklistFeatureCatalog {
                     AutomationType.NONE,
                     null,
                     true,
+                    true,
                     displayOrder,
                     code,
                     null,

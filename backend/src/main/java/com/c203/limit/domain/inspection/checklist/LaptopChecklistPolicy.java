@@ -333,6 +333,7 @@ public class LaptopChecklistPolicy {
                 AutomationType.NONE,
                 null,
                 null,
+                true,
                 true);
     }
 
@@ -347,6 +348,7 @@ public class LaptopChecklistPolicy {
                 AutomationType.FILE_PARSE,
                 parserType,
                 null,
+                true,
                 true);
     }
 
@@ -360,6 +362,7 @@ public class LaptopChecklistPolicy {
                 AutomationType.OCR,
                 null,
                 null,
+                true,
                 true);
     }
 
@@ -378,10 +381,14 @@ public class LaptopChecklistPolicy {
                 AutomationType.NONE,
                 null,
                 null,
+                true,
                 true);
     }
 
-    /** 실동작 점검 없이 판매자 확인만으로 남는 선택 기능. 필수 검증 항목이 아니므로 등록 완료를 막지 않는다. */
+    /**
+     * 실동작 점검 없이 판매자 확인만으로 남는 선택 기능. 필수 검증 항목이 아니므로 등록 완료를 막지 않고,
+     * 검증한 적 없는 항목이 구매자에게 미완료 체크리스트로 비치지 않도록 buyer 화면에서도 숨긴다.
+     */
     private static ItemDefinition featureSpecOnly(
             String code,
             String name,
@@ -397,6 +404,7 @@ public class LaptopChecklistPolicy {
                 AutomationType.NONE,
                 null,
                 null,
+                false,
                 false);
     }
 
@@ -409,7 +417,8 @@ public class LaptopChecklistPolicy {
             AutomationType automationType,
             String parserType,
             LaptopFeatureCode featureCode,
-            boolean required) {
+            boolean required,
+            boolean visibleToBuyer) {
 
         GeneratedChecklistItem toItem(int order) {
             LaptopFeatureCode resolvedFeature = featureCode;
@@ -425,6 +434,7 @@ public class LaptopChecklistPolicy {
                     automationType,
                     parserType,
                     required,
+                    visibleToBuyer,
                     order,
                                 resolvedFeature == null ? null : resolvedFeature.name(),
                     null,
