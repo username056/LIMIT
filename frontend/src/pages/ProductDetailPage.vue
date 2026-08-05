@@ -147,35 +147,34 @@ const mediaViewer = ref(null)
 // 상품 사진 원본. 위 4:3 틀이 사진을 잘라 채우기 때문에, 잘린 부분은 여기서만 보입니다.
 const expandedImage = ref('')
 
-function openMediaViewer(item, evidence) {
-  mediaViewer.value = { itemName: item.name, evidence }
-}
-
 /*
-  검증 자료가 네 개 이상이면 세 개만 보이고 나머지는 '+3'으로 접힙니다.
+  크게 보기 창에서 좌우로 넘겨 봅니다.
   ---------------------------------------------------------------------------
-  그 '+3'이 글자일 뿐이라 눌러도 아무 일이 없었습니다. 판매자가 사진을 여섯 장 올려도
-  구매자는 세 장까지만 열어 볼 수 있었습니다. 크게 보기 창은 한 장씩 띄우고 앞뒤로
-  넘기는 기능이 없어서, 접힌 자료에 닿을 방법이 아예 없었습니다.
+  목록은 자료를 세 개까지만 보여 주고 나머지를 '+3'으로 접어 둡니다. 그 '+3'이 글자일
+  뿐이라 눌러도 아무 일이 없었고, 크게 보기 창도 한 장만 띄우고 넘길 수 없었습니다.
+  그래서 판매자가 사진을 여섯 장 올려도 구매자는 세 장까지만 볼 수 있었습니다.
 
-  눌러서 펼치게 합니다. 기본은 그대로 세 장만 두어 목록이 길어지지 않게 하고, 펼치면
-  줄을 바꿔 가며 전부 보여 줍니다.
+  창이 그 항목의 자료 전체를 들고 있게 하고, 좌우로 넘기게 합니다. '+3'을 누르면 접혀
+  있던 네 번째 자료부터 열립니다. 목록은 지금처럼 세 개만 두어 짧게 유지합니다.
 */
-const expandedEvidenceItemIds = ref([])
+const mediaViewerIndex = ref(0)
 
-function isEvidenceExpanded(item) {
-  return expandedEvidenceItemIds.value.includes(item.checklistItemId)
+const mediaViewerEvidence = computed(() => {
+  const list = mediaViewer.value?.evidenceList || []
+  return list[mediaViewerIndex.value] || null
+})
+
+function openMediaViewer(item, startIndex = 0) {
+  mediaViewer.value = { itemName: item.name, evidenceList: item.evidence }
+  mediaViewerIndex.value = startIndex
 }
 
-function toggleEvidenceExpanded(item) {
-  const id = item.checklistItemId
-  expandedEvidenceItemIds.value = isEvidenceExpanded(item)
-    ? expandedEvidenceItemIds.value.filter((candidate) => candidate !== id)
-    : [...expandedEvidenceItemIds.value, id]
-}
-
-function visibleEvidence(item) {
-  return isEvidenceExpanded(item) ? item.evidence : item.evidence.slice(0, 3)
+function moveMediaViewer(step) {
+  const total = mediaViewer.value?.evidenceList?.length || 0
+  if (total < 2) return
+  // 끝에서 다음을 누르면 처음으로 돌아옵니다. 막다른 길에서 버튼이 죽어 있으면
+  // 고장난 것처럼 보입니다.
+  mediaViewerIndex.value = (mediaViewerIndex.value + step + total) % total
 }
 
 // 설명은 기본 4줄로 접어 두고, 길면 펼쳐 봅니다. 설명이 길어도 아래 검증 자료까지 한 화면에
@@ -345,6 +344,12 @@ async function loadProduct(productId) {
 
 // 화면을 가득 채운 사진에서는 어디를 눌러야 닫히는지 알기 어려워 Esc도 받습니다.
 function closeViewersOnEscape({ key: pressed }) {
+  // 여러 장을 넘겨 보는 창에서는 좌우 화살표도 받습니다. 사진을 훑을 때 마우스를
+  // 버튼까지 옮기는 것보다 짧습니다.
+  if (mediaViewer.value && !expandedImage.value) {
+    if (pressed === 'ArrowLeft') return moveMediaViewer(-1)
+    if (pressed === 'ArrowRight') return moveMediaViewer(1)
+  }
   if (pressed !== 'Escape') return
   if (expandedImage.value) expandedImage.value = ''
   else if (mediaViewer.value) mediaViewer.value = null
@@ -835,18 +840,17 @@ onMounted(async () => {
                 </div>
                 <ul
                   v-if="item.evidence.length"
-                  class="flex items-center gap-1.5"
-                  :class="isEvidenceExpanded(item) ? 'min-w-0 overflow-x-auto' : 'shrink-0'"
+                  class="flex shrink-0 items-center gap-1.5"
                 >
                   <li
-                    v-for="evidence in visibleEvidence(item)"
+                    v-for="(evidence, index) in item.evidence.slice(0, 3)"
                     :key="evidence.evidenceId"
                   >
                     <button
                       type="button"
                       class="relative block h-14 w-14 overflow-hidden rounded-md border border-border bg-white"
                       :aria-label="`${item.name} 검증 자료 크게 보기`"
-                      @click="openMediaViewer(item, evidence)"
+                      @click="openMediaViewer(item, index)"
                     >
                       <img
                         v-if="evidence.evidenceType === 'PHOTO'"
@@ -875,13 +879,10 @@ onMounted(async () => {
                     <button
                       type="button"
                       class="rounded-md px-1.5 py-1 text-xs font-semibold text-primary hover:bg-accent"
-                      :aria-expanded="isEvidenceExpanded(item)"
-                      :aria-label="isEvidenceExpanded(item)
-                        ? `${item.name} 검증 자료 접기`
-                        : `${item.name} 검증 자료 ${item.evidence.length - 3}개 더 보기`"
-                      @click="toggleEvidenceExpanded(item)"
+                      :aria-label="`${item.name} 검증 자료 ${item.evidence.length - 3}개 더 보기`"
+                      @click="openMediaViewer(item, 3)"
                     >
-                      {{ isEvidenceExpanded(item) ? '접기' : `+${item.evidence.length - 3}` }}
+                      +{{ item.evidence.length - 3 }}
                     </button>
                   </li>
                 </ul>
@@ -1046,6 +1047,10 @@ onMounted(async () => {
             <div class="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
               <p class="truncate text-sm font-bold text-text-main">
                 {{ mediaViewer.itemName }}
+                <span
+                  v-if="mediaViewer.evidenceList.length > 1"
+                  class="ml-1 font-normal text-text-sub"
+                >{{ mediaViewerIndex + 1 }} / {{ mediaViewer.evidenceList.length }}</span>
               </p>
               <button
                 type="button"
@@ -1056,27 +1061,49 @@ onMounted(async () => {
                 닫기
               </button>
             </div>
-            <div class="flex max-h-[70vh] items-center justify-center bg-black">
+            <div class="relative flex max-h-[70vh] items-center justify-center bg-black">
               <video
-                v-if="mediaViewer.evidence.evidenceType === 'VIDEO'"
-                :src="mediaViewer.evidence.mediaUrl"
+                v-if="mediaViewerEvidence?.evidenceType === 'VIDEO'"
+                :key="mediaViewerEvidence.evidenceId"
+                :src="mediaViewerEvidence.mediaUrl"
                 controls
                 autoplay
                 class="max-h-[70vh] w-full"
               />
               <img
-                v-else-if="mediaViewer.evidence.evidenceType === 'PHOTO'"
-                :src="mediaViewer.evidence.mediaUrl"
+                v-else-if="mediaViewerEvidence?.evidenceType === 'PHOTO'"
+                :src="mediaViewerEvidence.mediaUrl"
                 :alt="`${mediaViewer.itemName} 검증 자료`"
                 class="max-h-[70vh] w-full object-contain"
               >
               <a
-                v-else
-                :href="mediaViewer.evidence.mediaUrl"
+                v-else-if="mediaViewerEvidence"
+                :href="mediaViewerEvidence.mediaUrl"
                 class="block px-4 py-16 text-sm font-semibold text-white underline"
               >
                 검수 파일 내려받기
               </a>
+
+              <!-- 자료가 두 개 이상일 때만 좌우 버튼을 둡니다. 한 장뿐인데 버튼이 있으면
+                   누를 곳처럼 보여 혼란을 줍니다. -->
+              <template v-if="mediaViewer.evidenceList.length > 1">
+                <button
+                  type="button"
+                  class="absolute left-2 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-lg text-white hover:bg-black/70"
+                  aria-label="이전 자료"
+                  @click="moveMediaViewer(-1)"
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  class="absolute right-2 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-lg text-white hover:bg-black/70"
+                  aria-label="다음 자료"
+                  @click="moveMediaViewer(1)"
+                >
+                  ›
+                </button>
+              </template>
             </div>
           </div>
         </div>
