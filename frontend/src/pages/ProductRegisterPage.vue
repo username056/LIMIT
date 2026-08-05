@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import PageHeader from '../components/PageHeader.vue'
 import BaseButton from '../components/BaseButton.vue'
@@ -1843,38 +1843,8 @@ function closeExpandedImageOnEscape({ key: pressed }) {
   if (pressed === 'Escape') expandedImage.value = ''
 }
 
-/*
-  쓰던 내용을 두고 나가려 하면 한 번 붙잡습니다.
-  ---------------------------------------------------------------------------
-  등록은 사진 열 장과 체크리스트까지 채우는 긴 작업인데, '임시저장'을 누르지 않고
-  뒤로 가거나 탭을 닫으면 그대로 사라졌습니다. 눌러야 남는다는 것을 모르면 다 잃습니다.
-
-  저장·완료·점검 화면으로 옮겨 가는 것은 의도한 이동이라 붙잡지 않습니다.
-  그 경로에서는 allowLeave를 먼저 세워 둡니다.
-*/
-const allowLeave = ref(false)
-
-const hasUnsavedWork = computed(() => Boolean(
-  form.name || form.price || form.description
-  || form.categoryId || form.deviceModelId
-  || listingImages.value.length,
-))
-
-function warnBeforeUnload(event) {
-  if (allowLeave.value || !hasUnsavedWork.value) return
-  // 문구는 브라우저가 정합니다. preventDefault만으로 기본 확인창이 뜹니다.
-  event.preventDefault()
-  event.returnValue = ''
-}
-
-onBeforeRouteLeave(() => {
-  if (allowLeave.value || !hasUnsavedWork.value) return true
-  return window.confirm('작성 중인 내용이 저장되지 않았습니다. 이 화면을 떠날까요?')
-})
-
 onMounted(() => {
   window.addEventListener('keydown', closeExpandedImageOnEscape)
-  window.addEventListener('beforeunload', warnBeforeUnload)
 })
 
 onBeforeUnmount(() => {
@@ -1882,7 +1852,6 @@ onBeforeUnmount(() => {
   stopWindowsInspectionPolling()
   modelRequestId += 1
   window.removeEventListener('keydown', closeExpandedImageOnEscape)
-  window.removeEventListener('beforeunload', warnBeforeUnload)
 })
 
 onMounted(async () => {
@@ -3012,15 +2981,10 @@ onMounted(async () => {
                     진단 프로그램으로 완료된 항목은 자동 반영됩니다. 나머지 항목은 웹에서 직접 점검할 수 있습니다.
                   </p>
                 </div>
-                <!--
-                  점검 화면으로 옮겨 가는 것은 의도한 이동입니다. 이탈 경고를 띄우지 않게
-                  먼저 문을 열어 둡니다(점검을 마치면 ?step=2로 이 화면에 돌아옵니다).
-                -->
                 <BaseButton
                   v-if="currentProductId"
                   variant="outline"
                   :to="{ name: 'seller-product-device-check', params: { productId: currentProductId } }"
-                  @click="allowLeave = true"
                 >
                   카메라·마이크·키보드 등 직접 점검하기
                 </BaseButton>
