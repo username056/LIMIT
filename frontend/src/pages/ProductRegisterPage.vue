@@ -1981,7 +1981,8 @@ onMounted(async () => {
       <PageHeader
         eyebrow="ITEM REGISTER"
         :title="editingId && !isRegistrationResume ? '상품 수정' : '상품 등록'"
-        description="기기 정보와 검증 체크리스트를 순서대로 완료하면 바로 판매가 시작됩니다. 중간에 나가야 하면 임시저장을 눌러 주세요."
+        description="기기 정보와 검증 체크리스트를 순서대로 완료하면 바로 판매가 시작됩니다.
+        중간에 나가야 하면 임시저장을 눌러 주세요."
       >
         <template #action>
           <RouterLink

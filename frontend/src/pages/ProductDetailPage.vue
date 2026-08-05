@@ -151,6 +151,33 @@ function openMediaViewer(item, evidence) {
   mediaViewer.value = { itemName: item.name, evidence }
 }
 
+/*
+  검증 자료가 네 개 이상이면 세 개만 보이고 나머지는 '+3'으로 접힙니다.
+  ---------------------------------------------------------------------------
+  그 '+3'이 글자일 뿐이라 눌러도 아무 일이 없었습니다. 판매자가 사진을 여섯 장 올려도
+  구매자는 세 장까지만 열어 볼 수 있었습니다. 크게 보기 창은 한 장씩 띄우고 앞뒤로
+  넘기는 기능이 없어서, 접힌 자료에 닿을 방법이 아예 없었습니다.
+
+  눌러서 펼치게 합니다. 기본은 그대로 세 장만 두어 목록이 길어지지 않게 하고, 펼치면
+  줄을 바꿔 가며 전부 보여 줍니다.
+*/
+const expandedEvidenceItemIds = ref([])
+
+function isEvidenceExpanded(item) {
+  return expandedEvidenceItemIds.value.includes(item.checklistItemId)
+}
+
+function toggleEvidenceExpanded(item) {
+  const id = item.checklistItemId
+  expandedEvidenceItemIds.value = isEvidenceExpanded(item)
+    ? expandedEvidenceItemIds.value.filter((candidate) => candidate !== id)
+    : [...expandedEvidenceItemIds.value, id]
+}
+
+function visibleEvidence(item) {
+  return isEvidenceExpanded(item) ? item.evidence : item.evidence.slice(0, 3)
+}
+
 // 설명은 기본 4줄로 접어 두고, 길면 펼쳐 봅니다. 설명이 길어도 아래 검증 자료까지 한 화면에
 // 들어오게 하려는 것입니다.
 const isDescriptionExpanded = ref(false)
@@ -785,7 +812,8 @@ onMounted(async () => {
               <li
                 v-for="item in buyerChecklist"
                 :key="item.checklistItemId"
-                class="checklist-row flex h-20 items-center gap-3"
+                class="checklist-row flex items-center gap-3"
+                :class="isEvidenceExpanded(item) ? 'py-3' : 'h-20'"
               >
                 <span
                   class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold"
@@ -809,9 +837,10 @@ onMounted(async () => {
                 <ul
                   v-if="item.evidence.length"
                   class="flex shrink-0 items-center gap-1.5"
+                  :class="isEvidenceExpanded(item) ? 'max-w-[15rem] flex-wrap justify-end' : ''"
                 >
                   <li
-                    v-for="evidence in item.evidence.slice(0, 3)"
+                    v-for="evidence in visibleEvidence(item)"
                     :key="evidence.evidenceId"
                   >
                     <button
@@ -843,11 +872,18 @@ onMounted(async () => {
                       >▶</span>
                     </button>
                   </li>
-                  <li
-                    v-if="item.evidence.length > 3"
-                    class="text-xs font-semibold text-text-sub"
-                  >
-                    +{{ item.evidence.length - 3 }}
+                  <li v-if="item.evidence.length > 3">
+                    <button
+                      type="button"
+                      class="rounded-md px-1.5 py-1 text-xs font-semibold text-primary hover:bg-accent"
+                      :aria-expanded="isEvidenceExpanded(item)"
+                      :aria-label="isEvidenceExpanded(item)
+                        ? `${item.name} 검증 자료 접기`
+                        : `${item.name} 검증 자료 ${item.evidence.length - 3}개 더 보기`"
+                      @click="toggleEvidenceExpanded(item)"
+                    >
+                      {{ isEvidenceExpanded(item) ? '접기' : `+${item.evidence.length - 3}` }}
+                    </button>
                   </li>
                 </ul>
                 <span
