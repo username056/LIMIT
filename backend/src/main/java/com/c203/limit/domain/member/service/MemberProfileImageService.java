@@ -30,6 +30,9 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>키를 서버가 만들기 때문에 회원이 남의 자리에 덮어쓸 수 없다. 완료 통보 때 S3에 실제로 올라왔는지 head로 확인한다 — 확인하지 않으면 올리지 않고 완료만 불러
  * 깨진 사진이 박힌다.
+ *
+ * <p>이 서비스가 쓰는 members/ prefix는 런타임 자격 증명의 S3 정책에도 들어 있어야 한다. 정책에 없으면 API·DB·화면은 모두 정상인데 S3 PUT만
+ * 403 AccessDenied로 막혀, 코드를 봐도 원인이 보이지 않는다. 허용 prefix 목록은 docs/runbook/s3-media.md에 있다.
  */
 @Service
 public class MemberProfileImageService {
