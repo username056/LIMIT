@@ -93,6 +93,36 @@ function queueCompletion(run) {
   return result
 }
 
+/*
+  한 번에 세 개까지만 처리합니다.
+  ---------------------------------------------------------------------------
+  열 장을 고르면 열 장을 동시에 줄이려 했습니다. 요즘 휴대폰 사진은 한 장이 5MB를
+  넘는데, 그걸 한꺼번에 Canvas로 펼치면 메모리를 몇십 MB씩 잡아 기기에 따라 일부가
+  조용히 실패합니다. 셋씩 처리하면 앞이 끝나는 대로 다음이 들어가서, 사용자에게는
+  똑같이 '한꺼번에 올린' 것으로 보이고 실패는 줄어듭니다.
+
+  개별 실패는 각 작업이 스스로 알리므로 여기서는 삼키고 다음으로 넘어갑니다.
+  한 장이 실패해도 나머지가 멈추지 않아야 합니다.
+*/
+const UPLOAD_CONCURRENCY = 3
+
+async function runWithUploadLimit(items, task) {
+  let cursor = 0
+  const worker = async () => {
+    while (cursor < items.length) {
+      const index = cursor
+      cursor += 1
+      try {
+        await task(items[index], index)
+      } catch {
+        // 개별 실패는 각 작업이 화면에 알립니다.
+      }
+    }
+  }
+  const workerCount = Math.min(UPLOAD_CONCURRENCY, items.length)
+  await Promise.all(Array.from({ length: workerCount }, worker))
+}
+
 // 대표 이미지는 1단계에서 받습니다(pendingThumbnail 참고). 아직 '최소 1장 필수'로는 두지 않았습니다 —
 // 이미 이미지 없이 임시저장된 상품들이 있어서, 필수로 바꾸면 그 상품들이 수정 저장조차 못 하게 됩니다.
 // 필수로 올릴 때는 기존 초안 처리 방침을 먼저 정하고 validateSaleInfo에 규칙을 붙이세요.
@@ -1580,9 +1610,7 @@ async function onListingImageInput(event) {
   if (picked.length > files.length) {
     openAlert(`${picked.length - files.length}개는 최대 개수(10개)를 넘어 올리지 못했습니다.`)
   }
-  await Promise.allSettled(files.map(
-    (file, index) => handleListingImage(file, startOrder + index),
-  ))
+  await runWithUploadLimit(files, (file, index) => handleListingImage(file, startOrder + index))
 }
 
 // 올린 사진 중 첫 장이 목록·상세에 보이는 대표 이미지입니다. 업로드 때는 서버가 첫 장을
@@ -1661,7 +1689,7 @@ async function onCaptureInput(event, item) {
       `${picked.length - files.length}개는 이 항목의 최대 개수(${maxMediaFor(item)}개)를 넘어 올리지 못했습니다.`,
     )
   }
-  if (files.length) await Promise.allSettled(files.map((file) => handleCaptureFile(item, file)))
+  if (files.length) await runWithUploadLimit(files, (file) => handleCaptureFile(item, file))
 }
 
 // ── 그 자리에서 사진 찍기 ────────────────────────────────────────────────
