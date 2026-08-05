@@ -68,6 +68,9 @@ public class RtcSession {
     @Column(name = "connected_at")
     private LocalDateTime connectedAt;
 
+    @Column(name = "inspection_submitted_at")
+    private LocalDateTime inspectionSubmittedAt;
+
     @Column(name = "ended_at")
     private LocalDateTime endedAt;
 
@@ -110,12 +113,13 @@ public class RtcSession {
         endedAt = LocalDateTime.now();
     }
 
-    public void disconnect(RtcEndReason reason, String memo, LocalDateTime expiresAt) {
+    public void disconnectAfterInspection(
+            RtcEndReason reason, String memo, LocalDateTime submittedAt) {
         if (status == RtcSessionStatus.ENDED || status == RtcSessionStatus.EXPIRED) return;
         status = RtcSessionStatus.WAITING;
         endReason = reason;
         verificationMemo = memo;
-        this.expiresAt = expiresAt;
+        if (inspectionSubmittedAt == null) inspectionSubmittedAt = submittedAt;
     }
 
     public boolean expireIfDue(LocalDateTime now) {
@@ -175,6 +179,10 @@ public class RtcSession {
 
     public LocalDateTime getEndedAt() {
         return endedAt;
+    }
+
+    public LocalDateTime getInspectionSubmittedAt() {
+        return inspectionSubmittedAt;
     }
 
     public String getVerificationMemo() {

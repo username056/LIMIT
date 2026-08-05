@@ -13,6 +13,7 @@ public record RtcSessionResponse(
         String status,
         LocalDateTime expiresAt,
         LocalDateTime connectedAt,
+        LocalDateTime inspectionSubmittedAt,
         LocalDateTime endedAt,
         String memo,
         List<RtcChecklistItemResponse> checklistItems) {}
