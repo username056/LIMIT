@@ -1037,76 +1037,80 @@ onMounted(async () => {
           >
         </div>
 
-        <!-- 증빙 원본 팝업. 목록 썸네일이 작아서 영상은 여기서 재생합니다. -->
-        <div
-          v-if="mediaViewer"
-          class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
-          @click.self="mediaViewer = null"
-        >
-          <div class="w-full max-w-2xl overflow-hidden rounded-lg bg-surface">
-            <div class="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
-              <p class="truncate text-sm font-bold text-text-main">
-                {{ mediaViewer.itemName }}
-                <span
-                  v-if="mediaViewer.evidenceList.length > 1"
-                  class="ml-1 font-normal text-text-sub"
-                >{{ mediaViewerIndex + 1 }} / {{ mediaViewer.evidenceList.length }}</span>
-              </p>
-              <button
-                type="button"
-                class="rounded-md px-2 py-1 text-sm text-text-sub hover:bg-bg"
-                aria-label="검증 자료 닫기"
-                @click="mediaViewer = null"
-              >
-                닫기
-              </button>
-            </div>
-            <div class="relative flex max-h-[70vh] items-center justify-center bg-black">
-              <video
-                v-if="mediaViewerEvidence?.evidenceType === 'VIDEO'"
-                :key="mediaViewerEvidence.evidenceId"
-                :src="mediaViewerEvidence.mediaUrl"
-                controls
-                autoplay
-                class="max-h-[70vh] w-full"
-              />
-              <img
-                v-else-if="mediaViewerEvidence?.evidenceType === 'PHOTO'"
-                :src="mediaViewerEvidence.mediaUrl"
-                :alt="`${mediaViewer.itemName} 검증 자료`"
-                class="max-h-[70vh] w-full object-contain"
-              >
-              <a
-                v-else-if="mediaViewerEvidence"
-                :href="mediaViewerEvidence.mediaUrl"
-                class="block px-4 py-16 text-sm font-semibold text-white underline"
-              >
-                검수 파일 내려받기
-              </a>
+        <!-- 증빙 원본 팝업. 목록 썸네일이 작아서 영상은 여기서 재생합니다.
+             툭 나타나면 놀라기 때문에 짧게 밝아지며 올라오게 합니다. -->
+        <Transition name="viewer">
+          <div
+            v-if="mediaViewer"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4"
+            @click.self="mediaViewer = null"
+          >
+            <div class="viewer__panel w-full max-w-2xl overflow-hidden rounded-lg bg-surface">
+              <div class="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
+                <p class="truncate text-sm font-bold text-text-main">
+                  {{ mediaViewer.itemName }}
+                  <span
+                    v-if="mediaViewer.evidenceList.length > 1"
+                    class="ml-1 font-normal text-text-sub"
+                  >{{ mediaViewerIndex + 1 }} / {{ mediaViewer.evidenceList.length }}</span>
+                </p>
+                <button
+                  type="button"
+                  class="rounded-md px-2 py-1 text-sm text-text-sub hover:bg-bg"
+                  aria-label="검증 자료 닫기"
+                  @click="mediaViewer = null"
+                >
+                  닫기
+                </button>
+              </div>
+              <div class="relative flex max-h-[70vh] items-center justify-center bg-black">
+                <video
+                  v-if="mediaViewerEvidence?.evidenceType === 'VIDEO'"
+                  :key="mediaViewerEvidence.evidenceId"
+                  :src="mediaViewerEvidence.mediaUrl"
+                  controls
+                  autoplay
+                  class="viewer__media max-h-[70vh] w-full"
+                />
+                <img
+                  v-else-if="mediaViewerEvidence?.evidenceType === 'PHOTO'"
+                  :key="mediaViewerEvidence.evidenceId"
+                  :src="mediaViewerEvidence.mediaUrl"
+                  :alt="`${mediaViewer.itemName} 검증 자료`"
+                  class="viewer__media max-h-[70vh] w-full object-contain"
+                >
+                <a
+                  v-else-if="mediaViewerEvidence"
+                  :href="mediaViewerEvidence.mediaUrl"
+                  class="block px-4 py-16 text-sm font-semibold text-white underline"
+                >
+                  검수 파일 내려받기
+                </a>
 
-              <!-- 자료가 두 개 이상일 때만 좌우 버튼을 둡니다. 한 장뿐인데 버튼이 있으면
+                <!-- 자료가 두 개 이상일 때만 좌우 버튼을 둡니다. 한 장뿐인데 버튼이 있으면
                    누를 곳처럼 보여 혼란을 줍니다. -->
-              <template v-if="mediaViewer.evidenceList.length > 1">
-                <button
-                  type="button"
-                  class="absolute left-2 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-lg text-white hover:bg-black/70"
-                  aria-label="이전 자료"
-                  @click="moveMediaViewer(-1)"
-                >
-                  ‹
-                </button>
-                <button
-                  type="button"
-                  class="absolute right-2 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-lg text-white hover:bg-black/70"
-                  aria-label="다음 자료"
-                  @click="moveMediaViewer(1)"
-                >
-                  ›
-                </button>
-              </template>
+                <template v-if="mediaViewer.evidenceList.length > 1">
+                  <button
+                    type="button"
+                    class="absolute left-2 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-lg text-white hover:bg-black/70"
+                    aria-label="이전 자료"
+                    @click="moveMediaViewer(-1)"
+                  >
+                    ‹
+                  </button>
+                  <button
+                    type="button"
+                    class="absolute right-2 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-lg text-white hover:bg-black/70"
+                    aria-label="다음 자료"
+                    @click="moveMediaViewer(1)"
+                  >
+                    ›
+                  </button>
+                </template>
+              </div>
             </div>
           </div>
-        </div>
+        </Transition>
 
         <div
           v-if="isRecaptureModalOpen"
@@ -1203,6 +1207,53 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+/*
+  크게 보기 창이 부드럽게 나타납니다.
+  ---------------------------------------------------------------------------
+  화면 전체를 덮는 창이 툭 나타나면 놀랍니다. 어두운 배경은 짧게 밝아지고, 안쪽 판은
+  아주 조금 작은 상태에서 제자리로 올라옵니다. 0.18초는 "부드럽다"고 느끼면서도
+  기다린다는 느낌은 들지 않는 길이입니다.
+*/
+.viewer-enter-active,
+.viewer-leave-active {
+  transition: opacity 0.18s ease;
+}
+
+.viewer-enter-from,
+.viewer-leave-to {
+  opacity: 0;
+}
+
+.viewer-enter-active .viewer__panel {
+  animation: viewer-rise 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes viewer-rise {
+  from { transform: translateY(8px) scale(0.98); }
+  to { transform: none; }
+}
+
+/* 사진을 넘길 때도 툭 바뀌지 않게 짧게 밝아집니다. */
+.viewer__media {
+  animation: viewer-fade 0.16s ease;
+}
+
+@keyframes viewer-fade {
+  from { opacity: 0.3; }
+  to { opacity: 1; }
+}
+
+/* 움직임을 줄여 달라고 설정한 사용자에게는 움직임 없이 바로 보여 줍니다. */
+@media (prefers-reduced-motion: reduce) {
+  .viewer-enter-active,
+  .viewer-leave-active,
+  .viewer-enter-active .viewer__panel,
+  .viewer__media {
+    transition: none;
+    animation: none;
+  }
+}
+
 /* 자동 인식 사양: 옅은 카드 하나에 구분선으로만 행을 나눕니다. */
 .spec-list {
   background-color: #f8fafc;
