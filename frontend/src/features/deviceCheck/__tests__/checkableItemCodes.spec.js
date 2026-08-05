@@ -40,8 +40,29 @@ describe('toUniversalCheckItems', () => {
     const result = toUniversalCheckItems([])
 
     expect(result).toHaveLength(2)
-    expect(result.map((item) => item.testType)).toEqual([
-      'KEYBOARD', 'TOUCHPAD',
+    expect(result.map((item) => item.testType)).toEqual(['KEYBOARD', 'TOUCHPAD'])
+  })
+
+  it('이 매물 체크리스트에 숫자 키패드가 있으면 점검 목록에 추가한다', () => {
+    const result = toUniversalCheckItems([
+      { checklistItemId: 3, itemCode: 'LAP-KBD-005', evidenceType: 'SELLER_CONFIRMATION' },
+      { checklistItemId: 6, itemCode: 'LAP-PAD-006', evidenceType: 'SELLER_CONFIRMATION' },
+      { checklistItemId: 9, itemCode: 'LAP-FTR-NUM', name: '숫자 키패드', evidenceType: 'SELLER_CONFIRMATION' },
     ])
+
+    expect(result.map((item) => item.testType)).toEqual(['KEYBOARD', 'TOUCHPAD', 'NUMPAD'])
+    expect(result.find((item) => item.testType === 'NUMPAD')).toMatchObject({
+      checklistItemId: 9,
+      checkKind: CHECK_KIND.NUMPAD,
+      name: '숫자 키패드',
+    })
+  })
+
+  it('숫자 키패드가 없는 매물에는 3번째 점검을 추가하지 않는다', () => {
+    const result = toUniversalCheckItems([
+      { checklistItemId: 1, itemCode: 'LAP-FTR-CAM', evidenceType: 'SELLER_CONFIRMATION' },
+    ])
+
+    expect(result).toHaveLength(2)
   })
 })

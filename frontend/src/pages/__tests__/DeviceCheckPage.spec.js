@@ -20,7 +20,7 @@ vi.mock('../../api/products', () => ({
   updateProductDraftProgress: vi.fn(),
 }))
 
-// 카메라·마이크·스피커·포인터는 이 페이지의 저장 로직과 무관하므로 실제 composable을 그대로 쓰고,
+// 포인터는 이 페이지의 저장 로직과 무관하므로 실제 composable을 그대로 쓰고,
 // 결과를 직접 통제해야 하는 키보드만 가짜로 바꾼다. missingCodes는 테스트마다 바꿔야 해서
 // vi.hoisted로 만든 상자를 통해 바깥에서 주입한다.
 const { nextMissingCodes } = vi.hoisted(() => ({ nextMissingCodes: { value: [] } }))
@@ -59,11 +59,6 @@ const checklistItem = {
 
 const ALL_TEST_TYPES = ['KEYBOARD', 'TOUCHPAD']
 const ITEM_CODE_TEST_TYPE = {
-  'LAP-FTR-SPK': 'SPEAKER',
-  'LAP-DSP-003': 'DISPLAY',
-  'LAP-CHG-007': 'CHARGING',
-  'LAP-FTR-CAM': 'CAMERA',
-  'LAP-FTR-MIC': 'MICROPHONE',
   'LAP-KBD-005': 'KEYBOARD',
   'LAP-PAD-006': 'TOUCHPAD',
 }
@@ -128,10 +123,9 @@ async function runKeyboardStepAndSave(wrapper, missingCodes) {
   await flushPromises()
   await wrapper.findAll('button').find((b) => b.text() === '다음').trigger('click')
   await flushPromises()
-  for (let index = 0; index < 1; index += 1) {
-    await wrapper.findAll('button').find((b) => b.text() === '다음').trigger('click')
-    await flushPromises()
-  }
+  // 남은 항목(포인터)은 withOtherChecksCompleted가 이미 SUCCESS로 채워 둬서 '다음' 한 번이면 끝난다.
+  await wrapper.findAll('button').find((b) => b.text() === '다음').trigger('click')
+  await flushPromises()
   await wrapper.findAll('button').find((button) => button.text() === '저장하고 돌아가기').trigger('click')
   await flushPromises()
 }
