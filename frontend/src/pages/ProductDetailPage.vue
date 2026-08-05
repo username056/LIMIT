@@ -1062,29 +1062,51 @@ onMounted(async () => {
                     {{ batteryGrade.label }}
                   </span>
                 </div>
-                <!-- 등급 4단계는 넓은 구간을 가진 것도 있어, 구간 안 위치를 막대로 함께 보여줍니다. -->
-                <div class="mt-3 h-2 overflow-hidden rounded-pill bg-slate-200">
-                  <div
-                    class="h-full rounded-pill"
-                    :class="batteryGradeBarClass"
-                    :style="{ width: `${batteryRatioDisplay}%` }"
-                  />
-                </div>
                 <p class="mt-3 text-sm text-text-sub">
                   {{ batteryGrade.scenario }}
                 </p>
-                <p
-                  v-if="cycleCountItem?.status === 'AVAILABLE'"
-                  class="mt-3 text-xs text-text-sub"
-                >
-                  충전 사이클 {{ diagnosisFieldValue('CYCLE_COUNT', cycleCountItem.value) }} · {{ CYCLE_COUNT_DISCLAIMER }}
-                </p>
-                <p class="mt-3 text-xs text-text-sub">
-                  {{ BATTERY_GRADE_DISCLAIMER }}
-                </p>
-                <p class="mt-1 text-xs text-text-sub">
-                  {{ BATTERY_GRADE_BASIS }}
-                </p>
+                <!-- 처음에는 구매 판단에 필요한 등급·한 줄 안내만 두고, 근거 수치와 설명은
+                     필요할 때만 열어 보게 합니다. 기본 상태는 닫혀 있습니다. -->
+                <details class="group mt-3 border-t border-slate-200 pt-3">
+                  <summary class="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-semibold text-primary">
+                    <span>배터리 상세 정보</span>
+                    <span>
+                      <span class="group-open:hidden">펼치기</span>
+                      <span class="hidden group-open:inline">접기</span>
+                    </span>
+                  </summary>
+                  <div class="mt-3">
+                    <!-- 등급 4단계는 넓은 구간을 가진 것도 있어, 구간 안 위치를 막대로 함께 보여줍니다. -->
+                    <div class="h-2 overflow-hidden rounded-pill bg-slate-200">
+                      <div
+                        class="h-full rounded-pill"
+                        :class="batteryGradeBarClass"
+                        :style="{ width: `${batteryRatioDisplay}%` }"
+                      />
+                    </div>
+                    <p
+                      v-if="cycleCountItem?.status === 'AVAILABLE'"
+                      class="mt-3 text-xs text-text-sub"
+                    >
+                      충전 사이클 {{ diagnosisFieldValue('CYCLE_COUNT', cycleCountItem.value) }} · {{ CYCLE_COUNT_DISCLAIMER }}
+                    </p>
+                    <p class="mt-3 text-xs text-text-sub">
+                      {{ BATTERY_GRADE_DISCLAIMER }}
+                    </p>
+                    <p class="mt-1 text-xs text-text-sub">
+                      {{ BATTERY_GRADE_BASIS }}
+                    </p>
+                    <div
+                      v-if="batteryDetailItems.length"
+                      class="mt-3"
+                    >
+                      <p class="text-xs font-semibold text-text-sub">
+                        용량 상세
+                      </p>
+                      <DiagnosisSpecList :items="batteryDetailItems" />
+                    </div>
+                  </div>
+                </details>
               </div>
 
               <div
@@ -1122,17 +1144,6 @@ onMounted(async () => {
                 그래픽·장치 정보
               </h3>
               <DiagnosisSpecList :items="graphicsDeviceItems" />
-            </section>
-
-            <!-- 상세 배터리 정보: 건강도 카드를 뒷받침하는 보조 수치라 건강도가 있을 때만 둡니다. -->
-            <section
-              v-if="hasBatteryHealth && batteryDetailItems.length"
-              class="mt-5"
-            >
-              <h3 class="text-xs font-semibold text-text-sub">
-                상세 배터리 정보
-              </h3>
-              <DiagnosisSpecList :items="batteryDetailItems" />
             </section>
           </div>
         </div>

@@ -435,8 +435,17 @@ describe('ProductDetailPage', () => {
     expect(wrapper.text()).toContain('양호')
     expect(wrapper.text()).toContain('충전 사이클 300회')
     expect(wrapper.text()).toContain('모델별 정격 수명이 달라 등급 산정에는 사용하지 않습니다.')
-    // 출고 시 용량·현재 최대 충전 용량·제조사는 상세 배터리 정보로 따로 보여야 합니다.
-    expect(wrapper.text()).toContain('상세 배터리 정보')
+    // 상세 수치·산정 근거는 처음에는 접힌 패널에 둡니다.
+    const batteryDetails = wrapper.get('details')
+    expect(batteryDetails.attributes('open')).toBeUndefined()
+    expect(batteryDetails.get('summary').text()).toContain('배터리 상세 정보')
+    expect(batteryDetails.get('summary').text()).toContain('펼치기')
+    await batteryDetails.get('summary').trigger('click')
+    expect(batteryDetails.attributes('open')).toBeDefined()
+    expect(batteryDetails.get('summary').text()).toContain('접기')
+
+    // 출고 시 용량·현재 최대 충전 용량·제조사는 상세 패널 안에 보여야 합니다.
+    expect(batteryDetails.text()).toContain('용량 상세')
     expect(wrapper.text()).toContain('출고 시 용량')
     expect(wrapper.text()).toContain('현재 최대 충전 용량')
     expect(wrapper.text()).not.toContain('배터리 건강도를 측정할 수 없습니다')
