@@ -1982,7 +1982,7 @@ onMounted(async () => {
         eyebrow="ITEM REGISTER"
         :title="editingId && !isRegistrationResume ? '상품 수정' : '상품 등록'"
         description="기기 정보와 검증 체크리스트를 순서대로 완료하면 바로 판매가 시작됩니다.
-        중간에 나가야 하면 임시저장을 눌러 주세요."
+        여러 번 나눠 작성하는 경우 임시저장을 꼭 해주세요."
       >
         <template #action>
           <RouterLink
@@ -2601,10 +2601,12 @@ onMounted(async () => {
                   id="windows-inspection-title"
                   class="text-sm font-bold text-text-main"
                 >
-                  Windows 자동 검사
+                  Windows 자동 진단
                 </h3>
+                <!-- 두 문장을 각각 한 줄로 둡니다. 뒤 문장이 개인정보에 관한 안내라
+                     앞 문장에 붙어 흐르면 눈에 걸리지 않습니다. -->
                 <p class="mt-1 text-xs leading-5 text-text-sub">
-                  Limit 진단 프로그램으로 기기 정보와 점검 결과를 자동으로 입력할 수 있습니다.
+                  Limit 진단 프로그램으로 기기 정보와 점검 결과를 자동으로 입력할 수 있습니다.<br>
                   비밀번호와 개인 파일은 수집하지 않습니다.
                 </p>
                 <div class="mt-3 flex flex-wrap items-center gap-2">
@@ -3112,7 +3114,7 @@ onMounted(async () => {
               개인정보를 정리했는지 확인해 주세요.
             </h2>
             <p class="mt-1 text-sm text-text-sub">
-              구매자에게 전달되기 전, 개인정보 보호를 위해 기기의 계정·개인정보를 반드시 초기화해 주세요.
+              구매자에게 전달되기 전 개인정보 보호를 위해 기기의 계정·개인정보를 반드시 초기화해 주세요.
             </p>
 
             <p
