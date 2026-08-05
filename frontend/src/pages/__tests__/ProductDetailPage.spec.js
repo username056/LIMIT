@@ -344,7 +344,7 @@ describe('ProductDetailPage', () => {
     expect(rows[0].text()).toContain('공개 항목')
   })
 
-  it('자동 인식된 사양을 필드별로 보여주고, 값에 커서를 올리면 전체 값을 툴팁으로 보여준다', async () => {
+  it('자동 인식된 사양을 그룹별로 보여주고, 값에 커서를 올리면 전체 값을 툴팁으로 보여준다', async () => {
     getAccessToken.mockReturnValue(null)
     getProductDiagnosisSummary.mockResolvedValue({
       items: [
@@ -376,6 +376,9 @@ describe('ProductDetailPage', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('자동 인식된 사양')
+    // CPU는 기본 정보, GPU 메모리는 그래픽·장치 정보 그룹으로 나뉘어 보여야 합니다.
+    expect(wrapper.text()).toContain('기본 정보')
+    expect(wrapper.text()).toContain('그래픽·장치 정보')
     // 원본 파일로 바로 이동하는 링크는 없어야 합니다 — 커서를 올리면 툴팁으로 전체 값만 보여줍니다.
     expect(wrapper.find('a[href="https://cdn.example.test/evidence/1.txt"]').exists()).toBe(false)
 
@@ -396,6 +399,140 @@ describe('ProductDetailPage', () => {
     expect(wrapper.text()).toContain('GPU 메모리')
     expect(wrapper.text()).toContain('인식 실패')
     expect(wrapper.text()).toContain('자동 추출값은 참고 정보이며 상품의 정상 여부를 보증하지 않습니다.')
+
+    // 배터리 관련 필드가 하나도 없으므로 배터리 상태는 한 줄 대체 안내로 보여야 합니다.
+    expect(wrapper.text()).toContain('배터리 상태')
+    expect(wrapper.text()).toContain('배터리 정보를 확인할 수 없습니다')
+    expect(wrapper.text()).toContain('판매자가 배터리 리포트를 등록하지 않았거나 자동 인식에 실패했습니다.')
+    expect(wrapper.text()).not.toContain('상세 배터리 정보')
+  })
+
+  it('배터리 용량 비율이 있으면 건강도 등급 카드를 보여준다', async () => {
+    getAccessToken.mockReturnValue(null)
+    getProductDiagnosisSummary.mockResolvedValue({
+      items: [
+        { fieldName: 'CAPACITY_RATIO', value: '82.34', status: 'AVAILABLE' },
+        { fieldName: 'CYCLE_COUNT', value: '300', status: 'AVAILABLE' },
+        { fieldName: 'DESIGN_CAPACITY', value: '73829 mWh', status: 'AVAILABLE' },
+        { fieldName: 'FULL_CHARGE_CAPACITY', value: '69840 mWh', status: 'AVAILABLE' },
+        { fieldName: 'BATTERY_MANUFACTURER', value: 'SAMSUNG SDI', status: 'AVAILABLE' },
+      ],
+      disclaimer: '',
+    })
+
+    const wrapper = mount(ProductDetailPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('82.3%')
+    expect(wrapper.text()).toContain('양호')
+    expect(wrapper.text()).toContain('충전 사이클 300회')
+    expect(wrapper.text()).toContain('모델별 정격 수명이 달라 등급 산정에는 사용하지 않습니다.')
+    // 출고 시 용량·현재 최대 충전 용량·제조사는 상세 배터리 정보로 따로 보여야 합니다.
+    expect(wrapper.text()).toContain('상세 배터리 정보')
+    expect(wrapper.text()).toContain('출고 시 용량')
+    expect(wrapper.text()).toContain('현재 최대 충전 용량')
+    expect(wrapper.text()).not.toContain('배터리 건강도를 측정할 수 없습니다')
+    expect(wrapper.text()).not.toContain('배터리 정보를 확인할 수 없습니다')
+  })
+
+  it('배터리 용량 비율만 못 구했으면 확보된 배터리 값만 참고 정보로 보여준다', async () => {
+    getAccessToken.mockReturnValue(null)
+    getProductDiagnosisSummary.mockResolvedValue({
+      items: [
+        { fieldName: 'CAPACITY_RATIO', value: null, status: 'EXTRACTION_FAILED' },
+        { fieldName: 'CYCLE_COUNT', value: '540', status: 'AVAILABLE' },
+        { fieldName: 'BATTERY_MANUFACTURER', value: 'LG에너지솔루션', status: 'AVAILABLE' },
+      ],
+      disclaimer: '',
+    })
+
+    const wrapper = mount(ProductDetailPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('배터리 건강도를 측정할 수 없습니다')
+    expect(wrapper.text()).toContain('업로드된 배터리 리포트에서 건강도 계산에 필요한 값을 모두 확인하지 못했습니다.')
+    expect(wrapper.text()).toContain('충전 사이클')
+    expect(wrapper.text()).toContain('540회')
+    expect(wrapper.text()).toContain('LG에너지솔루션')
+    // 건강도가 없으므로 등급 배지·상세 배터리 정보 섹션은 없어야 합니다.
+    expect(wrapper.text()).not.toContain('상세 배터리 정보')
+    expect(wrapper.text()).not.toContain('배터리 정보를 확인할 수 없습니다')
+  })
+
+  it.each([
+    ['84.6', '양호', '84.6%'],
+    ['85', '우수', '85.0%'],
+    ['69.9', '확인 필요', '69.9%'],
+    ['70', '양호', '70.0%'],
+    ['49.9', '교체 검토', '49.9%'],
+  ])('배터리 용량 비율 %s%%는 등급 %s, 표시값 %s로 판정한다', async (rawValue, expectedLabel, expectedDisplay) => {
+    getAccessToken.mockReturnValue(null)
+    getProductDiagnosisSummary.mockResolvedValue({
+      items: [{ fieldName: 'CAPACITY_RATIO', value: rawValue, status: 'AVAILABLE' }],
+      disclaimer: '',
+    })
+
+    const wrapper = mount(ProductDetailPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain(expectedDisplay)
+    expect(wrapper.text()).toContain(expectedLabel)
+  })
+
+  it.each([
+    ['N/A', '숫자가 아닌 문자열'],
+    ['', '빈 문자열'],
+  ])('배터리 용량 비율 값이 %s(%s)이면 등급 없이 측정 불가로 처리한다', async (rawValue) => {
+    getAccessToken.mockReturnValue(null)
+    getProductDiagnosisSummary.mockResolvedValue({
+      items: [
+        { fieldName: 'CAPACITY_RATIO', value: rawValue, status: 'AVAILABLE' },
+        { fieldName: 'CYCLE_COUNT', value: '400', status: 'AVAILABLE' },
+      ],
+      disclaimer: '',
+    })
+
+    const wrapper = mount(ProductDetailPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    // status만 AVAILABLE이고 값이 깨진 경우, 등급을 매기려다 batteryGrade가 null이라 터지면
+    // 안 되고 "측정 불가" 분기로 안전하게 빠져야 합니다.
+    expect(wrapper.text()).toContain('배터리 건강도를 측정할 수 없습니다')
+    expect(wrapper.text()).toContain('400회')
+    expect(wrapper.text()).not.toContain('우수')
+    expect(wrapper.text()).not.toContain('교체 검토')
   })
 
   // 누구에게 사는지 모른 채로 결제하게 두지 않습니다.
