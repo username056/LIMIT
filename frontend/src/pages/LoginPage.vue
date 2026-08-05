@@ -76,11 +76,8 @@ async function socialLogin(provider) {
   }
 }
 
-const providers = [
-  { id: 'google', label: 'Google' },
-  { id: 'naver', label: '네이버' },
-  { id: 'kakao', label: '카카오' },
-]
+// 문구·색·로고는 각 회사가 배포하는 공식 버튼 이미지에 들어 있어 여기서는 순서만 정합니다.
+const providers = ['google', 'naver', 'kakao']
 </script>
 
 <template>
@@ -165,14 +162,13 @@ const providers = [
           <span class="h-px flex-1 bg-border" />
         </div>
 
-        <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div class="flex flex-col items-center gap-2.5">
           <SocialProviderButton
             v-for="provider in providers"
-            :key="provider.id"
-            :provider="provider.id"
-            :label="provider.label"
-            :loading="socialLoading === provider.id"
-            @click="socialLogin(provider.id)"
+            :key="provider"
+            :provider="provider"
+            :loading="socialLoading === provider"
+            @click="socialLogin(provider)"
           />
         </div>
       </BaseCard>

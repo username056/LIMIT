@@ -69,7 +69,6 @@ public sealed class MainForm : Form
         statusLabel.Margin = new Padding(3, 0, 3, 12);
         finalSubmitButton.Padding = new Padding(18, 8, 18, 8);
         finalSubmitButton.Margin = new Padding(3, 4, 3, 4);
-
         pairingCodeTextBox.TextChanged += (_, _) => UpdatePreparationState();
         consentCheckBox.CheckedChanged += (_, _) => UpdatePreparationState();
         startButton.Click += StartButton_Click;

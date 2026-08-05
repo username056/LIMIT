@@ -145,7 +145,6 @@ public sealed class InspectionCoordinator(
 
         await apiClient.CompleteAsync(sessionKey, cancellationToken);
     }
-
     private sealed class PreparedInspection : IAsyncDisposable
     {
         private readonly InspectionWorkspace workspace = new();
