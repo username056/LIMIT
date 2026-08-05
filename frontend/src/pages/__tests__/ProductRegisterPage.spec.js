@@ -1707,12 +1707,12 @@ describe('ProductRegisterPage', () => {
   // 폰에서는 카메라만 열려 앨범을 못 쓰고, 노트북에서는 촬영을 못 하던 문제를 버튼 분리로 풉니다.
   describe('촬영과 파일 업로드 선택', () => {
     // 영상은 60초·100MB 제한에 걸리면 한참 압축한 끝에 실패합니다. 올리기 전에 알려 줍니다.
-    it('영상 제한을 미리 알려준다', async () => {
+    it('영상 제한을 항목별·판매글별로 구분해 알려준다', async () => {
       const wrapper = mount(ProductRegisterPage, { global: globalOptions })
       await flushPromises()
       await goToCaptureStep(wrapper)
 
-      expect(wrapper.text()).toContain('영상은 60초 이내, 100MB 이하만 가능하며 최대 6개까지 가능합니다.')
+      expect(wrapper.text()).toContain('영상은 항목마다 1개씩, 60초 이내·100MB 이하만 올릴 수 있습니다. (판매글 전체로는 최대 6개)')
     })
 
     it('카메라가 있는 기기의 사진 항목에는 촬영과 파일 업로드를 함께 보여준다', async () => {
