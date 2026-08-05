@@ -2588,8 +2588,7 @@ onMounted(async () => {
                 검수용 기기 촬영
               </h2>
               <p class="mt-1 text-sm text-text-sub">
-                구매자가 확인할 수 있도록 촬영·업로드 항목 {{ mediaChecklistItems.length }}개에
-                <br>사진·영상·진단파일을 등록하세요.
+                촬영·업로드 {{ mediaChecklistItems.length }}개 항목에 필요한 파일을 등록해 주세요.
               </p>
 
               <section
@@ -3041,8 +3040,7 @@ onMounted(async () => {
               </div>
 
               <p class="mt-2 text-center text-[11px] text-text-sub">
-                항목별 최대 파일 개수와 크기·영상 길이를 적용합니다.
-                파일은 자동으로 압축됩니다.
+                사진 추가 후 이미지를 클릭하시면 삭제 버튼을 확인할 수 있습니다.
               </p>
               <p class="mt-1 text-center text-[11px] text-text-sub">
                 영상은 항목마다 1개씩, 60초 이내·100MB 이하만 올릴 수 있습니다. (판매글 전체로는 최대 6개)

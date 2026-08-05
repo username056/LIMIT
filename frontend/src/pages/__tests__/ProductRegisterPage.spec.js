@@ -629,7 +629,7 @@ describe('ProductRegisterPage', () => {
     await buttonByText(wrapper, '다음 단계').trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('촬영·업로드 항목 2개')
+    expect(wrapper.text()).toContain('촬영·업로드 2개 항목')
     expect(wrapper.text()).toContain('현재 진행률: 2개 중 0개 등록 완료')
   })
 
