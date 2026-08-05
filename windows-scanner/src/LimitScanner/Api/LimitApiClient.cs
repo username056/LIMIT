@@ -47,9 +47,8 @@ public sealed class LimitApiClient
         string contentType,
         CancellationToken cancellationToken)
     {
-        SetAgentAuthorization();
         var file = new FileInfo(filePath);
-        using var createResponse = await apiClient.PostAsJsonAsync(
+        using var createResponse = await PostAgentJsonAsync(
             $"api/v1/inspection-agent/sessions/{sessionKey}/uploads",
             new
             {
@@ -86,7 +85,7 @@ public sealed class LimitApiClient
             cancellationToken);
         await EnsureSuccessAsync(putResponse, cancellationToken);
 
-        using var completeResponse = await apiClient.PostAsJsonAsync(
+        using var completeResponse = await PostAgentJsonAsync(
             $"api/v1/inspection-agent/sessions/{sessionKey}/uploads/{uploadData.UploadId}/complete",
             new { parserType },
             cancellationToken);
@@ -97,8 +96,7 @@ public sealed class LimitApiClient
         string sessionKey,
         CancellationToken cancellationToken)
     {
-        SetAgentAuthorization();
-        using var response = await apiClient.PostAsJsonAsync(
+        using var response = await PostAgentJsonAsync(
             $"api/v1/inspection-agent/sessions/{sessionKey}/complete",
             new { },
             cancellationToken);
@@ -110,25 +108,31 @@ public sealed class LimitApiClient
         ModuleResult result,
         CancellationToken cancellationToken)
     {
-        SetAgentAuthorization();
         var request = SubmitTestResultRequest.From(result);
-        using var response = await apiClient.PostAsJsonAsync(
+        using var response = await PostAgentJsonAsync(
             $"api/v1/inspection-agent/sessions/{sessionKey}/test-results",
             request,
-            jsonOptions,
             cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
     }
 
-    private void SetAgentAuthorization()
+    private async Task<HttpResponseMessage> PostAgentJsonAsync<T>(
+        string requestUri,
+        T value,
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(agentToken))
         {
             throw new InvalidOperationException("먼저 검사 세션을 연결해야 합니다.");
         }
 
-        apiClient.DefaultRequestHeaders.Authorization =
+        using var request = new HttpRequestMessage(HttpMethod.Post, requestUri)
+        {
+            Content = JsonContent.Create(value, options: jsonOptions)
+        };
+        request.Headers.Authorization =
             new AuthenticationHeaderValue("Bearer", agentToken);
+        return await apiClient.SendAsync(request, cancellationToken);
     }
 
     private static async Task EnsureSuccessAsync(
