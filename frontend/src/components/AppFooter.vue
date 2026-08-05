@@ -32,12 +32,6 @@ import { RouterLink } from 'vue-router'
         aria-label="운영 메뉴"
       >
         <RouterLink
-          to="/dev-tools"
-          class="hover:text-text-main"
-        >
-          개발 도구
-        </RouterLink>
-        <RouterLink
           to="/admin"
           class="hover:text-text-main"
         >
