@@ -1,8 +1,12 @@
 package com.c203.limit.domain.product.service;
 
+import com.c203.limit.domain.inspection.agent.InspectionSessionTestResult;
+import com.c203.limit.domain.inspection.agent.InspectionSessionTestResultRepository;
 import com.c203.limit.domain.inspection.entity.ListingChecklistItem;
 import com.c203.limit.domain.inspection.enums.DeviceCheckResult;
 import com.c203.limit.domain.inspection.enums.EvidenceType;
+import com.c203.limit.domain.inspection.enums.InspectionUserResult;
+import com.c203.limit.domain.inspection.enums.MeasurementStatus;
 import com.c203.limit.domain.inspection.enums.TestType;
 import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
 import com.c203.limit.domain.product.dto.request.UpdateProductDraftProgressRequest;
@@ -36,12 +40,15 @@ public class ProductDraftProgressService {
 
     private final ListingRepository listings;
     private final ListingChecklistItemRepository checklistItems;
+    private final InspectionSessionTestResultRepository automaticResults;
 
     public ProductDraftProgressService(
             ListingRepository listings,
-            ListingChecklistItemRepository checklistItems) {
+            ListingChecklistItemRepository checklistItems,
+            InspectionSessionTestResultRepository automaticResults) {
         this.listings = listings;
         this.checklistItems = checklistItems;
+        this.automaticResults = automaticResults;
     }
 
     @Transactional(readOnly = true)
@@ -119,7 +126,26 @@ public class ProductDraftProgressService {
         Map<TestType, DeviceCheckResult> deviceResults = listing.getWebDeviceCheckResults() == null
                 ? Map.of()
                 : Map.copyOf(listing.getWebDeviceCheckResults());
-        return new ProductDraftProgressResponse(listing.getDraftStep(), results, deviceResults);
+        Map<TestType, DeviceCheckResult> automaticDeviceResults = new EnumMap<>(TestType.class);
+        automaticResults.findAllByListingIdNewestFirst(listing.getId()).forEach(result ->
+                automaticDeviceResults.putIfAbsent(result.getTestType(), automaticResult(result)));
+        return new ProductDraftProgressResponse(
+                listing.getDraftStep(), results, deviceResults, automaticDeviceResults);
+    }
+
+    private DeviceCheckResult automaticResult(InspectionSessionTestResult result) {
+        if (result.getUserResult() == InspectionUserResult.SKIPPED) {
+            return DeviceCheckResult.SKIPPED;
+        }
+        if (result.getUserResult() == InspectionUserResult.USER_REPORTED_ISSUE) {
+            return DeviceCheckResult.FAILED;
+        }
+        if (result.getUserResult() == InspectionUserResult.USER_CONFIRMED) {
+            return DeviceCheckResult.SUCCESS;
+        }
+        return result.getMeasurementStatus() == MeasurementStatus.DETECTED
+                ? DeviceCheckResult.SUCCESS
+                : DeviceCheckResult.FAILED;
     }
 
     private boolean isWebDeviceCheckItem(ListingChecklistItem item) {

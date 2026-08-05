@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface InspectionSessionTestResultRepository
         extends JpaRepository<InspectionSessionTestResult, Long> {
@@ -15,6 +17,16 @@ public interface InspectionSessionTestResultRepository
             String sessionKey, TestType testType);
 
     List<InspectionSessionTestResult> findAllBySessionKeyOrderByCreatedAtAscIdAsc(String sessionKey);
+
+    @Query("""
+            select result
+            from InspectionSessionTestResult result
+            join InspectionSession session on session.sessionKey = result.sessionKey
+            where session.listingId = :listingId
+            order by result.createdAt desc, result.id desc
+            """)
+    List<InspectionSessionTestResult> findAllByListingIdNewestFirst(
+            @Param("listingId") Long listingId);
 
     boolean existsByChecklistItemId(Long checklistItemId);
 }

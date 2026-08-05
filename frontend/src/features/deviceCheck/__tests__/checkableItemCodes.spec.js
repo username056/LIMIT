@@ -36,12 +36,12 @@ describe('toCheckableItems', () => {
 })
 
 describe('toUniversalCheckItems', () => {
-  it('체크리스트가 비어 있어도 공통 7개 점검을 만든다', () => {
+  it('체크리스트가 비어 있어도 키보드와 포인터 점검을 만든다', () => {
     const result = toUniversalCheckItems([])
 
-    expect(result).toHaveLength(7)
+    expect(result).toHaveLength(2)
     expect(result.map((item) => item.testType)).toEqual([
-      'SPEAKER', 'DISPLAY', 'CHARGING', 'CAMERA', 'MICROPHONE', 'KEYBOARD', 'TOUCHPAD',
+      'KEYBOARD', 'TOUCHPAD',
     ])
   })
 })

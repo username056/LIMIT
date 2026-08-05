@@ -129,7 +129,7 @@ public sealed class ModuleResultTests
     }
 
     [Fact]
-    public void KeyboardTracksDistinctDetectableKeys()
+    public void KeyboardReturnsPartialFailureWhenRequiredKeysAreMissing()
     {
         var state = new KeyboardTestState();
         state.Record(Keys.A);
@@ -138,7 +138,25 @@ public sealed class ModuleResultTests
 
         Assert.Equal(2, state.PressedKeys.Count);
         Assert.Equal("Enter", state.LastKey);
-        Assert.Equal(ModuleMeasurementStatuses.Detected,
+        Assert.False(state.IsComplete);
+        Assert.Equal(ModuleMeasurementStatuses.NotDetected,
             state.CreateResult(ModuleUserResults.Confirmed).MeasurementStatus);
+        Assert.Equal(ModuleUserResults.ReportedIssue,
+            state.CreateResult(ModuleUserResults.Confirmed).UserResult);
+    }
+
+    [Fact]
+    public void KeyboardReturnsSuccessOnlyWhenEveryRequiredKeyIsDetected()
+    {
+        var state = new KeyboardTestState();
+        foreach (var key in KeyboardTestState.RequiredKeys) state.Record(key);
+
+        var result = state.CreateResult(ModuleUserResults.Confirmed);
+
+        Assert.Equal(60, KeyboardTestState.RequiredKeys.Count);
+        Assert.True(state.IsComplete);
+        Assert.Empty(state.MissingKeys);
+        Assert.Equal(ModuleMeasurementStatuses.Detected, result.MeasurementStatus);
+        Assert.Equal(ModuleUserResults.Confirmed, result.UserResult);
     }
 }
