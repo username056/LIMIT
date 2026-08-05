@@ -45,9 +45,17 @@ defineProps({
       >
         {{ title }}
       </h1>
+      <!--
+        description에 넣은 줄바꿈을 그대로 살립니다.
+        ------------------------------------------------------------------
+        HTML은 원래 속성 값 안의 줄바꿈을 공백 하나로 바꿉니다. 그래서 코드에서 두 줄로
+        적어도 화면에서는 한 줄로 이어졌습니다. whitespace-pre-line은 줄바꿈만 살리고
+        들여쓰기로 들어간 공백은 그대로 합쳐 주므로, 코드에서 보기 좋게 들여써도
+        화면에 빈 칸이 생기지 않습니다.
+      -->
       <p
         v-if="description"
-        class="text-sm text-text-sub"
+        class="whitespace-pre-line text-sm text-text-sub"
         :class="dense ? 'mt-1' : 'mt-2'"
       >
         {{ description }}

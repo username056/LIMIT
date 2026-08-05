@@ -1211,12 +1211,12 @@ onMounted(async () => {
   크게 보기 창이 부드럽게 나타납니다.
   ---------------------------------------------------------------------------
   화면 전체를 덮는 창이 툭 나타나면 놀랍니다. 어두운 배경은 짧게 밝아지고, 안쪽 판은
-  아주 조금 작은 상태에서 제자리로 올라옵니다. 0.18초는 "부드럽다"고 느끼면서도
+  아주 조금 작은 상태에서 제자리로 올라옵니다. 0.1초는 "부드럽다"고 느끼면서도
   기다린다는 느낌은 들지 않는 길이입니다.
 */
 .viewer-enter-active,
 .viewer-leave-active {
-  transition: opacity 0.18s ease;
+  transition: opacity 0.1s ease;
 }
 
 .viewer-enter-from,
@@ -1225,7 +1225,7 @@ onMounted(async () => {
 }
 
 .viewer-enter-active .viewer__panel {
-  animation: viewer-rise 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: viewer-rise 0.13s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes viewer-rise {
@@ -1235,7 +1235,7 @@ onMounted(async () => {
 
 /* 사진을 넘길 때도 툭 바뀌지 않게 짧게 밝아집니다. */
 .viewer__media {
-  animation: viewer-fade 0.16s ease;
+  animation: viewer-fade 0.09s ease;
 }
 
 @keyframes viewer-fade {
