@@ -59,10 +59,46 @@ const RECAPTURE_DONE_PREVIEW = '재검수가 완료되었습니다'
   문자열로 만들어 두고 열었을 때의 것과 비교합니다. 새 메시지가 오거나 약속이
   바뀌면 문자열이 달라져 점이 다시 켜집니다.
 
-  저장은 메모리에만 합니다. localStorage에 두면 새로고침해도 남지만, 회원의 활동
-  내역을 브라우저에 남기지 않는다는 규칙을 지키는 편이 낫습니다.
+  한 번 확인한 뒤에는 새로 생기는 것이 없는 한 계속 꺼져 있어야 합니다. 메모리에만
+  두었을 때는 새로고침하면 다시 켜져서, 확인했는데도 손댈 일이 남은 것처럼 보였습니다.
+
+  그래서 브라우저에 남기는데, 값을 그대로 두지 않고 짧은 숫자열로 바꿔 저장합니다.
+  회원의 활동 내역(안 읽은 채팅 수, 약속 시각)을 브라우저에서 읽을 수 있게 남기지
+  않는다는 규칙 때문입니다. 저장된 값만 봐서는 무엇이 몇 건인지 알 수 없고, 같은
+  상태인지 비교하는 데만 쓰입니다.
 */
-const seenSignature = ref('')
+const SEEN_STORAGE_KEY = 'limit.notice-seen'
+
+// 문자열을 짧은 숫자열로 바꿉니다(FNV-1a). 암호가 아니라, 저장된 값에서 원래 내용을
+// 읽을 수 없게 하고 같은지 비교하려는 용도입니다.
+function digest(text) {
+  let hash = 0x811c9dc5
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index)
+    hash = Math.imul(hash, 0x01000193) >>> 0
+  }
+  return hash.toString(36)
+}
+
+function readSeenDigest() {
+  try {
+    return window.localStorage.getItem(SEEN_STORAGE_KEY) || ''
+  } catch {
+    // 저장소를 막아 둔 브라우저에서도 화면은 그대로 동작해야 합니다.
+    return ''
+  }
+}
+
+function writeSeenDigest(value) {
+  try {
+    if (value) window.localStorage.setItem(SEEN_STORAGE_KEY, value)
+    else window.localStorage.removeItem(SEEN_STORAGE_KEY)
+  } catch {
+    // 저장하지 못하면 이번 방문 동안만 꺼져 있습니다.
+  }
+}
+
+const seenDigest = ref(readSeenDigest())
 
 const signature = computed(() => {
   const parts = [
@@ -77,11 +113,12 @@ const signature = computed(() => {
 
 export const hasNotice = computed(() => Boolean(signature.value))
 export const hasUnreadNotification = computed(
-  () => Boolean(signature.value) && signature.value !== seenSignature.value,
+  () => Boolean(signature.value) && digest(signature.value) !== seenDigest.value,
 )
 
 export function markNotificationsSeen() {
-  seenSignature.value = signature.value
+  seenDigest.value = digest(signature.value)
+  writeSeenDigest(seenDigest.value)
 }
 
 let refreshTimer = null
@@ -179,5 +216,8 @@ export function stopNotificationDotWatch() {
   todayAppointment.value = null
   pendingRecaptureCount.value = 0
   doneRecaptureCount.value = 0
-  seenSignature.value = ''
+  // 로그아웃하면 확인 기록도 지웁니다. 다른 회원이 같은 브라우저로 들어왔을 때
+  // 앞사람이 확인한 상태를 이어받으면 안 됩니다.
+  seenDigest.value = ''
+  writeSeenDigest('')
 }

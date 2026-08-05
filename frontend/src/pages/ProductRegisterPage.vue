@@ -2589,7 +2589,7 @@ onMounted(async () => {
               </h2>
               <p class="mt-1 text-sm text-text-sub">
                 구매자가 확인할 수 있도록 촬영·업로드 항목 {{ mediaChecklistItems.length }}개에
-                사진·영상·진단파일을 등록하세요.
+                <br>사진·영상·진단파일을 등록하세요.
               </p>
 
               <section
@@ -2607,7 +2607,7 @@ onMounted(async () => {
                      앞 문장에 붙어 흐르면 눈에 걸리지 않습니다. -->
                 <p class="mt-1 text-xs leading-5 text-text-sub">
                   Limit 진단 프로그램으로 기기 정보와 점검 결과를 자동으로 입력할 수 있습니다.<br>
-                  비밀번호와 개인 파일은 수집하지 않습니다.
+                  비밀번호 및 개인 파일은 수집하지 않습니다.
                 </p>
                 <div class="mt-3 flex flex-wrap items-center gap-2">
                   <button
