@@ -508,6 +508,8 @@ sonarqube:
     key: sonar
     paths: [.sonar/cache]
   variables:
+    # MR의 new-code/changed-lines 계산에 target branch merge base가 필요하다.
+    GIT_DEPTH: "0"
     SONAR_USER_HOME: "$CI_PROJECT_DIR/.sonar"
   script: ["sh scripts/ci-quality.sh"]
   rules:
