@@ -698,7 +698,7 @@ onBeforeUnmount(() => {
               v-if="keyboardMissingUnreliable.length"
               class="mt-2 text-sm text-text-sub"
             >
-              확인 불가: {{ keyboardMissingUnreliable.map(unreliableKeyLabel).join(', ') }}
+              감지되지 않은 키: {{ keyboardMissingUnreliable.map(unreliableKeyLabel).join(', ') }}
             </p>
             <p
               v-if="keyboard && keyboard.excludedCodes.size"
