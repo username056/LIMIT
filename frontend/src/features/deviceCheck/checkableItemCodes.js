@@ -26,9 +26,18 @@ export const CHECKABLE_ITEM_CODES = {
   'LAP-FTR-PEN': CHECK_KIND.STYLUS,
 }
 
+// 카메라·마이크·스피커·디스플레이·충전은 실제 동작 여부를 브라우저에서 확인할 방법이 없거나
+// (스피커/디스플레이) 이미 별도 흐름(영상 증빙, 스펙 확인)으로 검증되어 여기서는 다루지 않는다.
+// 모든 매물에 항상 노출하는 항목은 키보드·포인터뿐이다.
 export const WEB_DEVICE_CHECKS = [
   { testType: 'KEYBOARD', checkKind: CHECK_KIND.KEYBOARD, itemCode: 'LAP-KBD-005', name: '키보드' },
   { testType: 'TOUCHPAD', checkKind: CHECK_KIND.POINTER, itemCode: 'LAP-PAD-006', name: '포인터' },
+]
+
+// 숫자 키패드는 매물마다 있고 없고가 달라(선택 기능) 모든 상품에 항상 붙이지 않고,
+// 이 매물의 체크리스트에 실제로 있을 때만 목록에 추가한다.
+const OPTIONAL_WEB_CHECKS = [
+  { testType: 'NUMPAD', checkKind: CHECK_KIND.NUMPAD, itemCode: 'LAP-FTR-NUM' },
 ]
 
 export function toCheckableItems(checklistItems) {
@@ -39,8 +48,13 @@ export function toCheckableItems(checklistItems) {
 
 export function toUniversalCheckItems(checklistItems = []) {
   const byCode = new Map(checklistItems.map((item) => [item.itemCode, item]))
-  return WEB_DEVICE_CHECKS.map((definition) => ({
+  const universal = WEB_DEVICE_CHECKS.map((definition) => ({
     ...definition,
     ...(byCode.get(definition.itemCode) || {}),
-  })).sort((left, right) => Number(Boolean(right.checklistItemId)) - Number(Boolean(left.checklistItemId)))
+  }))
+  const optional = OPTIONAL_WEB_CHECKS
+    .filter((definition) => byCode.has(definition.itemCode))
+    .map((definition) => ({ ...definition, ...byCode.get(definition.itemCode) }))
+  return [...universal, ...optional]
+    .sort((left, right) => Number(Boolean(right.checklistItemId)) - Number(Boolean(left.checklistItemId)))
 }

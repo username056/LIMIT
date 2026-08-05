@@ -11,5 +11,6 @@ public enum TestType {
     TOUCHPAD,
     SPEAKER,
     DISPLAY,
-    CHARGING
+    CHARGING,
+    NUMPAD
 }
