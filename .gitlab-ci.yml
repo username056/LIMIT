@@ -27,7 +27,6 @@ variables:
     - changes: &backend_changes
         - backend/**/*
         - scripts/ci-test.sh
-        - scripts/configure-sonar-quality-gate.sh
         - scripts/build-image.sh
         - scripts/bootstrap-ec2-stack.sh
         - scripts/sync-deploy-files.sh
@@ -495,22 +494,6 @@ backend_coverage_report:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
       changes: *backend_changes
 
-sonar_quality_gate_config:
-  stage: quality
-  image:
-    name: curlimages/curl:8.16.0
-    entrypoint: [""]
-  needs: []
-  allow_failure: true
-  script: ["sh scripts/configure-sonar-quality-gate.sh"]
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes: *backend_changes
-    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
-      changes: *backend_changes
-    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
-      changes: *backend_changes
-
 sonarqube:
   stage: quality
   image:
@@ -519,8 +502,6 @@ sonarqube:
   needs:
     - job: backend_coverage_report
       artifacts: true
-      optional: true
-    - job: sonar_quality_gate_config
       optional: true
   allow_failure: true
   cache:
