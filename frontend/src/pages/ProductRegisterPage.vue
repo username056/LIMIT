@@ -236,6 +236,7 @@ const confirmState = reactive({})
 const DEVICE_CHECK_RESULT = { SUCCESS: 'SUCCESS' }
 const draftProgressResults = ref(new Map())
 const draftDeviceResults = ref(new Map())
+const automaticDeviceResults = ref(new Map())
 // diagnosisState[checklistItemId] = { status: 'parsing'|'ready'|'error', fields: [...], errorMessage }
 // fields의 각 항목은 취합 응답(fieldName/ocrValue/fileParseValue/conflict/confirmedValue)에
 // draftValue(입력창 값)와 saving(저장 중 여부)을 더한 것입니다.
@@ -325,6 +326,7 @@ async function refreshAutomatedDiagnoses() {
   ])
   checklistItems.value = checklist
   draftDeviceResults.value = new Map(Object.entries(progress.deviceResults || {}))
+  automaticDeviceResults.value = new Map(Object.entries(progress.automaticDeviceResults || {}))
   checklistItems.value
     .filter((item) => CHECKABLE_ITEM_CODES[item.itemCode])
     .forEach((item) => {
@@ -340,6 +342,7 @@ async function refreshDeviceCheckProgress() {
   const progress = await getProductDraftProgress(currentProductId.value)
   draftProgressResults.value = progressResultsMap(progress.results) || new Map()
   draftDeviceResults.value = new Map(Object.entries(progress.deviceResults || {}))
+  automaticDeviceResults.value = new Map(Object.entries(progress.automaticDeviceResults || {}))
   checklistItems.value
     .filter((item) => CHECKABLE_ITEM_CODES[item.itemCode])
     .forEach((item) => {
@@ -359,12 +362,12 @@ function beginWindowsInspectionPolling(sessionKey) {
       if (session.status === 'COMPLETED') {
         stopWindowsInspectionPolling()
         await refreshAutomatedDiagnoses()
-        notice.value = 'Windows 자동 검사 결과가 체크리스트에 반영되었습니다.'
+        notice.value = 'Windows 자동 진단 결과가 체크리스트에 반영되었습니다.'
       } else if (['FAILED', 'EXPIRED'].includes(session.status)) {
         stopWindowsInspectionPolling()
         windowsInspectionError.value = session.status === 'EXPIRED'
           ? '연결 코드가 만료됐습니다. 새 코드를 발급해 주세요.'
-          : 'Windows 자동 검사를 완료하지 못했습니다.'
+          : 'Windows 자동 진단을 완료하지 못했습니다.'
       }
     } catch (error) {
       stopWindowsInspectionPolling()
@@ -382,7 +385,7 @@ async function startWindowsInspection() {
     windowsInspection.value = await createInspectionSession(currentProductId.value)
     beginWindowsInspectionPolling(windowsInspection.value.sessionKey)
   } catch (error) {
-    windowsInspectionError.value = error.message || 'Windows 자동 검사를 시작하지 못했습니다.'
+    windowsInspectionError.value = error.message || 'Windows 자동 진단을 시작하지 못했습니다.'
   } finally {
     windowsInspectionBusy.value = false
   }
@@ -468,12 +471,12 @@ function progressOf(checklistItemId) {
 function captureStatusOf(checklistItemId) {
   const busy = busyOf(checklistItemId)
   if (busy) return busy
-  if (mediaOf(checklistItemId).length) return 'captured'
 
   const item = checklistItems.value.find(
     (candidate) => candidate.checklistItemId === checklistItemId,
   )
-  return isAutomatedDiagnosisComplete(item) ? 'auto-completed' : 'idle'
+  if (isAutomatedDiagnosisComplete(item)) return 'auto-completed'
+  return mediaOf(checklistItemId).length ? 'captured' : 'idle'
 }
 
 function maxMediaFor(item) {
@@ -561,6 +564,9 @@ const deviceCheckConfirmedCount = computed(
 // draft 편집 중에는 draftProgressResults로 FAILED와 미점검을 구분할 수 있지만, 이미 판매 중인
 // 상품을 고칠 때는 서버가 COMPLETED/PENDING만 내려줘 구분할 수 없어 미점검으로만 표시합니다.
 function deviceCheckStatus(item) {
+  const automaticResult = automaticDeviceResults.value.get(item.testType)
+  if (automaticResult === 'SUCCESS') return 'COMPLETED'
+  if (automaticResult === 'FAILED') return 'FAILED'
   const webResult = draftDeviceResults.value.get(item.testType)
   if (webResult === 'SUCCESS') return 'COMPLETED'
   if (webResult === 'FAILED') return 'FAILED'
@@ -572,9 +578,8 @@ function deviceCheckStatusLabel(item) {
   const status = deviceCheckStatus(item)
   if (status === 'FAILED') return '재점검 필요'
   if (status !== 'COMPLETED') return '직접 점검 가능'
-  return draftDeviceResults.value.get(item.testType) === 'SUCCESS'
-    ? '웹 점검 완료'
-    : '자동 점검 완료'
+  if (automaticDeviceResults.value.get(item.testType) === 'SUCCESS') return '자동 점검 완료'
+  return draftDeviceResults.value.get(item.testType) === 'SUCCESS' ? '웹 점검 완료' : '자동 점검 완료'
 }
 const activeCaptureItem = computed(
   () => mediaChecklistItems.value.find((item) => item.checklistItemId === activeCaptureItemId.value)
@@ -800,6 +805,7 @@ function resetForm() {
   checklistItems.value = []
   draftProgressResults.value = new Map()
   draftDeviceResults.value = new Map()
+  automaticDeviceResults.value = new Map()
   activeCaptureItemId.value = null
   handoverGuide.value = null
   priceRejection.value = ''
@@ -1797,6 +1803,9 @@ async function startEdit(productId) {
     if (draftProgress) {
       draftProgressResults.value = progressResultsMap(draftProgress.results) || new Map()
       draftDeviceResults.value = new Map(Object.entries(draftProgress.deviceResults || {}))
+      automaticDeviceResults.value = new Map(
+        Object.entries(draftProgress.automaticDeviceResults || {}),
+      )
       checklistItems.value
         .filter((item) => item.evidenceType === 'SELLER_CONFIRMATION' || CHECKABLE_ITEM_CODES[item.itemCode])
         .forEach((item) => {
@@ -2515,7 +2524,7 @@ onMounted(async () => {
                   id="windows-inspection-title"
                   class="text-sm font-bold text-text-main"
                 >
-                  Windows 자동 검사
+                  Windows 자동 진단
                 </h3>
                 <p class="mt-1 text-xs leading-5 text-text-sub">
                   Limit 진단 프로그램으로 기기 정보와 점검 결과를 자동으로 입력할 수 있습니다.

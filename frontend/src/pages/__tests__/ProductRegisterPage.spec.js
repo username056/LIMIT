@@ -1485,6 +1485,40 @@ describe('ProductRegisterPage', () => {
       expect(wrapper.text()).toContain('키보드·포인터 직접 점검하기')
     })
 
+    it('자동 진단 첨부를 복구해도 자동 입력 완료 표시를 유지한다', async () => {
+      routeQuery.step = '2'
+      getProductChecklist.mockResolvedValue([{
+        checklistItemId: 7004,
+        itemCode: 'LAP-SCR-014',
+        name: '시스템 진단 정보',
+        evidenceType: 'DIAGNOSTIC_FILE',
+        automationType: 'FILE_PARSE',
+        parserType: 'DXDIAG',
+        isRequired: true,
+        status: 'COMPLETED',
+        maxCount: 1,
+      }])
+      getEvidenceHistory.mockResolvedValue([{
+        evidenceId: 9001,
+        mediaUrl: 'https://storage.test/dxdiag.txt',
+        evidenceType: 'DIAGNOSTIC_FILE',
+        attemptNo: 1,
+      }])
+      getDiagnosis.mockResolvedValue({
+        itemId: 7004,
+        fields: [
+          { fieldName: 'RAM', fileParseValue: '32 GB' },
+          { fieldName: 'GPU', fileParseValue: 'NVIDIA GeForce RTX 4070' },
+        ],
+      })
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('자동 입력 완료')
+      expect(wrapper.text()).not.toContain('첨부 1 / 1')
+    })
+
     it('직접 점검에서 new 주소로 돌아오면 상품 등록 제목과 초안 2단계를 복구한다', async () => {
       delete routeParams.productId
       routeQuery.step = '2'
@@ -1597,6 +1631,22 @@ describe('ProductRegisterPage', () => {
       await flushPromises()
 
       expect(wrapper.text()).toContain('웹 점검 완료')
+    })
+
+    it('체크리스트 항목이 없어도 EXE 결과를 자동 점검 완료로 표시한다', async () => {
+      getProductChecklist.mockResolvedValue([])
+      getProductDraftProgress.mockResolvedValue({
+        step: 2,
+        results: {},
+        automaticDeviceResults: { KEYBOARD: 'SUCCESS' },
+      })
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await buttonByText(wrapper, '다음 단계').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('자동 점검 완료')
     })
 
     // goToStep4는 개인정보·실동작 점검 둘 다 필수 완료를 요구하고, 안내 문구는 어디로 가야

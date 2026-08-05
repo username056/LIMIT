@@ -7,9 +7,10 @@ import java.util.Map;
 public record ProductDraftProgressResponse(
         int step,
         Map<Long, DeviceCheckResult> results,
-        Map<TestType, DeviceCheckResult> deviceResults) {
+        Map<TestType, DeviceCheckResult> deviceResults,
+        Map<TestType, DeviceCheckResult> automaticDeviceResults) {
 
     public ProductDraftProgressResponse(int step, Map<Long, DeviceCheckResult> results) {
-        this(step, results, Map.of());
+        this(step, results, Map.of(), Map.of());
     }
 }

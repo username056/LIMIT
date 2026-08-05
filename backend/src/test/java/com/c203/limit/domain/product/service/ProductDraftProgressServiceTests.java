@@ -5,12 +5,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.c203.limit.domain.inspection.agent.InspectionSessionDtos.SubmitTestResultRequest;
+import com.c203.limit.domain.inspection.agent.InspectionSessionTestResult;
+import com.c203.limit.domain.inspection.agent.InspectionSessionTestResultRepository;
 import com.c203.limit.domain.inspection.entity.ChecklistTemplateItem;
 import com.c203.limit.domain.inspection.entity.ListingChecklistItem;
 import com.c203.limit.domain.inspection.enums.AutomationType;
 import com.c203.limit.domain.inspection.enums.ChecklistItemCompletionStatus;
 import com.c203.limit.domain.inspection.enums.DeviceCheckResult;
 import com.c203.limit.domain.inspection.enums.EvidenceType;
+import com.c203.limit.domain.inspection.enums.InspectionUserResult;
+import com.c203.limit.domain.inspection.enums.MeasurementStatus;
 import com.c203.limit.domain.inspection.enums.TestType;
 import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
 import com.c203.limit.domain.product.dto.request.UpdateProductDraftProgressRequest;
@@ -21,9 +26,12 @@ import com.c203.limit.domain.product.entity.Listing;
 import com.c203.limit.domain.product.repository.ListingRepository;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Optional;
 import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -34,6 +42,7 @@ class ProductDraftProgressServiceTests {
 
     private ListingRepository listings;
     private ListingChecklistItemRepository checklistItems;
+    private InspectionSessionTestResultRepository automaticResults;
     private ProductDraftProgressService service;
     private Listing listing;
 
@@ -41,11 +50,14 @@ class ProductDraftProgressServiceTests {
     void setUp() {
         listings = mock(ListingRepository.class);
         checklistItems = mock(ListingChecklistItemRepository.class);
-        service = new ProductDraftProgressService(listings, checklistItems);
+        automaticResults = mock(InspectionSessionTestResultRepository.class);
+        service = new ProductDraftProgressService(listings, checklistItems, automaticResults);
 
         listing = Listing.createDraft(SELLER_ID, null, "제목", "설명", 100_000L, null);
+        ReflectionTestUtils.setField(listing, "id", PRODUCT_ID);
         when(listings.findByIdAndSellerIdAndDeletedAtIsNull(PRODUCT_ID, SELLER_ID))
                 .thenReturn(Optional.of(listing));
+        when(automaticResults.findAllByListingIdNewestFirst(PRODUCT_ID)).thenReturn(List.of());
     }
 
     private ListingChecklistItem confirmationItem(long id) {
@@ -66,6 +78,32 @@ class ProductDraftProgressServiceTests {
                 ListingChecklistItem.createFromTemplateItem(PRODUCT_ID, templateItem);
         ReflectionTestUtils.setField(item, "id", id);
         return item;
+    }
+
+    @Test
+    void exposesAutomaticResultWithoutChecklistItem() {
+        when(checklistItems.findByListingIdOrderByDisplayOrderAsc(PRODUCT_ID))
+                .thenReturn(List.of());
+        InspectionSessionTestResult keyboard = InspectionSessionTestResult.create(
+                "session-1",
+                null,
+                new SubmitTestResultRequest(
+                        UUID.randomUUID(),
+                        TestType.KEYBOARD,
+                        MeasurementStatus.DETECTED,
+                        InspectionUserResult.USER_CONFIRMED,
+                        Map.of(),
+                        OffsetDateTime.now(),
+                        null),
+                1,
+                LocalDateTime.now());
+        when(automaticResults.findAllByListingIdNewestFirst(PRODUCT_ID))
+                .thenReturn(List.of(keyboard));
+
+        ProductDraftProgressResponse response = service.find(SELLER_ID, PRODUCT_ID);
+
+        assertThat(response.automaticDeviceResults())
+                .containsEntry(TestType.KEYBOARD, DeviceCheckResult.SUCCESS);
     }
 
     @Test

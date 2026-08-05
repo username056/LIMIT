@@ -247,6 +247,17 @@ describe('DeviceCheckPage', () => {
     expect(wrapper.text()).not.toContain('Limit 진단 프로그램에서 정상 결과')
   })
 
+  it('체크리스트 항목이 없어도 EXE 성공 결과를 자동 점검 완료로 안내한다', async () => {
+    const wrapper = await mountWithChecklist([], {
+      step: 2,
+      results: {},
+      automaticDeviceResults: { KEYBOARD: 'SUCCESS' },
+    })
+
+    expect(wrapper.text()).toContain('자동 점검 완료')
+    expect(wrapper.text()).toContain('Limit 진단 프로그램에서 정상 결과')
+  })
+
   it('키보드 점검은 시작 전부터 좌우를 밝힌 감지 불확실 키 안내를 보여준다', async () => {
     const wrapper = await mountAndLoad({ step: 2, results: {} })
 

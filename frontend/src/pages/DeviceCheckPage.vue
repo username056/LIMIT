@@ -83,6 +83,7 @@ const stepIndex = ref(0)
 const itemResults = ref(new Map())
 const existingResults = ref(new Map())
 const existingDeviceResults = ref(new Map())
+const existingAutomaticDeviceResults = ref(new Map())
 const draftStep = ref(1)
 const finished = ref(false)
 const videoEl = ref(null)
@@ -126,11 +127,13 @@ const currentAlreadyCompleted = computed(() => {
   if (forceRecheckIds.has(item.testType)) return false
   return item.status === 'COMPLETED'
     || existingResults.value.get(item.checklistItemId) === RESULT.SUCCESS
+    || existingAutomaticDeviceResults.value.get(item.testType) === RESULT.SUCCESS
     || existingDeviceResults.value.get(item.testType) === RESULT.SUCCESS
 })
 const currentCompletionSource = computed(() => {
   const item = currentItem.value
   if (!item) return null
+  if (existingAutomaticDeviceResults.value.get(item.testType) === RESULT.SUCCESS) return 'AUTO'
   if (existingDeviceResults.value.get(item.testType) === RESULT.SUCCESS) return 'WEB'
   if (item.status === 'COMPLETED'
     || existingResults.value.get(item.checklistItemId) === RESULT.SUCCESS) return 'AUTO'
@@ -153,6 +156,9 @@ async function load() {
       Object.entries(progress.results || {}).map(([itemId, result]) => [Number(itemId), result]),
     )
     existingDeviceResults.value = new Map(Object.entries(progress.deviceResults || {}))
+    existingAutomaticDeviceResults.value = new Map(
+      Object.entries(progress.automaticDeviceResults || {}),
+    )
     draftStep.value = progress.step
   } catch {
     loadError.value = '점검 대상 체크리스트를 불러오지 못했습니다.'

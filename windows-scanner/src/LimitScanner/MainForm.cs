@@ -24,7 +24,7 @@ public sealed class MainForm : Form
     public MainForm(InspectionCoordinator coordinator)
     {
         this.coordinator = coordinator;
-        Text = "Limit Windows 자동 검사";
+        Text = "Limit Windows 자동 진단";
         AutoScaleMode = AutoScaleMode.Dpi;
         Font = new Font("Segoe UI", 10F);
         ClientSize = new Size(860, 960);
@@ -38,7 +38,7 @@ public sealed class MainForm : Form
         {
             AutoSize = true,
             Font = new Font(Font.FontFamily, 16F, FontStyle.Bold),
-            Text = "Limit Windows 자동 검사",
+            Text = "Limit Windows 자동 진단",
             Margin = new Padding(3, 3, 3, 14)
         };
         var description = new Label
