@@ -2567,14 +2567,17 @@ onMounted(async () => {
                     v-if="image.imageType === 'THUMBNAIL'"
                     class="absolute left-1 top-1 rounded bg-primary px-2 py-1 text-[11px] font-bold text-white"
                   >대표</span>
+                  <!-- '삭제' 글자는 작은 사진 위에서 자리를 많이 차지해 사진을 가렸습니다.
+                       ✕ 하나로 두어 사진이 더 크게 보이게 합니다. 무슨 버튼인지는
+                       aria-label이 읽어 줍니다. -->
                   <button
                     type="button"
-                    class="absolute right-1 top-1 rounded bg-black/65 px-2 py-1 text-xs text-white"
+                    class="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-[11px] leading-none text-white transition hover:bg-black/80"
                     aria-label="상품 이미지 삭제"
                     :disabled="listingImageBusy"
                     @click="removeListingImage(image)"
                   >
-                    삭제
+                    ✕
                   </button>
                   <!-- 화살표는 양 끝으로 붙입니다. 가운데 모여 있으면 어느 쪽으로 가는지 헷갈립니다. -->
                   <div class="flex items-center justify-between border-t border-border bg-white px-1 py-1">
