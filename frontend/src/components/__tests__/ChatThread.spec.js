@@ -152,7 +152,7 @@ describe('ChatThread', () => {
     expect(times).toHaveLength(2)
   })
 
-  it('약속 잡기는 입력줄의 달력 버튼이 맡고, 팝업으로 열린다', async () => {
+  it('일정 등록는 입력줄의 달력 버튼이 맡고, 팝업으로 열린다', async () => {
     const wrapper = mountThread()
     await flushPromises()
 
@@ -161,7 +161,7 @@ describe('ChatThread', () => {
     expect(wrapper.text()).not.toContain('상호 조율 하에 라이브 WebRTC 성능 테스트 시간대를 제안해보세요')
     expect(wrapper.find('input[type="datetime-local"]').exists()).toBe(false)
 
-    const calendar = wrapper.get('button[aria-label="실시간 검증 약속 잡기"]')
+    const calendar = wrapper.get('button[aria-label="실시간 검증 일정 등록"]')
     await calendar.trigger('click')
 
     const dialog = wrapper.get('[role="dialog"][aria-labelledby="call-form-title"]')
@@ -182,8 +182,8 @@ describe('ChatThread', () => {
     await flushPromises()
 
     // 한 줄 요약을 없앤 자리를 버튼 위의 점이 대신합니다.
-    expect(wrapper.find('button[aria-label="실시간 검증 약속 변경"]').exists()).toBe(true)
-    expect(wrapper.find('button[aria-label="실시간 검증 약속 잡기"]').exists()).toBe(false)
+    expect(wrapper.find('button[aria-label="실시간 검증 일정 변경"]').exists()).toBe(true)
+    expect(wrapper.find('button[aria-label="실시간 검증 일정 등록"]').exists()).toBe(false)
   })
 
   it('opens an image preview and closes it with Escape', async () => {
@@ -351,7 +351,7 @@ describe('ChatThread', () => {
     const wrapper = mountThread()
     await flushPromises()
 
-    await wrapper.get('button[aria-label="실시간 검증 약속 잡기"]').trigger('click')
+    await wrapper.get('button[aria-label="실시간 검증 일정 등록"]').trigger('click')
     await wrapper.get('input[type="datetime-local"]').setValue(scheduledAt)
     await wrapper.get('input[placeholder="확인할 내용을 입력하세요."]').setValue('배터리 확인')
     await wrapper.find('form:has(input[type="datetime-local"])').trigger('submit')

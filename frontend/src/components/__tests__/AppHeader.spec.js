@@ -202,6 +202,52 @@ describe('AppHeader', () => {
     expect(wrapper.get('[aria-label="알림"]').classes()).not.toContain('notification-btn--on')
   })
 
+  /*
+    확인한 뒤 새로고침해도 점이 다시 켜지면, 확인했는데도 손댈 일이 남은 것처럼 보입니다.
+    브라우저에 남긴 기록으로 같은 상태인지 비교하므로, 다시 마운트해도 꺼져 있어야 합니다.
+  */
+  it('한 번 확인하면 새로고침해도 점이 켜지지 않는다', async () => {
+    signedIn({ nickname: '회원' })
+    getChatRooms.mockResolvedValue({ content: [{ roomId: 1, unreadCount: 3 }] })
+    getMyRtcCalls.mockResolvedValue([])
+    getMyReinspectionRequests.mockResolvedValue([])
+
+    const first = mountHeader()
+    await flushPromises()
+    await first.get('[aria-label="알림 (새 소식 있음)"]').trigger('click')
+
+    // 새로고침을 흉내 냅니다. 화면을 새로 그려도 확인 기록은 남아 있어야 합니다.
+    const second = mountHeader()
+    await flushPromises()
+
+    expect(second.find('[aria-label="알림 (새 소식 있음)"]').exists()).toBe(false)
+    /*
+      브라우저에 남는 값은 확인 여부를 비교하는 데만 쓰이고, 읽어도 무슨 소식이 몇 건인지
+      알 수 없어야 합니다. 원문('3|...' 형태)이 그대로 남지 않는지 봅니다.
+    */
+    const stored = window.localStorage.getItem('limit.notice-seen')
+    expect(stored).toBeTruthy()
+    expect(stored).not.toContain('|')
+  })
+
+  it('새 소식이 생기면 다시 점이 켜진다', async () => {
+    signedIn({ nickname: '회원' })
+    getChatRooms.mockResolvedValue({ content: [{ roomId: 1, unreadCount: 3 }] })
+    getMyRtcCalls.mockResolvedValue([])
+    getMyReinspectionRequests.mockResolvedValue([])
+
+    const first = mountHeader()
+    await flushPromises()
+    await first.get('[aria-label="알림 (새 소식 있음)"]').trigger('click')
+
+    // 안 읽은 채팅이 늘어나면 확인한 상태와 달라지므로 다시 알려야 합니다.
+    getChatRooms.mockResolvedValue({ content: [{ roomId: 1, unreadCount: 5 }] })
+    const second = mountHeader()
+    await flushPromises()
+
+    expect(second.find('[aria-label="알림 (새 소식 있음)"]').exists()).toBe(true)
+  })
+
   it('소식이 없으면 말풍선에 없다고 알린다', async () => {
     signedIn({ nickname: '회원' })
     const wrapper = mountHeader()

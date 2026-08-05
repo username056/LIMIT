@@ -2567,14 +2567,17 @@ onMounted(async () => {
                     v-if="image.imageType === 'THUMBNAIL'"
                     class="absolute left-1 top-1 rounded bg-primary px-2 py-1 text-[11px] font-bold text-white"
                   >대표</span>
+                  <!-- '삭제' 글자는 작은 사진 위에서 자리를 많이 차지해 사진을 가렸습니다.
+                       ✕ 하나로 두어 사진이 더 크게 보이게 합니다. 무슨 버튼인지는
+                       aria-label이 읽어 줍니다. -->
                   <button
                     type="button"
-                    class="absolute right-1 top-1 rounded bg-black/65 px-2 py-1 text-xs text-white"
+                    class="absolute right-1 top-1 flex h-[15px] w-[15px] items-center justify-center rounded-full bg-black/60 text-[9px] leading-none text-white transition hover:bg-black/80"
                     aria-label="상품 이미지 삭제"
                     :disabled="listingImageBusy"
                     @click="removeListingImage(image)"
                   >
-                    삭제
+                    ✕
                   </button>
                   <!-- 화살표는 양 끝으로 붙입니다. 가운데 모여 있으면 어느 쪽으로 가는지 헷갈립니다. -->
                   <div class="flex items-center justify-between border-t border-border bg-white px-1 py-1">
@@ -2605,8 +2608,7 @@ onMounted(async () => {
                 검수용 기기 촬영
               </h2>
               <p class="mt-1 text-sm text-text-sub">
-                구매자가 확인할 수 있도록 촬영·업로드 항목 {{ mediaChecklistItems.length }}개에
-                사진·영상·진단파일을 등록하세요.
+                촬영·업로드 {{ mediaChecklistItems.length }}개 항목에 필요한 파일을 등록해 주세요.
               </p>
 
               <section
@@ -2624,7 +2626,7 @@ onMounted(async () => {
                      앞 문장에 붙어 흐르면 눈에 걸리지 않습니다. -->
                 <p class="mt-1 text-xs leading-5 text-text-sub">
                   Limit 진단 프로그램으로 기기 정보와 점검 결과를 자동으로 입력할 수 있습니다.<br>
-                  비밀번호와 개인 파일은 수집하지 않습니다.
+                  비밀번호 및 개인 파일은 수집하지 않습니다.
                 </p>
                 <div class="mt-3 flex flex-wrap items-center gap-2">
                   <button
@@ -3058,8 +3060,7 @@ onMounted(async () => {
               </div>
 
               <p class="mt-2 text-center text-[11px] text-text-sub">
-                항목별 최대 파일 개수와 크기·영상 길이를 적용합니다.
-                파일은 자동으로 압축됩니다.
+                사진 추가 후 이미지를 클릭하시면 삭제 버튼을 확인할 수 있습니다.
               </p>
               <p class="mt-1 text-center text-[11px] text-text-sub">
                 영상은 항목마다 1개씩, 60초 이내·100MB 이하만 올릴 수 있습니다. (판매글 전체로는 최대 6개)
