@@ -607,7 +607,7 @@ function remainingSessionTime(expiresAt) {
 }
 
 /*
-  약속 잡기 팝업도 Esc로 닫습니다.
+  일정 등록 팝업도 Esc로 닫습니다.
   ---------------------------------------------------------------------------
   사진 확대 쪽 처리와 합치지 않고 따로 둡니다. 사진 확대가 위에 떠 있으면
   그쪽이 먼저 닫혀야 하므로, 여기서는 사진이 닫혀 있을 때만 반응합니다.
@@ -1130,7 +1130,7 @@ onBeforeUnmount(() => {
         </button>
 
         <!--
-          약속 잡기를 사진 옆 달력 버튼으로 옮겼습니다.
+          일정 등록를 사진 옆 달력 버튼으로 옮겼습니다.
           -----------------------------------------------------------------------
           예전에는 입력줄 위에 큰 버튼과 안내 문장이 한 줄을 차지했고, 약속을
           잡은 뒤에도 그대로 남아 있었습니다. 사진 첨부와 성격이 같은 '무언가를
@@ -1142,7 +1142,7 @@ onBeforeUnmount(() => {
         <div class="group relative shrink-0">
           <button
             type="button"
-            :aria-label="latestAppointment ? '실시간 검증 약속 변경' : '실시간 검증 약속 잡기'"
+            :aria-label="latestAppointment ? '실시간 검증 일정 변경' : '실시간 검증 일정 등록'"
             class="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border text-text-sub transition-colors hover:border-primary hover:text-primary"
             :class="latestAppointment ? 'border-primary text-primary' : ''"
             @click="isCallFormOpen = true"
@@ -1179,7 +1179,7 @@ onBeforeUnmount(() => {
             role="tooltip"
             class="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md bg-text-main px-2.5 py-1.5 text-xs font-semibold text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
           >
-            {{ latestAppointment ? '실시간 검증 약속 변경' : '실시간 검증 약속 잡기' }}
+            {{ latestAppointment ? '실시간 검증 일정 변경' : '실시간 검증 일정 등록' }}
           </span>
         </div>
 
@@ -1201,7 +1201,7 @@ onBeforeUnmount(() => {
     </div>
 
     <!--
-      약속 잡기 팝업.
+      일정 등록 팝업.
       -------------------------------------------------------------------------
       예전에는 입력줄 위에 폼이 펼쳐져 대화창을 위로 밀어 올렸습니다. 대화를
       읽다가 약속을 잡으면 보고 있던 말이 화면에서 밀려 나갔습니다.
@@ -1223,7 +1223,7 @@ onBeforeUnmount(() => {
           id="call-form-title"
           class="text-lg font-bold text-text-main"
         >
-          {{ latestAppointment ? '실시간 검증 약속 변경' : '실시간 검증 약속 잡기' }}
+          {{ latestAppointment ? '실시간 검증 일정 변경' : '실시간 검증 일정 등록' }}
         </h2>
         <p class="mt-1.5 text-sm text-text-sub">
           상호 조율 하에 라이브 WebRTC 성능 테스트 시간대를 제안해 보세요.
