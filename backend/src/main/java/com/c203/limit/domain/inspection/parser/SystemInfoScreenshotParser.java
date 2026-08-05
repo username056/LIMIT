@@ -43,13 +43,25 @@ public class SystemInfoScreenshotParser {
     private static final double TABLE_SPLIT_GAP_RATIO = 1.0;
 
     private static final Pattern CAPACITY_PATTERN =
-            Pattern.compile("(?i)[0-9]+(?:\\.[0-9]+)?\\s*(?:GB|TB|MB)");
+            Pattern.compile(
+                    "[0-9]+(?:\\.[0-9]+)?\\s*(?:GB|TB|MB)",
+                    Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern CPU_NAME_PATTERN =
-            Pattern.compile("(?i).*(intel|amd|apple|ryzen|snapdragon|core\\s*i\\d).*");
+            Pattern.compile(
+                    ".*(intel|amd|apple|ryzen|snapdragon|core\\s*i\\d).*",
+                    Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern GPU_NAME_PATTERN =
-            Pattern.compile("(?i).*(intel|nvidia|amd|radeon|geforce|iris).*");
-    private static final Pattern OS_VERSION_PATTERN = Pattern.compile("(?i).*(비트|x86|x64|프로세서).*");
-    private static final Pattern OS_EDITION_PATTERN = Pattern.compile("(?i).*windows\\s*\\d+.*");
+            Pattern.compile(
+                    ".*(intel|nvidia|amd|radeon|geforce|iris).*",
+                    Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    private static final Pattern OS_VERSION_PATTERN =
+            Pattern.compile(
+                    ".*(비트|x86|x64|프로세서).*",
+                    Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    private static final Pattern OS_EDITION_PATTERN =
+            Pattern.compile(
+                    ".*windows\\s*\\d+.*",
+                    Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     // 설정 앱은 "25H2" 같은 짧은 기능 업데이트 버전을, msinfo32는 "10.0.26200 빌드 26200" 같은 커널 빌드
     // 버전을 "버전" 라벨에 담는다 — 둘 다 받아들이되 완전히 무관한 값은 걸러내도록 넉넉히 잡는다.
     private static final int OS_VERSION_TOKEN_MAX_LENGTH = 40;

@@ -428,6 +428,32 @@ describe('ProductRegisterPage', () => {
     ])
   })
 
+  it('1단계 기본 체크리스트에서도 DSP-002를 디스플레이·스피커 확인으로 표시한다', async () => {
+    getDeviceCategories.mockResolvedValue([{ categoryId: 10, name: 'Windows 노트북' }])
+    generateChecklist.mockResolvedValue({
+      deviceModelId: 101,
+      manufacturer: 'Samsung',
+      modelName: 'Galaxy Book',
+      osFamily: 'WINDOWS',
+      aiApplied: true,
+      items: [{
+        itemCode: 'DSP-002',
+        name: '화면 전체 터치',
+        evidenceType: 'VIDEO',
+        required: true,
+      }],
+      aiSuggestions: [],
+      reviewCandidates: [],
+    })
+
+    const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+    await flushPromises()
+    await fillDeviceStep(wrapper)
+
+    expect(wrapper.text()).toContain('디스플레이·스피커 확인')
+    expect(wrapper.text()).not.toContain('화면 전체 터치')
+  })
+
   it('기기 등록 정보를 입력하면 상품을 생성하고 촬영 단계로 진행한다', async () => {
     const wrapper = mount(ProductRegisterPage, { global: globalOptions })
     await flushPromises()
@@ -490,12 +516,7 @@ describe('ProductRegisterPage', () => {
     await goToCaptureStep(wrapper)
 
     expect(wrapper.text()).toContain('실동작 점검')
-    expect(wrapper.text()).toContain('카메라·마이크·키보드 등 직접 점검하기')
-    expect(wrapper.text()).toContain('스피커')
-    expect(wrapper.text()).toContain('디스플레이')
-    expect(wrapper.text()).toContain('충전')
-    expect(wrapper.text()).toContain('카메라')
-    expect(wrapper.text()).toContain('마이크')
+    expect(wrapper.text()).toContain('키보드·포인터 직접 점검하기')
     expect(wrapper.text()).toContain('키보드')
     expect(wrapper.text()).toContain('포인터')
   })
@@ -1487,7 +1508,41 @@ describe('ProductRegisterPage', () => {
       await flushPromises()
 
       expect(wrapper.text()).not.toContain('판매할 기기를 등록해 주세요.')
-      expect(wrapper.text()).toContain('카메라·마이크·키보드 등 직접 점검하기')
+      expect(wrapper.text()).toContain('키보드·포인터 직접 점검하기')
+    })
+
+    it('자동 진단 첨부를 복구해도 자동 입력 완료 표시를 유지한다', async () => {
+      routeQuery.step = '2'
+      getProductChecklist.mockResolvedValue([{
+        checklistItemId: 7004,
+        itemCode: 'LAP-SCR-014',
+        name: '시스템 진단 정보',
+        evidenceType: 'DIAGNOSTIC_FILE',
+        automationType: 'FILE_PARSE',
+        parserType: 'DXDIAG',
+        isRequired: true,
+        status: 'COMPLETED',
+        maxCount: 1,
+      }])
+      getEvidenceHistory.mockResolvedValue([{
+        evidenceId: 9001,
+        mediaUrl: 'https://storage.test/dxdiag.txt',
+        evidenceType: 'DIAGNOSTIC_FILE',
+        attemptNo: 1,
+      }])
+      getDiagnosis.mockResolvedValue({
+        itemId: 7004,
+        fields: [
+          { fieldName: 'RAM', fileParseValue: '32 GB' },
+          { fieldName: 'GPU', fileParseValue: 'NVIDIA GeForce RTX 4070' },
+        ],
+      })
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('자동 입력 완료')
+      expect(wrapper.text()).not.toContain('첨부 1 / 1')
     })
 
     it('직접 점검에서 new 주소로 돌아오면 상품 등록 제목과 초안 2단계를 복구한다', async () => {
@@ -1572,7 +1627,7 @@ describe('ProductRegisterPage', () => {
       expect(payload.results).toHaveLength(2)
     })
 
-    it('진단 프로그램이 완료한 실동작 항목은 2단계에서 자동 입력 완료로 표시한다', async () => {
+    it('진단 프로그램이 완료한 실동작 항목은 2단계에서 자동 점검 완료로 표시한다', async () => {
       getProductChecklist.mockResolvedValue([
         { checklistItemId: 7003, itemCode: 'LAP-KBD-005', name: '키보드 실동작 확인', evidenceType: 'SELLER_CONFIRMATION', isRequired: true, status: 'COMPLETED' },
       ])
@@ -1584,8 +1639,8 @@ describe('ProductRegisterPage', () => {
       await flushPromises()
 
       expect(wrapper.text()).toContain('키보드 실동작 확인')
-      expect(wrapper.text()).toContain('자동 입력 완료')
-      expect(wrapper.text()).toContain('카메라·마이크·키보드 등 직접 점검하기')
+      expect(wrapper.text()).toContain('자동 점검 완료')
+      expect(wrapper.text()).toContain('키보드·포인터 직접 점검하기')
     })
 
     it('웹에서 완료한 실동작 항목은 웹 점검 완료로 구분한다', async () => {
@@ -1602,6 +1657,22 @@ describe('ProductRegisterPage', () => {
       await flushPromises()
 
       expect(wrapper.text()).toContain('웹 점검 완료')
+    })
+
+    it('체크리스트 항목이 없어도 EXE 결과를 자동 점검 완료로 표시한다', async () => {
+      getProductChecklist.mockResolvedValue([])
+      getProductDraftProgress.mockResolvedValue({
+        step: 2,
+        results: {},
+        automaticDeviceResults: { KEYBOARD: 'SUCCESS' },
+      })
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await buttonByText(wrapper, '다음 단계').trigger('click')
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('자동 점검 완료')
     })
 
     // goToStep4는 개인정보·실동작 점검 둘 다 필수 완료를 요구하고, 안내 문구는 어디로 가야
@@ -1738,6 +1809,31 @@ describe('ProductRegisterPage', () => {
       const modal = wrapper.find('[role="dialog"][aria-label="촬영 가이드"]')
       expect(modal.text()).toContain('비필수 항목의 서버 기본 가이드 문구')
       expect(modal.text()).not.toContain('사면 테두리가 모두 잘 보이도록')
+    })
+
+    it('DSP-002 카드는 서버의 터치 문구 대신 디스플레이·스피커 안내를 표시한다', async () => {
+      getDeviceCategories.mockResolvedValueOnce([{ categoryId: 10, name: 'Windows 노트북' }])
+      getProductChecklist.mockResolvedValue([
+        {
+          checklistItemId: 7003,
+          itemCode: 'DSP-002',
+          name: '화면 전체 터치',
+          guide: '화면 전체 격자를 끊김 없이 드래그하는 과정을 촬영하세요.',
+          evidenceType: 'VIDEO',
+          isRequired: true,
+          status: 'PENDING',
+        },
+      ])
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await goToCaptureStep(wrapper)
+
+      expect(wrapper.text()).toContain('디스플레이·스피커 확인')
+      expect(wrapper.text()).toContain('화면 표시 상태와 좌우 스피커의 소리 출력을 영상으로 확인해 주세요.')
+      expect(wrapper.text()).not.toContain('화면 전체 터치')
+      expect(wrapper.text()).not.toContain('화면 전체 격자를 끊김 없이 드래그')
+      expect(wrapper.find('button[aria-label="디스플레이·스피커 확인 촬영 가이드 보기"]').exists()).toBe(true)
     })
 
     // 영상 녹화는 지원하지 않습니다. 촬영 버튼을 보여주면 눌러도 할 수 있는 게 없습니다.

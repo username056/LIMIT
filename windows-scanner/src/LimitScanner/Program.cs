@@ -29,10 +29,7 @@ internal static class Program
             apiClient,
             new DxDiagCollector(commandRunner),
             new BatteryReportCollector(commandRunner),
-            new InteractiveDeviceDiagnostics(
-                new AudioOutputService(),
-                new CameraCaptureService(),
-                new MicrophoneInputService()));
+            new InteractiveDeviceDiagnostics());
 
         Application.Run(new MainForm(coordinator));
     }

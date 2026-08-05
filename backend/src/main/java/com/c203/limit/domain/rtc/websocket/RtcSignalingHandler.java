@@ -25,6 +25,7 @@ public class RtcSignalingHandler extends TextWebSocketHandler {
     private static final int MAX_SIGNAL_BYTES = 64 * 1024;
     private final ObjectMapper objectMapper;
     private final Map<Long, Map<Long, WebSocketSession>> rooms = new ConcurrentHashMap<>();
+    private final Map<String, Object> sendLocks = new ConcurrentHashMap<>();
 
     public RtcSignalingHandler(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
@@ -64,13 +65,17 @@ public class RtcSignalingHandler extends TextWebSocketHandler {
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status)
             throws Exception {
-        Long rtcSessionId = attribute(session, "rtcSessionId");
-        Long memberId = attribute(session, "memberId");
-        Map<Long, WebSocketSession> participants = rooms.get(rtcSessionId);
-        if (participants == null) return;
-        participants.remove(memberId, session);
-        notifyPeers(rtcSessionId, memberId, Map.of("type", "peer-left"));
-        if (participants.isEmpty()) rooms.remove(rtcSessionId, participants);
+        try {
+            Long rtcSessionId = attribute(session, "rtcSessionId");
+            Long memberId = attribute(session, "memberId");
+            Map<Long, WebSocketSession> participants = rooms.get(rtcSessionId);
+            if (participants == null) return;
+            participants.remove(memberId, session);
+            notifyPeers(rtcSessionId, memberId, Map.of("type", "peer-left"));
+            if (participants.isEmpty()) rooms.remove(rtcSessionId, participants);
+        } finally {
+            sendLocks.remove(session.getId());
+        }
     }
 
     private void notifyPeers(Long rtcSessionId, Long senderId, Object payload) throws IOException {
@@ -84,7 +89,8 @@ public class RtcSignalingHandler extends TextWebSocketHandler {
     }
 
     private void send(WebSocketSession session, Object payload) throws IOException {
-        synchronized (session) {
+        Object sendLock = sendLocks.computeIfAbsent(session.getId(), ignored -> new Object());
+        synchronized (sendLock) {
             session.sendMessage(new TextMessage(objectMapper.writeValueAsString(payload)));
         }
     }

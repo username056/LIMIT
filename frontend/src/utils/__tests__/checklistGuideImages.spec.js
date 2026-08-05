@@ -5,7 +5,7 @@ describe('guideContentFor', () => {
   // 실제 체크리스트 생성 응답(Galaxy Book4)의 items 중 등록해 둔 항목들을 확인합니다.
   it.each([
     ['EXT-001', '외관'],
-    ['DSP-002', '터치'],
+    ['DSP-002', '스피커'],
     ['SYS-003', '모델명'],
     ['BAT-005', '완전 충전 용량'],
     ['DXD-006', 'GPU'],
@@ -14,6 +14,17 @@ describe('guideContentFor', () => {
     expect(content).not.toBeNull()
     expect(content.purpose).toContain(purposeKeyword)
     expect(content.image).toBeTruthy()
+  })
+
+  it('DSP-002 안내는 키보드·터치 대신 디스플레이와 스피커 점검을 안내한다', () => {
+    const content = guideContentFor({ itemCode: 'DSP-002', isRequired: true }, 'Windows 노트북')
+
+    expect(content.title).toBe('디스플레이·스피커 확인')
+    expect(content.summary).toBe('화면 표시 상태와 좌우 스피커의 소리 출력을 영상으로 확인해 주세요.')
+    expect(content.purpose).toContain('디스플레이 화면과 스피커')
+    expect(content.guide).toContain('불량 화소')
+    expect(content.guide).toContain('좌우 스피커')
+    expect(`${content.title} ${content.purpose} ${content.guide}`).not.toMatch(/키보드|터치 입력/)
   })
 
   it('필수 항목이어도 등록되지 않은 조합이면 null을 반환한다', () => {
