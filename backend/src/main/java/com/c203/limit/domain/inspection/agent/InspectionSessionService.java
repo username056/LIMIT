@@ -48,14 +48,13 @@ public class InspectionSessionService {
     private static final Duration PAIRING_CODE_TTL = Duration.ofMinutes(10);
     private static final Duration AGENT_SESSION_TTL = Duration.ofHours(1);
     private static final SecureRandom RANDOM = new SecureRandom();
+    // 카메라·마이크·스피커·디스플레이·충전은 실동작 점검에서 빠졌다. 이 맵에 남아 있으면
+    // (구버전 EXE 등이 보낸) 해당 테스트 결과가 체크리스트 항목을 그대로 COMPLETED 처리해
+    // 디스플레이·충전의 영상 증빙을 우회할 수 있어 키보드·포인터만 남긴다. TestType enum 자체는
+    // 과거 이력 조회 호환을 위해 그대로 둔다.
     private static final Map<TestType, String> CHECKLIST_ITEM_CODES = Map.of(
-            TestType.CAMERA, "LAP-FTR-CAM",
-            TestType.MICROPHONE, "LAP-FTR-MIC",
             TestType.KEYBOARD, "LAP-KBD-005",
-            TestType.TOUCHPAD, "LAP-PAD-006",
-            TestType.SPEAKER, "LAP-FTR-SPK",
-            TestType.DISPLAY, "LAP-DSP-003",
-            TestType.CHARGING, "LAP-CHG-007");
+            TestType.TOUCHPAD, "LAP-PAD-006");
 
     private final InspectionSessionRepository sessionRepository;
     private final InspectionSessionTestResultRepository testResultRepository;

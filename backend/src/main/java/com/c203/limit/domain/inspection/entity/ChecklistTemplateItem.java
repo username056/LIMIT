@@ -113,6 +113,7 @@ public class ChecklistTemplateItem {
             AutomationType automationType,
             String parserType,
             boolean isRequired,
+            boolean visibleToBuyer,
             int displayOrder) {
         ChecklistTemplateItem item = create(
                 checklistTemplate,
@@ -124,6 +125,7 @@ public class ChecklistTemplateItem {
                 automationType,
                 isRequired,
                 displayOrder);
+        item.visibleToBuyer = visibleToBuyer;
         item.parserType = parserType;
         if (evidenceType == EvidenceType.PHOTO) {
             item.allowedFormats = "jpg,jpeg,png";
