@@ -463,22 +463,8 @@ const expandedImage = ref('')
 
 // 파일 입력은 label 안에 숨겨 둡니다. label에는 :disabled가 안 걸리므로,
 // 못 누르는 상태를 라벨 쪽에도 따로 알려 줘야 버튼이 눌리는 것처럼 보이지 않습니다.
-/*
-  대표 이미지 한 장과 추가 사진을 나눠 둡니다.
-  ---------------------------------------------------------------------------
-  전에는 사진 열 장을 한 줄에 늘어놓고 '맨 왼쪽이 대표'라고 적어 두었습니다. 그 규칙은
-  설명을 읽어야 알 수 있고, 대표를 바꾸려면 화살표로 사진을 옮겨야 했습니다.
-
-  자리를 나눠 대표는 큰 칸 하나로, 나머지는 추가 사진으로 둡니다. 무엇이 대표인지 보면
-  바로 알 수 있고, 추가 사진의 '대표로'를 누르면 자리가 바뀝니다.
-*/
-const MAX_DETAIL_IMAGES = 5
-
-const listingDetailImages = computed(
-  () => listingImages.value.filter((image) => image.imageType !== 'THUMBNAIL'),
-)
 const listingImageAddDisabled = computed(
-  () => listingImageBusy.value || listingDetailImages.value.length >= MAX_DETAIL_IMAGES,
+  () => listingImageBusy.value || listingImages.value.length >= 10,
 )
 
 // 대표 이미지는 고르는 즉시 서버에 올립니다. presigned URL이 productId 기준이라 상품이 없으면
@@ -1516,7 +1502,7 @@ async function handleCaptureFile(item, file) {
 }
 
 async function handleListingImage(file, displayOrder = listingImages.value.length) {
-  if (!file || !currentProductId.value) return
+  if (!file || !currentProductId.value || listingImages.value.length >= 10) return
   listingImageInFlight += 1
   listingImageBusy.value = true
   listingImageUploading.value = true
@@ -1631,12 +1617,12 @@ async function flushPendingThumbnail() {
 
 async function onListingImageInput(event) {
   const picked = [...(event.target.files || [])]
-  const files = picked.slice(0, MAX_DETAIL_IMAGES - listingDetailImages.value.length)
+  const files = picked.slice(0, 10 - listingImages.value.length)
   const startOrder = listingImages.value.length
   event.target.value = ''
   // 자리가 부족해 잘린 파일을 알립니다. 그냥 버리면 사진이 사라진 것처럼 보입니다.
   if (picked.length > files.length) {
-    openAlert(`${picked.length - files.length}개는 추가 사진 최대 개수(${MAX_DETAIL_IMAGES}장)를 넘어 올리지 못했습니다.`)
+    openAlert(`${picked.length - files.length}개는 최대 개수(10개)를 넘어 올리지 못했습니다.`)
   }
   await runWithUploadLimit(files, (file, index) => handleListingImage(file, startOrder + index))
 }
@@ -2490,8 +2476,8 @@ onMounted(async () => {
                     상품 이미지
                   </h2>
                   <p class="mt-1 text-sm text-text-sub">
-                    <strong class="font-semibold text-text-main">대표 이미지 1장</strong>과
-                    추가 사진 최대 {{ MAX_DETAIL_IMAGES }}장을 올릴 수 있습니다.
+                    <strong class="font-semibold text-text-main">맨 왼쪽 사진이 대표 이미지</strong>입니다.
+                    최대 10개까지 올리고, ← → 로 순서를 바꿔 대표를 정하세요.
                   </p>
                 </div>
                 <!-- 다른 주요 버튼(BaseButton primary)과 같은 그라데이션·번짐을 씁니다. -->
@@ -2499,7 +2485,7 @@ onMounted(async () => {
                   class="btn-glow inline-flex cursor-pointer items-center justify-center rounded-md bg-primary-gradient px-4 py-2 text-sm font-semibold text-white shadow-elevated transition-all hover:brightness-110"
                   :class="listingImageAddDisabled ? 'pointer-events-none opacity-55' : ''"
                 >
-                  {{ listingImageBusy ? '업로드 중…' : '추가 사진 올리기' }}
+                  {{ listingImageBusy ? '업로드 중…' : '이미지 추가' }}
                   <input
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
@@ -2530,84 +2516,18 @@ onMounted(async () => {
                   :style="{ width: `${listingImageProgress}%` }"
                 />
               </div>
-              <!--
-                대표 이미지는 큰 칸 하나로 둡니다.
-                ---------------------------------------------------------------
-                목록·상세에서 이 사진 한 장만 보이므로, 추가 사진과 같은 크기로 늘어놓으면
-                무엇이 대표인지 눈에 들어오지 않습니다. 없을 때는 그 자리에서 바로 고르게
-                합니다.
-              -->
-              <div class="mt-4">
-                <p class="mb-2 text-sm font-semibold text-text-main">
-                  대표 이미지
-                </p>
-                <div
-                  v-if="thumbnailPreviewUrl"
-                  class="relative w-40 overflow-hidden rounded-md border border-border"
-                >
-                  <button
-                    type="button"
-                    class="block w-full cursor-zoom-in"
-                    aria-label="대표 이미지 확대 보기"
-                    @click="expandedImage = thumbnailPreviewUrl"
-                  >
-                    <img
-                      :src="thumbnailPreviewUrl"
-                      alt="대표 이미지"
-                      class="aspect-square w-full object-cover"
-                    >
-                  </button>
-                  <span class="absolute left-1 top-1 rounded bg-primary px-2 py-1 text-[11px] font-bold text-white">대표</span>
-                  <div class="flex items-center justify-between border-t border-border bg-white px-1 py-1">
-                    <label
-                      class="cursor-pointer rounded px-2 py-1 text-xs font-semibold text-primary hover:bg-accent"
-                      :class="listingImageBusy ? 'pointer-events-none opacity-55' : ''"
-                    >
-                      변경
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        class="sr-only"
-                        :disabled="listingImageBusy"
-                        @change="onThumbnailInput"
-                      >
-                    </label>
-                    <button
-                      type="button"
-                      class="rounded px-2 py-1 text-xs font-semibold text-text-sub hover:bg-bg"
-                      aria-label="대표 이미지 삭제"
-                      :disabled="listingImageBusy"
-                      @click="removeThumbnail"
-                    >
-                      삭제
-                    </button>
-                  </div>
-                </div>
-                <label
-                  v-else
-                  class="flex aspect-square w-40 cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-border bg-bg text-center text-xs text-text-sub hover:border-primary hover:text-primary"
-                  :class="listingImageBusy ? 'pointer-events-none opacity-55' : ''"
-                >
-                  <span class="text-lg">＋</span>
-                  대표 이미지 고르기
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    class="sr-only"
-                    :disabled="listingImageBusy"
-                    @change="onThumbnailInput"
-                  >
-                </label>
-              </div>
-
-              <p class="mt-5 text-sm font-semibold text-text-main">
-                추가 사진 <span class="font-normal text-text-sub">{{ listingDetailImages.length }} / {{ MAX_DETAIL_IMAGES }}</span>
+              <p class="mt-2 text-[11px] text-text-sub">
+                최근 처리시간:
+                체크리스트 {{ registrationMetrics.checklistMs ?? '-' }}ms ·
+                이미지 압축 {{ registrationMetrics.imageCompressionMs ?? '-' }}ms ·
+                영상 압축 {{ registrationMetrics.videoCompressionMs ?? '-' }}ms ·
+                S3 업로드 {{ registrationMetrics.s3UploadMs ?? '-' }}ms
               </p>
               <p
-                v-if="!listingDetailImages.length"
-                class="mt-2 rounded-md bg-bg px-4 py-5 text-center text-sm text-text-sub"
+                v-if="!listingImages.length"
+                class="mt-4 rounded-md bg-bg px-4 py-5 text-center text-sm text-text-sub"
               >
-                추가 사진은 아직 없습니다. 기기의 다른 면이나 구성품을 더 보여 줄 수 있습니다.
+                등록된 상품 이미지가 없습니다.
               </p>
               <!--
                 순서를 바꾸면 사진이 제자리로 미끄러져 들어갑니다.
@@ -2616,7 +2536,7 @@ onMounted(async () => {
                 두 장이 순간이동하면 무엇과 무엇이 바뀐 것인지 눈으로 못 따라갑니다.
               -->
               <TransitionGroup
-                v-if="listingDetailImages.length"
+                v-else
                 tag="ul"
                 name="thumb"
                 class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5"
@@ -2626,7 +2546,7 @@ onMounted(async () => {
                   서버 값과 방금 옮긴 화면 순서가 어긋나는 순간에 버튼이 잘못 잠깁니다.
                 -->
                 <li
-                  v-for="(image, index) in listingDetailImages"
+                  v-for="(image, index) in listingImages"
                   :key="image.imageId"
                   class="relative overflow-hidden rounded-md border border-border"
                 >
@@ -2643,6 +2563,10 @@ onMounted(async () => {
                       class="aspect-square w-full object-cover"
                     >
                   </button>
+                  <span
+                    v-if="image.imageType === 'THUMBNAIL'"
+                    class="absolute left-1 top-1 rounded bg-primary px-2 py-1 text-[11px] font-bold text-white"
+                  >대표</span>
                   <button
                     type="button"
                     class="absolute right-1 top-1 rounded bg-black/65 px-2 py-1 text-xs text-white"
@@ -2652,17 +2576,25 @@ onMounted(async () => {
                   >
                     삭제
                   </button>
-                  <!-- 화살표로 순서를 옮겨 대표를 정하던 것을 이 버튼 하나로 대신합니다.
-                       어느 사진이든 눌러서 바로 대표로 올릴 수 있습니다. -->
-                  <div class="border-t border-border bg-white px-1 py-1 text-center">
+                  <!-- 화살표는 양 끝으로 붙입니다. 가운데 모여 있으면 어느 쪽으로 가는지 헷갈립니다. -->
+                  <div class="flex items-center justify-between border-t border-border bg-white px-1 py-1">
                     <button
                       type="button"
-                      class="rounded px-2 py-1 text-xs font-semibold text-primary hover:bg-accent"
-                      :disabled="listingImageBusy"
-                      :aria-label="`${index + 1}번째 추가 사진을 대표 이미지로`"
-                      @click="makeListingThumbnail(image)"
+                      class="rounded px-2 py-1 text-xs font-semibold text-text-sub hover:bg-bg"
+                      :disabled="listingImageBusy || index === 0"
+                      aria-label="이미지 순서를 앞으로 이동"
+                      @click="moveListingImage(image, -1)"
                     >
-                      대표로
+                      ←
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded px-2 py-1 text-xs font-semibold text-text-sub hover:bg-bg"
+                      :disabled="listingImageBusy || index === listingImages.length - 1"
+                      aria-label="이미지 순서를 뒤로 이동"
+                      @click="moveListingImage(image, 1)"
+                    >
+                      →
                     </button>
                   </div>
                 </li>
