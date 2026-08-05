@@ -31,7 +31,7 @@
 | POST | `/api/v1/inspection-agent/sessions/{sessionKey}/uploads` | 진단 파일 Presigned URL 생성 |
 | POST | `/api/v1/inspection-agent/sessions/{sessionKey}/uploads/{uploadId}/complete` | 업로드 완료 및 기존 파서 실행 |
 | POST | `/api/v1/inspection-agent/sessions/{sessionKey}/complete` | 검사 완료 처리 |
-| POST | `/api/v1/inspection-agent/sessions/{sessionKey}/test-results` | 선택검사(카메라·마이크 등) 결과 제출 |
+| POST | `/api/v1/inspection-agent/sessions/{sessionKey}/test-results` | 선택검사 결과 제출 (현재 체크리스트에 반영되는 항목은 키보드·포인터뿐) |
 
 | Method | Path | 설명 | 인증 |
 | --- | --- | --- | --- |
@@ -68,8 +68,9 @@ API는 서버 저장 순서대로 전체 시도 이력을 반환한다.
 ```
 
 `testType`은 `CAMERA`, `MICROPHONE`, `KEYBOARD`, `TOUCHPAD`, `SPEAKER`, `DISPLAY`,
-`CHARGING` 중 하나다. `attemptNo`, `checklistItemId`, `listingId`, `rawDataSaved`는
-서버가 결정하므로 요청에 포함하지 않는다.
+`CHARGING` 중 하나다(과거 이력·구버전 EXE 호환을 위해 enum 자체는 7개를 유지한다).
+`attemptNo`, `checklistItemId`, `listingId`, `rawDataSaved`는 서버가 결정하므로 요청에
+포함하지 않는다.
 
 `measurementStatus`는 `DETECTED`, `NOT_DETECTED`, `PERMISSION_DENIED`, `UNSUPPORTED`,
 `EXECUTION_FAILED`, `NOT_EXECUTED` 중 하나다. 상태와 사용자 결과 조합은 다음 규칙을
@@ -89,22 +90,20 @@ API는 서버 저장 순서대로 전체 시도 이력을 반환한다.
 - 같은 UUID와 다른 payload 재전송: `409 INSPECTION_TEST_RESULT_IDEMPOTENCY_CONFLICT`
 - 새 UUID로 같은 `testType` 재검사: `(session_key, test_type)` 기준 `attemptNo` 증가
 
-응답에는 서버가 결정한 `listingId`와 nullable `checklistItemId`가 포함된다. 매물에 매핑된
-선택 기능 항목이 없으면 이력만 저장하고 `checklistItemId`는 `null`로 반환한다.
+응답에는 서버가 결정한 `listingId`와 nullable `checklistItemId`가 포함된다. 체크리스트
+항목에 실제로 반영되는 매핑은 다음 2개뿐이며, 그 외 `testType`은 이력(`inspection_session_
+test_result`)에만 저장되고 `checklistItemId`는 항상 `null`이다.
 
 | testType | checklist itemCode |
 | --- | --- |
-| CAMERA | `LAP-FTR-CAM` |
-| MICROPHONE | `LAP-FTR-MIC` |
 | KEYBOARD | `LAP-KBD-005` |
 | TOUCHPAD | `LAP-PAD-006` |
-| SPEAKER | `LAP-FTR-SPK` |
-| DISPLAY | `LAP-DSP-003` |
-| CHARGING | `LAP-CHG-007` |
 
-`DISPLAY`, `CHARGING` 결과는 Scanner 제출값으로 기존 영상 증빙을 대체해 최신 체크리스트
-상태에 반영한다. 구매자에게 선택검사 상세 측정값을 제공하는 별도 통합 API는 MVP 범위에
-포함하지 않는다.
+카메라·마이크·스피커는 실동작 점검 대상에서 빠지고 판매자 확인 스펙 항목으로만 남았다.
+디스플레이·충전은 `EvidenceType.VIDEO`라 실제 영상 증빙으로만 완료할 수 있으며, `CAMERA`/
+`MICROPHONE`/`SPEAKER`/`DISPLAY`/`CHARGING` 결과 제출은 더 이상 어떤 체크리스트 항목도
+완료 처리하지 않는다(구버전 EXE가 이 값을 계속 보내더라도 영상 증빙을 우회할 수 없다).
+구매자에게 선택검사 상세 측정값을 제공하는 별도 통합 API는 MVP 범위에 포함하지 않는다.
 
 Scanner와 웹 직접 점검 화면은 키보드(`KEYBOARD`)와 포인터(`TOUCHPAD`)만 실행한다.
 키보드는 모든 판정 대상 키가 감지되면 `SUCCESS`, 누락 키가 있으면 `FAILED`로 저장한다.

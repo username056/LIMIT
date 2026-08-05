@@ -181,7 +181,8 @@ class ProductApplicationServiceTests {
                 generated);
 
         assertThat(result.getProductId()).isEqualTo(2001L);
-        assertThat(result.getRequiredItemCount()).isEqualTo(14);
+        // 12개 필수 기본 항목(충전 제외) + 카메라(스펙 확인용, 필수 아님) = 12
+        assertThat(result.getRequiredItemCount()).isEqualTo(12);
         verify(templateRepository).saveAndFlush(any(ChecklistTemplate.class));
         verify(templateItemRepository).saveAllAndFlush(any());
         verify(checklistItemRepository).saveAll(any());

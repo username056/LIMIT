@@ -108,12 +108,6 @@ public class LaptopChecklistPolicy {
                         "웹 기반 점검에서 포인터 이동, 클릭, 스크롤이 정상 동작하는지 확인하세요.",
                         EvidenceType.SELLER_CONFIRMATION),
                 required(
-                        "LAP-CHG-007",
-                        "충전 상태",
-                        "충전기 연결과 충전 인식을 확인합니다.",
-                        "충전기를 연결하고 운영체제의 충전 표시가 바뀌는 장면을 촬영하세요.",
-                        EvidenceType.VIDEO),
-                required(
                         "LAP-SPEC-008",
                         "실제 사양 확인",
                         "판매자가 CPU, 메모리, 저장장치, GPU 정보를 확인합니다.",
@@ -195,27 +189,27 @@ public class LaptopChecklistPolicy {
                         EvidenceType.VIDEO));
         items.put(
                 LaptopFeatureCode.CAMERA,
-                feature(
+                featureSpecOnly(
                         "LAP-FTR-CAM",
                         "카메라",
-                        "내장 카메라 동작을 확인합니다.",
-                        "웹 기반 점검에서 카메라 화면이 정상 출력되는지 확인하세요.",
+                        "내장 카메라 탑재 여부를 확인합니다.",
+                        "판매자가 이 기기에 카메라가 있음을 확인합니다.",
                         EvidenceType.SELLER_CONFIRMATION));
         items.put(
                 LaptopFeatureCode.MICROPHONE,
-                feature(
+                featureSpecOnly(
                         "LAP-FTR-MIC",
                         "마이크",
-                        "내장 마이크 입력을 확인합니다.",
-                        "웹 기반 점검에서 마이크 입력 레벨이 정상 감지되는지 확인하세요.",
+                        "내장 마이크 탑재 여부를 확인합니다.",
+                        "판매자가 이 기기에 마이크가 있음을 확인합니다.",
                         EvidenceType.SELLER_CONFIRMATION));
         items.put(
                 LaptopFeatureCode.SPEAKERS,
-                feature(
+                featureSpecOnly(
                         "LAP-FTR-SPK",
                         "스피커",
-                        "좌우 스피커 출력과 잡음을 확인합니다.",
-                        "웹 기반 점검에서 테스트 음원이 정상적으로 들리는지 확인하세요.",
+                        "스피커 탑재 여부를 확인합니다.",
+                        "판매자가 이 기기에 스피커가 있음을 확인합니다.",
                         EvidenceType.SELLER_CONFIRMATION));
         items.put(
                 LaptopFeatureCode.WIFI,
@@ -235,11 +229,11 @@ public class LaptopChecklistPolicy {
                         EvidenceType.PHOTO));
         items.put(
                 LaptopFeatureCode.TOUCHSCREEN,
-                feature(
+                featureSpecOnly(
                         "LAP-FTR-TOUCH",
                         "터치스크린",
-                        "화면 전체의 터치 입력을 확인합니다.",
-                        "웹 기반 점검에서 화면 터치 입력이 정상 인식되는지 확인하세요.",
+                        "터치스크린 탑재 여부를 확인합니다.",
+                        "판매자가 이 기기에 터치스크린이 있음을 확인합니다.",
                         EvidenceType.SELLER_CONFIRMATION));
         items.put(
                 LaptopFeatureCode.CONVERTIBLE_HINGE,
@@ -251,11 +245,11 @@ public class LaptopChecklistPolicy {
                         EvidenceType.VIDEO));
         items.put(
                 LaptopFeatureCode.STYLUS,
-                feature(
+                featureSpecOnly(
                         "LAP-FTR-PEN",
                         "스타일러스",
-                        "펜 입력과 필압 인식을 확인합니다.",
-                        "웹 기반 점검에서 펜 입력과 필압이 정상 인식되는지 확인하세요.",
+                        "스타일러스 지원 여부를 확인합니다.",
+                        "판매자가 이 기기에서 스타일러스를 지원함을 확인합니다.",
                         EvidenceType.SELLER_CONFIRMATION));
         items.put(
                 LaptopFeatureCode.FINGERPRINT,
@@ -385,6 +379,25 @@ public class LaptopChecklistPolicy {
                 null,
                 null,
                 true);
+    }
+
+    /** 실동작 점검 없이 판매자 확인만으로 남는 선택 기능. 필수 검증 항목이 아니므로 등록 완료를 막지 않는다. */
+    private static ItemDefinition featureSpecOnly(
+            String code,
+            String name,
+            String purpose,
+            String guide,
+            EvidenceType evidenceType) {
+        return new ItemDefinition(
+                code,
+                name,
+                purpose,
+                guide,
+                evidenceType,
+                AutomationType.NONE,
+                null,
+                null,
+                false);
     }
 
     private record ItemDefinition(

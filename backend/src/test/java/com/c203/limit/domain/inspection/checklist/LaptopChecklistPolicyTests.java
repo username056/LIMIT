@@ -15,7 +15,9 @@ class LaptopChecklistPolicyTests {
     void createsWindowsDiagnosticsAsRequiredFiles() {
         var items = policy.generate(OsFamily.WINDOWS, Set.of());
 
-        assertThat(items).hasSize(13);
+        assertThat(items).hasSize(12);
+        assertThat(items)
+                .noneMatch(item -> item.itemCode().equals("LAP-CHG-007"));
         assertThat(items)
                 .filteredOn(item -> item.itemCode().equals("LAP-HNG-012"))
                 .singleElement()
@@ -52,7 +54,7 @@ class LaptopChecklistPolicyTests {
     void createsLinuxFallbackEvidenceWithoutWindowsParsers() {
         var items = policy.generate(OsFamily.LINUX, Set.of());
 
-        assertThat(items).hasSize(12);
+        assertThat(items).hasSize(11);
         assertThat(items)
                 .filteredOn(item -> item.itemCode().equals("LAP-BAT-010")
                         || item.itemCode().equals("LAP-SYS-011"))
@@ -73,7 +75,7 @@ class LaptopChecklistPolicyTests {
                         LaptopFeatureCode.OLED,
                         LaptopFeatureCode.NUMPAD));
 
-        assertThat(items).hasSize(18);
+        assertThat(items).hasSize(17);
         assertThat(items.stream()
                         .filter(item -> item.featureCode() != null)
                         .map(GeneratedChecklistItem::featureCode))
@@ -91,7 +93,7 @@ class LaptopChecklistPolicyTests {
                 OsFamily.WINDOWS,
                 Set.of(LaptopFeatureCode.RJ45_PORT, LaptopFeatureCode.MICROSD_SLOT));
 
-        assertThat(items).hasSize(15);
+        assertThat(items).hasSize(14);
         assertThat(items.stream()
                         .filter(item -> item.featureCode() != null)
                         .map(GeneratedChecklistItem::featureCode))
@@ -160,5 +162,43 @@ class LaptopChecklistPolicyTests {
                 .singleElement()
                 .extracting(GeneratedChecklistItem::evidenceType)
                 .isEqualTo(EvidenceType.SELLER_CONFIRMATION);
+    }
+
+    @Test
+    void marksCameraMicrophoneSpeakerTouchscreenStylusAsSpecOnlyNotRequired() {
+        // MAX_ADDITIONAL_ITEMS(5)를 넘기지 않도록 스펙 전용 대상 5개만 확인한다.
+        var items = policy.generate(
+                OsFamily.WINDOWS,
+                Set.of(
+                        LaptopFeatureCode.CAMERA,
+                        LaptopFeatureCode.MICROPHONE,
+                        LaptopFeatureCode.SPEAKERS,
+                        LaptopFeatureCode.TOUCHSCREEN,
+                        LaptopFeatureCode.STYLUS));
+
+        assertThat(items)
+                .filteredOn(item -> Set.of(
+                                "LAP-FTR-CAM", "LAP-FTR-MIC", "LAP-FTR-SPK", "LAP-FTR-TOUCH", "LAP-FTR-PEN")
+                        .contains(item.itemCode()))
+                .hasSize(5)
+                .allSatisfy(item -> assertThat(item.required()).isFalse());
+
+        var portsItems = policy.generate(OsFamily.WINDOWS, Set.of(LaptopFeatureCode.PORTS));
+        assertThat(portsItems)
+                .filteredOn(item -> item.itemCode().equals("LAP-FTR-PORT"))
+                .singleElement()
+                .satisfies(item -> assertThat(item.required()).isTrue());
+    }
+
+    // 숫자 키패드는 셋과 달리 웹 점검(useKeyboardCheck includeNumpad)으로 실제 완료가
+    // 가능해서 필수 항목으로 남긴다.
+    @Test
+    void keepsNumpadAsRequiredBecauseWebCheckCanCompleteIt() {
+        var items = policy.generate(OsFamily.WINDOWS, Set.of(LaptopFeatureCode.NUMPAD));
+
+        assertThat(items)
+                .filteredOn(item -> item.itemCode().equals("LAP-FTR-NUM"))
+                .singleElement()
+                .satisfies(item -> assertThat(item.required()).isTrue());
     }
 }
