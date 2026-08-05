@@ -16,6 +16,9 @@ public sealed class InteractiveDeviceDiagnostics
         return module.Run(owner);
     }
 
+    // 스피커·디스플레이·충전·카메라·마이크는 실동작 자동/반자동 점검 대상에서 빠졌다(카메라·마이크·
+    // 스피커는 판매자 확인 스펙으로만 남고, 디스플레이·충전은 영상 증빙으로만 확인한다).
+    // ModuleTestTypes와 각 진단 폼은 과거 이력 호환을 위해 남겨 두되, 활성 플로우에는 올리지 않는다.
     private IReadOnlyList<InspectionModule> CreateModules() =>
     [
         new("키보드", ModuleTestTypes.Keyboard, owner => RunDialog(owner, new KeyboardDiagnosticForm())),
