@@ -6,6 +6,7 @@ public sealed class PointerDiagnosticForm : Form
     private readonly Label statusLabel = new();
     private readonly Panel testArea = new();
     private readonly Button normalButton = new() { Text = "정상", Enabled = false };
+    private bool autoCompletionScheduled;
 
     public ModuleResult Result { get; private set; }
 
@@ -51,6 +52,11 @@ public sealed class PointerDiagnosticForm : Form
     {
         statusLabel.Text = $"이동 {(state.MoveCount > 0 ? "✓" : "○")}   왼쪽 클릭 {(state.LeftClickCount > 0 ? "✓" : "○")}   오른쪽 클릭 {(state.RightClickCount > 0 ? "✓" : "○")}   스크롤 {(state.ScrollEventCount > 0 ? "✓" : "○")}";
         normalButton.Enabled = state.HasRequiredInput;
+        if (state.HasRequiredInput && !autoCompletionScheduled)
+        {
+            autoCompletionScheduled = true;
+            BeginInvoke(() => Finish(ModuleUserResults.Confirmed));
+        }
     }
 
     private void Finish(string userResult)
