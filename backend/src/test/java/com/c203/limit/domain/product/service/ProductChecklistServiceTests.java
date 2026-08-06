@@ -54,8 +54,10 @@ class ProductChecklistServiceTests {
         when(first.getListingChecklistItem()).thenReturn(camera);
         Evidence latest =
                 evidence(9002L, LocalDateTime.of(2026, 7, 29, 10, 5), camera);
+        Listing listing = mock(Listing.class);
+        when(listing.isPubliclyVisible()).thenReturn(true);
         when(listingRepository.findByIdAndDeletedAtIsNull(1001L))
-                .thenReturn(Optional.of(mock(Listing.class)));
+                .thenReturn(Optional.of(listing));
         when(checklistItemRepository.findByListingIdOrderByDisplayOrderAsc(1001L))
                 .thenReturn(List.of(camera));
         when(evidenceRepository.findAllByListingId(1001L))
@@ -81,8 +83,10 @@ class ProductChecklistServiceTests {
                 "화면을 천천히 여닫아 유격과 소음을 확인하세요.",
                 true,
                 ChecklistItemCompletionStatus.COMPLETED);
+        Listing listing = mock(Listing.class);
+        when(listing.isPubliclyVisible()).thenReturn(true);
         when(listingRepository.findByIdAndDeletedAtIsNull(1001L))
-                .thenReturn(Optional.of(mock(Listing.class)));
+                .thenReturn(Optional.of(listing));
         when(checklistItemRepository
                         .findByListingIdAndIsRequiredTrueOrderByDisplayOrderAsc(1001L))
                 .thenReturn(List.of(completedHinge));
@@ -98,8 +102,10 @@ class ProductChecklistServiceTests {
 
     @Test
     void rejectsUnknownStatus() {
+        Listing listing = mock(Listing.class);
+        when(listing.isPubliclyVisible()).thenReturn(true);
         when(listingRepository.findByIdAndDeletedAtIsNull(1001L))
-                .thenReturn(Optional.of(mock(Listing.class)));
+                .thenReturn(Optional.of(listing));
 
         assertThatThrownBy(() -> service.findAll(1001L, "UNKNOWN", false))
                 .isInstanceOfSatisfying(

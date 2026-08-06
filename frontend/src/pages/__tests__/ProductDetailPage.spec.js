@@ -13,6 +13,11 @@ import { getAccessToken, getSessionMember } from '../../auth/session'
 import { createOrGetChatRoom } from '../../api/chat'
 import { getProductDiagnosisSummary } from '../../api/inspection'
 import { getSellerProfile } from '../../api/seller'
+import {
+  acknowledgeProductWarning,
+  reportProduct,
+  requestProductRestoration,
+} from '../../api/moderation'
 
 const push = vi.fn()
 
@@ -38,6 +43,11 @@ vi.mock('../../auth/session', () => ({ getAccessToken: vi.fn(), getSessionMember
 vi.mock('../../api/chat', () => ({ createOrGetChatRoom: vi.fn() }))
 vi.mock('../../api/seller', () => ({ getSellerProfile: vi.fn() }))
 vi.mock('../../api/inspection', () => ({ getProductDiagnosisSummary: vi.fn() }))
+vi.mock('../../api/moderation', () => ({
+  acknowledgeProductWarning: vi.fn(),
+  reportProduct: vi.fn(),
+  requestProductRestoration: vi.fn(),
+}))
 vi.mock('../../api/rtc', () => ({ createChatRoom: vi.fn(), requestRtcCall: vi.fn() }))
 
 const layoutStub = { template: '<main><slot /></main>' }
@@ -53,6 +63,7 @@ describe('ProductDetailPage', () => {
     // clearAllMocks는 호출 기록만 지우고 mockReturnValue는 남깁니다. 소유자 테스트가 세워 둔
     // 세션이 다음 테스트로 새어 나가 isOwner가 잘못 켜지므로 기본값을 다시 세웁니다.
     getSessionMember.mockReturnValue(null)
+    getMyProduct.mockResolvedValue(undefined)
     getProduct.mockResolvedValue({
       productId: 1001,
       sellerId: 55,
@@ -72,6 +83,9 @@ describe('ProductDetailPage', () => {
     getEvidenceHistory.mockResolvedValue([])
     getProductImages.mockResolvedValue([])
     getProductDiagnosisSummary.mockResolvedValue({ items: [], disclaimer: '' })
+    acknowledgeProductWarning.mockResolvedValue(undefined)
+    reportProduct.mockResolvedValue({ reportId: 501, status: 'PENDING' })
+    requestProductRestoration.mockResolvedValue({ restorationRequestId: 601, status: 'PENDING' })
   })
 
   it('기존 좋아요한 상품 상태를 불러와 첫 클릭으로 해제한다', async () => {
@@ -685,5 +699,118 @@ describe('ProductDetailPage', () => {
 
     expect(wrapper.text()).toContain('판매자에게 문의하기')
     expect(wrapper.text()).not.toContain('1:1 영상으로 상태 추가 확인')
+  })
+
+  it('로그인한 구매자는 분류와 상세 내용으로 상품을 신고한다', async () => {
+    getAccessToken.mockReturnValue('member-token')
+    getFavoriteStatus.mockResolvedValue({ favorite: false })
+    const wrapper = mount(ProductDetailPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    await wrapper.findAll('button')
+      .find((button) => button.text().includes('이 상품 신고하기'))
+      .trigger('click')
+    await wrapper.get('select').setValue('FRAUD_SUSPECTED')
+    await wrapper.get('textarea[placeholder="문제가 된 부분을 구체적으로 적어 주세요."]')
+      .setValue('외부 계좌로 입금을 유도합니다.')
+    await wrapper.findAll('button')
+      .find((button) => button.text().includes('신고 접수'))
+      .trigger('click')
+    await flushPromises()
+
+    expect(reportProduct).toHaveBeenCalledWith(1001, {
+      category: 'FRAUD_SUSPECTED',
+      detail: '외부 계좌로 입금을 유도합니다.',
+    })
+    expect(wrapper.text()).toContain('신고가 접수되었습니다.')
+  })
+
+  it('판매자는 관리자 경고와 신고 내역을 확인해야 정상 상태로 돌아간다', async () => {
+    getAccessToken.mockReturnValue('seller-token')
+    getSessionMember.mockReturnValue({ memberId: 55 })
+    getFavoriteStatus.mockResolvedValue({ favorite: false })
+    const warnedProduct = {
+      productId: 1001,
+      sellerId: 55,
+      name: 'Galaxy S24',
+      price: 650000,
+      status: 'ON_SALE',
+      moderationStatus: 'WARNING_ACK_REQUIRED',
+      moderationNotices: [{ reportId: 501, detail: '저장 용량이 다릅니다.', adminNote: '설명을 확인하세요.' }],
+      device: {},
+      checklistSummary: {},
+    }
+    getMyProduct
+      .mockResolvedValueOnce(warnedProduct)
+      .mockResolvedValue({ ...warnedProduct, moderationStatus: 'NORMAL', moderationNotices: [] })
+    const wrapper = mount(ProductDetailPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('상품 신고 내용을 확인해 주세요')
+    expect(wrapper.text()).toContain('저장 용량이 다릅니다.')
+    await wrapper.findAll('button')
+      .find((button) => button.text().includes('신고·경고 내용 확인'))
+      .trigger('click')
+    await flushPromises()
+
+    expect(acknowledgeProductWarning).toHaveBeenCalledWith(1001)
+    expect(wrapper.text()).toContain('정상 판매 상태로 돌아왔습니다.')
+  })
+
+  it('판매 중지 상품은 수정 후 관리자 복구 승인을 신청한다', async () => {
+    getAccessToken.mockReturnValue('seller-token')
+    getSessionMember.mockReturnValue({ memberId: 55 })
+    getFavoriteStatus.mockResolvedValue({ favorite: false })
+    const suspendedProduct = {
+      productId: 1001,
+      sellerId: 55,
+      name: 'Galaxy S24',
+      price: 650000,
+      status: 'ON_SALE',
+      moderationStatus: 'SUSPENDED',
+      moderationNotices: [{ reportId: 501, detail: '중복 상품입니다.', adminNote: '사진을 수정하세요.' }],
+      device: {},
+      checklistSummary: {},
+    }
+    getProduct.mockRejectedValue(new Error('공개 조회 불가'))
+    getMyProduct
+      .mockResolvedValueOnce(suspendedProduct)
+      .mockResolvedValue({ ...suspendedProduct, moderationStatus: 'RESTORE_REQUESTED' })
+    vi.spyOn(window, 'prompt').mockReturnValue('사진과 설명을 수정했습니다.')
+    const wrapper = mount(ProductDetailPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('이 상품은 판매 중지되었습니다')
+    await wrapper.findAll('button')
+      .find((button) => button.text().includes('복구 신청'))
+      .trigger('click')
+    await flushPromises()
+
+    expect(requestProductRestoration).toHaveBeenCalledWith(1001, '사진과 설명을 수정했습니다.')
+    expect(wrapper.text()).toContain('관리자 승인 후 상품이 다시 공개됩니다.')
   })
 })

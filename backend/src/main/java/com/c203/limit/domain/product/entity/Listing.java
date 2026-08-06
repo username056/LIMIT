@@ -3,6 +3,7 @@ package com.c203.limit.domain.product.entity;
 import com.c203.limit.global.common.BaseTimeEntity;
 import com.c203.limit.domain.inspection.enums.DeviceCheckResult;
 import com.c203.limit.domain.inspection.enums.TestType;
+import com.c203.limit.domain.product.moderation.entity.ListingModerationStatus;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import jakarta.persistence.*;
@@ -128,6 +129,10 @@ public class Listing extends BaseTimeEntity {
     @Column(nullable = false, length = 30)
     private ListingStatus status;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "moderation_status", nullable = false, length = 30)
+    private ListingModerationStatus moderationStatus;
+
     @Column(name = "suspended_reason", length = 200)
     private String suspendedReason;
 
@@ -182,6 +187,7 @@ public class Listing extends BaseTimeEntity {
         listing.precheckCompleted = false;
         listing.draftStep = 1;
         listing.status = ListingStatus.DRAFT;
+        listing.moderationStatus = ListingModerationStatus.NORMAL;
         return listing;
     }
 
@@ -335,6 +341,9 @@ public class Listing extends BaseTimeEntity {
      */
     public void reserve(Long buyerId, LocalDateTime reservedUntil) {
         requireStatus(ListingStatus.ON_SALE, ErrorCode.LISTING_NOT_ON_SALE);
+        if (!isPubliclyVisible()) {
+            throw new BusinessException(ErrorCode.LISTING_MODERATION_BLOCKED);
+        }
         this.buyerId = buyerId;
         this.status = ListingStatus.RESERVED;
         this.reservedAt = LocalDateTime.now();
@@ -437,6 +446,62 @@ public class Listing extends BaseTimeEntity {
     public void suspend(String reason) {
         this.status = ListingStatus.SUSPENDED;
         this.suspendedReason = reason;
+    }
+
+    public boolean isPubliclyVisible() {
+        return status == ListingStatus.ON_SALE
+                && (moderationStatus == ListingModerationStatus.NORMAL
+                        || moderationStatus == ListingModerationStatus.WARNING_ACK_REQUIRED);
+    }
+
+    public void issueModerationWarning(String reason) {
+        requireModeratableStatus();
+        moderationStatus = ListingModerationStatus.WARNING_ACK_REQUIRED;
+        suspendedReason = trimToNull(reason);
+    }
+
+    public void acknowledgeModerationWarning() {
+        if (moderationStatus != ListingModerationStatus.WARNING_ACK_REQUIRED) {
+            throw new BusinessException(ErrorCode.MODERATION_STATE_CONFLICT);
+        }
+        moderationStatus = ListingModerationStatus.NORMAL;
+        suspendedReason = null;
+    }
+
+    public void suspendForModeration(String reason) {
+        requireModeratableStatus();
+        moderationStatus = ListingModerationStatus.SUSPENDED;
+        suspendedReason = trimToNull(reason);
+    }
+
+    public void requestModerationRestoration() {
+        if (moderationStatus != ListingModerationStatus.SUSPENDED) {
+            throw new BusinessException(ErrorCode.MODERATION_STATE_CONFLICT);
+        }
+        moderationStatus = ListingModerationStatus.RESTORE_REQUESTED;
+    }
+
+    public void approveModerationRestoration() {
+        if (moderationStatus != ListingModerationStatus.RESTORE_REQUESTED) {
+            throw new BusinessException(ErrorCode.MODERATION_STATE_CONFLICT);
+        }
+        moderationStatus = ListingModerationStatus.NORMAL;
+        suspendedReason = null;
+    }
+
+    public void rejectModerationRestoration(String reason) {
+        if (moderationStatus != ListingModerationStatus.RESTORE_REQUESTED) {
+            throw new BusinessException(ErrorCode.MODERATION_STATE_CONFLICT);
+        }
+        moderationStatus = ListingModerationStatus.SUSPENDED;
+        String normalized = trimToNull(reason);
+        if (normalized != null) suspendedReason = normalized;
+    }
+
+    private void requireModeratableStatus() {
+        if (status != ListingStatus.ON_SALE && status != ListingStatus.HIDDEN) {
+            throw new BusinessException(ErrorCode.MODERATION_STATE_CONFLICT);
+        }
     }
 
     public void softDelete() {

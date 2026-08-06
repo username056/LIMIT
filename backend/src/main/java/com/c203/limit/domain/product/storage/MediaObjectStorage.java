@@ -12,6 +12,8 @@ public interface MediaObjectStorage {
 
     StoredObject head(String bucket, String objectKey);
 
+    byte[] read(String bucket, String objectKey, long maxBytes);
+
     void promote(String bucket, String sourceKey, String destinationKey, String contentType);
 
     void delete(String bucket, String objectKey);

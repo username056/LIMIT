@@ -97,10 +97,9 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 사전 검증(existsBy 체크 등)을 통과한 뒤에도 동시성 경합으로 FK 제약을 건드린 경우의
-     * 백스톱이다. 서비스 코드에서 직접 잡아 트랜잭션 중간에 복구를 시도하지 않는다 — flush 시점
-     * 예외로 트랜잭션이 이미 rollback-only가 된 뒤 계속 작업하면 UnexpectedRollbackException으로
-     * 이어질 수 있어서, 롤백이 끝난 뒤 이 핸들러에서만 응답을 매핑한다.
+     * 사전 검증(existsBy 체크 등)을 통과한 뒤에도 동시성 경합으로 FK 제약을 건드린 경우의 백스톱이다. 서비스 코드에서 직접 잡아 트랜잭션 중간에 복구를 시도하지
+     * 않는다 — flush 시점 예외로 트랜잭션이 이미 rollback-only가 된 뒤 계속 작업하면 UnexpectedRollbackException으로 이어질 수
+     * 있어서, 롤백이 끝난 뒤 이 핸들러에서만 응답을 매핑한다.
      */
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiErrorResponse> handleDataIntegrityViolation(

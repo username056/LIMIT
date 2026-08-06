@@ -1,7 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ProductManagePage from '../ProductManagePage.vue'
-import { getMyProducts, transitionProductStatus } from '../../api/products'
+import { deleteProduct, getMyProducts, transitionProductStatus } from '../../api/products'
 
 vi.mock('../../api/products', () => ({
   deleteProduct: vi.fn(),
@@ -141,6 +141,29 @@ describe('ProductManagePage', () => {
 
     expect(transitionProductStatus).toHaveBeenCalledWith(3003, 'SOLD', '판매자 직거래 판매 완료')
     expect(wrapper.text()).toContain('판매 완료로 처리했습니다.')
+  })
+
+  it('신고 조치 중인 상품은 운영 상태를 표시하고 판매 완료·삭제를 막는다', async () => {
+    getMyProducts.mockResolvedValue({
+      data: [{
+        productId: 3003,
+        name: '신고 조치 상품',
+        status: 'ON_SALE',
+        moderationStatus: 'SUSPENDED',
+        completedItemCount: 2,
+        requiredItemCount: 2,
+      }],
+      meta: { page: 0, totalPages: 1, hasNext: false },
+    })
+    const wrapper = mount(ProductManagePage, { global: globalOptions })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('판매 중지')
+    expect(wrapper.text()).not.toContain('판매 완료 처리')
+    const deleteButton = wrapper.findAll('button').find((button) => button.text() === '삭제')
+    expect(deleteButton.attributes('disabled')).toBeDefined()
+    await deleteButton.trigger('click')
+    expect(deleteProduct).not.toHaveBeenCalled()
   })
 
   // 판매자도 자기 대표 이미지가 구매자 화면과 같은 모양으로 보이는지 확인할 수 있어야 합니다.

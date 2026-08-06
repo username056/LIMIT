@@ -1,11 +1,12 @@
 package com.c203.limit.domain.product.repository;
 
 import com.c203.limit.domain.product.entity.Listing;
+import com.c203.limit.domain.product.entity.ListingStatus;
+import com.c203.limit.domain.product.moderation.entity.ListingModerationStatus;
 import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import com.c203.limit.domain.product.entity.ListingStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -48,6 +49,12 @@ public interface ListingRepository
     Page<Listing> findBySellerIdAndDeletedAtIsNull(Long sellerId, Pageable pageable);
 
     @EntityGraph(attributePaths = {"category", "category.parent"})
+    Page<Listing> findBySellerIdAndIdNotAndDeletedAtIsNull(
+            Long sellerId, Long id, Pageable pageable);
+
+    long countByModerationStatusAndDeletedAtIsNull(ListingModerationStatus moderationStatus);
+
+    @EntityGraph(attributePaths = {"category", "category.parent"})
     Page<Listing> findByDeviceModelIdAndDeletedAtIsNull(Long deviceModelId, Pageable pageable);
 
     long countByDeviceModelIdAndDeletedAtIsNull(Long deviceModelId);
@@ -76,6 +83,19 @@ public interface ListingRepository
 
     /** 판매자 공개 프로필에 보여 줄 판매 중 상품 수. */
     long countBySellerIdAndStatusAndDeletedAtIsNull(Long sellerId, ListingStatus status);
+
+    @Query(
+            """
+            SELECT COUNT(listing)
+              FROM Listing listing
+             WHERE listing.sellerId = :sellerId
+               AND listing.status = com.c203.limit.domain.product.entity.ListingStatus.ON_SALE
+               AND listing.moderationStatus IN (
+                    com.c203.limit.domain.product.moderation.entity.ListingModerationStatus.NORMAL,
+                    com.c203.limit.domain.product.moderation.entity.ListingModerationStatus.WARNING_ACK_REQUIRED)
+               AND listing.deletedAt IS NULL
+            """)
+    long countPublicBySellerId(@Param("sellerId") Long sellerId);
 
     boolean existsBySellerIdAndTitleAndDeletedAtIsNull(Long sellerId, String title);
 
@@ -107,6 +127,9 @@ public interface ListingRepository
                SET listing.viewCount = listing.viewCount + 1
              WHERE listing.id = :listingId
                AND listing.status = com.c203.limit.domain.product.entity.ListingStatus.ON_SALE
+               AND listing.moderationStatus IN (
+                    com.c203.limit.domain.product.moderation.entity.ListingModerationStatus.NORMAL,
+                    com.c203.limit.domain.product.moderation.entity.ListingModerationStatus.WARNING_ACK_REQUIRED)
                AND listing.deletedAt IS NULL
             """)
     int increaseViewCount(@Param("listingId") Long listingId);

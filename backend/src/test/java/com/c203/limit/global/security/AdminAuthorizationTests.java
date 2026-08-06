@@ -99,6 +99,11 @@ class AdminAuthorizationTests {
     com.c203.limit.domain.product.repository.ManufacturerRepository manufacturerRepository;
     @MockitoBean WishlistRepository wishlistRepository;
     @MockitoBean ProductApplicationService productApplicationService;
+    @MockitoBean
+    com.c203.limit.domain.product.moderation.service.ListingModerationService
+            listingModerationService;
+    @MockitoBean
+    com.c203.limit.domain.product.moderation.service.ModerationRiskService moderationRiskService;
     @MockitoBean ProductCatalogService productCatalogService;
     @MockitoBean
     com.c203.limit.domain.inspection.checklist.ChecklistGenerationService
