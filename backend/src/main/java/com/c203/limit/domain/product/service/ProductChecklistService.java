@@ -40,12 +40,22 @@ public class ProductChecklistService {
     @Transactional(readOnly = true)
     public List<ProductChecklistItemResponse> findAll(
             Long productId, String status, boolean requiredOnly) {
-        listingRepository
+        return findAll(productId, status, requiredOnly, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ProductChecklistItemResponse> findAll(
+            Long productId, String status, boolean requiredOnly, Long viewerMemberId) {
+        var listing = listingRepository
                 .findByIdAndDeletedAtIsNull(productId)
                 .orElseThrow(() -> {
                     log.warn("product checklist lookup failed: productId={}", productId);
                     return new BusinessException(ErrorCode.PRODUCT_NOT_FOUND);
                 });
+        boolean isOwner = viewerMemberId != null && viewerMemberId.equals(listing.getSellerId());
+        if (!isOwner && !listing.isPubliclyVisible()) {
+            throw new BusinessException(ErrorCode.PRODUCT_NOT_FOUND);
+        }
 
         ChecklistItemCompletionStatus completionStatus = completionStatus(status);
         List<ListingChecklistItem> items = requiredOnly

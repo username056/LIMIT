@@ -3,15 +3,14 @@ package com.c203.limit.domain.seller.service;
 import com.c203.limit.domain.member.entity.Member;
 import com.c203.limit.domain.member.entity.MemberStatus;
 import com.c203.limit.domain.member.repository.MemberRepository;
-import com.c203.limit.domain.product.entity.ListingStatus;
 import com.c203.limit.domain.product.repository.ListingRepository;
+import com.c203.limit.domain.product.storage.MediaUrlResolver;
 import com.c203.limit.domain.seller.dto.request.CreateSellerRequest;
 import com.c203.limit.domain.seller.dto.response.PublicSellerProfileResponse;
 import com.c203.limit.domain.seller.dto.response.SellerProfileResponse;
 import com.c203.limit.domain.seller.entity.Seller;
 import com.c203.limit.domain.seller.entity.SellerType;
 import com.c203.limit.domain.seller.repository.SellerRepository;
-import com.c203.limit.domain.product.storage.MediaUrlResolver;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.time.LocalDateTime;
@@ -104,9 +103,7 @@ public class SellerService {
                         .findById(sellerMemberId)
                         .orElseThrow(() -> new BusinessException(ErrorCode.MEMBER_NOT_FOUND));
         Seller seller = sellerRepository.findByMemberId(sellerMemberId).orElse(null);
-        long onSaleCount =
-                listingRepository.countBySellerIdAndStatusAndDeletedAtIsNull(
-                        sellerMemberId, ListingStatus.ON_SALE);
+        long onSaleCount = listingRepository.countPublicBySellerId(sellerMemberId);
         return new PublicSellerProfileResponse(
                 sellerMemberId,
                 member.getNickname(),

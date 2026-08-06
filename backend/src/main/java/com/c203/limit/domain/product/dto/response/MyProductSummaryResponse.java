@@ -21,6 +21,9 @@ public class MyProductSummaryResponse {
     @Schema(example = "VERIFYING")
     private final String status;
 
+    @Schema(example = "WARNING_ACK_REQUIRED")
+    private final String moderationStatus;
+
     // 아래 네 필드는 판매자가 목록에서 상품을 알아보기 위한 값이다. 공개 목록
     // (ProductSummaryResponse)에는 있었지만 내 상품 목록에는 빠져 있어, 상품 관리 화면이
     // 대표 이미지와 기기 정보를 비워 둔 채로 보여 주고 있었다.

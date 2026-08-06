@@ -203,6 +203,13 @@ class ProductMockControllerTests {
     ProductApplicationService productApplicationService;
 
     @MockitoBean
+    com.c203.limit.domain.product.moderation.service.ListingModerationService
+            listingModerationService;
+
+    @MockitoBean
+    com.c203.limit.domain.product.moderation.service.ModerationRiskService moderationRiskService;
+
+    @MockitoBean
     ProductCatalogService productCatalogService;
 
     @MockitoBean
@@ -329,8 +336,9 @@ class ProductMockControllerTests {
     void returnsProductDetailWithChecklistSummary() throws Exception {
         when(productApplicationService.findPublicDetail(1001L))
                 .thenReturn(new ProductDetailResponse(
-                        1001L, 55L, null, null, "테스트 상품", null, null, "ON_SALE", null,
-                        null, null, null, null, 128L, 12L, 3L, false, List.of()));
+                        1001L, 55L, null, null, "테스트 상품", null, null, "ON_SALE",
+                        "NORMAL", null, List.of(), null, null, null, null, null,
+                        128L, 12L, 3L, false, List.of()));
         mockMvc.perform(get("/api/v1/products/1001"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.productId").value(1001))
@@ -355,7 +363,7 @@ class ProductMockControllerTests {
 
     @Test
     void returnsListingChecklistSnapshotWithCaptureGuide() throws Exception {
-        when(productChecklistService.findAll(1001L, null, false))
+        when(productChecklistService.findAll(1001L, null, false, 55L))
                 .thenReturn(List.of(new ProductChecklistItemResponse(
                         7003L,
                         "LAP-FTR-CAM",
@@ -397,7 +405,7 @@ class ProductMockControllerTests {
     // 사람에게 '공개된 검증 항목이 없습니다'로만 보였다.
     @Test
     void allowsAnonymousAccessToProductChecklist() throws Exception {
-        when(productChecklistService.findAll(1001L, null, false)).thenReturn(List.of());
+        when(productChecklistService.findAll(1001L, null, false, null)).thenReturn(List.of());
 
         mockMvc.perform(get("/api/v1/products/1001/checklist-items"))
                 .andExpect(status().isOk());

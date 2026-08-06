@@ -46,6 +46,8 @@ import com.c203.limit.domain.product.entity.Listing;
 import com.c203.limit.domain.product.entity.ListingStatus;
 import com.c203.limit.domain.product.entity.ListingStatusHistory;
 import com.c203.limit.domain.product.entity.OsFamily;
+import com.c203.limit.domain.product.moderation.service.ListingModerationService;
+import com.c203.limit.domain.product.moderation.service.ModerationRiskService;
 import com.c203.limit.domain.product.repository.CategoryRepository;
 import com.c203.limit.domain.product.repository.ListingImageRepository;
 import com.c203.limit.domain.product.repository.ListingRepository;
@@ -97,6 +99,8 @@ class ProductApplicationServiceTests {
     @Mock RtcSessionChecklistResultRepository rtcSessionChecklistResultRepository;
     @Mock MediaUploadSessionRepository mediaUploadSessionRepository;
     @Mock InspectionSessionTestResultRepository inspectionSessionTestResultRepository;
+    @Mock ListingModerationService moderationService;
+    @Mock ModerationRiskService moderationRiskService;
     ProductApplicationService service;
 
     @BeforeEach
@@ -106,7 +110,8 @@ class ProductApplicationServiceTests {
                 checklistItemRepository, statusHistoryRepository, imageRepository, null,
                 checklistGenerationService, evidenceRepository, reinspectionRequestItemRepository,
                 rtcSessionChecklistResultRepository, mediaUploadSessionRepository,
-                inspectionSessionTestResultRepository, viewCountDispatcher, engagementReader);
+                inspectionSessionTestResultRepository, viewCountDispatcher, engagementReader,
+                moderationService, moderationRiskService);
         // 상세를 만드는 모든 경로가 관심도 수치를 읽는다. 이 테스트들이 확인하는 것은
         // 그 수치가 아니라 모델명·상태 처리라, 값은 0으로 두고 NPE만 막는다.
         lenient().when(engagementReader.findByListingId(anyLong()))
@@ -1468,7 +1473,7 @@ class ProductApplicationServiceTests {
                 mediaUrlResolver, checklistGenerationService, evidenceRepository,
                 reinspectionRequestItemRepository, rtcSessionChecklistResultRepository,
                 mediaUploadSessionRepository, inspectionSessionTestResultRepository,
-                viewCountDispatcher, engagementReader);
+                viewCountDispatcher, engagementReader, moderationService, moderationRiskService);
         ListingThumbnailProjection thumbnail = mock(ListingThumbnailProjection.class);
         when(thumbnail.getListingId()).thenReturn(1001L);
         when(thumbnail.getS3Key()).thenReturn("listing/1001/thumb.jpg");

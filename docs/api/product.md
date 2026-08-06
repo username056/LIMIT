@@ -14,7 +14,7 @@
   - `listing.status`는 `VARCHAR(30)`이라 `SOLD` 추가에 마이그레이션이 필요하지 않다.
   - 공개 목록·상세는 `ON_SALE`만 노출하므로 `SOLD` 매물은 구매자에게 `LISTING_NOT_FOUND`로
     응답한다. 판매자는 `GET /api/v1/members/me/products/{productId}`로 계속 확인할 수 있다.
-- `ON_SALE` 공개 상품 목록·상세 및 판매자 본인 상품 목록·상세 조회
+- 공개 가능한 `ON_SALE` 상품 목록·상세 및 판매자 본인 상품 목록·상세 조회
 - 기기 카테고리·모델·체크리스트 템플릿·판매 준비 가이드 조회
 - 상품 생성 시 게시된 체크리스트 템플릿을 매물 항목으로 스냅샷 저장
 - 관심상품 등록·목록·해제와 판매자 상품 관리 화면 API 연동
@@ -55,9 +55,13 @@
 - `category.manufacturer_id` 조회 인덱스
 - 공개 목록, 판매자 목록, 관심상품 최신순, 썸네일 일괄 조회용 복합 인덱스
 
-공개 상세 `GET /api/v1/products/{productId}`는 `ON_SALE` 상품만 반환한다. 활성 판매자는
+공개 상세 `GET /api/v1/products/{productId}`는 판매 상태가 `ON_SALE`이고 운영 상태가
+`NORMAL` 또는 `WARNING_ACK_REQUIRED`인 상품만 반환한다. 경고는 판매자 확인을 요구하지만
+구매자 노출과 구매를 막지 않는다. `SUSPENDED`, `RESTORE_REQUESTED` 상품은 판매자 본인과
+관리자 전용 조회에서만 보인다. 활성 판매자는
 `SELLER` 역할이 필요한 `GET /api/v1/members/me/products/{productId}`로 본인의 `DRAFT`,
-`HIDDEN` 상품을 조회한다.
+`HIDDEN` 및 운영 조치 상품을 조회한다. 신고와 복구 계약은
+[마켓플레이스 신고·운영 API](marketplace-moderation.md)를 참고한다.
 목록의 `manufacturerId`, `verificationStatus(COMPLETED|IN_PROGRESS)`, `sort` 조건은 DB 조회에
 반영하며 허용되지 않은 정렬 필드나 방향은 `INVALID_INPUT_VALUE`로 거절한다.
 

@@ -102,9 +102,7 @@ class SellerServiceTests {
                 55L, SellerType.BUSINESS, "KR", "리미트상회", "국민은행", "판매자", "1234");
         when(sellerRepository.findByMemberId(55L)).thenReturn(Optional.of(seller));
         when(memberRepository.findById(55L)).thenReturn(Optional.of(member));
-        when(listingRepository.countBySellerIdAndStatusAndDeletedAtIsNull(
-                        55L, ListingStatus.ON_SALE))
-                .thenReturn(3L);
+        when(listingRepository.countPublicBySellerId(55L)).thenReturn(3L);
 
         var result = service.publicProfile(55L);
 
@@ -126,9 +124,7 @@ class SellerServiceTests {
         Member member = verifiedMember(20L);
         when(memberRepository.findById(20L)).thenReturn(Optional.of(member));
         when(sellerRepository.findByMemberId(20L)).thenReturn(Optional.empty());
-        when(listingRepository.countBySellerIdAndStatusAndDeletedAtIsNull(
-                        20L, ListingStatus.ON_SALE))
-                .thenReturn(1L);
+        when(listingRepository.countPublicBySellerId(20L)).thenReturn(1L);
 
         var result = service.publicProfile(20L);
 

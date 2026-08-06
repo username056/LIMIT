@@ -38,6 +38,15 @@ public class ListingImage {
     @Column(name = "mime_type", nullable = false, length = 50)
     private String mimeType;
 
+    @Column(name = "content_sha256", length = 64)
+    private String contentSha256;
+
+    @Column(name = "perceptual_hash", length = 16)
+    private String perceptualHash;
+
+    @Column(name = "analyzed_at")
+    private LocalDateTime analyzedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -70,5 +79,11 @@ public class ListingImage {
 
     public void changeOrder(int displayOrder) {
         this.displayOrder = displayOrder;
+    }
+
+    public void recordHashes(String contentSha256, String perceptualHash, LocalDateTime analyzedAt) {
+        this.contentSha256 = contentSha256;
+        this.perceptualHash = perceptualHash;
+        this.analyzedAt = analyzedAt;
     }
 }
