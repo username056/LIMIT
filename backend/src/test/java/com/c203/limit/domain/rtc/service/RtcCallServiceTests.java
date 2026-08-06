@@ -661,7 +661,8 @@ class RtcCallServiceTests {
 
     @Test
     void savesChecklistResultsAndKeepsSessionRejoinableAfterEnd() {
-        RtcSession session = session(10L, 1L, LocalDateTime.now().plusMinutes(10));
+        LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(10);
+        RtcSession session = session(10L, 1L, expiresAt);
         List<ListingChecklistItem> items = List.of(checklistItem(200L, "BODY"));
         when(sessionRepository.findById(10L)).thenReturn(Optional.of(session));
         when(checklistRepository.findByListingIdOrderByDisplayOrderAsc(100L)).thenReturn(items);
@@ -678,7 +679,8 @@ class RtcCallServiceTests {
 
         assertThat(response.status()).isEqualTo(RtcSessionStatus.WAITING.name());
         assertThat(response.memo()).isEqualTo("확인 완료");
-        assertThat(response.expiresAt()).isAfter(LocalDateTime.now().plusMinutes(25));
+        assertThat(response.expiresAt()).isEqualTo(expiresAt);
+        assertThat(response.inspectionSubmittedAt()).isNotNull();
         verify(resultRepository).saveAll(anyList());
     }
 

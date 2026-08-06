@@ -508,7 +508,7 @@ class ChecklistGenerationServiceTests {
         assertThat(result.aiApplied()).isFalse();
         assertThat(result.aiSuggestions()).isEmpty();
         assertThat(result.reviewCandidates()).isEmpty();
-        assertThat(result.items()).hasSize(13);
+        assertThat(result.items()).hasSize(12);
     }
 
     @Test

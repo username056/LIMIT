@@ -24,6 +24,7 @@ class ListingChecklistItemTests {
                 AutomationType.OCR,
                 "SYSTEM_INFO_OCR",
                 true,
+                true,
                 3);
     }
 

@@ -736,34 +736,34 @@ class InspectionSessionServiceTests {
     @Test
     void submitTestResultMapsUserReportedIssueToFailedDeviceCheck() {
         PairedSession paired = pairedSession();
-        ListingChecklistItem cameraItem = mock(ListingChecklistItem.class);
-        when(checklistItemRepository.findByListingIdAndItemCode(1001L, "LAP-FTR-CAM"))
-                .thenReturn(Optional.of(cameraItem));
+        ListingChecklistItem keyboardItem = mock(ListingChecklistItem.class);
+        when(checklistItemRepository.findByListingIdAndItemCode(1001L, "LAP-KBD-005"))
+                .thenReturn(Optional.of(keyboardItem));
 
         service.submitTestResult(
                 paired.authorization(),
                 paired.sessionKey(),
                 testResult(
-                        TestType.CAMERA,
+                        TestType.KEYBOARD,
                         MeasurementStatus.NOT_DETECTED,
                         InspectionUserResult.USER_REPORTED_ISSUE));
 
-        verify(cameraItem).applyDeviceCheckResult(DeviceCheckResult.FAILED);
+        verify(keyboardItem).applyDeviceCheckResult(DeviceCheckResult.FAILED);
     }
 
     @Test
     void submitTestResultMapsSkippedToSkippedDeviceCheck() {
         PairedSession paired = pairedSession();
-        ListingChecklistItem cameraItem = mock(ListingChecklistItem.class);
-        when(cameraItem.getId()).thenReturn(7001L);
-        when(checklistItemRepository.findByListingIdAndItemCode(1001L, "LAP-FTR-CAM"))
-                .thenReturn(Optional.of(cameraItem));
+        ListingChecklistItem keyboardItem = mock(ListingChecklistItem.class);
+        when(keyboardItem.getId()).thenReturn(7001L);
+        when(checklistItemRepository.findByListingIdAndItemCode(1001L, "LAP-KBD-005"))
+                .thenReturn(Optional.of(keyboardItem));
 
         var submission = service.submitTestResult(
                 paired.authorization(),
                 paired.sessionKey(),
                 testResult(
-                        TestType.CAMERA,
+                        TestType.KEYBOARD,
                         MeasurementStatus.NOT_EXECUTED,
                         InspectionUserResult.SKIPPED));
 
@@ -771,22 +771,21 @@ class InspectionSessionServiceTests {
         assertThat(submission.response().checklistItemId()).isEqualTo(7001L);
         assertThat(submission.response().userResult())
                 .isEqualTo(InspectionUserResult.SKIPPED);
-        verify(cameraItem).applyDeviceCheckResult(DeviceCheckResult.SKIPPED);
+        verify(keyboardItem).applyDeviceCheckResult(DeviceCheckResult.SKIPPED);
     }
 
     @Test
-    void submitTestResultWithoutUserResultFallsBackToMeasurementForCharging() {
+    void submitTestResultForChargingDoesNotCompleteEvidenceChecklistItem() {
         PairedSession paired = pairedSession();
         ListingChecklistItem chargingItem = mock(ListingChecklistItem.class);
-        when(checklistItemRepository.findByListingIdAndItemCode(1001L, "LAP-CHG-007"))
-                .thenReturn(Optional.of(chargingItem));
 
-        service.submitTestResult(
+        var submission = service.submitTestResult(
                 paired.authorization(),
                 paired.sessionKey(),
                 testResult(TestType.CHARGING, MeasurementStatus.NOT_DETECTED, null));
 
-        verify(chargingItem).applyDeviceCheckResult(DeviceCheckResult.FAILED);
+        assertThat(submission.response().checklistItemId()).isNull();
+        verify(chargingItem, never()).applyDeviceCheckResult(any());
     }
 
     @Test
