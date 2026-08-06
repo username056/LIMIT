@@ -2,6 +2,7 @@ package com.c203.limit.domain.product.service;
 
 import com.c203.limit.domain.inspection.entity.Evidence;
 import com.c203.limit.domain.inspection.entity.ListingChecklistItem;
+import com.c203.limit.domain.inspection.enums.ChecklistItemCompletionStatus;
 import com.c203.limit.domain.inspection.repository.EvidenceRepository;
 import com.c203.limit.domain.product.dto.response.EvidenceResponse;
 import com.c203.limit.domain.product.entity.MediaUploadPurpose;
@@ -73,10 +74,26 @@ public class EvidenceUploadCompletionService {
         List<Evidence> history =
                 evidenceRepository.findAllByListingChecklistItem_Id(checklistItemId);
         int requiredCount = item.getMinCount() == null ? 1 : item.getMinCount();
-        if (history.size() >= requiredCount) {
-            item.markCompleted();
-        } else {
-            item.markSubmitted();
+        /*
+          상태가 실제로 바뀔 때만 고친다.
+          -----------------------------------------------------------------------
+          사진을 여러 장 올리면 첫 장에서 이미 목표 상태가 되고, 나머지 장의 통보는 같은
+          값을 다시 쓰는 일이 된다. 그 UPDATE가 항목 줄의 쓰기 잠금을 요구하는데, 같은 줄에는
+          evidence INSERT의 외래키 검사로 읽기 잠금이 걸려 있어 서로 맞물릴 수 있다.
+          운영에서 실제로 교착이 나 여섯 장 중 한 장만 저장됐다.
+
+          필요 없는 쓰기를 없애면 그 위험이 줄고 DB 부하도 준다. 잠그는 순서는 건드리지
+          않으므로 다른 경로에 영향이 없다.
+        */
+        ChecklistItemCompletionStatus nextStatus = history.size() >= requiredCount
+                ? ChecklistItemCompletionStatus.COMPLETED
+                : ChecklistItemCompletionStatus.SUBMITTED;
+        if (item.getCompletionStatus() != nextStatus) {
+            if (nextStatus == ChecklistItemCompletionStatus.COMPLETED) {
+                item.markCompleted();
+            } else {
+                item.markSubmitted();
+            }
         }
 
         int attemptNo = history.stream()

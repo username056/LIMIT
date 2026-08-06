@@ -72,6 +72,57 @@ const DEFAULT_MAX_MEDIA_PER_ITEM = 3
 // ListingImageUploadService.MAX_IMAGE_BYTES와 같은 값입니다. 서버가 거절하기 전에 안내하려고 둡니다.
 const MAX_LISTING_IMAGE_BYTES = 15 * 1024 * 1024
 
+/*
+  '다 올렸다'는 통보만 한 번에 하나씩 보냅니다.
+  ---------------------------------------------------------------------------
+  여러 장을 한꺼번에 올리면 그 통보들이 동시에 도착하는데, 서버는 그때 같은 항목·상품
+  줄을 함께 고칩니다. 그러다 DB에서 교착이 나서 한 장만 저장되고 나머지는 실패했습니다
+  (운영 로그: Deadlock found when trying to get lock).
+
+  그래서 압축과 전송은 지금처럼 동시에 두고 — 시간이 걸리는 건 이쪽입니다 — 마지막
+  통보만 줄을 세웁니다. 통보는 짧아서 줄을 서도 체감이 거의 없고, 여러 장을 한꺼번에
+  고르는 사용 방식은 그대로 유지됩니다.
+
+  앞 통보가 실패해도 줄이 끊기지 않게 성공·실패 양쪽에서 이어 붙입니다.
+*/
+let completionQueue = Promise.resolve()
+
+function queueCompletion(run) {
+  const result = completionQueue.then(run, run)
+  completionQueue = result.then(() => undefined, () => undefined)
+  return result
+}
+
+/*
+  한 번에 세 개까지만 처리합니다.
+  ---------------------------------------------------------------------------
+  열 장을 고르면 열 장을 동시에 줄이려 했습니다. 요즘 휴대폰 사진은 한 장이 5MB를
+  넘는데, 그걸 한꺼번에 Canvas로 펼치면 메모리를 몇십 MB씩 잡아 기기에 따라 일부가
+  조용히 실패합니다. 셋씩 처리하면 앞이 끝나는 대로 다음이 들어가서, 사용자에게는
+  똑같이 '한꺼번에 올린' 것으로 보이고 실패는 줄어듭니다.
+
+  개별 실패는 각 작업이 스스로 알리므로 여기서는 삼키고 다음으로 넘어갑니다.
+  한 장이 실패해도 나머지가 멈추지 않아야 합니다.
+*/
+const UPLOAD_CONCURRENCY = 3
+
+async function runWithUploadLimit(items, task) {
+  let cursor = 0
+  const worker = async () => {
+    while (cursor < items.length) {
+      const index = cursor
+      cursor += 1
+      try {
+        await task(items[index], index)
+      } catch {
+        // 개별 실패는 각 작업이 화면에 알립니다.
+      }
+    }
+  }
+  const workerCount = Math.min(UPLOAD_CONCURRENCY, items.length)
+  await Promise.all(Array.from({ length: workerCount }, worker))
+}
+
 // 대표 이미지는 1단계에서 받습니다(pendingThumbnail 참고). 아직 '최소 1장 필수'로는 두지 않았습니다 —
 // 이미 이미지 없이 임시저장된 상품들이 있어서, 필수로 바꾸면 그 상품들이 수정 저장조차 못 하게 됩니다.
 // 필수로 올릴 때는 기존 초안 처리 방침을 먼저 정하고 validateSaleInfo에 규칙을 붙이세요.
@@ -774,7 +825,12 @@ async function persistDraftProgress() {
     })
     draftProgressResults.value = progressResultsMap(response?.results) || resultsByItemId
   } catch {
-    notice.value = '임시저장 상태를 서버에 반영하지 못했습니다.'
+    /*
+      자동 저장은 단계를 옮길 때 화면이 스스로 부르는 것이라, 실패를 알리면 사용자는
+      누르지도 않은 '임시저장'이 실패했다는 문구를 보게 됩니다. 특히 상품이 이미 없어져
+      404가 오는 경우가 그렇습니다. 조용히 넘기고, 사용자가 직접 누르는 임시저장에서만
+      결과를 알립니다.
+    */
   }
 }
 
@@ -1357,6 +1413,27 @@ async function handleCaptureFile(item, file) {
     return
   }
   errorMessage.value = ''
+
+  /*
+    영상 길이는 압축하기 전에 원본에서 읽습니다.
+    ---------------------------------------------------------------------------
+    서버는 영상에 길이를 반드시 요구하는데, 압축 결과물에서 길이를 못 읽는 경우가 있어
+    null이 되면 422로 거절당했습니다. 한참 압축한 끝에 이유 없이 실패하던 원인입니다.
+    길이는 압축해도 그대로이므로 원본에서 읽는 편이 정확합니다.
+
+    제한을 넘긴 영상은 여기서 바로 알립니다. 압축부터 시작하면 수십 초를 기다린 뒤에야
+    거절당합니다.
+  */
+  let durationSeconds = null
+  if (item.evidenceType === 'VIDEO') {
+    durationSeconds = await readVideoDuration(file)
+    const maxDuration = Number(item.maxDurationSec) || null
+    if (maxDuration && durationSeconds && durationSeconds > maxDuration) {
+      openAlert(`‘${item.name}’ 항목은 ${maxDuration}초 이내 영상만 올릴 수 있습니다.`)
+      return
+    }
+  }
+
   // 영상은 한 번에 하나씩 줄이므로, 차례가 오기 전에는 '대기 중'입니다.
   captureState[itemId].busy = item.evidenceType === 'VIDEO' ? 'queued' : 'optimizing'
   captureState[itemId].progress = 0
@@ -1387,7 +1464,6 @@ async function handleCaptureFile(item, file) {
   captureState[itemId].progress = 0
 
   try {
-    const durationSeconds = item.evidenceType === 'VIDEO' ? await readVideoDuration(optimizedFile) : null
     const uploadUrl = await createEvidenceUploadUrl(currentProductId.value, item.checklistItemId, {
       filename: optimizedFile.name,
       contentType: optimizedFile.type || 'application/octet-stream',
@@ -1400,11 +1476,11 @@ async function handleCaptureFile(item, file) {
       uploadUrl.requiredHeaders || {},
       (progress) => { captureState[itemId].progress = progress },
     ))
-    const completed = await completeEvidence(
+    const completed = await queueCompletion(() => completeEvidence(
       currentProductId.value,
       item.checklistItemId,
       { uploadId: uploadUrl.uploadId },
-    )
+    ))
     mediaKeySeq += 1
     captureState[itemId].media.push({
       key: completed.evidenceId || mediaKeySeq,
@@ -1452,11 +1528,11 @@ async function handleListingImage(file, displayOrder = listingImages.value.lengt
       upload.requiredHeaders || {},
       (progress) => { listingImageProgress.value = progress },
     ))
-    const image = await completeProductImage(currentProductId.value, {
+    const image = await queueCompletion(() => completeProductImage(currentProductId.value, {
       uploadId: upload.uploadId,
       imageType: displayOrder === 0 ? 'THUMBNAIL' : 'DETAIL',
       displayOrder,
-    })
+    }))
     listingImages.value.push({
       ...image,
       previewUrl: URL.createObjectURL(optimizedFile),
@@ -1540,12 +1616,15 @@ async function flushPendingThumbnail() {
 }
 
 async function onListingImageInput(event) {
-  const files = [...(event.target.files || [])].slice(0, 10 - listingImages.value.length)
+  const picked = [...(event.target.files || [])]
+  const files = picked.slice(0, 10 - listingImages.value.length)
   const startOrder = listingImages.value.length
   event.target.value = ''
-  await Promise.allSettled(files.map(
-    (file, index) => handleListingImage(file, startOrder + index),
-  ))
+  // 자리가 부족해 잘린 파일을 알립니다. 그냥 버리면 사진이 사라진 것처럼 보입니다.
+  if (picked.length > files.length) {
+    openAlert(`${picked.length - files.length}개는 최대 개수(10개)를 넘어 올리지 못했습니다.`)
+  }
+  await runWithUploadLimit(files, (file, index) => handleListingImage(file, startOrder + index))
 }
 
 // 올린 사진 중 첫 장이 목록·상세에 보이는 대표 이미지입니다. 업로드 때는 서버가 첫 장을
@@ -1616,9 +1695,15 @@ async function makeListingThumbnail(image) {
 }
 
 async function onCaptureInput(event, item) {
-  const files = [...(event.target.files || [])].slice(0, remainingSlots(item.checklistItemId))
+  const picked = [...(event.target.files || [])]
+  const files = picked.slice(0, remainingSlots(item.checklistItemId))
   event.target.value = ''
-  if (files.length) await Promise.allSettled(files.map((file) => handleCaptureFile(item, file)))
+  if (picked.length > files.length) {
+    openAlert(
+      `${picked.length - files.length}개는 이 항목의 최대 개수(${maxMediaFor(item)}개)를 넘어 올리지 못했습니다.`,
+    )
+  }
+  if (files.length) await runWithUploadLimit(files, (file) => handleCaptureFile(item, file))
 }
 
 // ── 그 자리에서 사진 찍기 ────────────────────────────────────────────────
@@ -1913,7 +1998,8 @@ onMounted(async () => {
       <PageHeader
         eyebrow="ITEM REGISTER"
         :title="editingId && !isRegistrationResume ? '상품 수정' : '상품 등록'"
-        description="기기 정보와 검증 체크리스트를 순서대로 완료하면 바로 판매가 시작됩니다. 중간에 나가야 하면 임시저장을 눌러 주세요."
+        description="기기 정보와 검증 체크리스트를 순서대로 완료하면 바로 판매가 시작됩니다.
+        여러 번 나눠 작성하는 경우 임시저장을 꼭 해주세요."
       >
         <template #action>
           <RouterLink
@@ -2481,14 +2567,17 @@ onMounted(async () => {
                     v-if="image.imageType === 'THUMBNAIL'"
                     class="absolute left-1 top-1 rounded bg-primary px-2 py-1 text-[11px] font-bold text-white"
                   >대표</span>
+                  <!-- '삭제' 글자는 작은 사진 위에서 자리를 많이 차지해 사진을 가렸습니다.
+                       ✕ 하나로 두어 사진이 더 크게 보이게 합니다. 무슨 버튼인지는
+                       aria-label이 읽어 줍니다. -->
                   <button
                     type="button"
-                    class="absolute right-1 top-1 rounded bg-black/65 px-2 py-1 text-xs text-white"
+                    class="absolute right-1 top-1 flex h-[15px] w-[15px] items-center justify-center rounded-full bg-black/60 text-[9px] leading-none text-white transition hover:bg-black/80"
                     aria-label="상품 이미지 삭제"
                     :disabled="listingImageBusy"
                     @click="removeListingImage(image)"
                   >
-                    삭제
+                    ✕
                   </button>
                   <!-- 화살표는 양 끝으로 붙입니다. 가운데 모여 있으면 어느 쪽으로 가는지 헷갈립니다. -->
                   <div class="flex items-center justify-between border-t border-border bg-white px-1 py-1">
@@ -2519,8 +2608,7 @@ onMounted(async () => {
                 검수용 기기 촬영
               </h2>
               <p class="mt-1 text-sm text-text-sub">
-                구매자가 확인할 수 있도록 촬영·업로드 항목 {{ mediaChecklistItems.length }}개에
-                사진·영상·진단파일을 등록하세요.
+                촬영·업로드 {{ mediaChecklistItems.length }}개 항목에 필요한 파일을 등록해 주세요.
               </p>
 
               <section
@@ -2534,9 +2622,11 @@ onMounted(async () => {
                 >
                   Windows 자동 진단
                 </h3>
+                <!-- 두 문장을 각각 한 줄로 둡니다. 뒤 문장이 개인정보에 관한 안내라
+                     앞 문장에 붙어 흐르면 눈에 걸리지 않습니다. -->
                 <p class="mt-1 text-xs leading-5 text-text-sub">
-                  Limit 진단 프로그램으로 기기 정보와 점검 결과를 자동으로 입력할 수 있습니다.
-                  비밀번호와 개인 파일은 수집하지 않습니다.
+                  Limit 진단 프로그램으로 기기 정보와 점검 결과를 자동으로 입력할 수 있습니다.<br>
+                  비밀번호 및 개인 파일은 수집하지 않습니다.
                 </p>
                 <div class="mt-3 flex flex-wrap items-center gap-2">
                   <button
@@ -2970,11 +3060,10 @@ onMounted(async () => {
               </div>
 
               <p class="mt-2 text-center text-[11px] text-text-sub">
-                항목별 최대 파일 개수와 크기·영상 길이를 적용합니다.
-                파일은 자동으로 압축됩니다.
+                사진 추가 후 이미지를 클릭하시면 삭제 버튼을 확인할 수 있습니다.
               </p>
               <p class="mt-1 text-center text-[11px] text-text-sub">
-                영상은 60초 이내, 100MB 이하만 가능하며 최대 6개까지 가능합니다.
+                영상은 항목마다 1개씩, 60초 이내·100MB 이하만 올릴 수 있습니다. (판매글 전체로는 최대 6개)
               </p>
 
               <div class="mt-5 rounded-lg bg-bg p-4 text-xs leading-6 text-text-sub">
@@ -2995,7 +3084,7 @@ onMounted(async () => {
                     실동작 점검
                   </h2>
                   <p class="mt-1 text-sm text-text-sub">
-                    진단 프로그램으로 완료된 항목은 자동 반영됩니다. 나머지 항목은 웹에서 직접 점검할 수 있습니다.
+                    진단 프로그램은 시스템 정보만 수집합니다. 키보드와 포인터는 필요할 때 웹에서 직접 점검할 수 있습니다.
                   </p>
                 </div>
                 <BaseButton
@@ -3043,7 +3132,7 @@ onMounted(async () => {
               개인정보를 정리했는지 확인해 주세요.
             </h2>
             <p class="mt-1 text-sm text-text-sub">
-              구매자에게 전달되기 전, 개인정보 보호를 위해 기기의 계정·개인정보를 반드시 초기화해 주세요.
+              구매자에게 전달되기 전 개인정보 보호를 위해 기기의 계정·개인정보를 반드시 초기화해 주세요.
             </p>
 
             <p
@@ -3140,8 +3229,11 @@ onMounted(async () => {
             <h2 class="mt-4 text-lg font-bold text-text-main">
               체크리스트 등록이 완료되었습니다.
             </h2>
+            <!-- 끝났다는 사실과 다음에 할 일을 각각 한 줄로 둡니다. 한 줄로 이으면
+                 '완료를 누르면'이라는 안내가 축하 문구에 묻힙니다. -->
             <p class="mt-2 text-sm text-text-sub">
-              ‘{{ form.name }}’ 등록이 끝났어요. 완료를 누르면 바로 판매가 시작되고 상품 상세 페이지로 이동합니다.
+              ‘{{ form.name }}’ 등록이 끝났어요.<br>
+              완료를 누르면 바로 판매가 시작되고 상품 상세 페이지로 이동합니다.
             </p>
 
             <dl class="mt-6 grid grid-cols-2 gap-4 rounded-lg border border-border bg-bg p-6 text-left text-sm">

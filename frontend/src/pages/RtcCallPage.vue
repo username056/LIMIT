@@ -38,6 +38,7 @@ let signalingSocket
 let chatSocket
 let peer
 let localStream
+let optionalAudioStream
 let remoteStream
 let joinInfo
 let connectedRecorded = false
@@ -122,7 +123,11 @@ async function handleSignal(event) {
       requestMessage.value = message.payload?.instruction || ''
     }
     if (message.type === 'peer-left') status.value = 'reconnecting'
-    if (message.type === 'hangup') status.value = 'peer-ended'
+    if (message.type === 'hangup') {
+      status.value = 'peer-ended'
+      cleanupRtc()
+      goToChat()
+    }
   } catch (error) {
     showError(error)
   }
@@ -143,10 +148,15 @@ function cleanupRtc() {
     peer.close()
   }
   localStream?.getTracks().forEach((track) => track.stop())
+  optionalAudioStream?.getTracks().forEach((track) => track.stop())
   remoteStream?.getTracks().forEach((track) => track.stop())
+  if (sellerVideo.value && 'srcObject' in sellerVideo.value) {
+    sellerVideo.value.srcObject = null
+  }
   signalingSocket = null
   peer = null
   localStream = null
+  optionalAudioStream = null
   remoteStream = null
   pendingSignals = []
 }
@@ -157,7 +167,6 @@ async function connectRtc() {
   errorMessage.value = ''
   try {
     joinInfo = await issueRtcJoinToken(rtcSession.value.sessionId)
-    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
     peer = new RTCPeerConnection({
       iceServers: joinInfo.iceServers.map((server) => ({
         urls: server.urls,
@@ -165,7 +174,19 @@ async function connectRtc() {
         credential: server.credential || undefined,
       })),
     })
-    localStream.getTracks().forEach((track) => peer.addTrack(track, localStream))
+    if (isSeller.value) {
+      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+      localStream.getTracks().forEach((track) => peer.addTrack(track, localStream))
+      try {
+        optionalAudioStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true })
+        optionalAudioStream.getTracks().forEach((track) => peer.addTrack(track, optionalAudioStream))
+      } catch {
+        optionalAudioStream = null
+      }
+    } else {
+      peer.addTransceiver('video', { direction: 'recvonly' })
+      peer.addTransceiver('audio', { direction: 'recvonly' })
+    }
     peer.ontrack = async (event) => {
       remoteStream = event.streams[0]
       await attachSellerStream()
@@ -333,7 +354,7 @@ function formatTime(value) {
 }
 
 function goToChat() {
-  router.push({ name: 'chat', params: { roomId: call.value.chatRoomId } })
+  return router.push({ name: 'chat', params: { roomId: call.value.chatRoomId } })
 }
 
 // 통화 중 재촬영 요청은 잠시 내려 두었습니다. 이미 얼굴을 보고 이야기하는 중이라 채팅으로
@@ -406,6 +427,7 @@ async function finish() {
     sendSignal('hangup')
     status.value = 'ended'
     cleanupRtc()
+    await goToChat()
   } catch (error) {
     showError(error)
   }
@@ -515,8 +537,11 @@ onBeforeUnmount(() => {
               </svg>
             </div>
           </div>
+          <!-- 검은 화면은 권한을 막아 둔 경우가 대부분입니다. 연결이 끊긴 줄 알고
+               나가 버리기 전에 무엇을 확인하면 되는지 같은 자리에서 알려 줍니다. -->
           <div class="mt-4 rounded-lg border border-primary/30 bg-accent/60 px-4 py-3 text-sm text-primary">
-            안내: 체크리스트를 참고해 상품 상태를 확인하고, 세부 요청은 오른쪽 채팅으로 전달해 주세요.
+            안내: 체크리스트를 참고해 상품 상태를 확인하고, 세부 요청은 오른쪽 채팅으로 전달해 주세요.<br>
+            검은 화면이 보인다면 카메라, 마이크, 소리 권한을 전부 허용해 주세요.
           </div>
         </section>
 

@@ -344,6 +344,7 @@ public class ModelChecklistResearchService {
                 item.getAutomationType(),
                 item.getParserType(),
                 item.isRequired(),
+                item.isVisibleToBuyer(),
                 item.getDisplayOrder(),
                 null,
                 null,

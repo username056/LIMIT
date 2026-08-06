@@ -167,13 +167,6 @@ async function unlinkSocialAccountFor(account) {
   }
 }
 
-// 거래·정산 API가 아직 없어 대시보드 요약은 예시 데이터로 표시합니다.
-const stats = [
-  { label: '구매 완료 건수', value: '12건' },
-  { label: '판매 완료 건수', value: '3건' },
-  { label: '진행 중인 안심거래', value: '2건' },
-]
-
 // 배송지 API가 아직 없어 등록/수정/삭제는 세션 메모리(addressBook 스토어)에서만 동작합니다.
 const isAddressFormOpen = ref(false)
 const addressForm = reactive({
@@ -586,21 +579,6 @@ onMounted(() => {
             </div>
           </form>
         </section>
-        <!-- 숫자 셋은 테두리 없이 나란히만 둡니다. -->
-        <section class="grid gap-4 p-6 sm:grid-cols-3">
-          <div
-            v-for="stat in stats"
-            :key="stat.label"
-          >
-            <p class="text-[13px] font-semibold text-text-sub">
-              {{ stat.label }}
-            </p>
-            <p class="mt-2 text-2xl font-bold text-text-main">
-              {{ stat.value }}
-            </p>
-          </div>
-        </section>
-
 
         <section
           id="address-section"

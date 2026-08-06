@@ -256,6 +256,7 @@ public class ProductApplicationService {
                 item.automationType(),
                 item.parserType(),
                 item.required(),
+                item.visibleToBuyer(),
                 item.displayOrder());
     }
 

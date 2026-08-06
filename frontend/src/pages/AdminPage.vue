@@ -1,4 +1,5 @@
 <script setup>
+import limitLogo from '../assets/real_limt_logo.png'
 import { computed, onMounted, reactive, ref } from 'vue'
 import AuthShell from '../components/AuthShell.vue'
 import BaseBadge from '../components/BaseBadge.vue'
@@ -455,11 +456,12 @@ onMounted(() => {
     class="min-h-screen bg-bg font-main"
   >
     <div class="border-b border-border bg-white px-6 py-5">
-      <RouterLink
-        to="/"
-        class="bg-primary-gradient bg-clip-text text-xl font-extrabold text-transparent"
-      >
-        LIMIT
+      <RouterLink to="/">
+        <img
+          :src="limitLogo"
+          alt="LIMIT"
+          class="h-7 w-auto"
+        >
       </RouterLink>
       <span class="ml-2 rounded-full bg-accent px-2 py-1 text-[10px] font-bold text-primary">ADMIN</span>
     </div>
