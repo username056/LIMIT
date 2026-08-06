@@ -8,10 +8,12 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -56,6 +58,9 @@ import com.c203.limit.domain.rtc.repository.RtcSessionChecklistResultRepository;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Root;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -66,6 +71,7 @@ import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -910,5 +916,294 @@ class ProductApplicationServiceTests {
                 "서울 강남구", 501L);
         ReflectionTestUtils.setField(listing, "id", 1001L);
         return listing;
+    }
+
+    @Test
+    void rejectsEditingAProductThatBelongsToAnotherSeller() {
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.empty());
+        when(listingRepository.findByIdAndDeletedAtIsNull(1001L))
+                .thenReturn(Optional.of(listing()));
+
+        assertThatThrownBy(() -> service.update(55L, 1001L, new UpdateProductRequest()))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.PRODUCT_ACCESS_DENIED));
+    }
+
+    @Test
+    void rejectsEditingAProductThatDoesNotExist() {
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.empty());
+        when(listingRepository.findByIdAndDeletedAtIsNull(1001L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.update(55L, 1001L, new UpdateProductRequest()))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.LISTING_NOT_FOUND));
+    }
+
+    @Test
+    void rejectsAPriceOutsideTheContractRange() {
+        Listing listing = listing();
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+
+        assertThatThrownBy(() -> service.update(55L, 1001L, updateRequestWithPrice(BigDecimal.ZERO)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+        assertThatThrownBy(() -> service.update(
+                        55L,
+                        1001L,
+                        updateRequestWithPrice(BigDecimal.valueOf(1_000_000_000_000L))))
+                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> service.update(
+                        55L, 1001L, updateRequestWithPrice(new BigDecimal("650000.50"))))
+                .isInstanceOf(BusinessException.class);
+        assertThat(listing.getPrice()).isEqualTo(650000L);
+    }
+
+    @Test
+    void softDeletesAHiddenProduct() {
+        Listing listing = listing();
+        ReflectionTestUtils.setField(listing, "status", ListingStatus.HIDDEN);
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+
+        service.delete(55L, 1001L);
+
+        assertThat(listing.getDeletedAt()).isNotNull();
+    }
+
+    @Test
+    void rejectsDeletingAProductThatIsAlreadyInATrade() {
+        Listing listing = listing();
+        ReflectionTestUtils.setField(listing, "status", ListingStatus.RESERVED);
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+
+        assertThatThrownBy(() -> service.delete(55L, 1001L))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.PRODUCT_DELETE_NOT_ALLOWED));
+
+        assertThat(listing.getDeletedAt()).isNull();
+    }
+
+    @Test
+    void rejectsPagingParametersOutsideTheAllowedRangeOnThePublicList() {
+        assertThatThrownBy(() -> service.findPublic(
+                        null, null, null, null, null, null, null, null, null, null, null, -1, 20,
+                        null))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+        assertThatThrownBy(() -> service.findPublic(
+                        null, null, null, null, null, null, null, null, null, null, null, 0, 0,
+                        null))
+                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> service.findPublic(
+                        null, null, null, null, null, null, null, null, null, null, null, 0, 101,
+                        null))
+                .isInstanceOf(BusinessException.class);
+
+        verify(listingRepository, never()).findAll(any(Specification.class), any(Pageable.class));
+    }
+
+    @Test
+    void rejectsPagingParametersOutsideTheAllowedRangeOnTheSellerList() {
+        assertThatThrownBy(() -> service.findMine(55L, null, -1, 20, null))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+        assertThatThrownBy(() -> service.findMine(55L, null, 0, 101, null))
+                .isInstanceOf(BusinessException.class);
+
+        verify(listingRepository, never())
+                .findBySellerIdAndDeletedAtIsNull(anyLong(), any(Pageable.class));
+    }
+
+    @Test
+    void filtersTheSellerListByTheRequestedStatus() {
+        when(listingRepository.findBySellerIdAndStatusAndDeletedAtIsNull(
+                        eq(55L), eq(ListingStatus.ON_SALE), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        var result = service.findMine(55L, "ON_SALE", 0, 20, null);
+
+        assertThat(result.content()).isEmpty();
+        assertThat(result.hasNext()).isFalse();
+        verify(listingRepository, never())
+                .findBySellerIdAndDeletedAtIsNull(anyLong(), any(Pageable.class));
+    }
+
+    @Test
+    void rejectsAnUnknownStatusFilterOnTheSellerList() {
+        assertThatThrownBy(() -> service.findMine(55L, "NOT_A_STATUS", 0, 20, null))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+    }
+
+    @Test
+    void rejectsASortFieldThatIsNotAllowedForTheSellerList() {
+        assertThatThrownBy(() -> service.findMine(55L, null, 0, 20, "viewCount,desc"))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+    }
+
+    @Test
+    void treatsASortValueWithoutADirectionAsAscending() {
+        when(listingRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        service.findPublic(
+                null, null, null, null, null, null, null, null, null, null, null, 0, 20, "price");
+
+        verify(listingRepository).findAll(
+                any(Specification.class),
+                argThat((Pageable pageable) ->
+                        pageable.getSort().getOrderFor("price").isAscending()));
+    }
+
+    @Test
+    void rejectsMalformedSortExpressions() {
+        assertThatThrownBy(() -> service.findPublic(
+                        null, null, null, null, null, null, null, null, null, null, null, 0, 20,
+                        "price,asc,extra"))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+        assertThatThrownBy(() -> service.findPublic(
+                        null, null, null, null, null, null, null, null, null, null, null, 0, 20,
+                        "price,upward"))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+
+        verify(listingRepository, never()).findAll(any(Specification.class), any(Pageable.class));
+    }
+
+    @Test
+    void rejectsAnInvalidVerifiedCountRange() {
+        assertThatThrownBy(() -> service.findPublic(
+                        null, null, null, null, null, null, null, null, -1, null, null, 0, 20,
+                        null))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+        assertThatThrownBy(() -> service.findPublic(
+                        null, null, null, null, null, null, null, null, 5, 3, null, 0, 20, null))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+
+        verify(listingRepository, never()).findAll(any(Specification.class), any(Pageable.class));
+    }
+
+    @Test
+    void rejectsATargetStatusThatIsNotAKnownListingStatus() {
+        Listing listing = listing();
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+
+        assertThatThrownBy(() -> service.transition(
+                        55L, 1001L, new TransitionProductStatusRequest("NOT_A_STATUS", null)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INVALID_PRODUCT_STATUS_TRANSITION));
+
+        assertThat(listing.getStatus()).isEqualTo(ListingStatus.DRAFT);
+        verify(statusHistoryRepository, never()).saveAndFlush(any(ListingStatusHistory.class));
+    }
+
+    @Test
+    void rejectsATargetStatusTheSellerCannotDriveDirectly() {
+        Listing listing = listing();
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+
+        assertThatThrownBy(() -> service.transition(
+                        55L, 1001L, new TransitionProductStatusRequest("PAID", null)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INVALID_PRODUCT_STATUS_TRANSITION));
+
+        assertThat(listing.getStatus()).isEqualTo(ListingStatus.DRAFT);
+        verify(statusHistoryRepository, never()).saveAndFlush(any(ListingStatusHistory.class));
+    }
+
+    @Test
+    void letsSellerHideAnOnSaleListing() {
+        Listing listing = listing();
+        ReflectionTestUtils.setField(listing, "status", ListingStatus.ON_SALE);
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(statusHistoryRepository.saveAndFlush(any(ListingStatusHistory.class)))
+                .thenAnswer(invocation -> {
+                    ListingStatusHistory history = invocation.getArgument(0);
+                    ReflectionTestUtils.setField(history, "id", 7003L);
+                    return history;
+                });
+
+        var result = service.transition(
+                55L, 1001L, new TransitionProductStatusRequest("HIDDEN", "잠시 내려둡니다"));
+
+        assertThat(result.getPreviousStatus()).isEqualTo("ON_SALE");
+        assertThat(result.getCurrentStatus()).isEqualTo("HIDDEN");
+        assertThat(result.getReason()).isEqualTo("잠시 내려둡니다");
+        assertThat(listing.getStatus()).isEqualTo(ListingStatus.HIDDEN);
+    }
+
+    // 목록 필터는 Specification 람다 안에서 조립된다. 저장소에 넘어간 Specification을 그대로
+    // 잡아 criteria 목 위에서 평가해, 필터 조합마다 서로 다른 술어 분기를 타는지 확인한다.
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    @Test
+    void buildsPublicSearchPredicatesForEveryFilterCombination() {
+        when(listingRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        service.findPublic(
+                "갤럭시", 1L, 9L, null, BigDecimal.valueOf(100_000), BigDecimal.valueOf(900_000),
+                "서울", "COMPLETED", 1, 5, 55L, 0, 20, null);
+        service.findPublic(
+                "   ", null, null, 101L, BigDecimal.valueOf(100_000), null, "   ", "in_progress",
+                null, null, null, 0, 20, null);
+        service.findPublic(
+                null, null, null, null, null, BigDecimal.valueOf(900_000), null, "   ", 0, null,
+                null, 0, 20, null);
+        service.findPublic(
+                null, null, null, null, null, null, null, null, null, 5, null, 0, 20, null);
+
+        ArgumentCaptor<Specification> captor = ArgumentCaptor.forClass(Specification.class);
+        verify(listingRepository, times(4)).findAll(captor.capture(), any(Pageable.class));
+        for (Specification specification : captor.getAllValues()) {
+            Root<Listing> root = mock(Root.class, RETURNS_DEEP_STUBS);
+            CriteriaQuery<?> query = mock(CriteriaQuery.class, RETURNS_DEEP_STUBS);
+            CriteriaBuilder builder = mock(CriteriaBuilder.class, RETURNS_DEEP_STUBS);
+            assertThat(specification.toPredicate(root, query, builder)).isNotNull();
+        }
+    }
+
+    private UpdateProductRequest updateRequestWithPrice(BigDecimal price) {
+        UpdateProductRequest request = new UpdateProductRequest();
+        request.setPrice(price);
+        return request;
     }
 }
