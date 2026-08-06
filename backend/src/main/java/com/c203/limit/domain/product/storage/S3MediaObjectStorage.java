@@ -6,6 +6,8 @@ import org.springframework.stereotype.Component;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.core.ResponseBytes;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.MetadataDirective;
@@ -56,6 +58,17 @@ public class S3MediaObjectStorage implements MediaObjectStorage {
         var response = s3Client.headObject(
                 HeadObjectRequest.builder().bucket(bucket).key(objectKey).build());
         return new StoredObject(response.contentLength(), response.contentType());
+    }
+
+    @Override
+    public byte[] read(String bucket, String objectKey, long maxBytes) {
+        ResponseBytes<GetObjectResponse> response = s3Client.getObjectAsBytes(
+                GetObjectRequest.builder().bucket(bucket).key(objectKey).build());
+        byte[] bytes = response.asByteArray();
+        if (bytes.length > maxBytes) {
+            throw new IllegalArgumentException("stored object exceeds analysis limit");
+        }
+        return bytes;
     }
 
     @Override

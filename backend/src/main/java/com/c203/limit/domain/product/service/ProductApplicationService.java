@@ -36,6 +36,9 @@ import com.c203.limit.domain.product.entity.ListingImageType;
 import com.c203.limit.domain.product.entity.ListingSpecSnapshot;
 import com.c203.limit.domain.product.entity.ListingStatus;
 import com.c203.limit.domain.product.entity.ListingStatusHistory;
+import com.c203.limit.domain.product.moderation.entity.ListingModerationStatus;
+import com.c203.limit.domain.product.moderation.service.ListingModerationService;
+import com.c203.limit.domain.product.moderation.service.ModerationRiskService;
 import com.c203.limit.domain.product.repository.CategoryRepository;
 import com.c203.limit.domain.product.repository.ListingImageRepository;
 import com.c203.limit.domain.product.repository.ListingRepository;
@@ -98,6 +101,8 @@ public class ProductApplicationService {
 
     private final ProductViewCountDispatcher viewCountDispatcher;
     private final ProductEngagementReader engagementReader;
+    private final ListingModerationService moderationService;
+    private final ModerationRiskService moderationRiskService;
 
     public ProductApplicationService(
             ListingRepository listingRepository,
@@ -115,9 +120,13 @@ public class ProductApplicationService {
             MediaUploadSessionRepository mediaUploadSessionRepository,
             InspectionSessionTestResultRepository inspectionSessionTestResultRepository,
             ProductViewCountDispatcher viewCountDispatcher,
-            ProductEngagementReader engagementReader) {
+            ProductEngagementReader engagementReader,
+            ListingModerationService moderationService,
+            ModerationRiskService moderationRiskService) {
         this.viewCountDispatcher = viewCountDispatcher;
         this.engagementReader = engagementReader;
+        this.moderationService = moderationService;
+        this.moderationRiskService = moderationRiskService;
         this.listingRepository = listingRepository;
         this.categoryRepository = categoryRepository;
         this.templateRepository = templateRepository;
@@ -420,6 +429,9 @@ public class ProductApplicationService {
     @Transactional
     public void delete(Long sellerId, Long productId) {
         Listing listing = owned(productId, sellerId);
+        if (listing.getModerationStatus() != ListingModerationStatus.NORMAL) {
+            throw new BusinessException(ErrorCode.MODERATION_STATE_CONFLICT);
+        }
         if (!List.of(ListingStatus.DRAFT, ListingStatus.ON_SALE, ListingStatus.HIDDEN)
                 .contains(listing.getStatus())) {
             throw new BusinessException(ErrorCode.PRODUCT_DELETE_NOT_ALLOWED);
@@ -451,6 +463,7 @@ public class ProductApplicationService {
         validatePage(page, size);
         Specification<Listing> spec = Specification.where(notDeleted())
                 .and(hasStatus(ListingStatus.ON_SALE))
+                .and(isPubliclyVisible())
                 .and(keyword(keyword))
                 .and(category(categoryId, deviceModelId))
                 .and(manufacturer(manufacturerId))
@@ -478,6 +491,7 @@ public class ProductApplicationService {
     public ProductDetailResponse findPublicDetail(Long productId) {
         ProductDetailResponse response = detail(listingRepository
                 .findByIdAndStatusAndDeletedAtIsNull(productId, ListingStatus.ON_SALE)
+                .filter(Listing::isPubliclyVisible)
                 .orElseThrow(() -> new BusinessException(ErrorCode.LISTING_NOT_FOUND)));
         try {
             viewCountDispatcher.dispatch(productId);
@@ -489,7 +503,15 @@ public class ProductApplicationService {
 
     @Transactional(readOnly = true)
     public ProductDetailResponse findOwnedDetail(Long sellerId, Long productId) {
-        return detail(owned(productId, sellerId));
+        return detail(owned(productId, sellerId), true);
+    }
+
+    @Transactional(readOnly = true)
+    public ProductDetailResponse findAdminDetail(Long productId) {
+        Listing listing = listingRepository
+                .findByIdAndDeletedAtIsNull(productId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.LISTING_NOT_FOUND));
+        return detail(listing, true);
     }
 
     @Transactional(readOnly = true)
@@ -518,6 +540,7 @@ public class ProductApplicationService {
                                         listing.getId(),
                                         listing.getTitle(),
                                         listing.getStatus().name(),
+                                        listing.getModerationStatus().name(),
                                         displayManufacturer(listing, model),
                                         displayModelName(listing, model),
                                         BigDecimal.valueOf(listing.getPrice()),
@@ -542,6 +565,9 @@ public class ProductApplicationService {
             Long sellerId, Long productId, TransitionProductStatusRequest request) {
         Listing listing = owned(productId, sellerId);
         ListingStatus previous = listing.getStatus();
+        if (listing.getModerationStatus() != ListingModerationStatus.NORMAL) {
+            throw new BusinessException(ErrorCode.MODERATION_STATE_CONFLICT);
+        }
         ListingStatus target;
         try {
             target = ListingStatus.valueOf(request.getTargetStatus());
@@ -567,6 +593,9 @@ public class ProductApplicationService {
         ListingStatusHistory history = statusHistoryRepository.saveAndFlush(
                 ListingStatusHistory.record(
                         listing, previous, listing.getStatus(), request.getReason(), sellerId));
+        if (previous == ListingStatus.DRAFT && listing.getStatus() == ListingStatus.ON_SALE) {
+            moderationRiskService.analyzePublication(listing);
+        }
         log.info(
                 "product status changed: productId={}, from={}, to={}",
                 productId,
@@ -624,6 +653,10 @@ public class ProductApplicationService {
     }
 
     private ProductDetailResponse detail(Listing listing) {
+        return detail(listing, false);
+    }
+
+    private ProductDetailResponse detail(Listing listing, boolean includeModeration) {
         Category model = listing.getCategory();
         Category parent = model.getParent();
         ProductMetrics metrics = loadMetrics(List.of(listing)).get(listing.getId());
@@ -643,6 +676,11 @@ public class ProductApplicationService {
                 listing.getDescription(),
                 BigDecimal.valueOf(listing.getPrice()),
                 listing.getStatus().name(),
+                includeModeration
+                        ? listing.getModerationStatus().name()
+                        : ListingModerationStatus.NORMAL.name(),
+                includeModeration ? listing.getSuspendedReason() : null,
+                includeModeration ? moderationService.sellerNotices(listing.getId()) : List.of(),
                 listing.getTradeRegion(),
                 checklistSummary(metrics),
                 metrics.thumbnailUrl(),
@@ -777,6 +815,12 @@ public class ProductApplicationService {
 
     private Specification<Listing> hasStatus(ListingStatus status) {
         return (root, query, cb) -> cb.equal(root.get("status"), status);
+    }
+
+    private Specification<Listing> isPubliclyVisible() {
+        return (root, query, cb) -> root.get("moderationStatus").in(
+                ListingModerationStatus.NORMAL,
+                ListingModerationStatus.WARNING_ACK_REQUIRED);
     }
 
     /*

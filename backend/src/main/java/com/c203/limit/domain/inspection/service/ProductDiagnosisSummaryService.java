@@ -48,6 +48,22 @@ public class ProductDiagnosisSummaryService {
     @Transactional(readOnly = true)
     public ProductDiagnosisSummaryResponse getSummary(Long productId) {
         listingOwnerReader.findById(productId).orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
+        return buildSummary(productId);
+    }
+
+    @Transactional(readOnly = true)
+    public ProductDiagnosisSummaryResponse getSummary(Long productId, Long viewerMemberId) {
+        var visibility = listingOwnerReader
+                .findVisibilityById(productId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
+        boolean isOwner = viewerMemberId != null && viewerMemberId.equals(visibility.sellerId());
+        if (!isOwner && !visibility.publiclyVisible()) {
+            throw new BusinessException(ErrorCode.PRODUCT_NOT_FOUND);
+        }
+        return buildSummary(productId);
+    }
+
+    private ProductDiagnosisSummaryResponse buildSummary(Long productId) {
 
         List<ListingChecklistItem> checklistItems =
                 listingChecklistItemRepository.findAllByListingIdOrderByDisplayOrderAsc(productId);

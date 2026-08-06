@@ -39,6 +39,9 @@ public interface WishlistRepository extends JpaRepository<Wishlist, Long> {
                      WHERE wishlist.userId = :userId
                        AND listing.deletedAt IS NULL
                        AND listing.status = com.c203.limit.domain.product.entity.ListingStatus.ON_SALE
+                       AND listing.moderationStatus IN (
+                            com.c203.limit.domain.product.moderation.entity.ListingModerationStatus.NORMAL,
+                            com.c203.limit.domain.product.moderation.entity.ListingModerationStatus.WARNING_ACK_REQUIRED)
                     """,
             countQuery =
                     """
@@ -48,6 +51,9 @@ public interface WishlistRepository extends JpaRepository<Wishlist, Long> {
                      WHERE wishlist.userId = :userId
                        AND listing.deletedAt IS NULL
                        AND listing.status = com.c203.limit.domain.product.entity.ListingStatus.ON_SALE
+                       AND listing.moderationStatus IN (
+                            com.c203.limit.domain.product.moderation.entity.ListingModerationStatus.NORMAL,
+                            com.c203.limit.domain.product.moderation.entity.ListingModerationStatus.WARNING_ACK_REQUIRED)
                     """)
     Page<Wishlist> findActiveByUserId(@Param("userId") Long userId, Pageable pageable);
 }

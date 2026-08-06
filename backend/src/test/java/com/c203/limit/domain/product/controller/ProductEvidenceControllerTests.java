@@ -59,19 +59,21 @@ class ProductEvidenceControllerTests {
     @Test
     void returnsChecklistItemsWithoutAuthentication() {
         ProductChecklistItemResponse item = mock(ProductChecklistItemResponse.class);
-        when(productChecklistService.findAll(PRODUCT_ID, "PENDING", true))
+        when(currentUser.memberIdOrNull()).thenReturn(null);
+        when(productChecklistService.findAll(PRODUCT_ID, "PENDING", true, null))
                 .thenReturn(List.of(item));
 
         var result = controller.getProductChecklist(PRODUCT_ID, "PENDING", true);
 
         assertThat(result.getStatusCode().value()).isEqualTo(200);
         assertThat(result.getBody().data()).containsExactly(item);
-        verifyNoInteractions(currentUser, sellerStatusReader);
+        verifyNoInteractions(sellerStatusReader);
     }
 
     @Test
     void returnsEmptyChecklistWhenNoItemMatchesTheFilter() {
-        when(productChecklistService.findAll(PRODUCT_ID, null, false)).thenReturn(List.of());
+        when(currentUser.memberIdOrNull()).thenReturn(null);
+        when(productChecklistService.findAll(PRODUCT_ID, null, false, null)).thenReturn(List.of());
 
         var result = controller.getProductChecklist(PRODUCT_ID, null, false);
 

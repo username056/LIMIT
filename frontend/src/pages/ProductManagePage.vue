@@ -9,7 +9,9 @@ import { deleteProduct, getMyProducts, transitionProductStatus } from '../api/pr
 import {
   canSellerMarkSold,
   canSellerReopen,
+  isProductModerationNormal,
   isProductEditable,
+  productModerationStatusLabel,
   productStatusLabel,
 } from '../utils/productStatus'
 
@@ -197,6 +199,13 @@ onMounted(() => loadProducts(0))
           >
             {{ productStatusLabel(product.status) }}
           </BaseBadge>
+          <BaseBadge
+            v-if="!isProductModerationNormal(product.moderationStatus)"
+            variant="danger"
+            class="absolute right-3 top-3"
+          >
+            {{ productModerationStatusLabel(product.moderationStatus) }}
+          </BaseBadge>
         </template>
         <template #footer>
           <p class="truncate text-xs text-text-sub">
@@ -226,7 +235,7 @@ onMounted(() => loadProducts(0))
               판매 시작
             </button>
             <button
-              v-if="canSellerMarkSold(product.status)"
+              v-if="canSellerMarkSold(product.status) && isProductModerationNormal(product.moderationStatus)"
               type="button"
               class="font-semibold text-primary"
               @click="markSold(product)"
@@ -244,6 +253,9 @@ onMounted(() => loadProducts(0))
             <button
               type="button"
               class="ml-auto font-semibold text-red-600"
+              :disabled="!isProductModerationNormal(product.moderationStatus)"
+              :class="!isProductModerationNormal(product.moderationStatus) ? 'cursor-not-allowed opacity-40' : ''"
+              :title="!isProductModerationNormal(product.moderationStatus) ? '신고 조치가 끝난 뒤 삭제할 수 있습니다.' : ''"
               @click="remove(product)"
             >
               삭제

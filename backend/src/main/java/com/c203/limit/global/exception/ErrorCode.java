@@ -20,8 +20,7 @@ public enum ErrorCode {
     MISSING_REQUEST_PARAMETER("CMN005", HttpStatus.BAD_REQUEST, "필수 요청 값이 누락되었습니다."),
     UNAUTHORIZED("CMN006", HttpStatus.UNAUTHORIZED, "인증이 필요합니다."),
     TOO_MANY_REQUEST("CMN007", HttpStatus.TOO_MANY_REQUESTS, "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요."),
-    DATA_CONFLICT(
-            "CMN008", HttpStatus.CONFLICT, "다른 요청과 충돌하여 처리하지 못했습니다. 잠시 후 다시 시도해 주세요."),
+    DATA_CONFLICT("CMN008", HttpStatus.CONFLICT, "다른 요청과 충돌하여 처리하지 못했습니다. 잠시 후 다시 시도해 주세요."),
 
     // ========== 인증 에러 ==========
     INVALID_CREDENTIALS("AUTH001", HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다."),
@@ -126,9 +125,7 @@ public enum ErrorCode {
     LISTING_RESERVATION_MISMATCH(
             "PRD017", HttpStatus.CONFLICT, "예약이 만료되었거나 다른 구매자에게 재배정되어 처리할 수 없습니다."),
     CHECKLIST_ITEM_LOCKED_BY_EVIDENCE(
-            "PRD023",
-            HttpStatus.CONFLICT,
-            "이미 증빙이나 점검 기록이 있는 항목은 기능 선택을 해제할 수 없습니다."),
+            "PRD023", HttpStatus.CONFLICT, "이미 증빙이나 점검 기록이 있는 항목은 기능 선택을 해제할 수 없습니다."),
     CUSTOM_MODEL_CHECKLIST_EDIT_NOT_SUPPORTED(
             "PRD024", HttpStatus.BAD_REQUEST, "직접 입력한 모델은 등록 후 기능 체크리스트를 수정할 수 없습니다."),
 
@@ -214,7 +211,19 @@ public enum ErrorCode {
             "INS041", HttpStatus.CONFLICT, "동일한 선택검사 결과 ID로 다른 내용이 이미 제출되었습니다."),
     LISTING_IMAGE_NOT_FOUND("PRD015", HttpStatus.NOT_FOUND, "상품 이미지를 찾을 수 없습니다."),
     LISTING_IMAGE_LIMIT_EXCEEDED(
-            "PRD016", HttpStatus.UNPROCESSABLE_ENTITY, "상품 이미지는 최대 10개까지 등록할 수 있습니다.");
+            "PRD016", HttpStatus.UNPROCESSABLE_ENTITY, "상품 이미지는 최대 10개까지 등록할 수 있습니다."),
+
+    // ========== 상품 신고·운영 에러 ==========
+    REPORT_NOT_FOUND("MOD001", HttpStatus.NOT_FOUND, "신고를 찾을 수 없습니다."),
+    SELF_REPORT_NOT_ALLOWED("MOD002", HttpStatus.BAD_REQUEST, "본인의 상품은 신고할 수 없습니다."),
+    REPORT_ALREADY_EXISTS("MOD003", HttpStatus.CONFLICT, "이미 신고한 상품입니다."),
+    REPORT_ALREADY_REVIEWED("MOD004", HttpStatus.CONFLICT, "이미 검토가 끝난 신고입니다."),
+    MODERATION_STATE_CONFLICT("MOD005", HttpStatus.CONFLICT, "현재 운영 상태에서는 처리할 수 없습니다."),
+    LISTING_MODERATION_BLOCKED("MOD006", HttpStatus.CONFLICT, "운영 검토로 판매가 중지된 상품입니다."),
+    RESTORATION_REQUEST_NOT_FOUND("MOD007", HttpStatus.NOT_FOUND, "복구 신청을 찾을 수 없습니다."),
+    RESTORATION_PENDING_ALREADY_EXISTS("MOD008", HttpStatus.CONFLICT, "이미 검토 중인 복구 신청이 있습니다."),
+    RESTORATION_REQUEST_ALREADY_REVIEWED("MOD009", HttpStatus.CONFLICT, "이미 검토가 끝난 복구 신청입니다."),
+    RISK_SIGNAL_NOT_FOUND("MOD010", HttpStatus.NOT_FOUND, "이상 활동 신호를 찾을 수 없습니다.");
 
     private final String code;
     private final HttpStatus status;

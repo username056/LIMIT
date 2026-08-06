@@ -146,6 +146,13 @@ class OpenApiContractTests {
     ProductApplicationService productApplicationService;
 
     @MockitoBean
+    com.c203.limit.domain.product.moderation.service.ListingModerationService
+            listingModerationService;
+
+    @MockitoBean
+    com.c203.limit.domain.product.moderation.service.ModerationRiskService moderationRiskService;
+
+    @MockitoBean
     ProductCatalogService productCatalogService;
 
     @MockitoBean
@@ -267,6 +274,14 @@ class OpenApiContractTests {
                 .andExpect(jsonPath(
                                 "$.paths['/api/v1/admin/device-models/{modelId}/products/{productId}/materials'].get")
                         .exists())
+                .andExpect(jsonPath("$.paths['/api/v1/admin/moderation/dashboard'].get")
+                        .exists())
+                .andExpect(jsonPath("$.paths['/api/v1/admin/reports'].get")
+                        .exists())
+                .andExpect(jsonPath("$.components.schemas.ModerationDashboardApiResponse")
+                        .exists())
+                .andExpect(jsonPath("$.components.schemas.AdminListingReportPageApiResponse")
+                        .exists())
                 .andExpect(jsonPath("$.components.schemas.UpdateDeviceModelStatusRequest").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/admin/me/password']").exists())
                 .andExpect(jsonPath("$.paths['/api/v1/auth/password-reset-requests']").exists())
@@ -289,6 +304,11 @@ class OpenApiContractTests {
                 .andExpect(jsonPath("$.paths['/api/v1/products'].get.operationId").value("product04"))
                 .andExpect(jsonPath("$.components.schemas.CreateProductRequest").exists())
                 .andExpect(jsonPath("$.components.schemas.ProductDetailResponse").exists())
+                .andExpect(jsonPath(
+                                "$.paths['/api/v1/products/{productId}/reports'].post.responses['201']")
+                        .exists())
+                .andExpect(jsonPath("$.components.schemas.ListingReportCreatedApiResponse")
+                        .exists())
                 .andExpect(jsonPath("$.paths['/api/v1/sellers'].post.operationId")
                         .value("seller01"))
                 .andExpect(jsonPath("$.paths['/api/v1/sellers/me'].get.operationId")

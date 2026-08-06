@@ -49,6 +49,9 @@ public class EvidenceHistoryService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.ITEM_NOT_FOUND));
 
         boolean isOwner = viewerMemberId != null && viewerMemberId.equals(listing.getSellerId());
+        if (!isOwner && !listing.isPubliclyVisible()) {
+            throw new BusinessException(ErrorCode.PRODUCT_NOT_FOUND);
+        }
         if (!isOwner && !item.isVisibleToBuyer()) {
             log.info(
                     "Buyer-hidden evidence history access suppressed: productId={}, checklistItemId={}",

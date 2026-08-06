@@ -8,6 +8,7 @@ import BaseCard from '../components/BaseCard.vue'
 import BaseInput from '../components/BaseInput.vue'
 import AdminShell from '../components/AdminShell.vue'
 import AdminDeviceModelManagement from '../components/admin/AdminDeviceModelManagement.vue'
+import AdminMarketplaceModeration from '../components/admin/AdminMarketplaceModeration.vue'
 import {
   createAdminAccount,
   createMemberRestriction,
@@ -79,6 +80,7 @@ const isSuperAdmin = computed(() => admin.value?.roles?.includes('SUPER_ADMIN'))
 const sections = computed(() => [
   { id: 'dashboard', label: '대시보드' },
   { id: 'members', label: '회원 관리' },
+  { id: 'marketplace-moderation', label: '상품 신고·이상 활동' },
   { id: 'device-models', label: '모델 관리' },
   { id: 'checklist-researches', label: '체크리스트 AI 검토' },
   { id: 'device-model-requests', label: '신규 기기 모델 검토' },
@@ -790,6 +792,11 @@ onMounted(() => {
       v-else-if="activeSection === 'device-models'"
     >
       <AdminDeviceModelManagement />
+    </section>
+    <section
+      v-else-if="activeSection === 'marketplace-moderation'"
+    >
+      <AdminMarketplaceModeration />
     </section>
     <section
       v-else-if="activeSection === 'device-model-requests'"

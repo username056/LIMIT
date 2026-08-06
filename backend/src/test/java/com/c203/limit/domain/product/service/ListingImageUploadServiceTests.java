@@ -416,8 +416,10 @@ class ListingImageUploadServiceTests {
     void buildsImageUrlsFromPublicBaseUrlWhenConfigured() {
         ListingImageUploadService withCdn =
                 serviceWith(properties("limit-dev-media", "https://cdn.example.com/"));
+        Listing listing = mock(Listing.class);
+        when(listing.isPubliclyVisible()).thenReturn(true);
         when(listingRepository.findByIdAndDeletedAtIsNull(1001L))
-                .thenReturn(Optional.of(mock(Listing.class)));
+                .thenReturn(Optional.of(listing));
         ListingImage stored = image(9L, ListingImageType.THUMBNAIL, "listings/1001/a.webp");
         when(imageRepository.findAllByListingIdOrderByDisplayOrderAscIdAsc(1001L))
                 .thenReturn(List.of(stored));
@@ -432,8 +434,10 @@ class ListingImageUploadServiceTests {
 
     @Test
     void buildsPresignedImageUrlsWhenPublicBaseUrlIsBlank() throws Exception {
+        Listing listing = mock(Listing.class);
+        when(listing.isPubliclyVisible()).thenReturn(true);
         when(listingRepository.findByIdAndDeletedAtIsNull(1001L))
-                .thenReturn(Optional.of(mock(Listing.class)));
+                .thenReturn(Optional.of(listing));
         ListingImage stored = image(9L, ListingImageType.DETAIL, "listings/1001/a.webp");
         when(imageRepository.findAllByListingIdOrderByDisplayOrderAscIdAsc(1001L))
                 .thenReturn(List.of(stored));

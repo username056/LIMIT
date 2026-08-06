@@ -18,6 +18,11 @@ import {
 } from '../api/products'
 import { createOrGetChatRoom } from '../api/chat'
 import { getProductDiagnosisSummary } from '../api/inspection'
+import {
+  acknowledgeProductWarning,
+  reportProduct,
+  requestProductRestoration,
+} from '../api/moderation'
 import { getSellerProfile } from '../api/seller'
 import { getAccessToken, getSessionMember } from '../auth/session'
 import { canSellerMarkSold, canSellerReopen, isSoldOut } from '../utils/productStatus'
@@ -46,6 +51,7 @@ const isFavorite = ref(false)
 const isUpdatingFavorite = ref(false)
 const isOpeningChat = ref(false)
 const errorMessage = ref('')
+const successMessage = ref('')
 const productImages = ref([])
 const activeImageUrl = ref('')
 // 구매자에게 공개되는 판매자 정보입니다(닉네임·개인/사업자·판매 중 수).
@@ -58,9 +64,12 @@ const isOwner = computed(() => {
   return Boolean(memberId && product.value?.sellerId
     && String(product.value.sellerId) === String(memberId))
 })
+const moderationStatus = computed(() => product.value?.moderationStatus || 'NORMAL')
+const hasModerationBlock = computed(() => ['SUSPENDED', 'RESTORE_REQUESTED']
+  .includes(moderationStatus.value))
 
 const checklist = computed(() => product.value?.checklistSummary || {})
-const canPurchase = computed(() => product.value?.status === 'ON_SALE')
+const canPurchase = computed(() => product.value?.status === 'ON_SALE' && !hasModerationBlock.value)
 const purchaseButtonLabel = computed(() => {
   if (canPurchase.value) return '상품 구매하기'
   if (product.value?.status === 'RESERVED') return '예약 중인 상품입니다'
@@ -276,6 +285,22 @@ const isSubmittingRecapture = ref(false)
 const recaptureError = ref('')
 const recaptureSubmitted = ref(false)
 
+const REPORT_CATEGORIES = [
+  { value: 'INACCURATE_INFORMATION', label: '상품 정보가 사실과 다름' },
+  { value: 'DUPLICATE_LISTING', label: '같은 상품을 중복 등록함' },
+  { value: 'FRAUD_SUSPECTED', label: '사기 거래가 의심됨' },
+  { value: 'PROHIBITED_ITEM', label: '판매가 금지된 상품임' },
+  { value: 'INAPPROPRIATE_CONTENT', label: '부적절한 사진이나 내용이 있음' },
+  { value: 'OTHER', label: '기타' },
+]
+const isReportModalOpen = ref(false)
+const reportCategory = ref('INACCURATE_INFORMATION')
+const reportDetail = ref('')
+const reportError = ref('')
+const isSubmittingReport = ref(false)
+const isAcknowledgingWarning = ref(false)
+const isRequestingRestoration = ref(false)
+
 async function openRecaptureModal() {
   if (!await requireLogin()) return
   checkedItemIds.value = []
@@ -342,6 +367,66 @@ async function requireLogin() {
   return false
 }
 
+async function openReportModal() {
+  if (!await requireLogin()) return
+  reportCategory.value = 'INACCURATE_INFORMATION'
+  reportDetail.value = ''
+  reportError.value = ''
+  isReportModalOpen.value = true
+}
+
+async function submitReport() {
+  reportError.value = ''
+  if (reportDetail.value.trim().length < 5) {
+    reportError.value = '신고 내용을 5자 이상 입력해 주세요.'
+    return
+  }
+  isSubmittingReport.value = true
+  try {
+    await reportProduct(product.value.productId, {
+      category: reportCategory.value,
+      detail: reportDetail.value.trim(),
+    })
+    isReportModalOpen.value = false
+    successMessage.value = '신고가 접수되었습니다. 관리자가 내용을 확인합니다.'
+  } catch (error) {
+    reportError.value = error.message || '신고를 접수하지 못했습니다.'
+  } finally {
+    isSubmittingReport.value = false
+  }
+}
+
+async function acknowledgeWarning() {
+  if (isAcknowledgingWarning.value) return
+  isAcknowledgingWarning.value = true
+  errorMessage.value = ''
+  try {
+    await acknowledgeProductWarning(product.value.productId)
+    successMessage.value = '경고 내용을 확인했습니다. 상품이 정상 판매 상태로 돌아왔습니다.'
+    await loadProduct(product.value.productId)
+  } catch (error) {
+    errorMessage.value = error.message || '경고 확인을 처리하지 못했습니다.'
+  } finally {
+    isAcknowledgingWarning.value = false
+  }
+}
+
+async function requestRestoration() {
+  const note = window.prompt('수정한 내용과 복구가 필요한 이유를 입력해 주세요.', '')
+  if (note === null) return
+  isRequestingRestoration.value = true
+  errorMessage.value = ''
+  try {
+    await requestProductRestoration(product.value.productId, note.trim())
+    successMessage.value = '복구 신청을 보냈습니다. 관리자 승인 후 상품이 다시 공개됩니다.'
+    await loadProduct(product.value.productId)
+  } catch (error) {
+    errorMessage.value = error.message || '복구 신청을 보내지 못했습니다.'
+  } finally {
+    isRequestingRestoration.value = false
+  }
+}
+
 async function toggleFavorite() {
   if (!await requireLogin()) return
   isUpdatingFavorite.value = true
@@ -360,7 +445,9 @@ async function toggleFavorite() {
 // 직거래로 팔린 매물을 판매자가 직접 닫습니다. 구매자 화면에는 이 버튼이 보이지 않습니다.
 const isMarkingSold = ref(false)
 const canMarkSold = computed(
-  () => isOwner.value && canSellerMarkSold(product.value?.status),
+  () => isOwner.value
+    && moderationStatus.value === 'NORMAL'
+    && canSellerMarkSold(product.value?.status),
 )
 
 async function markSold() {
@@ -416,8 +503,21 @@ async function openChat() {
 // 공개 상세 API는 ON_SALE 상품만 반환합니다. 판매자가 자기 초안·숨김 상품을 열었을 때는
 // 소유자 전용 조회로 한 번 더 시도해서 등록 직후 상세 확인이 끊기지 않게 합니다.
 async function loadProduct(productId) {
+  loadedViaOwnerApi.value = false
   try {
     product.value = await getProduct(productId)
+    const memberId = getSessionMember()?.memberId
+    if (memberId && String(product.value?.sellerId) === String(memberId)) {
+      try {
+        const ownerProduct = await getMyProduct(productId)
+        if (ownerProduct) {
+          product.value = ownerProduct
+          loadedViaOwnerApi.value = true
+        }
+      } catch {
+        // 공개 상품 자체는 계속 보여 주되, 소유자 전용 운영 정보만 생략합니다.
+      }
+    }
   } catch (error) {
     if (!getAccessToken()) throw error
     try {
@@ -538,7 +638,83 @@ onMounted(async () => {
       </nav>
 
       <p
-        v-if="isOwner && !canPurchase"
+        v-if="successMessage"
+        role="status"
+        class="mb-6 rounded-md bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
+      >
+        {{ successMessage }}
+      </p>
+
+      <section
+        v-if="isOwner && product && moderationStatus !== 'NORMAL'"
+        class="mb-6 rounded-lg border p-5"
+        :class="moderationStatus === 'WARNING_ACK_REQUIRED'
+          ? 'border-amber-200 bg-amber-50'
+          : 'border-red-200 bg-red-50'"
+        aria-labelledby="moderation-notice-title"
+      >
+        <h2
+          id="moderation-notice-title"
+          class="font-bold text-text-main"
+        >
+          {{ moderationStatus === 'WARNING_ACK_REQUIRED'
+            ? '상품 신고 내용을 확인해 주세요'
+            : moderationStatus === 'RESTORE_REQUESTED'
+              ? '관리자가 복구 신청을 심사 중입니다'
+              : '이 상품은 판매 중지되었습니다' }}
+        </h2>
+        <p class="mt-2 text-sm text-text-sub">
+          {{ moderationStatus === 'WARNING_ACK_REQUIRED'
+            ? '상품은 계속 판매 중이지만, 아래 신고·경고 내용을 확인해야 운영 상태가 정상으로 돌아옵니다.'
+            : moderationStatus === 'RESTORE_REQUESTED'
+              ? '관리자 승인 전까지 판매자와 관리자만 이 상품을 볼 수 있습니다.'
+              : '문제가 된 내용을 수정한 뒤 복구를 신청해 주세요. 관리자 승인 전에는 다시 공개되지 않습니다.' }}
+        </p>
+        <ul
+          v-if="product.moderationNotices?.length"
+          class="mt-4 space-y-3"
+        >
+          <li
+            v-for="notice in product.moderationNotices"
+            :key="notice.reportId"
+            class="rounded-md bg-white/80 p-4 text-sm"
+          >
+            <p class="font-semibold text-text-main">
+              {{ notice.detail }}
+            </p>
+            <p
+              v-if="notice.adminNote"
+              class="mt-1 text-text-sub"
+            >
+              관리자 안내: {{ notice.adminNote }}
+            </p>
+          </li>
+        </ul>
+        <div class="mt-4 flex flex-wrap gap-2">
+          <BaseButton
+            v-if="moderationStatus === 'WARNING_ACK_REQUIRED'"
+            :disabled="isAcknowledgingWarning"
+            @click="acknowledgeWarning"
+          >
+            {{ isAcknowledgingWarning ? '처리 중…' : '신고·경고 내용 확인' }}
+          </BaseButton>
+          <template v-if="moderationStatus === 'SUSPENDED'">
+            <BaseButton :to="{ name: 'seller-product-edit', params: { productId: product.productId } }">
+              상품 수정
+            </BaseButton>
+            <BaseButton
+              variant="outline"
+              :disabled="isRequestingRestoration"
+              @click="requestRestoration"
+            >
+              {{ isRequestingRestoration ? '신청 중…' : '복구 신청' }}
+            </BaseButton>
+          </template>
+        </div>
+      </section>
+
+      <p
+        v-if="isOwner && moderationStatus === 'NORMAL' && product?.status !== 'ON_SALE'"
         role="status"
         class="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-md bg-accent px-4 py-3 text-sm text-primary-dark"
       >
@@ -795,6 +971,13 @@ onMounted(async () => {
                   >
                     {{ isOpeningChat ? '채팅방 여는 중…' : '판매자에게 문의하기' }}
                   </BaseButton>
+                  <button
+                    type="button"
+                    class="w-full py-2 text-center text-xs font-semibold text-text-sub hover:text-red-600"
+                    @click="openReportModal"
+                  >
+                    이 상품 신고하기
+                  </button>
                 </div>
               </div>
 
@@ -1284,6 +1467,68 @@ onMounted(async () => {
             </div>
           </div>
         </Transition>
+
+        <div
+          v-if="isReportModalOpen"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          @click.self="isReportModalOpen = false"
+        >
+          <BaseCard class="w-full max-w-md">
+            <h2 class="text-lg font-bold text-text-main">
+              상품 신고
+            </h2>
+            <p class="mt-1 text-sm text-text-sub">
+              신고 내용은 관리자만 확인하며, 허위 신고는 서비스 이용에 영향을 줄 수 있습니다.
+            </p>
+            <label class="mt-5 block text-sm font-semibold text-text-main">
+              신고 분류
+              <select
+                v-model="reportCategory"
+                class="mt-2 w-full rounded-md border border-border bg-white px-3 py-2.5 text-sm"
+              >
+                <option
+                  v-for="category in REPORT_CATEGORIES"
+                  :key="category.value"
+                  :value="category.value"
+                >
+                  {{ category.label }}
+                </option>
+              </select>
+            </label>
+            <label class="mt-4 block text-sm font-semibold text-text-main">
+              신고 내용
+              <textarea
+                v-model="reportDetail"
+                rows="5"
+                minlength="5"
+                maxlength="1000"
+                placeholder="문제가 된 부분을 구체적으로 적어 주세요."
+                class="mt-2 w-full rounded-md border border-border px-3 py-2.5 text-sm outline-none focus:border-primary"
+              />
+            </label>
+            <p
+              v-if="reportError"
+              role="alert"
+              class="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700"
+            >
+              {{ reportError }}
+            </p>
+            <div class="mt-5 flex justify-end gap-3">
+              <BaseButton
+                variant="outline"
+                @click="isReportModalOpen = false"
+              >
+                취소
+              </BaseButton>
+              <BaseButton
+                :disabled="isSubmittingReport"
+                @click="submitReport"
+              >
+                {{ isSubmittingReport ? '접수 중…' : '신고 접수' }}
+              </BaseButton>
+            </div>
+          </BaseCard>
+        </div>
 
         <div
           v-if="isRecaptureModalOpen"
