@@ -1034,12 +1034,12 @@ onMounted(async () => {
             </section>
 
             <!--
-              배터리 상태: 원시 수치 나열 대신 "믿고 써도 되는가"에 답하는 카드입니다.
+              배터리 성능: 원시 수치 나열 대신 "믿고 써도 되는가"에 답하는 카드입니다.
               건강도(용량 비율)를 못 구한 경우까지 감안해 3단계로 나눕니다.
             -->
             <section class="mt-5">
               <h3 class="text-xs font-semibold text-text-sub">
-                배터리 상태
+                배터리 성능
               </h3>
 
               <div
