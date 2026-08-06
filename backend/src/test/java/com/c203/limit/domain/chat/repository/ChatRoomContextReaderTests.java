@@ -1,11 +1,26 @@
 package com.c203.limit.domain.chat.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
+
+import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.simple.JdbcClient;
 
 class ChatRoomContextReaderTests {
+
+    @Test
+    @DisplayName("방이 하나도 없으면 질의하지 않고 빈 결과를 준다")
+    void skipsQueryWhenNoRoomIsGiven() {
+        JdbcClient jdbcClient = mock(JdbcClient.class);
+
+        assertThat(new ChatRoomContextReader(jdbcClient).findAll(List.of(), 1L)).isEmpty();
+
+        verifyNoInteractions(jdbcClient);
+    }
 
     @Test
     @DisplayName("사진과 영상은 파일명 대신 무엇을 보냈는지로 적는다")
