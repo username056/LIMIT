@@ -140,8 +140,7 @@ public interface MemberApi {
     @Operation(
             operationId = "member05",
             summary = "프로필 사진 등록 완료",
-            description =
-                    "요청\n권한: MEMBER\n검증: 내 자리에 발급된 objectKey인지, 실제로 업로드됐는지 확인",
+            description = "요청\n권한: MEMBER\n검증: 내 자리에 발급된 objectKey인지, 실제로 업로드됐는지 확인",
             security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
         @ApiResponse(

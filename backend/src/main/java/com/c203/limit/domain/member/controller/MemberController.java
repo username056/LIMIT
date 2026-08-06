@@ -61,8 +61,9 @@ public class MemberController implements MemberApi {
     @Override
     public ResponseEntity<Void> member04(Object body) {
         JsonNode json = json(body);
-        var request = new CreateProfileImageUploadUrlRequest(
-                required(json, "contentType"), requiredLong(json, "fileSize"));
+        var request =
+                new CreateProfileImageUploadUrlRequest(
+                        required(json, "contentType"), requiredLong(json, "fileSize"));
         return response(
                 ResponseEntity.ok(
                         ApiResponse.ok(

@@ -166,6 +166,11 @@ limit:
       ffprobe-enabled: ${S3_FFPROBE_ENABLED:false}
       ffprobe-executable: ${S3_FFPROBE_EXECUTABLE:ffprobe}
       ffprobe-timeout: ${S3_FFPROBE_TIMEOUT:15s}
+  moderation:
+    publishing-threshold: ${MODERATION_PUBLISHING_THRESHOLD:30}
+    publishing-window-days: ${MODERATION_PUBLISHING_WINDOW_DAYS:7}
+    title-similarity-threshold: ${MODERATION_TITLE_SIMILARITY_THRESHOLD:85}
+    image-hamming-threshold: ${MODERATION_IMAGE_HAMMING_THRESHOLD:8}
 
 springdoc:
   api-docs:

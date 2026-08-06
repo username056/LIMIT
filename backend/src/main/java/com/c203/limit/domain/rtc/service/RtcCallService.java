@@ -403,10 +403,11 @@ public class RtcCallService {
             session.expireIfDue(now);
             throw new BusinessException(ErrorCode.RTC_SESSION_EXPIRED);
         }
-        LocalDateTime scheduledAt = appointmentRepository
-                .findById(session.getCallAppointmentId())
-                .map(CallAppointment::getScheduledAt)
-                .orElseThrow(() -> new BusinessException(ErrorCode.RTC_SESSION_NOT_FOUND));
+        LocalDateTime scheduledAt =
+                appointmentRepository
+                        .findById(session.getCallAppointmentId())
+                        .map(CallAppointment::getScheduledAt)
+                        .orElseThrow(() -> new BusinessException(ErrorCode.RTC_SESSION_NOT_FOUND));
         if (now.isBefore(scheduledAt)) {
             throw new BusinessException(ErrorCode.RTC_INVALID_STATE);
         }

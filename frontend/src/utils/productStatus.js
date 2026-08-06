@@ -13,6 +13,21 @@ export function productStatusLabel(status) {
   return PRODUCT_STATUS_LABELS[status] || '상태 확인 중'
 }
 
+const PRODUCT_MODERATION_STATUS_LABELS = {
+  NORMAL: '정상',
+  WARNING_ACK_REQUIRED: '신고 확인 필요',
+  SUSPENDED: '판매 중지',
+  RESTORE_REQUESTED: '복구 심사 중',
+}
+
+export function productModerationStatusLabel(status) {
+  return PRODUCT_MODERATION_STATUS_LABELS[status] || '정상'
+}
+
+export function isProductModerationNormal(status) {
+  return !status || status === 'NORMAL'
+}
+
 // 판매자가 직접 '판매 완료'로 닫을 수 있는 상태입니다. 서버 Listing.markSoldBySeller와 같은 조건입니다.
 // 예약 이후는 구매자가 결제·검수에 들어가 있어 판매자가 임의로 닫지 못합니다.
 const SELLER_CLOSABLE_STATUSES = ['ON_SALE', 'HIDDEN']

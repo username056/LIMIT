@@ -50,7 +50,8 @@ public class ProductImageController implements ProductImageApi {
 
     @Override
     public ResponseEntity<ApiResponse<List<ListingImageResponse>>> getImages(Long productId) {
-        return ResponseEntity.ok(ApiResponse.ok(service.findAll(productId)));
+        return ResponseEntity.ok(
+                ApiResponse.ok(service.findAll(productId, currentUser.memberIdOrNull())));
     }
 
     @Override

@@ -124,3 +124,39 @@ export function approveDeviceModelRequest(requestId, payload) {
 export function rejectDeviceModelRequest(requestId, payload) {
   return apiClient.post(`/admin/device-model-requests/${requestId}/rejection`, payload)
 }
+
+export function getModerationDashboard() {
+  return apiClient.get('/admin/moderation/dashboard')
+}
+
+export function getAdminReports(params = {}) {
+  return apiClient.get(`/admin/reports${query(params)}`)
+}
+
+export function decideAdminReport(reportId, payload) {
+  return apiClient.post(`/admin/reports/${reportId}/decisions`, payload)
+}
+
+export function getAdminRestorationRequests(params = {}) {
+  return apiClient.get(`/admin/restoration-requests${query(params)}`)
+}
+
+export function decideAdminRestoration(requestId, payload) {
+  return apiClient.post(`/admin/restoration-requests/${requestId}/decisions`, payload)
+}
+
+export function getAdminRiskSignals(params = {}) {
+  return apiClient.get(`/admin/risk-signals${query(params)}`)
+}
+
+export function resolveAdminRiskSignal(signalId, note) {
+  return apiClient.patch(`/admin/risk-signals/${signalId}`, { note })
+}
+
+export function getAdminModeratedProducts(params = {}) {
+  return apiClient.get(`/admin/products${query(params)}`)
+}
+
+export function getAdminModeratedProduct(productId) {
+  return apiClient.get(`/admin/products/${productId}`)
+}

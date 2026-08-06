@@ -15,7 +15,15 @@ public class ListingChatReader {
 
     public Optional<ListingChatInfo> findById(Long listingId) {
         return jdbcClient.sql("""
-                        SELECT id, seller_id, buyer_id, status
+                        SELECT id,
+                               seller_id,
+                               buyer_id,
+                               CASE
+                                   WHEN status = 'ON_SALE'
+                                    AND moderation_status IN ('SUSPENDED', 'RESTORE_REQUESTED')
+                                   THEN 'MODERATION_BLOCKED'
+                                   ELSE status
+                               END AS status
                         FROM listing
                         WHERE id = :listingId AND deleted_at IS NULL
                         """)
