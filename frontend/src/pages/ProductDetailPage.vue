@@ -246,6 +246,10 @@ function moveMediaViewer(step) {
   mediaViewerIndex.value = (mediaViewerIndex.value + step + total) % total
 }
 
+// 설명은 기본 4줄로 접어 두고, 길면 펼쳐 봅니다. 설명이 길어도 아래 검증 자료까지 한 화면에
+// 들어오게 하려는 것입니다.
+const isDescriptionExpanded = ref(false)
+const isDescriptionLong = computed(() => (product.value?.description || '').length > 180)
 const isRecaptureModalOpen = ref(false)
 const checkedItemIds = ref([])
 const recaptureReason = ref('')
@@ -817,14 +821,20 @@ onMounted(async () => {
               4.6:1까지 떨어져 길게 읽기 어렵습니다. 판매자가 직접 쓴 글이고 이
               화면에서 가장 오래 읽는 부분이라 본문 색으로 둡니다.
             -->
-            <!--
-              길어도 자르지 않고 그대로 폅니다. 네 줄에서 끊고 '더 보기'를 두었더니 상태·하자
-              같은 중요한 내용이 잘린 뒤에 있으면 누르지 않은 사람은 못 보고 지나쳤습니다.
-              페이지가 길어지는 편이 낫습니다.
-            -->
-            <p class="mt-3 whitespace-pre-wrap text-base leading-7 text-text-main">
+            <p
+              class="mt-3 whitespace-pre-wrap text-base leading-7 text-text-main"
+              :class="isDescriptionExpanded ? '' : 'line-clamp-4'"
+            >
               {{ product.description || '판매자가 등록한 상세 설명이 없습니다.' }}
             </p>
+            <button
+              v-if="isDescriptionLong"
+              type="button"
+              class="mt-2 text-sm font-semibold text-primary hover:underline"
+              @click="isDescriptionExpanded = !isDescriptionExpanded"
+            >
+              {{ isDescriptionExpanded ? '접기' : '더 보기' }}
+            </button>
           </section>
         </div>
 
