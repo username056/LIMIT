@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.c203.limit.domain.inspection.agent.InspectionSessionDtos.CreateAgentUploadRequest;
 import com.c203.limit.domain.inspection.agent.InspectionSessionDtos.SubmitTestResultRequest;
 import com.c203.limit.domain.inspection.entity.ListingChecklistItem;
 import com.c203.limit.domain.inspection.enums.AutomationType;
@@ -19,6 +20,10 @@ import com.c203.limit.domain.inspection.enums.TestType;
 import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepository;
 import com.c203.limit.domain.inspection.service.BatteryReportParsingService;
 import com.c203.limit.domain.inspection.service.DxdiagParsingService;
+import com.c203.limit.domain.product.dto.request.CompleteEvidenceRequest;
+import com.c203.limit.domain.product.dto.request.CreateEvidenceUploadUrlRequest;
+import com.c203.limit.domain.product.dto.response.EvidenceResponse;
+import com.c203.limit.domain.product.dto.response.EvidenceUploadUrlResponse;
 import com.c203.limit.domain.product.entity.Listing;
 import com.c203.limit.domain.product.repository.ListingRepository;
 import com.c203.limit.domain.product.service.EvidenceUploadService;
@@ -30,6 +35,7 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,13 +46,20 @@ class InspectionSessionServiceTests {
     private InspectionSessionRepository sessionRepository;
     private InspectionSessionTestResultRepository testResultRepository;
     private ListingChecklistItemRepository checklistItemRepository;
+    private ListingChecklistItem dxdiagItem;
+    private EvidenceUploadService evidenceUploadService;
+    private DxdiagParsingService dxdiagParsingService;
+    private BatteryReportParsingService batteryReportParsingService;
 
     @BeforeEach
     void setUp() {
         ListingRepository listingRepository = mock(ListingRepository.class);
         checklistItemRepository = mock(ListingChecklistItemRepository.class);
         Listing listing = mock(Listing.class);
-        ListingChecklistItem dxdiagItem = mock(ListingChecklistItem.class);
+        dxdiagItem = mock(ListingChecklistItem.class);
+        evidenceUploadService = mock(EvidenceUploadService.class);
+        dxdiagParsingService = mock(DxdiagParsingService.class);
+        batteryReportParsingService = mock(BatteryReportParsingService.class);
 
         when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 10L))
                 .thenReturn(Optional.of(listing));
@@ -70,9 +83,9 @@ class InspectionSessionServiceTests {
                 testResultRepository,
                 listingRepository,
                 checklistItemRepository,
-                mock(EvidenceUploadService.class),
-                mock(DxdiagParsingService.class),
-                mock(BatteryReportParsingService.class),
+                evidenceUploadService,
+                dxdiagParsingService,
+                batteryReportParsingService,
                 Clock.fixed(Instant.parse("2026-08-03T01:00:00Z"), ZoneOffset.UTC));
     }
 
@@ -460,6 +473,401 @@ class InspectionSessionServiceTests {
 
         assertThat(service.listTestResults(10L, created.sessionKey())).isEmpty();
     }
+
+    @Test
+    void createRejectsListingThatBelongsToAnotherSeller() {
+        assertThatThrownBy(() -> service.create(99L, 1001L))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.PRODUCT_NOT_FOUND));
+        verify(sessionRepository, never()).save(any(InspectionSession.class));
+    }
+
+    @Test
+    void createRequiresDxdiagChecklistTarget() {
+        when(checklistItemRepository.findByListingIdOrderByDisplayOrderAsc(1001L))
+                .thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.create(10L, 1001L))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INSPECTION_TARGET_NOT_FOUND));
+    }
+
+    @Test
+    void createFailsWhenEveryGeneratedPairingCodeCollides() {
+        when(sessionRepository.existsByPairingCodeHashAndStatusAndExpiresAtAfter(
+                        any(byte[].class), eq(InspectionSessionStatus.CREATED), any()))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.create(10L, 1001L))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INTERNAL_ERROR));
+        verify(sessionRepository, never()).save(any(InspectionSession.class));
+    }
+
+    @Test
+    void statusRejectsSellerWhoDoesNotOwnTheSession() {
+        var created = service.create(10L, 1001L);
+        InspectionSession stored = captureCreatedSession(created.sessionKey());
+        when(sessionRepository.findById(created.sessionKey())).thenReturn(Optional.of(stored));
+
+        assertThatThrownBy(() -> service.status(99L, created.sessionKey()))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.FORBIDDEN));
+    }
+
+    @Test
+    void statusExpiresSessionThatPassedItsDeadline() {
+        when(sessionRepository.findById("sess-expired"))
+                .thenReturn(Optional.of(expiredSession()));
+
+        assertThat(service.status(10L, "sess-expired").status())
+                .isEqualTo(InspectionSessionStatus.EXPIRED);
+    }
+
+    @Test
+    void statusThrowsWhenSessionIsUnknown() {
+        assertThatThrownBy(() -> service.status(10L, "sess-unknown"))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INSPECTION_SESSION_NOT_FOUND));
+    }
+
+    @Test
+    void agentRequestOnExpiredSessionIsRejected() {
+        when(sessionRepository.findById("sess-expired"))
+                .thenReturn(Optional.of(expiredSession()));
+
+        assertThatThrownBy(() -> service.complete("Bearer any-token", "sess-expired"))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INSPECTION_SESSION_EXPIRED));
+    }
+
+    @Test
+    void agentRequestWithoutUsableBearerTokenIsRejected() {
+        PairedSession paired = pairedSession();
+
+        for (String authorization : new String[] {null, "token-without-scheme", "Bearer    "}) {
+            assertThatThrownBy(() -> service.complete(authorization, paired.sessionKey()))
+                    .isInstanceOfSatisfying(
+                            BusinessException.class,
+                            exception -> assertThat(exception.getErrorCode())
+                                    .isEqualTo(ErrorCode.INSPECTION_AGENT_UNAUTHORIZED));
+        }
+    }
+
+    @Test
+    void createUploadRejectsCompletedSession() {
+        PairedSession paired = pairedSession();
+        paired.session().complete(LocalDateTime.parse("2026-08-03T01:01:00"));
+
+        assertThatThrownBy(() -> service.createUpload(
+                        paired.authorization(),
+                        paired.sessionKey(),
+                        new CreateAgentUploadRequest(
+                                "DXDIAG", "DxDiag.txt", "text/plain", 2048L)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INSPECTION_SESSION_INVALID_STATE));
+    }
+
+    @Test
+    void createUploadIssuesPresignedUrlAndMarksSessionUploading() {
+        PairedSession paired = pairedSession();
+        when(dxdiagItem.getId()).thenReturn(7002L);
+        when(evidenceUploadService.createUploadUrl(
+                        eq(10L), eq(1001L), eq(7002L), any(CreateEvidenceUploadUrlRequest.class)))
+                .thenReturn(new EvidenceUploadUrlResponse(
+                        "upl_01",
+                        "products/1001/checklist/7002/attempt-1.txt",
+                        "https://storage.example.com/presigned",
+                        OffsetDateTime.parse("2026-08-03T01:15:00Z"),
+                        Map.of("Content-Type", "text/plain")));
+
+        var response = service.createUpload(
+                paired.authorization(),
+                paired.sessionKey(),
+                new CreateAgentUploadRequest("dxdiag", "DxDiag.txt", "text/plain", 2048L));
+
+        assertThat(response.uploadId()).isEqualTo("upl_01");
+        assertThat(response.presignedUrl()).isEqualTo("https://storage.example.com/presigned");
+        assertThat(response.requiredHeaders()).containsEntry("Content-Type", "text/plain");
+        assertThat(service.status(10L, paired.sessionKey()).status())
+                .isEqualTo(InspectionSessionStatus.UPLOADING);
+    }
+
+    @Test
+    void createUploadRejectsUnsupportedParserType() {
+        PairedSession paired = pairedSession();
+
+        assertThatThrownBy(() -> service.createUpload(
+                        paired.authorization(),
+                        paired.sessionKey(),
+                        new CreateAgentUploadRequest(
+                                "MEMORY_DUMP", "dump.bin", "application/octet-stream", 10L)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+        verify(evidenceUploadService, never()).createUploadUrl(
+                any(), any(), any(), any(CreateEvidenceUploadUrlRequest.class));
+    }
+
+    @Test
+    void completeUploadHandsDxdiagEvidenceToTheDxdiagParser() {
+        PairedSession paired = pairedSession();
+        paired.session().markUploading();
+        when(dxdiagItem.getId()).thenReturn(7002L);
+        when(evidenceUploadService.complete(
+                        eq(10L), eq(1001L), eq(7002L), any(CompleteEvidenceRequest.class)))
+                .thenReturn(evidence(9003L));
+
+        service.completeUpload(paired.authorization(), paired.sessionKey(), "upl_01", "DXDIAG");
+
+        verify(dxdiagParsingService).parse(9003L, 10L);
+        verify(batteryReportParsingService, never()).parse(any(), any());
+    }
+
+    @Test
+    void completeUploadHandsBatteryReportEvidenceToTheBatteryParser() {
+        ListingChecklistItem batteryItem = mock(ListingChecklistItem.class);
+        when(batteryItem.getAutomationType()).thenReturn(AutomationType.FILE_PARSE);
+        when(batteryItem.getParserType()).thenReturn("BATTERY_REPORT");
+        when(batteryItem.getId()).thenReturn(7003L);
+        when(checklistItemRepository.findByListingIdOrderByDisplayOrderAsc(1001L))
+                .thenReturn(List.of(dxdiagItem, batteryItem));
+        PairedSession paired = pairedSession();
+        paired.session().markUploading();
+        when(evidenceUploadService.complete(
+                        eq(10L), eq(1001L), eq(7003L), any(CompleteEvidenceRequest.class)))
+                .thenReturn(evidence(9004L));
+
+        service.completeUpload(
+                paired.authorization(), paired.sessionKey(), "upl_02", " battery_report ");
+
+        verify(batteryReportParsingService).parse(9004L, 10L);
+        verify(dxdiagParsingService, never()).parse(any(), any());
+    }
+
+    @Test
+    void completeRejectsSessionThatIsNotUploading() {
+        PairedSession paired = pairedSession();
+
+        assertThatThrownBy(() -> service.complete(paired.authorization(), paired.sessionKey()))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INSPECTION_SESSION_INVALID_STATE));
+    }
+
+    @Test
+    void completeMarksUploadingSessionAsCompleted() {
+        PairedSession paired = pairedSession();
+        paired.session().markUploading();
+
+        var status = service.complete(paired.authorization(), paired.sessionKey());
+
+        assertThat(status.status()).isEqualTo(InspectionSessionStatus.COMPLETED);
+        assertThat(status.sessionKey()).isEqualTo(paired.sessionKey());
+    }
+
+    @Test
+    void submitTestResultRejectsSkippedResultWithMeasurement() {
+        PairedSession paired = pairedSession();
+
+        assertThatThrownBy(() -> service.submitTestResult(
+                        paired.authorization(),
+                        paired.sessionKey(),
+                        testResult(
+                                TestType.CAMERA,
+                                MeasurementStatus.DETECTED,
+                                InspectionUserResult.SKIPPED)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INSPECTION_TEST_RESULT_INVALID));
+    }
+
+    @Test
+    void submitTestResultRejectsUserConfirmationWithoutDetection() {
+        PairedSession paired = pairedSession();
+
+        assertThatThrownBy(() -> service.submitTestResult(
+                        paired.authorization(),
+                        paired.sessionKey(),
+                        testResult(
+                                TestType.CAMERA,
+                                MeasurementStatus.NOT_DETECTED,
+                                InspectionUserResult.USER_CONFIRMED)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INSPECTION_TEST_RESULT_INVALID));
+    }
+
+    @Test
+    void submitTestResultRejectsNotExecutedMeasurementWithConfirmedResult() {
+        PairedSession paired = pairedSession();
+
+        assertThatThrownBy(() -> service.submitTestResult(
+                        paired.authorization(),
+                        paired.sessionKey(),
+                        testResult(
+                                TestType.CAMERA,
+                                MeasurementStatus.NOT_EXECUTED,
+                                InspectionUserResult.USER_CONFIRMED)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INSPECTION_TEST_RESULT_INVALID));
+    }
+
+    @Test
+    void submitTestResultMapsUserReportedIssueToFailedDeviceCheck() {
+        PairedSession paired = pairedSession();
+        ListingChecklistItem keyboardItem = mock(ListingChecklistItem.class);
+        when(checklistItemRepository.findByListingIdAndItemCode(1001L, "LAP-KBD-005"))
+                .thenReturn(Optional.of(keyboardItem));
+
+        service.submitTestResult(
+                paired.authorization(),
+                paired.sessionKey(),
+                testResult(
+                        TestType.KEYBOARD,
+                        MeasurementStatus.NOT_DETECTED,
+                        InspectionUserResult.USER_REPORTED_ISSUE));
+
+        verify(keyboardItem).applyDeviceCheckResult(DeviceCheckResult.FAILED);
+    }
+
+    @Test
+    void submitTestResultMapsSkippedToSkippedDeviceCheck() {
+        PairedSession paired = pairedSession();
+        ListingChecklistItem keyboardItem = mock(ListingChecklistItem.class);
+        when(keyboardItem.getId()).thenReturn(7001L);
+        when(checklistItemRepository.findByListingIdAndItemCode(1001L, "LAP-KBD-005"))
+                .thenReturn(Optional.of(keyboardItem));
+
+        var submission = service.submitTestResult(
+                paired.authorization(),
+                paired.sessionKey(),
+                testResult(
+                        TestType.KEYBOARD,
+                        MeasurementStatus.NOT_EXECUTED,
+                        InspectionUserResult.SKIPPED));
+
+        assertThat(submission.created()).isTrue();
+        assertThat(submission.response().checklistItemId()).isEqualTo(7001L);
+        assertThat(submission.response().userResult())
+                .isEqualTo(InspectionUserResult.SKIPPED);
+        verify(keyboardItem).applyDeviceCheckResult(DeviceCheckResult.SKIPPED);
+    }
+
+    @Test
+    void submitTestResultForChargingDoesNotCompleteEvidenceChecklistItem() {
+        PairedSession paired = pairedSession();
+        ListingChecklistItem chargingItem = mock(ListingChecklistItem.class);
+
+        var submission = service.submitTestResult(
+                paired.authorization(),
+                paired.sessionKey(),
+                testResult(TestType.CHARGING, MeasurementStatus.NOT_DETECTED, null));
+
+        assertThat(submission.response().checklistItemId()).isNull();
+        verify(chargingItem, never()).applyDeviceCheckResult(any());
+    }
+
+    @Test
+    void submitTestResultThrowsWhenSessionRowIsMissing() {
+        assertThatThrownBy(() -> service.submitTestResult(
+                        "Bearer any-token",
+                        "sess-unknown",
+                        testResult(
+                                TestType.CAMERA,
+                                MeasurementStatus.DETECTED,
+                                InspectionUserResult.USER_CONFIRMED)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INSPECTION_SESSION_NOT_FOUND));
+    }
+
+    @Test
+    void listTestResultsThrowsWhenSessionIsUnknown() {
+        assertThatThrownBy(() -> service.listTestResults(10L, "sess-unknown"))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INSPECTION_SESSION_NOT_FOUND));
+    }
+
+    private PairedSession pairedSession() {
+        var created = service.create(10L, 1001L);
+        InspectionSession stored = captureCreatedSession(created.sessionKey());
+        when(sessionRepository
+                        .findFirstByPairingCodeHashAndStatusAndExpiresAtAfterOrderByCreatedAtDesc(
+                                any(byte[].class),
+                                eq(InspectionSessionStatus.CREATED),
+                                any()))
+                .thenReturn(Optional.of(stored));
+        when(sessionRepository.findById(created.sessionKey())).thenReturn(Optional.of(stored));
+        when(sessionRepository.findBySessionKeyForUpdate(created.sessionKey()))
+                .thenReturn(Optional.of(stored));
+        var paired = service.pair(created.pairingCode(), "0.1.0");
+        return new PairedSession(created.sessionKey(), stored, "Bearer " + paired.agentToken());
+    }
+
+    private InspectionSession expiredSession() {
+        return InspectionSession.create(
+                "sess-expired",
+                new byte[32],
+                10L,
+                1001L,
+                LocalDateTime.parse("2026-08-03T00:59:00"),
+                LocalDateTime.parse("2026-08-03T00:00:00"));
+    }
+
+    private EvidenceResponse evidence(Long evidenceId) {
+        return new EvidenceResponse(
+                evidenceId,
+                7002L,
+                "DIAGNOSTIC_FILE",
+                1,
+                true,
+                "https://cdn.example.com/evidence.txt",
+                "READY",
+                "NONE",
+                OffsetDateTime.parse("2026-08-03T01:00:00Z"),
+                OffsetDateTime.parse("2026-08-03T01:01:00Z"));
+    }
+
+    private SubmitTestResultRequest testResult(
+            TestType testType,
+            MeasurementStatus measurementStatus,
+            InspectionUserResult userResult) {
+        return new SubmitTestResultRequest(
+                UUID.randomUUID(),
+                testType,
+                measurementStatus,
+                userResult,
+                null,
+                OffsetDateTime.parse("2026-08-03T01:00:00Z"),
+                null);
+    }
+
+    private record PairedSession(
+            String sessionKey, InspectionSession session, String authorization) {}
 
     private InspectionSession captureCreatedSession(String sessionKey) {
         var captor = org.mockito.ArgumentCaptor.forClass(InspectionSession.class);

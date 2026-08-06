@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -189,5 +190,390 @@ class SocialAccountLoginServiceTests {
                                 assertThat(exception.getErrorCode())
                                         .isEqualTo(ErrorCode.MEMBER_NOT_ACTIVE));
         verify(authService, never()).issueTokens(any());
+    }
+
+    @Test
+    void rejectsSocialIdentityWithoutUsableEmail() {
+        assertThatThrownBy(
+                        () ->
+                                service.login(
+                                        SocialProvider.GOOGLE,
+                                        new SocialIdentityClient.SocialIdentity(
+                                                "g-9", "not-an-email", "member")))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.SOCIAL_AUTH_FAILED));
+        assertThatThrownBy(
+                        () ->
+                                service.login(
+                                        SocialProvider.GOOGLE,
+                                        new SocialIdentityClient.SocialIdentity(
+                                                "g-9", null, "member")))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.SOCIAL_AUTH_FAILED));
+        verify(socialAccountRepository, never()).findByProviderAndProviderUserId(any(), any());
+    }
+
+    @Test
+    void fallsBackToDefaultNicknameAndAppendsSuffixWhenSuggestionIsTaken() {
+        when(socialAccountRepository.findByProviderAndProviderUserId(SocialProvider.KAKAO, "k-9"))
+                .thenReturn(Optional.empty());
+        when(memberRepository.existsByNickname("member")).thenReturn(true);
+        when(memberRepository.existsByNickname("member1")).thenReturn(false);
+
+        var result =
+                service.login(
+                        SocialProvider.KAKAO,
+                        new SocialIdentityClient.SocialIdentity("k-9", "user@kakao.com", "!!!"));
+
+        assertThat(result.response().getStatus()).isEqualTo("SIGNUP_REQUIRED");
+        assertThat(result.response().getSignup().suggestedNickname()).isEqualTo("member1");
+    }
+
+    @Test
+    void fallsBackToDefaultNicknameWhenProviderSendsNoNickname() {
+        when(socialAccountRepository.findByProviderAndProviderUserId(SocialProvider.KAKAO, "k-11"))
+                .thenReturn(Optional.empty());
+
+        var withoutNickname =
+                service.login(
+                        SocialProvider.KAKAO,
+                        new SocialIdentityClient.SocialIdentity("k-11", "user@kakao.com", null));
+        var withBlankNickname =
+                service.login(
+                        SocialProvider.KAKAO,
+                        new SocialIdentityClient.SocialIdentity("k-11", "user@kakao.com", "   "));
+
+        assertThat(withoutNickname.response().getSignup().suggestedNickname()).isEqualTo("member");
+        assertThat(withBlankNickname.response().getSignup().suggestedNickname()).isEqualTo("member");
+    }
+
+    @Test
+    void truncatesOverlongProviderNicknameSuggestion() {
+        when(socialAccountRepository.findByProviderAndProviderUserId(SocialProvider.KAKAO, "k-10"))
+                .thenReturn(Optional.empty());
+
+        var result =
+                service.login(
+                        SocialProvider.KAKAO,
+                        new SocialIdentityClient.SocialIdentity(
+                                "k-10", "user@kakao.com", "abcdefghijklmnopqrstuvwxyz"));
+
+        assertThat(result.response().getSignup().suggestedNickname())
+                .isEqualTo("abcdefghijklmn");
+    }
+
+    @Test
+    void rejectsCompleteWithoutSignupToken() {
+        var request = new CompleteSocialSignupRequest("runner", null, true, true, true, false);
+
+        assertThatThrownBy(() -> service.complete(null, request))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.SOCIAL_SIGNUP_SESSION_INVALID));
+        assertThatThrownBy(() -> service.complete("   ", request))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.SOCIAL_SIGNUP_SESSION_INVALID));
+        verify(signupSessionStore, never()).consume(any());
+    }
+
+    @Test
+    void rejectsCompleteWithDuplicatedNicknameBeforeConsumingSession() {
+        when(memberRepository.existsByNickname("runner")).thenReturn(true);
+
+        assertThatThrownBy(
+                        () ->
+                                service.complete(
+                                        "signup-token",
+                                        new CompleteSocialSignupRequest(
+                                                "runner", null, true, true, true, false)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.NICKNAME_DUPLICATED));
+        verify(signupSessionStore, never()).consume(any());
+    }
+
+    @Test
+    void rejectsCompleteWhenSignupSessionIsExpiredOrAlreadyUsed() {
+        when(signupSessionStore.consume(any())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(
+                        () ->
+                                service.complete(
+                                        "signup-token",
+                                        new CompleteSocialSignupRequest(
+                                                "runner", null, true, true, true, false)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.SOCIAL_SIGNUP_SESSION_INVALID));
+        verify(memberRepository, never()).save(any(Member.class));
+    }
+
+    @Test
+    void rejectsCompleteWhenEmailWasRegisteredWhileSessionWasOpen() {
+        when(signupSessionStore.consume(any()))
+                .thenReturn(
+                        Optional.of(
+                                new SocialSignupSessionStore.SocialSignupSession(
+                                        SocialProvider.KAKAO, "k-1", "user@example.com", "member")));
+        when(memberRepository.existsByEmailIgnoreCase("user@example.com")).thenReturn(true);
+
+        assertThatThrownBy(
+                        () ->
+                                service.complete(
+                                        "signup-token",
+                                        new CompleteSocialSignupRequest(
+                                                "runner", null, true, true, true, false)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.SOCIAL_ACCOUNT_REAUTH_REQUIRED));
+        verify(memberRepository, never()).save(any(Member.class));
+    }
+
+    @Test
+    void rejectsCompleteWhenProviderAccountWasLinkedWhileSessionWasOpen() {
+        Member other = Member.createSocial("other@example.com", "other");
+        when(signupSessionStore.consume(any()))
+                .thenReturn(
+                        Optional.of(
+                                new SocialSignupSessionStore.SocialSignupSession(
+                                        SocialProvider.KAKAO, "k-1", "user@example.com", "member")));
+        when(socialAccountRepository.findByProviderAndProviderUserId(SocialProvider.KAKAO, "k-1"))
+                .thenReturn(
+                        Optional.of(
+                                SocialAccount.link(
+                                        other, SocialProvider.KAKAO, "k-1", "user@example.com")));
+
+        assertThatThrownBy(
+                        () ->
+                                service.complete(
+                                        "signup-token",
+                                        new CompleteSocialSignupRequest(
+                                                "runner", null, true, true, true, false)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.SOCIAL_ACCOUNT_CONFLICT));
+        verify(memberRepository, never()).save(any(Member.class));
+    }
+
+    @Test
+    void translatesConcurrentLinkViolationIntoConflictWhileCompletingSignup() {
+        when(signupSessionStore.consume(any()))
+                .thenReturn(
+                        Optional.of(
+                                new SocialSignupSessionStore.SocialSignupSession(
+                                        SocialProvider.KAKAO, "k-2", "user@example.com", "member")));
+        when(socialAccountRepository.findByProviderAndProviderUserId(SocialProvider.KAKAO, "k-2"))
+                .thenReturn(Optional.empty());
+        when(memberRepository.save(any(Member.class)))
+                .thenAnswer(
+                        invocation -> {
+                            Member member = invocation.getArgument(0);
+                            ReflectionTestUtils.setField(member, "id", 5L);
+                            return member;
+                        });
+        when(socialAccountRepository.saveAndFlush(any(SocialAccount.class)))
+                .thenThrow(new DataIntegrityViolationException("duplicate provider_user_id"));
+
+        assertThatThrownBy(
+                        () ->
+                                service.complete(
+                                        "signup-token",
+                                        new CompleteSocialSignupRequest(
+                                                "runner", null, true, true, true, false)))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.SOCIAL_ACCOUNT_CONFLICT));
+        verify(authService, never()).issueTokens(any());
+    }
+
+    @Test
+    void linksProviderAccountToActiveMember() {
+        Member member = Member.createLocal("user@example.com", "encoded", "member", null);
+        ReflectionTestUtils.setField(member, "id", 2L);
+        when(memberRepository.findById(2L)).thenReturn(Optional.of(member));
+        when(socialAccountRepository.findByProviderAndProviderUserId(SocialProvider.GOOGLE, "g-7"))
+                .thenReturn(Optional.empty());
+        when(socialAccountRepository.saveAndFlush(any(SocialAccount.class)))
+                .thenAnswer(
+                        invocation -> {
+                            SocialAccount saved = invocation.getArgument(0);
+                            ReflectionTestUtils.setField(saved, "id", 11L);
+                            return saved;
+                        });
+
+        var response =
+                service.link(
+                        2L,
+                        SocialProvider.GOOGLE,
+                        new SocialIdentityClient.SocialIdentity(
+                                "g-7", " User@Example.com ", "member"));
+
+        assertThat(response.getSocialAccountId()).isEqualTo(11L);
+        assertThat(response.getProvider()).isEqualTo("GOOGLE");
+        assertThat(response.getProviderEmail()).isEqualTo("user@example.com");
+        assertThat(response.getConnectedAt()).isNotNull();
+    }
+
+    @Test
+    void rejectsLinkForUnknownMember() {
+        when(memberRepository.findById(9L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(
+                        () ->
+                                service.link(
+                                        9L,
+                                        SocialProvider.GOOGLE,
+                                        new SocialIdentityClient.SocialIdentity(
+                                                "g-7", "user@example.com", "member")))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.MEMBER_NOT_FOUND));
+        verify(socialAccountRepository, never()).saveAndFlush(any(SocialAccount.class));
+    }
+
+    @Test
+    void rejectsLinkForMemberPendingWithdrawal() {
+        Member member = Member.createLocal("user@example.com", "encoded", "member", null);
+        ReflectionTestUtils.setField(member, "id", 2L);
+        ReflectionTestUtils.setField(member, "status", MemberStatus.WITHDRAWAL_PENDING);
+        when(memberRepository.findById(2L)).thenReturn(Optional.of(member));
+
+        assertThatThrownBy(
+                        () ->
+                                service.link(
+                                        2L,
+                                        SocialProvider.GOOGLE,
+                                        new SocialIdentityClient.SocialIdentity(
+                                                "g-7", "user@example.com", "member")))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.MEMBER_NOT_ACTIVE));
+        verify(socialAccountRepository, never()).saveAndFlush(any(SocialAccount.class));
+    }
+
+    @Test
+    void rejectsLinkWhenProviderIsAlreadyConnectedToTheSameMember() {
+        Member member = Member.createLocal("user@example.com", "encoded", "member", null);
+        ReflectionTestUtils.setField(member, "id", 2L);
+        when(memberRepository.findById(2L)).thenReturn(Optional.of(member));
+        when(socialAccountRepository.existsByMemberIdAndProvider(2L, SocialProvider.GOOGLE))
+                .thenReturn(true);
+
+        assertThatThrownBy(
+                        () ->
+                                service.link(
+                                        2L,
+                                        SocialProvider.GOOGLE,
+                                        new SocialIdentityClient.SocialIdentity(
+                                                "g-7", "user@example.com", "member")))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.SOCIAL_ACCOUNT_CONFLICT));
+        verify(socialAccountRepository, never()).findByProviderAndProviderUserId(any(), any());
+        verify(socialAccountRepository, never()).saveAndFlush(any(SocialAccount.class));
+    }
+
+    @Test
+    void rejectsLinkWhenProviderAccountBelongsToAnotherMember() {
+        Member member = Member.createLocal("user@example.com", "encoded", "member", null);
+        ReflectionTestUtils.setField(member, "id", 2L);
+        Member other = Member.createSocial("other@example.com", "other");
+        when(memberRepository.findById(2L)).thenReturn(Optional.of(member));
+        when(socialAccountRepository.findByProviderAndProviderUserId(SocialProvider.GOOGLE, "g-8"))
+                .thenReturn(
+                        Optional.of(
+                                SocialAccount.link(
+                                        other,
+                                        SocialProvider.GOOGLE,
+                                        "g-8",
+                                        "other@example.com")));
+
+        assertThatThrownBy(
+                        () ->
+                                service.link(
+                                        2L,
+                                        SocialProvider.GOOGLE,
+                                        new SocialIdentityClient.SocialIdentity(
+                                                "g-8", "user@example.com", "member")))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.SOCIAL_ACCOUNT_CONFLICT));
+        verify(socialAccountRepository, never()).saveAndFlush(any(SocialAccount.class));
+    }
+
+    @Test
+    void rejectsLinkWhenProviderReturnsMalformedEmail() {
+        Member member = Member.createLocal("user@example.com", "encoded", "member", null);
+        ReflectionTestUtils.setField(member, "id", 2L);
+        when(memberRepository.findById(2L)).thenReturn(Optional.of(member));
+        when(socialAccountRepository.findByProviderAndProviderUserId(SocialProvider.GOOGLE, "g-7"))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(
+                        () ->
+                                service.link(
+                                        2L,
+                                        SocialProvider.GOOGLE,
+                                        new SocialIdentityClient.SocialIdentity(
+                                                "g-7", "missing-at-sign", "member")))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.SOCIAL_AUTH_FAILED));
+        verify(socialAccountRepository, never()).saveAndFlush(any(SocialAccount.class));
+    }
+
+    @Test
+    void translatesConcurrentLinkViolationIntoConflictWhileLinking() {
+        Member member = Member.createLocal("user@example.com", "encoded", "member", null);
+        ReflectionTestUtils.setField(member, "id", 2L);
+        when(memberRepository.findById(2L)).thenReturn(Optional.of(member));
+        when(socialAccountRepository.findByProviderAndProviderUserId(SocialProvider.GOOGLE, "g-7"))
+                .thenReturn(Optional.empty());
+        when(socialAccountRepository.saveAndFlush(any(SocialAccount.class)))
+                .thenThrow(new DataIntegrityViolationException("duplicate provider_user_id"));
+
+        assertThatThrownBy(
+                        () ->
+                                service.link(
+                                        2L,
+                                        SocialProvider.GOOGLE,
+                                        new SocialIdentityClient.SocialIdentity(
+                                                "g-7", "user@example.com", "member")))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.SOCIAL_ACCOUNT_CONFLICT));
     }
 }

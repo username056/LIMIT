@@ -158,6 +158,164 @@ class DeviceCatalogRegistrarTests {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    /** 사용자가 올린 모델은 검토 대기 상태로 들어가야 관리자가 확인할 대상이 된다. */
+    @Test
+    void marksUserReportedModelAsPendingReview() {
+        givenCatalog();
+        when(modelRepository.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
+
+        DeviceModel model = registrar.registerReported(leaf(), 7L);
+
+        assertThat(model.getReviewStatus())
+                .isEqualTo(com.c203.limit.domain.product.entity.DeviceModelReviewStatus
+                        .PENDING_REVIEW);
+        assertThat(model.getSourceType())
+                .isEqualTo(com.c203.limit.domain.product.entity.DeviceModelSourceType.USER_REPORT);
+        assertThat(model.getReportedByMemberId()).isEqualTo(7L);
+    }
+
+    @Test
+    void leavesManufacturerEmptyWhenLeafHasNoManufacturerName() {
+        when(modelRepository.findById(LEAF_ID)).thenReturn(Optional.empty());
+        when(deviceCategoryRepository.findById(PARENT_ID))
+                .thenReturn(Optional.of(deviceCategory()));
+        when(modelRepository.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
+        Category leaf = leaf();
+        ReflectionTestUtils.setField(leaf, "manufacturer", null);
+
+        DeviceModel model = registrar.register(leaf);
+
+        assertThat(model.manufacturerId()).isNull();
+        verify(manufacturerRepository, never()).findById(any());
+        verify(manufacturerRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void rejectsLeafWithoutModelCode() {
+        Category parent = Category.createTopLevel("일반형 스마트폰", DeviceType.SMARTPHONE, 1);
+        ReflectionTestUtils.setField(parent, "id", PARENT_ID);
+        Category leaf = Category.createLeaf(
+                parent, "Galaxy S25", DeviceType.SMARTPHONE, "Samsung", OsFamily.ANDROID,
+                null, List.of(), 3);
+        ReflectionTestUtils.setField(leaf, "id", LEAF_ID);
+
+        assertThatThrownBy(() -> registrar.register(leaf))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("device model leaf");
+        verify(modelRepository, never()).findById(any());
+    }
+
+    @Test
+    void rejectsLeafThatWasNeverPersisted() {
+        Category parent = Category.createTopLevel("일반형 스마트폰", DeviceType.SMARTPHONE, 1);
+        ReflectionTestUtils.setField(parent, "id", PARENT_ID);
+        Category leaf = Category.createLeaf(
+                parent, "Galaxy S25", DeviceType.SMARTPHONE, "Samsung", OsFamily.ANDROID,
+                "SM-S931N", List.of(), 3);
+
+        assertThatThrownBy(() -> registrar.register(leaf))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("persisted");
+    }
+
+    @Test
+    void rewritesCatalogRowWhenLeafMovesToAnotherCategory() {
+        Category parent = Category.createTopLevel("노트북", DeviceType.LAPTOP, 2);
+        ReflectionTestUtils.setField(parent, "id", 2L);
+        Category leaf = Category.createLeaf(
+                parent, "Galaxy Book4", DeviceType.LAPTOP, "Samsung", OsFamily.WINDOWS,
+                "NT960XGK", List.of(), 3);
+        ReflectionTestUtils.setField(leaf, "id", LEAF_ID);
+        DeviceCategory movedCategory = DeviceCategory.create(DeviceType.LAPTOP, "노트북", 2);
+        ReflectionTestUtils.setField(movedCategory, "id", 2L);
+        when(modelRepository.findByIdForUpdate(LEAF_ID)).thenReturn(Optional.of(registered()));
+        when(deviceCategoryRepository.findById(2L)).thenReturn(Optional.of(movedCategory));
+        when(manufacturerRepository.findById(Manufacturer.idOf("Samsung")))
+                .thenReturn(Optional.of(Manufacturer.create("Samsung")));
+
+        DeviceModel model = registrar.update(leaf);
+
+        assertThat(model.getModelName()).isEqualTo("Galaxy Book4");
+        assertThat(model.getModelCode()).isEqualTo("NT960XGK");
+        assertThat(model.getOsFamily()).isEqualTo(OsFamily.WINDOWS);
+        assertThat(model.getCategory()).isSameAs(movedCategory);
+    }
+
+    @Test
+    void failsUpdateWhenModelWasNeverRegistered() {
+        when(modelRepository.findByIdForUpdate(LEAF_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> registrar.update(leaf()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("not registered");
+        verify(deviceCategoryRepository, never()).findById(any());
+    }
+
+    @Test
+    void failsUpdateWhenTargetCategoryIsNotMigrated() {
+        when(modelRepository.findByIdForUpdate(LEAF_ID)).thenReturn(Optional.of(registered()));
+        when(deviceCategoryRepository.findById(PARENT_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> registrar.update(leaf()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("not migrated");
+        verify(manufacturerRepository, never()).findById(any());
+    }
+
+    @Test
+    void completeReviewMarksReportedModelVerified() {
+        DeviceModel model = DeviceModel.createReported(
+                LEAF_ID, deviceCategory(), null, "Galaxy S25", "SM-S931N", OsFamily.ANDROID, 1, 7L);
+        when(modelRepository.findByIdForUpdate(LEAF_ID)).thenReturn(Optional.of(model));
+
+        registrar.completeReview(LEAF_ID, 9L, "공식 모델 확인");
+
+        assertThat(model.getReviewStatus())
+                .isEqualTo(com.c203.limit.domain.product.entity.DeviceModelReviewStatus.VERIFIED);
+        assertThat(model.getReviewedByAdminId()).isEqualTo(9L);
+        assertThat(model.getReviewNote()).isEqualTo("공식 모델 확인");
+    }
+
+    @Test
+    void failsCompleteReviewWhenModelIsNotInTheCatalog() {
+        when(modelRepository.findByIdForUpdate(LEAF_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> registrar.completeReview(LEAF_ID, 9L, null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("not registered");
+    }
+
+    @Test
+    void deactivateHidesRegisteredModel() {
+        DeviceModel model = registered();
+        when(modelRepository.findByIdForUpdate(LEAF_ID)).thenReturn(Optional.of(model));
+
+        registrar.deactivate(LEAF_ID);
+
+        assertThat(model.isActive()).isFalse();
+    }
+
+    /** 거절 처리는 카탈로그 행이 없더라도 조용히 끝나야 한다. */
+    @Test
+    void deactivateIsSilentWhenModelIsNotInTheCatalog() {
+        when(modelRepository.findByIdForUpdate(LEAF_ID)).thenReturn(Optional.empty());
+
+        org.assertj.core.api.Assertions.assertThatNoException()
+                .isThrownBy(() -> registrar.deactivate(LEAF_ID));
+    }
+
+    private DeviceModel registered() {
+        return DeviceModel.create(
+                LEAF_ID,
+                deviceCategory(),
+                Manufacturer.create("Samsung"),
+                "Galaxy S25",
+                "SM-S931N",
+                OsFamily.ANDROID,
+                null,
+                3);
+    }
+
     private void givenCatalog() {
         when(modelRepository.findById(LEAF_ID)).thenReturn(Optional.empty());
         when(deviceCategoryRepository.findById(PARENT_ID))
