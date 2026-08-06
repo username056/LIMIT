@@ -3,10 +3,14 @@ package com.c203.limit.domain.product.entity;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.c203.limit.domain.inspection.enums.DeviceCheckResult;
 import com.c203.limit.domain.inspection.enums.DeviceType;
+import com.c203.limit.domain.inspection.enums.TestType;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -14,11 +18,19 @@ class ListingTests {
 
     private static final LocalDateTime RESERVED_UNTIL = LocalDateTime.of(2026, 7, 28, 0, 30);
 
-    private Listing onSaleListing() {
+    private Listing draftListing() {
         Category category = Category.createTopLevel("스마트폰", DeviceType.SMARTPHONE, 0);
-        Listing listing = Listing.createDraft(1L, category, "갤럭시 S24", "설명", 650_000, 10L);
-        ReflectionTestUtils.setField(listing, "status", ListingStatus.ON_SALE);
+        return Listing.createDraft(1L, category, "갤럭시 S24", "설명", 650_000, 10L);
+    }
+
+    private Listing listingWithStatus(ListingStatus status) {
+        Listing listing = draftListing();
+        ReflectionTestUtils.setField(listing, "status", status);
         return listing;
+    }
+
+    private Listing onSaleListing() {
+        return listingWithStatus(ListingStatus.ON_SALE);
     }
 
     @Test
@@ -320,5 +332,275 @@ class ListingTests {
 
         assertThat(listing.getStatus()).isEqualTo(ListingStatus.SETTLED);
         assertThat(listing.getSettledAt()).isNotNull();
+    }
+
+    @Test
+    void publishRequiresDraftWithCompletedPrecheck() {
+        Listing listing = draftListing();
+
+        assertThatThrownBy(listing::publish)
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.REQUIRED_EVIDENCE_INCOMPLETE));
+
+        listing.completePrecheck();
+        listing.publish();
+
+        assertThat(listing.isPrecheckCompleted()).isTrue();
+        assertThat(listing.getStatus()).isEqualTo(ListingStatus.ON_SALE);
+    }
+
+    @Test
+    void publishRejectsListingThatIsNoLongerDraft() {
+        Listing listing = onSaleListing();
+        listing.completePrecheck();
+
+        assertThatThrownBy(listing::publish)
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.INVALID_PRODUCT_STATUS_TRANSITION));
+    }
+
+    @Test
+    void updateDraftStepAcceptsOnlyStepsWithinRange() {
+        Listing listing = draftListing();
+
+        listing.updateDraftStep(1);
+        assertThat(listing.getDraftStep()).isEqualTo(1);
+
+        listing.updateDraftStep(4);
+        assertThat(listing.getDraftStep()).isEqualTo(4);
+
+        assertThatThrownBy(() -> listing.updateDraftStep(0))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+        assertThatThrownBy(() -> listing.updateDraftStep(5))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+        assertThat(listing.getDraftStep()).isEqualTo(4);
+    }
+
+    @Test
+    void updateDraftStepRejectsListingThatLeftDraft() {
+        Listing listing = onSaleListing();
+
+        assertThatThrownBy(() -> listing.updateDraftStep(2))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PRODUCT_EDIT_NOT_ALLOWED));
+    }
+
+    @Test
+    void updateDraftKeepsExistingTextWhenNewValueIsNull() {
+        Listing listing = draftListing();
+
+        listing.updateDraft(null, null, 700_000);
+
+        assertThat(listing.getTitle()).isEqualTo("갤럭시 S24");
+        assertThat(listing.getDescription()).isEqualTo("설명");
+        assertThat(listing.getPrice()).isEqualTo(700_000);
+
+        listing.updateDraft("갤럭시 S24 울트라", "새 설명", 800_000);
+
+        assertThat(listing.getTitle()).isEqualTo("갤럭시 S24 울트라");
+        assertThat(listing.getDescription()).isEqualTo("새 설명");
+        assertThat(listing.getPrice()).isEqualTo(800_000);
+    }
+
+    @Test
+    void updateBySellerLeavesUnspecifiedFieldsUntouched() {
+        Category category = Category.createTopLevel("스마트폰", DeviceType.SMARTPHONE, 0);
+        Listing listing = Listing.createDraft(
+                1L, category, "갤럭시 S24", "설명", 650_000, "블랙", 256, "서울 강남구", 10L);
+
+        listing.updateBySeller(null, null, false, null, null, false, null, false, null);
+
+        assertThat(listing.getTitle()).isEqualTo("갤럭시 S24");
+        assertThat(listing.getDescription()).isEqualTo("설명");
+        assertThat(listing.getPrice()).isEqualTo(650_000);
+        assertThat(listing.getColor()).isEqualTo("블랙");
+        assertThat(listing.getStorageGb()).isEqualTo(256);
+        assertThat(listing.getTradeRegion()).isEqualTo("서울 강남구");
+    }
+
+    @Test
+    void updateBySellerClearsOptionalFieldsWhenExplicitlySpecifiedAsNull() {
+        Category category = Category.createTopLevel("스마트폰", DeviceType.SMARTPHONE, 0);
+        Listing listing = Listing.createDraft(
+                1L, category, "갤럭시 S24", "설명", 650_000, "블랙", 256, "서울 강남구", 10L);
+
+        listing.updateBySeller(
+                "갤럭시 S24 울트라", null, true, 700_000L, null, true, null, true, "부산 해운대구");
+
+        assertThat(listing.getTitle()).isEqualTo("갤럭시 S24 울트라");
+        assertThat(listing.getDescription()).isNull();
+        assertThat(listing.getPrice()).isEqualTo(700_000);
+        assertThat(listing.getColor()).isNull();
+        assertThat(listing.getStorageGb()).isNull();
+        assertThat(listing.getTradeRegion()).isEqualTo("부산 해운대구");
+    }
+
+    @Test
+    void updateBySellerIsAllowedWhileListingIsOnSaleOrHidden() {
+        Listing onSale = onSaleListing();
+        Listing hidden = listingWithStatus(ListingStatus.HIDDEN);
+
+        onSale.updateBySeller("판매 중 수정", null, false, 660_000L, null, false, null, false, null);
+        hidden.updateBySeller("숨김 수정", null, false, 670_000L, null, false, null, false, null);
+
+        assertThat(onSale.getTitle()).isEqualTo("판매 중 수정");
+        assertThat(onSale.getPrice()).isEqualTo(660_000);
+        assertThat(hidden.getTitle()).isEqualTo("숨김 수정");
+        assertThat(hidden.getPrice()).isEqualTo(670_000);
+    }
+
+    @Test
+    void updateBySellerRejectsListingReservedOrLater() {
+        Listing reserved = listingWithStatus(ListingStatus.RESERVED);
+        Listing sold = listingWithStatus(ListingStatus.SOLD);
+
+        assertThatThrownBy(
+                        () -> reserved.updateBySeller(
+                                "수정", null, false, 1L, null, false, null, false, null))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PRODUCT_EDIT_NOT_ALLOWED));
+        assertThatThrownBy(
+                        () -> sold.updateBySeller(
+                                "수정", null, false, 1L, null, false, null, false, null))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.PRODUCT_EDIT_NOT_ALLOWED));
+        assertThat(reserved.getTitle()).isEqualTo("갤럭시 S24");
+    }
+
+    @Test
+    void hideMovesOnSaleListingToHiddenOnly() {
+        Listing listing = onSaleListing();
+
+        listing.hide();
+        assertThat(listing.getStatus()).isEqualTo(ListingStatus.HIDDEN);
+
+        assertThatThrownBy(listing::hide)
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.INVALID_PRODUCT_STATUS_TRANSITION));
+    }
+
+    @Test
+    void markSoldBySellerIsAllowedFromOnSaleAndHidden() {
+        Listing onSale = onSaleListing();
+        Listing hidden = listingWithStatus(ListingStatus.HIDDEN);
+
+        onSale.markSoldBySeller();
+        hidden.markSoldBySeller();
+
+        assertThat(onSale.getStatus()).isEqualTo(ListingStatus.SOLD);
+        assertThat(hidden.getStatus()).isEqualTo(ListingStatus.SOLD);
+    }
+
+    @Test
+    void markSoldBySellerRejectsDraftAndReservedListings() {
+        Listing draft = draftListing();
+        Listing reserved = listingWithStatus(ListingStatus.RESERVED);
+
+        assertThatThrownBy(draft::markSoldBySeller)
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.INVALID_PRODUCT_STATUS_TRANSITION));
+        assertThatThrownBy(reserved::markSoldBySeller)
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.INVALID_PRODUCT_STATUS_TRANSITION));
+    }
+
+    @Test
+    void reopenSoldBySellerReturnsSelfClosedListingToOnSale() {
+        Listing listing = onSaleListing();
+        listing.markSoldBySeller();
+
+        listing.reopenSoldBySeller();
+
+        assertThat(listing.getStatus()).isEqualTo(ListingStatus.ON_SALE);
+    }
+
+    @Test
+    void reopenSoldBySellerRejectsListingClosedThroughPayment() {
+        Listing settled = listingWithStatus(ListingStatus.SETTLED);
+
+        assertThatThrownBy(settled::reopenSoldBySeller)
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.INVALID_PRODUCT_STATUS_TRANSITION));
+    }
+
+    @Test
+    void applyCustomModelTrimsValuesAndTreatsBlankAsMissing() {
+        Listing listing = draftListing();
+
+        listing.applyCustomModel("  샤오미  ", "  홍미노트 13  ");
+
+        assertThat(listing.getCustomManufacturer()).isEqualTo("샤오미");
+        assertThat(listing.getCustomModelName()).isEqualTo("홍미노트 13");
+        assertThat(listing.hasCustomModel()).isTrue();
+
+        listing.applyCustomModel("   ", null);
+
+        assertThat(listing.getCustomManufacturer()).isNull();
+        assertThat(listing.getCustomModelName()).isNull();
+        assertThat(listing.hasCustomModel()).isFalse();
+    }
+
+    @Test
+    void hasCustomModelRequiresBothManufacturerAndModelName() {
+        Listing onlyManufacturer = draftListing();
+        Listing onlyModelName = draftListing();
+
+        onlyManufacturer.applyCustomModel("샤오미", "  ");
+        onlyModelName.applyCustomModel(null, "홍미노트 13");
+
+        assertThat(onlyManufacturer.hasCustomModel()).isFalse();
+        assertThat(onlyModelName.hasCustomModel()).isFalse();
+    }
+
+    @Test
+    void updateWebDeviceCheckResultsCopiesGivenResultsAndAcceptsNull() {
+        Listing listing = draftListing();
+        Map<TestType, DeviceCheckResult> results = new LinkedHashMap<>();
+        results.put(TestType.CAMERA, DeviceCheckResult.SUCCESS);
+
+        listing.updateWebDeviceCheckResults(results);
+        results.put(TestType.MICROPHONE, DeviceCheckResult.FAILED);
+
+        assertThat(listing.getWebDeviceCheckResults())
+                .containsExactly(Map.entry(TestType.CAMERA, DeviceCheckResult.SUCCESS));
+
+        listing.updateWebDeviceCheckResults(null);
+
+        assertThat(listing.getWebDeviceCheckResults()).isNull();
     }
 }

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withNoContent;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
@@ -184,6 +185,258 @@ class NaverClovaOcrClientTests {
                         exception ->
                                 assertThat(exception.getErrorCode())
                                         .isEqualTo(ErrorCode.OCR_IMAGE_FETCH_FAILED));
+        server.verify();
+    }
+
+    @Test
+    void recognizeFallsBackToDefaultModelVersionAndZeroConfidence() {
+        var builder = RestClient.builder();
+        var server = MockRestServiceServer.bindTo(builder).build();
+        var client = new NaverClovaOcrClient(builder, properties());
+
+        server.expect(requestTo(IMAGE_URL))
+                .andRespond(withSuccess(new byte[] {1, 2, 3}, MediaType.IMAGE_JPEG));
+        server.expect(requestTo(INVOKE_URL))
+                .andRespond(
+                        withSuccess(
+                                """
+                                {
+                                  "images": [
+                                    {
+                                      "inferResult": "SUCCESS",
+                                      "fields": [
+                                        {"inferText": "Galaxy"},
+                                        {"inferText": "Book4", "inferConfidence": 0.90}
+                                      ]
+                                    }
+                                  ]
+                                }
+                                """,
+                                MediaType.APPLICATION_JSON));
+
+        NaverClovaOcrResult result = client.recognize(IMAGE_URL, "jpg");
+
+        assertThat(result.modelVersion()).isEqualTo("V2");
+        assertThat(result.confidence()).isEqualByComparingTo("0.450");
+        server.verify();
+    }
+
+    @Test
+    void recognizeFieldsFallsBackToZeroBoxWhenBoundingPolyIsMissingOrEmpty() {
+        var builder = RestClient.builder();
+        var server = MockRestServiceServer.bindTo(builder).build();
+        var client = new NaverClovaOcrClient(builder, properties());
+
+        server.expect(requestTo(IMAGE_URL))
+                .andRespond(withSuccess(new byte[] {1, 2, 3}, MediaType.IMAGE_JPEG));
+        server.expect(requestTo(INVOKE_URL))
+                .andRespond(
+                        withSuccess(
+                                """
+                                {
+                                  "version": "V2",
+                                  "images": [
+                                    {
+                                      "inferResult": "SUCCESS",
+                                      "fields": [
+                                        {"inferText": "없음"},
+                                        {"inferText": "빈polygon", "boundingPoly": {}},
+                                        {"inferText": "빈vertices",
+                                         "boundingPoly": {"vertices": []}}
+                                      ]
+                                    }
+                                  ]
+                                }
+                                """,
+                                MediaType.APPLICATION_JSON));
+
+        List<OcrToken> tokens = client.recognizeFields(IMAGE_URL, "jpg");
+
+        assertThat(tokens).hasSize(3);
+        assertThat(tokens)
+                .allSatisfy(
+                        token -> {
+                            assertThat(token.confidence()).isEqualByComparingTo("0");
+                            assertThat(token.left()).isZero();
+                            assertThat(token.top()).isZero();
+                            assertThat(token.right()).isZero();
+                            assertThat(token.bottom()).isZero();
+                        });
+        server.verify();
+    }
+
+    @Test
+    void recognizeFieldsOnPreFetchedBytesSkipsTheImageDownload() {
+        var builder = RestClient.builder();
+        var server = MockRestServiceServer.bindTo(builder).build();
+        var client = new NaverClovaOcrClient(builder, properties());
+
+        server.expect(requestTo(INVOKE_URL))
+                .andExpect(header("X-OCR-SECRET", "secret-key"))
+                .andRespond(
+                        withSuccess(
+                                """
+                                {
+                                  "version": "V2",
+                                  "images": [
+                                    {
+                                      "inferResult": "SUCCESS",
+                                      "fields": [{"inferText": "128GB", "inferConfidence": 0.9}]
+                                    }
+                                  ]
+                                }
+                                """,
+                                MediaType.APPLICATION_JSON));
+
+        List<OcrToken> tokens = client.recognizeFields(new byte[] {4, 5, 6}, "jpg");
+
+        assertThat(tokens).extracting(OcrToken::text).containsExactly("128GB");
+        server.verify();
+    }
+
+    @Test
+    void fetchImageThrowsWhenBodyIsEmpty() {
+        var builder = RestClient.builder();
+        var server = MockRestServiceServer.bindTo(builder).build();
+        var client = new NaverClovaOcrClient(builder, properties());
+
+        server.expect(requestTo(IMAGE_URL))
+                .andRespond(withSuccess(new byte[0], MediaType.IMAGE_JPEG));
+
+        assertThatThrownBy(() -> client.fetchImage(IMAGE_URL))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.OCR_IMAGE_FETCH_FAILED));
+        server.verify();
+    }
+
+    @Test
+    void recognizeThrowsWhenResponseHasNoImages() {
+        var builder = RestClient.builder();
+        var server = MockRestServiceServer.bindTo(builder).build();
+        var client = new NaverClovaOcrClient(builder, properties());
+
+        server.expect(requestTo(IMAGE_URL))
+                .andRespond(withSuccess(new byte[] {1, 2, 3}, MediaType.IMAGE_JPEG));
+        server.expect(requestTo(INVOKE_URL))
+                .andRespond(
+                        withSuccess(
+                                "{\"version\": \"V2\", \"images\": []}",
+                                MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> client.recognize(IMAGE_URL, "jpg"))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.OCR_RECOGNITION_FAILED));
+        server.verify();
+    }
+
+    @Test
+    void fetchImageThrowsWhenResponseCarriesNoBodyAtAll() {
+        var builder = RestClient.builder();
+        var server = MockRestServiceServer.bindTo(builder).build();
+        var client = new NaverClovaOcrClient(builder, properties());
+
+        server.expect(requestTo(IMAGE_URL)).andRespond(withNoContent());
+
+        assertThatThrownBy(() -> client.fetchImage(IMAGE_URL))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.OCR_IMAGE_FETCH_FAILED));
+        server.verify();
+    }
+
+    @Test
+    void recognizeThrowsWhenClovaReturnsNoResponseBody() {
+        var builder = RestClient.builder();
+        var server = MockRestServiceServer.bindTo(builder).build();
+        var client = new NaverClovaOcrClient(builder, properties());
+
+        server.expect(requestTo(IMAGE_URL))
+                .andRespond(withSuccess(new byte[] {1, 2, 3}, MediaType.IMAGE_JPEG));
+        server.expect(requestTo(INVOKE_URL)).andRespond(withNoContent());
+
+        assertThatThrownBy(() -> client.recognize(IMAGE_URL, "jpg"))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.OCR_RECOGNITION_FAILED));
+        server.verify();
+    }
+
+    @Test
+    void recognizeThrowsWhenImagesElementIsAbsent() {
+        var builder = RestClient.builder();
+        var server = MockRestServiceServer.bindTo(builder).build();
+        var client = new NaverClovaOcrClient(builder, properties());
+
+        server.expect(requestTo(IMAGE_URL))
+                .andRespond(withSuccess(new byte[] {1, 2, 3}, MediaType.IMAGE_JPEG));
+        server.expect(requestTo(INVOKE_URL))
+                .andRespond(withSuccess("{\"version\": \"V2\"}", MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> client.recognize(IMAGE_URL, "jpg"))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.OCR_RECOGNITION_FAILED));
+        server.verify();
+    }
+
+    @Test
+    void recognizeThrowsWhenSuccessfulResponseCarriesNoFields() {
+        var builder = RestClient.builder();
+        var server = MockRestServiceServer.bindTo(builder).build();
+        var client = new NaverClovaOcrClient(builder, properties());
+
+        server.expect(requestTo(IMAGE_URL))
+                .andRespond(withSuccess(new byte[] {1, 2, 3}, MediaType.IMAGE_JPEG));
+        server.expect(requestTo(INVOKE_URL))
+                .andRespond(
+                        withSuccess(
+                                "{\"version\": \"V2\", \"images\": [{\"inferResult\": \"SUCCESS\"}]}",
+                                MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> client.recognize(IMAGE_URL, "jpg"))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.OCR_RECOGNITION_FAILED));
+        server.verify();
+    }
+
+    @Test
+    void recognizeThrowsWhenSuccessfulResponseCarriesEmptyFields() {
+        var builder = RestClient.builder();
+        var server = MockRestServiceServer.bindTo(builder).build();
+        var client = new NaverClovaOcrClient(builder, properties());
+
+        server.expect(requestTo(IMAGE_URL))
+                .andRespond(withSuccess(new byte[] {1, 2, 3}, MediaType.IMAGE_JPEG));
+        server.expect(requestTo(INVOKE_URL))
+                .andRespond(
+                        withSuccess(
+                                """
+                                {"version": "V2",
+                                 "images": [{"inferResult": "SUCCESS", "fields": []}]}
+                                """,
+                                MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> client.recognize(IMAGE_URL, "jpg"))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception ->
+                                assertThat(exception.getErrorCode())
+                                        .isEqualTo(ErrorCode.OCR_RECOGNITION_FAILED));
         server.verify();
     }
 

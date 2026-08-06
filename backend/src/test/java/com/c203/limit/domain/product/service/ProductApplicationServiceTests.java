@@ -54,6 +54,7 @@ import com.c203.limit.domain.product.repository.ListingThumbnailProjection;
 import com.c203.limit.domain.product.repository.MediaUploadSessionRepository;
 import com.c203.limit.domain.product.repository.ProductEngagementReader;
 import com.c203.limit.domain.product.repository.ProductEngagementReader.ProductEngagement;
+import com.c203.limit.domain.product.storage.MediaUrlResolver;
 import com.c203.limit.domain.rtc.repository.RtcSessionChecklistResultRepository;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
@@ -1205,5 +1206,386 @@ class ProductApplicationServiceTests {
         UpdateProductRequest request = new UpdateProductRequest();
         request.setPrice(price);
         return request;
+    }
+
+    @Test
+    void rejectsCreateForAModelThatIsUnknownOrDeactivated() {
+        Category deactivated = model();
+        deactivated.deactivate();
+        when(categoryRepository.findById(101L))
+                .thenReturn(Optional.empty(), Optional.of(deactivated));
+
+        for (int attempt = 0; attempt < 2; attempt++) {
+            assertThatThrownBy(() -> service.create(55L, new CreateProductRequest(
+                            1L, 101L, "Galaxy S24", null, BigDecimal.valueOf(650000),
+                            "Black", 256, "서울 강남구")))
+                    .isInstanceOfSatisfying(
+                            BusinessException.class,
+                            exception -> assertThat(exception.getErrorCode())
+                                    .isEqualTo(ErrorCode.DEVICE_MODEL_NOT_FOUND));
+        }
+        verify(listingRepository, never()).saveAndFlush(any(Listing.class));
+    }
+
+    /** 상위 카테고리를 그대로 고른 경우에도 요청한 카테고리와 어긋나면 등록을 막아야 한다. */
+    @Test
+    void rejectsCreateWhenATopLevelCategoryIsUsedAsAModelOfAnotherCategory() {
+        Category topLevel = Category.createTopLevel("스마트폰", DeviceType.SMARTPHONE, 1);
+        ReflectionTestUtils.setField(topLevel, "id", 1L);
+        when(categoryRepository.findById(1L)).thenReturn(Optional.of(topLevel));
+
+        assertThatThrownBy(() -> service.create(55L, new CreateProductRequest(
+                        9L, 1L, "Galaxy S24", null, BigDecimal.valueOf(650000),
+                        "Black", 256, "서울 강남구")))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.DEVICE_MODEL_NOT_FOUND));
+    }
+
+    @Test
+    void rejectsCreateWhenTheModelHasNoPublishedChecklistTemplate() {
+        when(categoryRepository.findById(101L)).thenReturn(Optional.of(model()));
+        when(templateRepository.findFirstByCategoryIdAndStatusOrderByVersionDesc(
+                        101L, ChecklistTemplateStatus.PUBLISHED))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.create(55L, new CreateProductRequest(
+                        1L, 101L, "Galaxy S24", null, BigDecimal.valueOf(650000),
+                        "Black", 256, "서울 강남구")))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.CHECKLIST_TEMPLATE_NOT_FOUND));
+        verify(listingRepository, never()).saveAndFlush(any(Listing.class));
+    }
+
+    @Test
+    void rejectsAGeneratedChecklistThatDoesNotMatchTheSelectedModel() {
+        when(categoryRepository.findById(101L)).thenReturn(Optional.of(model()));
+        GeneratedChecklist forAnotherModel = new GeneratedChecklist(
+                999L, "Samsung", "Galaxy S24", OsFamily.ANDROID, 1, false,
+                List.of(generatedItem("PHN-FTR-FP", "FINGERPRINT")), List.of(), List.of());
+        GeneratedChecklist withoutItems = new GeneratedChecklist(
+                101L, "Samsung", "Galaxy S24", OsFamily.ANDROID, 1, false,
+                List.of(), List.of(), List.of());
+
+        for (GeneratedChecklist invalid : List.of(forAnotherModel, withoutItems)) {
+            assertThatThrownBy(() -> service.create(
+                            55L,
+                            new CreateProductRequest(
+                                    1L, 101L, "Galaxy S24", null, BigDecimal.valueOf(650000),
+                                    "Black", 256, "서울 강남구"),
+                            invalid))
+                    .isInstanceOfSatisfying(
+                            BusinessException.class,
+                            exception -> assertThat(exception.getErrorCode())
+                                    .isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+        }
+        verify(templateRepository, never()).saveAndFlush(any(ChecklistTemplate.class));
+    }
+
+    /** '기타 (직접 입력)' 자리표시자 대신 판매자가 적은 값이 등록 시점 스냅샷에 남아야 한다. */
+    @Test
+    void freezesSellerEnteredModelIntoTheCreatedSpecSnapshot() {
+        Category model = model();
+        ChecklistTemplate template = template();
+        ChecklistTemplateItem required = ChecklistTemplateItem.create(
+                template, "EXT-01", "외관", "외관 확인", "전체 촬영", EvidenceType.PHOTO,
+                AutomationType.NONE, true, 1);
+        when(categoryRepository.findById(101L)).thenReturn(Optional.of(model));
+        when(templateRepository.findFirstByCategoryIdAndStatusOrderByVersionDesc(
+                        101L, ChecklistTemplateStatus.PUBLISHED))
+                .thenReturn(Optional.of(template));
+        when(templateItemRepository.findByChecklistTemplateIdOrderByDisplayOrderAsc(501L))
+                .thenReturn(List.of(required));
+        when(listingRepository.saveAndFlush(any(Listing.class))).thenAnswer(invocation -> {
+            Listing listing = invocation.getArgument(0);
+            ReflectionTestUtils.setField(listing, "id", 1001L);
+            return listing;
+        });
+
+        service.create(
+                55L,
+                new CreateProductRequest(
+                        1L,
+                        101L,
+                        "gram 17",
+                        "직접 입력 모델",
+                        BigDecimal.valueOf(1_500_000),
+                        "Black",
+                        512,
+                        "서울 송파구",
+                        Set.of(),
+                        "LG Electronics",
+                        "gram 17",
+                        "17Z90R",
+                        OsFamily.WINDOWS));
+
+        ArgumentCaptor<Listing> captor = ArgumentCaptor.forClass(Listing.class);
+        verify(listingRepository).saveAndFlush(captor.capture());
+        assertThat(captor.getValue().getCustomManufacturer()).isEqualTo("LG Electronics");
+        assertThat(captor.getValue().getCustomModelName()).isEqualTo("gram 17");
+        assertThat(captor.getValue().getSpecSnapshot())
+                .contains("LG Electronics")
+                .contains("gram 17")
+                .doesNotContain("Galaxy S24");
+    }
+
+    @Test
+    void updateBlocksRemovalWhenReinspectionRequestReferencesItem() {
+        Listing listing = listingWithDeviceModel();
+        ListingChecklistItem existing = confirmedFeatureItem(7020L);
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNullForUpdate(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(checklistGenerationService.resolveConfirmedFeatureItems(eq(101L), eq(Set.of())))
+                .thenReturn(Map.of());
+        when(checklistItemRepository.findByListingIdOrderByDisplayOrderAsc(1001L))
+                .thenReturn(List.of(existing));
+        when(reinspectionRequestItemRepository.existsByListingChecklistItem_Id(7020L))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.update(55L, 1001L, updateRequestWithFeatures(Set.of())))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.CHECKLIST_ITEM_LOCKED_BY_EVIDENCE));
+        verify(checklistItemRepository, never()).deleteAll(anyList());
+    }
+
+    @Test
+    void updateBlocksRemovalWhenRtcSessionResultReferencesItem() {
+        Listing listing = listingWithDeviceModel();
+        ListingChecklistItem existing = confirmedFeatureItem(7021L);
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNullForUpdate(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(checklistGenerationService.resolveConfirmedFeatureItems(eq(101L), eq(Set.of())))
+                .thenReturn(Map.of());
+        when(checklistItemRepository.findByListingIdOrderByDisplayOrderAsc(1001L))
+                .thenReturn(List.of(existing));
+        when(rtcSessionChecklistResultRepository.existsByListingChecklistItemId(7021L))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.update(55L, 1001L, updateRequestWithFeatures(Set.of())))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.CHECKLIST_ITEM_LOCKED_BY_EVIDENCE));
+        verify(checklistItemRepository, never()).deleteAll(anyList());
+    }
+
+    @Test
+    void rejectsFeatureAdditionWhenTheListingTemplateIsGone() {
+        Listing listing = listingWithDeviceModel();
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNullForUpdate(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(checklistGenerationService.resolveConfirmedFeatureItems(
+                        eq(101L), eq(Set.of("FINGERPRINT"))))
+                .thenReturn(Map.of("FINGERPRINT", generatedItem("PHN-FTR-FP", "FINGERPRINT")));
+        when(checklistItemRepository.findByListingIdOrderByDisplayOrderAsc(1001L))
+                .thenReturn(List.of());
+        when(templateRepository.findById(501L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.update(
+                        55L, 1001L, updateRequestWithFeatures(Set.of("FINGERPRINT"))))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.CHECKLIST_TEMPLATE_NOT_FOUND));
+        verify(checklistItemRepository, never()).saveAll(anyList());
+    }
+
+    /** 매물 전용이어야 할 DRAFT 템플릿을 다른 매물이 함께 쓰고 있으면 조용히 고쳐선 안 된다. */
+    @Test
+    void failsWhenAListingOnlyDraftTemplateTurnsOutToBeShared() {
+        Listing listing = listingWithDeviceModel();
+        ChecklistTemplate draftTemplate = ChecklistTemplate.createDraft(101L, 3);
+        ReflectionTestUtils.setField(draftTemplate, "id", 501L);
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNullForUpdate(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(checklistGenerationService.resolveConfirmedFeatureItems(
+                        eq(101L), eq(Set.of("FINGERPRINT"))))
+                .thenReturn(Map.of("FINGERPRINT", generatedItem("PHN-FTR-FP", "FINGERPRINT")));
+        when(checklistItemRepository.findByListingIdOrderByDisplayOrderAsc(1001L))
+                .thenReturn(List.of());
+        when(templateRepository.findById(501L)).thenReturn(Optional.of(draftTemplate));
+        when(listingRepository.countByChecklistTemplateId(501L)).thenReturn(2L);
+
+        assertThatThrownBy(() -> service.update(
+                        55L, 1001L, updateRequestWithFeatures(Set.of("FINGERPRINT"))))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("unexpectedly shared");
+        verify(checklistItemRepository, never()).saveAll(anyList());
+    }
+
+    /** 껐다 켠 기능은 템플릿에 정의가 남아 있다 — 다시 만들면 (template, item_code) 제약을 깬다. */
+    @Test
+    void reusesTheExistingTemplateItemWhenAFeatureIsTurnedBackOn() {
+        Listing listing = listingWithDeviceModel();
+        ChecklistTemplate draftTemplate = ChecklistTemplate.createDraft(101L, 3);
+        ReflectionTestUtils.setField(draftTemplate, "id", 501L);
+        ChecklistTemplateItem leftoverDefinition = ChecklistTemplateItem.create(
+                draftTemplate, "PHN-FTR-FP", "지문 인식", "확인", "가이드", EvidenceType.VIDEO,
+                AutomationType.NONE, true, 4);
+        ReflectionTestUtils.setField(leftoverDefinition, "id", 9020L);
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNullForUpdate(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        when(checklistGenerationService.resolveConfirmedFeatureItems(
+                        eq(101L), eq(Set.of("FINGERPRINT"))))
+                .thenReturn(Map.of("FINGERPRINT", generatedItem("PHN-FTR-FP", "FINGERPRINT")));
+        when(checklistItemRepository.findByListingIdOrderByDisplayOrderAsc(1001L))
+                .thenReturn(List.of());
+        when(templateRepository.findById(501L)).thenReturn(Optional.of(draftTemplate));
+        when(listingRepository.countByChecklistTemplateId(501L)).thenReturn(1L);
+        when(templateItemRepository.findByChecklistTemplateIdOrderByDisplayOrderAsc(501L))
+                .thenReturn(List.of(leftoverDefinition));
+
+        service.update(55L, 1001L, updateRequestWithFeatures(Set.of("FINGERPRINT")));
+
+        verify(templateItemRepository, never()).saveAllAndFlush(anyList());
+        verify(checklistItemRepository).saveAll(argThat((List<ListingChecklistItem> saved) ->
+                saved.size() == 1 && saved.get(0).getItemCode().equals("PHN-FTR-FP")));
+    }
+
+    /** CDN URL이 비어 있어도 저장소 키로 서명 URL을 만들어 대표 이미지를 보여 줘야 한다. */
+    @Test
+    void resolvesThumbnailThroughTheMediaUrlResolverWhenConfigured() {
+        MediaUrlResolver mediaUrlResolver = mock(MediaUrlResolver.class);
+        ProductApplicationService withResolver = new ProductApplicationService(
+                listingRepository, categoryRepository, templateRepository, templateItemRepository,
+                checklistItemRepository, statusHistoryRepository, imageRepository,
+                mediaUrlResolver, checklistGenerationService, evidenceRepository,
+                reinspectionRequestItemRepository, rtcSessionChecklistResultRepository,
+                mediaUploadSessionRepository, inspectionSessionTestResultRepository,
+                viewCountDispatcher, engagementReader);
+        ListingThumbnailProjection thumbnail = mock(ListingThumbnailProjection.class);
+        when(thumbnail.getListingId()).thenReturn(1001L);
+        when(thumbnail.getS3Key()).thenReturn("listing/1001/thumb.jpg");
+        when(listingRepository.findBySellerIdAndDeletedAtIsNull(eq(55L), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(listing())));
+        when(imageRepository.findFirstByListingIdsAndImageType(
+                        eq(List.of(1001L)),
+                        eq(com.c203.limit.domain.product.entity.ListingImageType.THUMBNAIL)))
+                .thenReturn(List.of(thumbnail));
+        when(mediaUrlResolver.resolve("listing/1001/thumb.jpg", null))
+                .thenReturn("https://cdn.example.com/signed/1001.jpg");
+
+        var result = withResolver.findMine(55L, null, 0, 20, null);
+
+        assertThat(result.content().get(0).getThumbnailUrl())
+                .isEqualTo("https://cdn.example.com/signed/1001.jpg");
+    }
+
+    @Test
+    void flagsSellerListItemWhenPrivacyConfirmationIsStillPending() {
+        ListingChecklistCountProjection count = mock(ListingChecklistCountProjection.class);
+        when(count.getListingId()).thenReturn(1001L);
+        when(count.getRequiredCount()).thenReturn(2L);
+        when(count.getCompletedRequiredCount()).thenReturn(1L);
+        when(count.getRequiredConfirmationCount()).thenReturn(1L);
+        when(count.getCompletedConfirmationCount()).thenReturn(0L);
+        when(listingRepository.findBySellerIdAndDeletedAtIsNull(eq(55L), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(listing())));
+        when(checklistItemRepository.countRequiredByListingIds(
+                        eq(List.of(1001L)),
+                        eq(ChecklistItemCompletionStatus.COMPLETED),
+                        eq(EvidenceType.SELLER_CONFIRMATION)))
+                .thenReturn(List.of(count));
+
+        var result = service.findMine(55L, null, 0, 20, null);
+
+        var item = result.content().get(0);
+        assertThat(item.isPendingPrivacyConfirmation()).isTrue();
+        assertThat(item.getRequiredItemCount()).isEqualTo(2);
+        assertThat(item.getCompletedItemCount()).isEqualTo(1);
+        assertThat(item.getThumbnailUrl()).isNull();
+    }
+
+    /** 직접 입력 모델은 오타를 고칠 수 있어야 한다. 보내지 않은 쪽은 기존 값을 유지한다. */
+    @Test
+    void updateKeepsTheStoredCustomModelFieldThatWasNotSent() {
+        Listing listing = listing();
+        listing.applyCustomModel("Samsng", "Galxy Book");
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+        UpdateProductRequest manufacturerOnly = new UpdateProductRequest();
+        manufacturerOnly.setCustomManufacturer("Samsung");
+        UpdateProductRequest modelNameOnly = new UpdateProductRequest();
+        modelNameOnly.setCustomModelName("Galaxy Book4");
+
+        service.update(55L, 1001L, manufacturerOnly);
+
+        assertThat(listing.getCustomManufacturer()).isEqualTo("Samsung");
+        assertThat(listing.getCustomModelName()).isEqualTo("Galxy Book");
+
+        service.update(55L, 1001L, modelNameOnly);
+
+        assertThat(listing.getCustomManufacturer()).isEqualTo("Samsung");
+        assertThat(listing.getCustomModelName()).isEqualTo("Galaxy Book4");
+    }
+
+    /** 리프가 아닌 카테고리를 그대로 모델로 쓴 매물도 상세를 만들 수 있어야 한다. */
+    @Test
+    void ownedDetailFallsBackToTheModelItselfWhenItHasNoParentCategory() {
+        Category topLevel = Category.createTopLevel("스마트폰", DeviceType.SMARTPHONE, 1);
+        ReflectionTestUtils.setField(topLevel, "id", 1L);
+        Listing listing = Listing.createDraft(
+                55L, topLevel, "Galaxy S24", "상태 양호", 650000, "Black", 256, "서울 강남구", 501L);
+        ReflectionTestUtils.setField(listing, "id", 1001L);
+        when(listingRepository.findByIdAndSellerIdAndDeletedAtIsNull(1001L, 55L))
+                .thenReturn(Optional.of(listing));
+
+        var result = service.findOwnedDetail(55L, 1001L);
+
+        assertThat(result.getCategory().getCategoryId()).isEqualTo(1L);
+        assertThat(result.getCategory().getParentId()).isNull();
+        assertThat(result.getDevice().getOs()).isNull();
+        assertThat(result.getThumbnailUrl()).isNull();
+    }
+
+    @Test
+    void marksPublicSummaryInProgressWhileRequiredItemsRemainAndFallsBackToTheDefaultSort() {
+        ListingChecklistCountProjection count = mock(ListingChecklistCountProjection.class);
+        when(count.getListingId()).thenReturn(1001L);
+        when(count.getRequiredCount()).thenReturn(3L);
+        when(count.getCompletedRequiredCount()).thenReturn(1L);
+        when(listingRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(listing())));
+        when(checklistItemRepository.countRequiredByListingIds(
+                        eq(List.of(1001L)),
+                        eq(ChecklistItemCompletionStatus.COMPLETED),
+                        eq(EvidenceType.SELLER_CONFIRMATION)))
+                .thenReturn(List.of(count));
+
+        var result = service.findPublic(
+                null, null, null, null, null, null, null, null, null, null, null, 0, 20, "   ");
+
+        assertThat(result.content().get(0).getVerificationStatus()).isEqualTo("IN_PROGRESS");
+        assertThat(result.content().get(0).getCompletedItemCount()).isEqualTo(1);
+        assertThat(result.content().get(0).getRequiredItemCount()).isEqualTo(3);
+        verify(listingRepository).findAll(
+                any(Specification.class),
+                argThat((Pageable pageable) ->
+                        pageable.getSort().getOrderFor("createdAt").isDescending()));
+    }
+
+    private ListingChecklistItem confirmedFeatureItem(Long id) {
+        ChecklistTemplateItem templateItem = ChecklistTemplateItem.create(
+                template(), "PHN-FTR-FP", "지문 인식", "확인", "가이드", EvidenceType.VIDEO,
+                AutomationType.NONE, true, 2);
+        ListingChecklistItem item = ListingChecklistItem.createConfirmedFeatureItem(
+                1001L, templateItem, "FINGERPRINT");
+        ReflectionTestUtils.setField(item, "id", id);
+        return item;
     }
 }
