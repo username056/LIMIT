@@ -2,6 +2,7 @@ package com.c203.limit.domain.chat.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -23,11 +24,16 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.c203.limit.domain.chat.entity.ChatMedia;
+import com.c203.limit.domain.chat.entity.ChatMessageMedia;
+import com.c203.limit.domain.chat.entity.ChatOutboxEvent;
 import com.c203.limit.domain.chat.entity.ChatRoom;
 import com.c203.limit.domain.chat.entity.ChatMessage;
 import com.c203.limit.domain.chat.entity.ChatRoomParticipant;
 import com.c203.limit.domain.chat.domain.ChatRoomStatus;
+import com.c203.limit.domain.chat.domain.MediaType;
 import com.c203.limit.domain.chat.domain.ParticipantRole;
+import com.c203.limit.domain.chat.domain.UploadStatus;
 import com.c203.limit.domain.chat.dto.request.ChatMessageSendRequest;
 import com.c203.limit.domain.chat.dto.request.ChatReadRequest;
 import com.c203.limit.domain.chat.repository.ChatRoomRepository;
@@ -46,6 +52,7 @@ import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import com.c203.limit.global.response.CursorResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.c203.limit.domain.chat.dto.response.ChatMessageResponse;
 import com.c203.limit.domain.chat.dto.response.ChatRoomSummaryResponse;
 import com.c203.limit.domain.chat.domain.MessageStatus;
 import com.c203.limit.domain.chat.domain.MessageType;
@@ -411,6 +418,382 @@ class ChatRoomServiceTests {
         verify(participantRepository)
                 .findByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID);
         assertThat(participant.getLeftAt()).isNotNull();
+    }
+
+    @Test
+    void rejoinsRoomLeftEarlierWhenBuyerStartsChatAgain() {
+        ListingChatInfo listing = new ListingChatInfo(LISTING_ID, SELLER_ID, BUYER_ID, "ON_SALE");
+        ChatRoomParticipant participant = participant(100L, BUYER_ID);
+        participant.leave();
+        when(listingReader.findById(LISTING_ID)).thenReturn(Optional.of(listing));
+        when(chatRoomRepository.findByListingIdAndBuyerIdAndSellerId(LISTING_ID, BUYER_ID, SELLER_ID))
+                .thenReturn(Optional.of(room(100L)));
+        when(participantRepository.findByChatRoomIdAndUserId(100L, BUYER_ID))
+                .thenReturn(Optional.of(participant));
+        when(participantRepository.existsByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID))
+                .thenReturn(false);
+
+        ChatRoomCreateResult result = service.createOrGet(LISTING_ID, BUYER_ID);
+
+        assertThat(result.created()).isFalse();
+        assertThat(participant.getLeftAt()).isNull();
+    }
+
+    @Test
+    void doesNotRejoinParticipantWhoIsStillInTheRoom() {
+        ListingChatInfo listing = new ListingChatInfo(LISTING_ID, SELLER_ID, BUYER_ID, "ON_SALE");
+        ChatRoomParticipant participant = participant(100L, BUYER_ID);
+        participant.leave();
+        when(listingReader.findById(LISTING_ID)).thenReturn(Optional.of(listing));
+        when(chatRoomRepository.findByListingIdAndBuyerIdAndSellerId(LISTING_ID, BUYER_ID, SELLER_ID))
+                .thenReturn(Optional.of(room(100L)));
+        when(participantRepository.findByChatRoomIdAndUserId(100L, BUYER_ID))
+                .thenReturn(Optional.of(participant));
+        when(participantRepository.existsByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID))
+                .thenReturn(true);
+
+        service.createOrGet(LISTING_ID, BUYER_ID);
+
+        assertThat(participant.getLeftAt()).isNotNull();
+    }
+
+    @Test
+    void rejectsReinspectionChatRoomWhenSellerDoesNotOwnListing() {
+        when(listingReader.findById(LISTING_ID))
+                .thenReturn(Optional.of(new ListingChatInfo(LISTING_ID, SELLER_ID, BUYER_ID, "PAID")));
+
+        assertThatThrownBy(() -> service.getOrCreateChatRoom(LISTING_ID, BUYER_ID, SELLER_ID + 1))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+        verifyNoInteractions(chatRoomRepository, creator);
+    }
+
+    @Test
+    void rejectsReinspectionChatRoomBetweenTheSameMember() {
+        when(listingReader.findById(LISTING_ID))
+                .thenReturn(Optional.of(new ListingChatInfo(LISTING_ID, BUYER_ID, BUYER_ID, "PAID")));
+
+        assertThatThrownBy(() -> service.getOrCreateChatRoom(LISTING_ID, BUYER_ID, BUYER_ID))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.SELF_CHAT_NOT_ALLOWED));
+        verifyNoInteractions(chatRoomRepository, creator);
+    }
+
+    @Test
+    void returnsReinspectionRoomCreatedByConcurrentRequest() {
+        when(listingReader.findById(LISTING_ID))
+                .thenReturn(Optional.of(new ListingChatInfo(LISTING_ID, SELLER_ID, BUYER_ID, "PAID")));
+        when(chatRoomRepository.findByListingIdAndBuyerIdAndSellerId(LISTING_ID, BUYER_ID, SELLER_ID))
+                .thenReturn(Optional.empty(), Optional.of(room(100L)));
+        when(chatRoomRepository.findFirstByBuyerIdAndSellerIdOrderByIdDesc(BUYER_ID, SELLER_ID))
+                .thenReturn(Optional.empty());
+        when(creator.create(LISTING_ID, BUYER_ID, SELLER_ID))
+                .thenThrow(new DataIntegrityViolationException("duplicate"));
+
+        Long roomId = service.getOrCreateChatRoom(LISTING_ID, BUYER_ID, SELLER_ID);
+
+        assertThat(roomId).isEqualTo(100L);
+    }
+
+    @Test
+    void rethrowsWhenReinspectionRoomIsMissingAfterDuplicateKey() {
+        DataIntegrityViolationException duplicate = new DataIntegrityViolationException("duplicate");
+        when(listingReader.findById(LISTING_ID))
+                .thenReturn(Optional.of(new ListingChatInfo(LISTING_ID, SELLER_ID, BUYER_ID, "PAID")));
+        when(chatRoomRepository.findByListingIdAndBuyerIdAndSellerId(LISTING_ID, BUYER_ID, SELLER_ID))
+                .thenReturn(Optional.empty());
+        when(chatRoomRepository.findFirstByBuyerIdAndSellerIdOrderByIdDesc(BUYER_ID, SELLER_ID))
+                .thenReturn(Optional.empty());
+        when(creator.create(LISTING_ID, BUYER_ID, SELLER_ID)).thenThrow(duplicate);
+
+        assertThatThrownBy(() -> service.getOrCreateChatRoom(LISTING_ID, BUYER_ID, SELLER_ID))
+                .isSameAs(duplicate);
+    }
+
+    @Test
+    void rejectsOutOfRangeMessageCursorAndPageSize() {
+        assertThatThrownBy(() -> service.findMessages(100L, BUYER_ID, 0L, null, 20))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+        assertThatThrownBy(() -> service.findMessages(100L, BUYER_ID, null, -1L, 20))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+        assertThatThrownBy(() -> service.findMessages(100L, BUYER_ID, null, null, 101))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+        verifyNoInteractions(participantRepository, chatMessageRepository);
+    }
+
+    @Test
+    void addsReinspectionPayloadToSystemMessage() {
+        UUID eventId = new UUID(3L, 4L);
+        when(participantRepository.existsByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID)).thenReturn(true);
+        when(chatMessageRepository.findBeforeSequence(eq(100L), eq(10L), any(Pageable.class)))
+                .thenReturn(List.of(systemMessage(9L, eventId)));
+        when(outboxEventRepository.findByEventId(eventId))
+                .thenReturn(Optional.of(outboxEvent(eventId, """
+                        {"requestKey":"request-key","listingId":10,"pendingRequestCount":2,
+                         "reason":"흠집이 있어요","items":[{"name":"앞면","requestContent":"다시 찍어 주세요"}],
+                         "action":{"type":"START_RECAPTURE","label":"바로 재촬영하기"}}
+                        """)));
+
+        CursorResponse<ChatMessageResponse> result =
+                service.findMessages(100L, BUYER_ID, 10L, null, 10);
+
+        assertThat(result.content().get(0).notificationType()).isEqualTo("REINSPECTION_REQUESTED");
+        assertThat(result.content().get(0).reinspection().requestKey()).isEqualTo("request-key");
+        assertThat(result.content().get(0).reinspection().items()).hasSize(1);
+        assertThat(result.content().get(0).reinspection().action().type()).isEqualTo("START_RECAPTURE");
+    }
+
+    @Test
+    void keepsSystemMessageWhenReinspectionPayloadCannotBeRead() {
+        UUID eventId = new UUID(3L, 4L);
+        when(participantRepository.existsByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID)).thenReturn(true);
+        when(chatMessageRepository.findBeforeSequence(eq(100L), eq(10L), any(Pageable.class)))
+                .thenReturn(List.of(systemMessage(9L, eventId)));
+        when(outboxEventRepository.findByEventId(eventId))
+                .thenReturn(Optional.of(outboxEvent(eventId, "{broken")));
+
+        CursorResponse<ChatMessageResponse> result =
+                service.findMessages(100L, BUYER_ID, 10L, null, 10);
+
+        assertThat(result.content().get(0).notificationType()).isNull();
+        assertThat(result.content().get(0).reinspection()).isNull();
+    }
+
+    @Test
+    void keepsSystemMessageWhenOutboxEventIsGone() {
+        UUID eventId = new UUID(3L, 4L);
+        when(participantRepository.existsByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID)).thenReturn(true);
+        when(chatMessageRepository.findBeforeSequence(eq(100L), eq(10L), any(Pageable.class)))
+                .thenReturn(List.of(systemMessage(9L, eventId)));
+        when(outboxEventRepository.findByEventId(eventId)).thenReturn(Optional.empty());
+
+        CursorResponse<ChatMessageResponse> result =
+                service.findMessages(100L, BUYER_ID, 10L, null, 10);
+
+        assertThat(result.content().get(0).notificationType()).isNull();
+    }
+
+    @Test
+    void rejectsSendingMessageByNonParticipant() {
+        when(participantRepository.findByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.sendMessage(
+                        100L, BUYER_ID, new ChatMessageSendRequest(new UUID(1L, 2L), "TEXT", "hello", List.of())))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.CHAT_ROOM_ACCESS_DENIED));
+        verifyNoInteractions(chatMessageRepository, chatRoomRepository);
+    }
+
+    @Test
+    void rejectsUnknownAndSystemMessageTypes() {
+        when(participantRepository.findByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID))
+                .thenReturn(Optional.of(participant(100L, BUYER_ID)));
+
+        assertThatThrownBy(() -> service.sendMessage(
+                        100L, BUYER_ID, new ChatMessageSendRequest(new UUID(1L, 2L), "PHOTO", "hello", List.of())))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+        // 시스템 알림은 서버만 만든다.
+        assertThatThrownBy(() -> service.sendMessage(
+                        100L, BUYER_ID, new ChatMessageSendRequest(new UUID(1L, 2L), "SYSTEM", "hello", List.of())))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+        verifyNoInteractions(chatMessageRepository, chatRoomRepository);
+    }
+
+    @Test
+    void rejectsTextMessageWithoutContent() {
+        when(participantRepository.findByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID))
+                .thenReturn(Optional.of(participant(100L, BUYER_ID)));
+
+        assertThatThrownBy(() -> service.sendMessage(
+                        100L, BUYER_ID, new ChatMessageSendRequest(new UUID(1L, 2L), "TEXT", null, null)))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+        verifyNoInteractions(chatMessageRepository, chatMediaRepository);
+    }
+
+    @Test
+    void rejectsTextMessageCarryingMedia() {
+        when(participantRepository.findByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID))
+                .thenReturn(Optional.of(participant(100L, BUYER_ID)));
+
+        assertThatThrownBy(() -> service.sendMessage(
+                        100L, BUYER_ID, new ChatMessageSendRequest(new UUID(1L, 2L), "TEXT", "hello", List.of(1L))))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+        verifyNoInteractions(chatMessageRepository, chatMediaRepository);
+    }
+
+    @Test
+    void rejectsMediaMessageThatDoesNotCarryExactlyOneFile() {
+        when(participantRepository.findByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID))
+                .thenReturn(Optional.of(participant(100L, BUYER_ID)));
+
+        assertThatThrownBy(() -> service.sendMessage(
+                        100L, BUYER_ID,
+                        new ChatMessageSendRequest(new UUID(1L, 2L), "IMAGE", null, List.of(1L, 2L))))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.CHAT_MEDIA_INVALID));
+        verifyNoInteractions(chatMediaRepository);
+    }
+
+    @Test
+    void rejectsMediaMessageWhoseFileIsNotVerifiedForThisRoom() {
+        when(participantRepository.findByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID))
+                .thenReturn(Optional.of(participant(100L, BUYER_ID)));
+        when(chatMediaRepository.findAllByIdInAndChatRoomIdAndUploaderIdAndUploadStatus(
+                        List.of(1L), 100L, BUYER_ID, UploadStatus.VERIFIED))
+                .thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.sendMessage(
+                        100L, BUYER_ID, new ChatMessageSendRequest(new UUID(1L, 2L), "IMAGE", null, List.of(1L))))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.CHAT_MEDIA_INVALID));
+        verifyNoInteractions(chatMessageRepository);
+    }
+
+    @Test
+    void rejectsMediaMessageWhoseFileTypeDiffersFromMessageType() {
+        when(participantRepository.findByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID))
+                .thenReturn(Optional.of(participant(100L, BUYER_ID)));
+        when(chatMediaRepository.findAllByIdInAndChatRoomIdAndUploaderIdAndUploadStatus(
+                        List.of(1L), 100L, BUYER_ID, UploadStatus.VERIFIED))
+                .thenReturn(List.of(media(1L, MediaType.VIDEO)));
+
+        assertThatThrownBy(() -> service.sendMessage(
+                        100L, BUYER_ID, new ChatMessageSendRequest(new UUID(1L, 2L), "IMAGE", null, List.of(1L))))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.CHAT_MEDIA_INVALID));
+        verifyNoInteractions(chatMessageRepository);
+    }
+
+    @Test
+    void sendsImageMessageWithLinkedMedia() {
+        UUID clientMessageId = new UUID(1L, 2L);
+        ChatRoom room = room(100L);
+        when(participantRepository.findByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID))
+                .thenReturn(Optional.of(participant(100L, BUYER_ID)));
+        when(chatMediaRepository.findAllByIdInAndChatRoomIdAndUploaderIdAndUploadStatus(
+                        List.of(1L), 100L, BUYER_ID, UploadStatus.VERIFIED))
+                .thenReturn(List.of(media(1L, MediaType.IMAGE)));
+        when(chatMessageRepository.findByChatRoomIdAndClientMessageId(100L, clientMessageId))
+                .thenReturn(Optional.empty());
+        when(chatRoomRepository.findLockedById(100L)).thenReturn(Optional.of(room));
+        when(chatMessageRepository.save(any(ChatMessage.class))).thenAnswer(invocation -> {
+            ChatMessage message = invocation.getArgument(0);
+            ReflectionTestUtils.setField(message, "id", 501L);
+            return message;
+        });
+
+        var result = service.sendMessage(
+                100L, BUYER_ID, new ChatMessageSendRequest(clientMessageId, "IMAGE", null, List.of(1L)));
+
+        assertThat(result.created()).isTrue();
+        assertThat(result.message().type()).isEqualTo("IMAGE");
+        assertThat(result.message().content()).isEmpty();
+        assertThat(result.message().media()).hasSize(1);
+        assertThat(result.message().media().get(0).mediaId()).isEqualTo(1L);
+        verify(chatMessageMediaRepository).save(any(ChatMessageMedia.class));
+    }
+
+    @Test
+    void returnsMessageStoredByConcurrentRequestAfterLockingRoom() {
+        UUID clientMessageId = new UUID(1L, 2L);
+        ChatMessage existing = textMessage(100L, 3L, BUYER_ID, clientMessageId, "hello");
+        when(participantRepository.findByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID))
+                .thenReturn(Optional.of(participant(100L, BUYER_ID)));
+        when(chatMessageRepository.findByChatRoomIdAndClientMessageId(100L, clientMessageId))
+                .thenReturn(Optional.empty(), Optional.of(existing));
+        when(chatRoomRepository.findLockedById(100L)).thenReturn(Optional.of(room(100L)));
+
+        var result = service.sendMessage(
+                100L, BUYER_ID, new ChatMessageSendRequest(clientMessageId, "TEXT", "hello", List.of()));
+
+        assertThat(result.created()).isFalse();
+        assertThat(result.message().messageId()).isEqualTo(300L);
+        verify(chatMessageRepository, never()).save(any(ChatMessage.class));
+    }
+
+    @Test
+    void rejectsSendingMessageWhenRoomIsGone() {
+        UUID clientMessageId = new UUID(1L, 2L);
+        when(participantRepository.findByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID))
+                .thenReturn(Optional.of(participant(100L, BUYER_ID)));
+        when(chatMessageRepository.findByChatRoomIdAndClientMessageId(100L, clientMessageId))
+                .thenReturn(Optional.empty());
+        when(chatRoomRepository.findLockedById(100L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.sendMessage(
+                        100L, BUYER_ID, new ChatMessageSendRequest(clientMessageId, "TEXT", "hello", List.of())))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.CHAT_ROOM_ACCESS_DENIED));
+    }
+
+    @Test
+    void rejectsReadingMessagesWhenRoomIsGone() {
+        when(participantRepository.findByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID))
+                .thenReturn(Optional.of(participant(100L, BUYER_ID)));
+        when(chatRoomRepository.findById(100L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.readMessages(100L, BUYER_ID, new ChatReadRequest(3L)))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.CHAT_ROOM_ACCESS_DENIED));
+    }
+
+    @Test
+    void keepsRequestedReadSequenceWhenItIsBehindTheLastMessage() {
+        ChatRoom room = room(100L);
+        ReflectionTestUtils.setField(room, "lastMessageSeq", 9L);
+        ChatRoomParticipant participant = participant(100L, BUYER_ID);
+        when(participantRepository.findByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID))
+                .thenReturn(Optional.of(participant));
+        when(chatRoomRepository.findById(100L)).thenReturn(Optional.of(room));
+
+        Long lastReadSeq = service.readMessages(100L, BUYER_ID, new ChatReadRequest(3L));
+
+        assertThat(lastReadSeq).isEqualTo(3L);
+    }
+
+    @Test
+    void rejectsLeavingRoomByNonParticipant() {
+        when(participantRepository.findByChatRoomIdAndUserIdAndLeftAtIsNull(100L, BUYER_ID))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.leaveRoom(100L, BUYER_ID))
+                .isInstanceOfSatisfying(BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.CHAT_ROOM_ACCESS_DENIED));
+    }
+
+    private ChatMedia media(Long id, MediaType type) {
+        ChatMedia media = ChatMedia.verified(
+                new UUID(0L, id), 100L, BUYER_ID, type, "bucket", "chat/" + id,
+                "file-" + id, type == MediaType.IMAGE ? "image/jpeg" : "video/mp4", 1024L);
+        ReflectionTestUtils.setField(media, "id", id);
+        return media;
+    }
+
+    private ChatOutboxEvent outboxEvent(UUID eventId, String payload) {
+        return ChatOutboxEvent.pending(
+                eventId, "REINSPECTION_REQUEST", 10L, "REINSPECTION_REQUESTED", payload,
+                LocalDateTime.of(2026, 7, 23, 12, 0));
+    }
+
+    private ChatMessageProjection systemMessage(Long sequence, UUID clientMessageId) {
+        return new ChatMessageProjection() {
+            public Long getMessageId() { return sequence + 100L; }
+            public Long getRoomSequence() { return sequence; }
+            public Long getSenderId() { return SELLER_ID; }
+            public UUID getClientMessageId() { return clientMessageId; }
+            public MessageType getType() { return MessageType.SYSTEM; }
+            public String getContent() { return "재검수 요청이 2건 들어왔어요!"; }
+            public MessageStatus getStatus() { return MessageStatus.SENT; }
+            public LocalDateTime getSentAt() { return LocalDateTime.of(2026, 7, 23, 12, 0); }
+        };
     }
 
     private ChatRoomSummaryProjection summary(
