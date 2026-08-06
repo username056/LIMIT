@@ -146,13 +146,31 @@ class DeviceCatalogMigrationIntegrationTests extends AbstractMySqlIntegrationTes
                 "NT960XMB",
                 "NT750XHD",
                 "NT960XHA",
-                "NT960QHA");
+                "NT960QHA",
+                "NT750XFG",
+                "NT750QFG",
+                "NT940XFG",
+                "NT960XFG",
+                "NT960QFG",
+                "NT960XFH",
+                "NT550XEZ",
+                "NT750QED",
+                "NT950XED",
+                "NT950QED");
 
         assertThat(jdbcTemplate.queryForList(
-                        "SELECT model_code FROM device_model "
-                                + "WHERE model_code IN (?, ?, ?, ?, ?, ?, ?) ORDER BY model_code",
-                        String.class,
-                        modelCodes.toArray()))
+                        """
+                        SELECT model_code FROM device_model
+                         WHERE model_code IN (
+                             'NT960XGK', 'NT960QGK', 'NT960XGL', 'NT960XMB',
+                             'NT750XHD', 'NT960XHA', 'NT960QHA',
+                             'NT750XFG', 'NT750QFG', 'NT940XFG', 'NT960XFG',
+                             'NT960QFG', 'NT960XFH',
+                             'NT550XEZ', 'NT750QED', 'NT950XED', 'NT950QED'
+                         )
+                         ORDER BY model_code
+                        """,
+                        String.class))
                 .containsExactlyInAnyOrderElementsOf(modelCodes);
         assertThat(count(
                         """
@@ -160,7 +178,10 @@ class DeviceCatalogMigrationIntegrationTests extends AbstractMySqlIntegrationTes
                           FROM device_model m
                          WHERE m.model_code IN (
                              'NT960XGK', 'NT960QGK', 'NT960XGL', 'NT960XMB',
-                             'NT750XHD', 'NT960XHA', 'NT960QHA'
+                             'NT750XHD', 'NT960XHA', 'NT960QHA',
+                             'NT750XFG', 'NT750QFG', 'NT940XFG', 'NT960XFG',
+                             'NT960QFG', 'NT960XFH',
+                             'NT550XEZ', 'NT750QED', 'NT950XED', 'NT950QED'
                          )
                            AND NOT EXISTS (
                                SELECT 1 FROM device_variant v
@@ -174,7 +195,10 @@ class DeviceCatalogMigrationIntegrationTests extends AbstractMySqlIntegrationTes
                           FROM device_model m
                          WHERE m.model_code IN (
                              'NT960XGK', 'NT960QGK', 'NT960XGL', 'NT960XMB',
-                             'NT750XHD', 'NT960XHA', 'NT960QHA'
+                             'NT750XHD', 'NT960XHA', 'NT960QHA',
+                             'NT750XFG', 'NT750QFG', 'NT940XFG', 'NT960XFG',
+                             'NT960QFG', 'NT960XFH',
+                             'NT550XEZ', 'NT750QED', 'NT950XED', 'NT950QED'
                          )
                            AND NOT EXISTS (
                                SELECT 1 FROM checklist_template t

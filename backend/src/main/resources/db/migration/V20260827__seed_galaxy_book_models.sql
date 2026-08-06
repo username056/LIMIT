@@ -1,4 +1,4 @@
--- 판매하기의 Windows 노트북 선택지에 국내 출시 Galaxy Book4·Book5 계열을 보강한다.
+-- 판매하기의 Windows 노트북 선택지에 국내 출시 Galaxy Book2~Book5 계열을 보강한다.
 -- 모델 코드는 삼성전자 국내 제품 SKU에서 옵션 접미사를 제외한 제품군 코드로 사용한다.
 -- category -> device_model -> device_variant를 함께 만들고, 기존 Galaxy Book4의
 -- PUBLISHED 체크리스트를 복제해 추가 직후에도 판매 등록이 가능하게 한다.
@@ -26,6 +26,26 @@ FROM (
     SELECT 'Galaxy Book5 Pro', 'NT960XHA', '256,512,1024,2048', 13
     UNION ALL
     SELECT 'Galaxy Book5 Pro 360', 'NT960QHA', '512,1024,2048', 14
+    UNION ALL
+    SELECT 'Galaxy Book3', 'NT750XFG', '256,512', 15
+    UNION ALL
+    SELECT 'Galaxy Book3 360', 'NT750QFG', '256,512', 16
+    UNION ALL
+    SELECT 'Galaxy Book3 Pro 14', 'NT940XFG', '256,512,1024', 17
+    UNION ALL
+    SELECT 'Galaxy Book3 Pro 16', 'NT960XFG', '256,512,1024', 18
+    UNION ALL
+    SELECT 'Galaxy Book3 Pro 360', 'NT960QFG', '512,1024', 19
+    UNION ALL
+    SELECT 'Galaxy Book3 Ultra', 'NT960XFH', '512,1024', 20
+    UNION ALL
+    SELECT 'Galaxy Book2', 'NT550XEZ', '256,512', 21
+    UNION ALL
+    SELECT 'Galaxy Book2 360', 'NT750QED', '256,512', 22
+    UNION ALL
+    SELECT 'Galaxy Book2 Pro', 'NT950XED', '256,512,1024', 23
+    UNION ALL
+    SELECT 'Galaxy Book2 Pro 360', 'NT950QED', '256,512,1024', 24
 ) seed
 JOIN category parent
   ON parent.parent_id IS NULL
@@ -47,7 +67,14 @@ SELECT c.id,
        LOWER(REPLACE(TRIM(c.name), ' ', '')),
        c.model_code,
        c.os_family,
-       CASE WHEN c.model_code LIKE '%HA' OR c.model_code = 'NT750XHD' THEN 2025 ELSE 2024 END,
+       CASE
+           WHEN c.model_code IN ('NT550XEZ', 'NT750QED', 'NT950XED', 'NT950QED') THEN 2022
+           WHEN c.model_code IN (
+               'NT750XFG', 'NT750QFG', 'NT940XFG', 'NT960XFG', 'NT960QFG', 'NT960XFH'
+           ) THEN 2023
+           WHEN c.model_code IN ('NT960XGK', 'NT960QGK', 'NT960XGL', 'NT960XMB') THEN 2024
+           ELSE 2025
+       END,
        c.is_active,
        c.display_order,
        'VERIFIED',
@@ -57,7 +84,9 @@ SELECT c.id,
 FROM category c
 WHERE c.model_code IN (
     'NT960XGK', 'NT960QGK', 'NT960XGL', 'NT960XMB',
-    'NT750XHD', 'NT960XHA', 'NT960QHA'
+    'NT750XHD', 'NT960XHA', 'NT960QHA',
+    'NT750XFG', 'NT750QFG', 'NT940XFG', 'NT960XFG', 'NT960QFG', 'NT960XFH',
+    'NT550XEZ', 'NT750QED', 'NT950XED', 'NT950QED'
 )
   AND NOT EXISTS (
       SELECT 1 FROM device_model existing WHERE existing.model_id = c.id
@@ -90,7 +119,9 @@ JOIN (
                   - CHAR_LENGTH(REPLACE(c.supported_storage_gb, ',', '')) + 1
     WHERE c.model_code IN (
         'NT960XGK', 'NT960QGK', 'NT960XGL', 'NT960XMB',
-        'NT750XHD', 'NT960XHA', 'NT960QHA'
+        'NT750XHD', 'NT960XHA', 'NT960QHA',
+        'NT750XFG', 'NT750QFG', 'NT940XFG', 'NT960XFG', 'NT960QFG', 'NT960XFH',
+        'NT550XEZ', 'NT750QED', 'NT950XED', 'NT950QED'
     )
 ) expanded ON expanded.model_id = m.model_id
 WHERE expanded.storage_gb > 0
@@ -109,7 +140,9 @@ JOIN category source_model
   ON source_model.model_code = 'NT750XGK'
 WHERE model.model_code IN (
     'NT960XGK', 'NT960QGK', 'NT960XGL', 'NT960XMB',
-    'NT750XHD', 'NT960XHA', 'NT960QHA'
+    'NT750XHD', 'NT960XHA', 'NT960QHA',
+    'NT750XFG', 'NT750QFG', 'NT940XFG', 'NT960XFG', 'NT960QFG', 'NT960XFH',
+    'NT550XEZ', 'NT750QED', 'NT950XED', 'NT950QED'
 )
   AND NOT EXISTS (
       SELECT 1
@@ -145,7 +178,9 @@ JOIN checklist_template_item item
   ON item.checklist_template_id = source_template.id
 WHERE model.model_code IN (
     'NT960XGK', 'NT960QGK', 'NT960XGL', 'NT960XMB',
-    'NT750XHD', 'NT960XHA', 'NT960QHA'
+    'NT750XHD', 'NT960XHA', 'NT960QHA',
+    'NT750XFG', 'NT750QFG', 'NT940XFG', 'NT960XFG', 'NT960QFG', 'NT960XFH',
+    'NT550XEZ', 'NT750QED', 'NT950XED', 'NT950QED'
 )
   AND NOT EXISTS (
       SELECT 1
