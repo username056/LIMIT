@@ -401,7 +401,7 @@ describe('ProductDetailPage', () => {
     expect(wrapper.text()).toContain('자동 추출값은 참고 정보이며 상품의 정상 여부를 보증하지 않습니다.')
 
     // 배터리 관련 필드가 하나도 없으므로 배터리 상태는 한 줄 대체 안내로 보여야 합니다.
-    expect(wrapper.text()).toContain('배터리 상태')
+    expect(wrapper.text()).toContain('배터리 성능')
     expect(wrapper.text()).toContain('배터리 정보를 확인할 수 없습니다')
     expect(wrapper.text()).toContain('판매자가 배터리 리포트를 등록하지 않았거나 자동 인식에 실패했습니다.')
     expect(wrapper.text()).not.toContain('상세 배터리 정보')

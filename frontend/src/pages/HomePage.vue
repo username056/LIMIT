@@ -74,15 +74,6 @@ onMounted(() => {
 
         <HomeProcess />
         <HomeServicePreview />
-
-        <HomeProductSection
-          title="최근 등록된 상품"
-          subtitle="방금 업로드 된 상품들을 가장 먼저 확인해보세요"
-          sort="createdAt,desc"
-          :size="4"
-          :columns="4"
-          variant="recent"
-        />
       </div>
     </div>
   </DefaultLayout>
