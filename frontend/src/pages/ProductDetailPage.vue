@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseButton from '../components/BaseButton.vue'
@@ -249,7 +249,26 @@ function moveMediaViewer(step) {
 // 설명은 기본 4줄로 접어 두고, 길면 펼쳐 봅니다. 설명이 길어도 아래 검증 자료까지 한 화면에
 // 들어오게 하려는 것입니다.
 const isDescriptionExpanded = ref(false)
-const isDescriptionLong = computed(() => (product.value?.description || '').length > 180)
+
+/*
+  '더 보기'는 실제로 잘렸을 때만 띄웁니다.
+  ---------------------------------------------------------------------------
+  전에는 글자 수가 180자를 넘는지로 판단했는데, 자르는 쪽은 CSS가 네 줄을 넘는지로
+  봅니다. 두 기준이 어긋나 짧지만 줄바꿈이 많은 글(80자·5줄)은 잘리는데 버튼이 안 나와,
+  뒷부분을 볼 방법이 없었습니다.
+
+  글자 수 대신 실제 높이를 재서 판단합니다. 화면 폭에 따라 줄 수가 달라지는 것까지
+  그대로 반영됩니다.
+*/
+const descriptionEl = ref(null)
+const isDescriptionClamped = ref(false)
+
+function measureDescription() {
+  const element = descriptionEl.value
+  // 펼친 상태에서는 잘린 곳이 없으므로 재지 않습니다. 재면 false가 되어 '접기'가 사라집니다.
+  if (!element || isDescriptionExpanded.value) return
+  isDescriptionClamped.value = element.scrollHeight > element.clientHeight + 1
+}
 const isRecaptureModalOpen = ref(false)
 const checkedItemIds = ref([])
 const recaptureReason = ref('')
@@ -424,10 +443,20 @@ function closeViewersOnEscape({ key: pressed }) {
   else if (mediaViewer.value) mediaViewer.value = null
 }
 
-onBeforeUnmount(() => window.removeEventListener('keydown', closeViewersOnEscape))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', closeViewersOnEscape)
+  window.removeEventListener('resize', measureDescription)
+})
+
+// 설명이 들어오면 그린 뒤에 잽니다. 창 폭이 바뀌면 줄 수도 달라지므로 다시 잽니다.
+watch(() => product.value?.description, async () => {
+  await nextTick()
+  measureDescription()
+})
 
 onMounted(async () => {
   window.addEventListener('keydown', closeViewersOnEscape)
+  window.addEventListener('resize', measureDescription)
   try {
     await loadProduct(route.params.productId)
     try {
@@ -822,13 +851,14 @@ onMounted(async () => {
               화면에서 가장 오래 읽는 부분이라 본문 색으로 둡니다.
             -->
             <p
+              ref="descriptionEl"
               class="mt-3 whitespace-pre-wrap text-base leading-7 text-text-main"
               :class="isDescriptionExpanded ? '' : 'line-clamp-4'"
             >
               {{ product.description || '판매자가 등록한 상세 설명이 없습니다.' }}
             </p>
             <button
-              v-if="isDescriptionLong"
+              v-if="isDescriptionClamped || isDescriptionExpanded"
               type="button"
               class="mt-2 text-sm font-semibold text-primary hover:underline"
               @click="isDescriptionExpanded = !isDescriptionExpanded"
