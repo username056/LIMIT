@@ -396,7 +396,10 @@ onMounted(async () => {
     }
     try {
       const summary = await getProductDiagnosisSummary(product.value.productId)
-      diagnosisSummaryItems.value = summary.items || []
+      // 사운드 장치는 중고 기기를 고를 때 판단에 쓰이지 않아 목록에서 뺍니다. 서버는 계속
+      // 내려주지만(다른 화면에서 쓰일 수 있어) 구매자 화면에서만 감춥니다.
+      diagnosisSummaryItems.value = (summary.items || [])
+        .filter((item) => item.fieldName !== 'SOUND_DEVICE')
       diagnosisDisclaimer.value = summary.disclaimer || ''
     } catch {
       diagnosisSummaryItems.value = []
@@ -1066,7 +1069,7 @@ onMounted(async () => {
               <div class="relative flex max-h-[70vh] items-center justify-center bg-black">
                 <video
                   v-if="mediaViewerEvidence?.evidenceType === 'VIDEO'"
-                  :key="mediaViewerEvidence.evidenceId"
+                  :key="`video-${mediaViewerEvidence.evidenceId}`"
                   :src="mediaViewerEvidence.mediaUrl"
                   controls
                   autoplay
@@ -1074,7 +1077,7 @@ onMounted(async () => {
                 />
                 <img
                   v-else-if="mediaViewerEvidence?.evidenceType === 'PHOTO'"
-                  :key="mediaViewerEvidence.evidenceId"
+                  :key="`photo-${mediaViewerEvidence.evidenceId}`"
                   :src="mediaViewerEvidence.mediaUrl"
                   :alt="`${mediaViewer.itemName} 검증 자료`"
                   class="viewer__media max-h-[70vh] w-full object-contain"
