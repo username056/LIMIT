@@ -8,8 +8,6 @@ import com.c203.limit.domain.product.moderation.dto.request.ResolveRiskSignalReq
 import com.c203.limit.domain.product.moderation.dto.response.AdminListingReportResponse;
 import com.c203.limit.domain.product.moderation.dto.response.AdminModeratedProductResponse;
 import com.c203.limit.domain.product.moderation.dto.response.AdminRestorationRequestResponse;
-import com.c203.limit.domain.product.moderation.dto.response.ModerationDashboardResponse;
-import com.c203.limit.domain.product.moderation.dto.response.ModerationRiskSignalResponse;
 import com.c203.limit.domain.product.moderation.dto.response.ModerationApiResponseSchemas.AdminListingReportApiResponse;
 import com.c203.limit.domain.product.moderation.dto.response.ModerationApiResponseSchemas.AdminListingReportPageApiResponse;
 import com.c203.limit.domain.product.moderation.dto.response.ModerationApiResponseSchemas.AdminModeratedProductDetailApiResponse;
@@ -19,6 +17,8 @@ import com.c203.limit.domain.product.moderation.dto.response.ModerationApiRespon
 import com.c203.limit.domain.product.moderation.dto.response.ModerationApiResponseSchemas.ModerationDashboardApiResponse;
 import com.c203.limit.domain.product.moderation.dto.response.ModerationApiResponseSchemas.ModerationRiskSignalApiResponse;
 import com.c203.limit.domain.product.moderation.dto.response.ModerationApiResponseSchemas.ModerationRiskSignalPageApiResponse;
+import com.c203.limit.domain.product.moderation.dto.response.ModerationDashboardResponse;
+import com.c203.limit.domain.product.moderation.dto.response.ModerationRiskSignalResponse;
 import com.c203.limit.domain.product.moderation.entity.ListingModerationStatus;
 import com.c203.limit.domain.product.moderation.entity.ListingReportStatus;
 import com.c203.limit.domain.product.moderation.entity.ModerationRiskStatus;
@@ -41,7 +41,10 @@ public interface AdminModerationApi {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "200",
             description = "대시보드 조회 성공",
-            content = @Content(schema = @Schema(implementation = ModerationDashboardApiResponse.class)))
+            content =
+                    @Content(
+                            schema =
+                                    @Schema(implementation = ModerationDashboardApiResponse.class)))
     @GetMapping("/moderation/dashboard")
     ResponseEntity<ApiResponse<ModerationDashboardResponse>> dashboard();
 
@@ -49,7 +52,12 @@ public interface AdminModerationApi {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "200",
             description = "신고 목록 조회 성공",
-            content = @Content(schema = @Schema(implementation = AdminListingReportPageApiResponse.class)))
+            content =
+                    @Content(
+                            schema =
+                                    @Schema(
+                                            implementation =
+                                                    AdminListingReportPageApiResponse.class)))
     @GetMapping("/reports")
     ResponseEntity<ApiResponse<PageResponse<AdminListingReportResponse>>> reports(
             @RequestParam(required = false) ListingReportStatus status,
@@ -60,7 +68,9 @@ public interface AdminModerationApi {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "200",
             description = "신고 처리 성공",
-            content = @Content(schema = @Schema(implementation = AdminListingReportApiResponse.class)))
+            content =
+                    @Content(
+                            schema = @Schema(implementation = AdminListingReportApiResponse.class)))
     @PostMapping("/reports/{reportId}/decisions")
     ResponseEntity<ApiResponse<AdminListingReportResponse>> decideReport(
             @PathVariable Long reportId,
@@ -70,7 +80,12 @@ public interface AdminModerationApi {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "200",
             description = "복구 신청 목록 조회 성공",
-            content = @Content(schema = @Schema(implementation = AdminRestorationRequestPageApiResponse.class)))
+            content =
+                    @Content(
+                            schema =
+                                    @Schema(
+                                            implementation =
+                                                    AdminRestorationRequestPageApiResponse.class)))
     @GetMapping("/restoration-requests")
     ResponseEntity<ApiResponse<PageResponse<AdminRestorationRequestResponse>>> restorationRequests(
             @RequestParam(required = false) RestorationRequestStatus status,
@@ -81,7 +96,12 @@ public interface AdminModerationApi {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "200",
             description = "복구 신청 심사 성공",
-            content = @Content(schema = @Schema(implementation = AdminRestorationRequestApiResponse.class)))
+            content =
+                    @Content(
+                            schema =
+                                    @Schema(
+                                            implementation =
+                                                    AdminRestorationRequestApiResponse.class)))
     @PostMapping("/restoration-requests/{requestId}/decisions")
     ResponseEntity<ApiResponse<AdminRestorationRequestResponse>> decideRestoration(
             @PathVariable Long requestId,
@@ -91,7 +111,12 @@ public interface AdminModerationApi {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "200",
             description = "이상 활동 신호 목록 조회 성공",
-            content = @Content(schema = @Schema(implementation = ModerationRiskSignalPageApiResponse.class)))
+            content =
+                    @Content(
+                            schema =
+                                    @Schema(
+                                            implementation =
+                                                    ModerationRiskSignalPageApiResponse.class)))
     @GetMapping("/risk-signals")
     ResponseEntity<ApiResponse<PageResponse<ModerationRiskSignalResponse>>> riskSignals(
             @RequestParam(required = false) ModerationRiskStatus status,
@@ -103,7 +128,12 @@ public interface AdminModerationApi {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "200",
             description = "이상 활동 신호 검토 완료",
-            content = @Content(schema = @Schema(implementation = ModerationRiskSignalApiResponse.class)))
+            content =
+                    @Content(
+                            schema =
+                                    @Schema(
+                                            implementation =
+                                                    ModerationRiskSignalApiResponse.class)))
     @PatchMapping("/risk-signals/{signalId}")
     ResponseEntity<ApiResponse<ModerationRiskSignalResponse>> resolveRiskSignal(
             @PathVariable Long signalId, @Valid @RequestBody ResolveRiskSignalRequest request);
@@ -112,7 +142,12 @@ public interface AdminModerationApi {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "200",
             description = "전체 상품 운영 상태 목록 조회 성공",
-            content = @Content(schema = @Schema(implementation = AdminModeratedProductPageApiResponse.class)))
+            content =
+                    @Content(
+                            schema =
+                                    @Schema(
+                                            implementation =
+                                                    AdminModeratedProductPageApiResponse.class)))
     @GetMapping("/products")
     ResponseEntity<ApiResponse<PageResponse<AdminModeratedProductResponse>>> products(
             @RequestParam(required = false) String keyword,
@@ -126,7 +161,12 @@ public interface AdminModerationApi {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "200",
             description = "관리자 상품 상세 조회 성공",
-            content = @Content(schema = @Schema(implementation = AdminModeratedProductDetailApiResponse.class)))
+            content =
+                    @Content(
+                            schema =
+                                    @Schema(
+                                            implementation =
+                                                    AdminModeratedProductDetailApiResponse.class)))
     @GetMapping("/products/{productId}")
     ResponseEntity<ApiResponse<ProductDetailResponse>> productDetail(@PathVariable Long productId);
 }

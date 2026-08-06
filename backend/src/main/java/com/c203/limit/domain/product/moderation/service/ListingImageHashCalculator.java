@@ -8,10 +8,14 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import javax.imageio.ImageIO;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 @Component
 public class ListingImageHashCalculator {
+    private static final Logger log = LoggerFactory.getLogger(ListingImageHashCalculator.class);
+
     public ImageHashes calculate(byte[] content) {
         String sha256 = sha256(content);
         String perceptualHash = differenceHash(content);
@@ -29,7 +33,12 @@ public class ListingImageHashCalculator {
     private String differenceHash(byte[] content) {
         try {
             BufferedImage source = ImageIO.read(new ByteArrayInputStream(content));
-            if (source == null) return null;
+            if (source == null) {
+                log.warn(
+                        "listing image perceptual hash skipped: bytes={}, reason=unsupported-format",
+                        content.length);
+                return null;
+            }
             BufferedImage resized = new BufferedImage(9, 8, BufferedImage.TYPE_BYTE_GRAY);
             Graphics2D graphics = resized.createGraphics();
             try {
@@ -51,7 +60,11 @@ public class ListingImageHashCalculator {
                 }
             }
             return String.format("%016x", hash);
-        } catch (Exception exception) {
+        } catch (RuntimeException | java.io.IOException exception) {
+            log.warn(
+                    "listing image perceptual hash skipped: bytes={}, errorType={}",
+                    content.length,
+                    exception.getClass().getSimpleName());
             return null;
         }
     }

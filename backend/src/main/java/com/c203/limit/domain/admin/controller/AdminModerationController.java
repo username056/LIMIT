@@ -1,7 +1,7 @@
 package com.c203.limit.domain.admin.controller;
 
-import com.c203.limit.domain.product.entity.ListingStatus;
 import com.c203.limit.domain.product.dto.response.ProductDetailResponse;
+import com.c203.limit.domain.product.entity.ListingStatus;
 import com.c203.limit.domain.product.moderation.dto.request.AdminModerationDecisionRequest;
 import com.c203.limit.domain.product.moderation.dto.request.AdminRestorationDecisionRequest;
 import com.c203.limit.domain.product.moderation.dto.request.ResolveRiskSignalRequest;
@@ -58,8 +58,8 @@ public class AdminModerationController implements AdminModerationApi {
     }
 
     @Override
-    public ResponseEntity<ApiResponse<PageResponse<AdminRestorationRequestResponse>>> restorationRequests(
-            RestorationRequestStatus status, int page, int size) {
+    public ResponseEntity<ApiResponse<PageResponse<AdminRestorationRequestResponse>>>
+            restorationRequests(RestorationRequestStatus status, int page, int size) {
         return ResponseEntity.ok(
                 ApiResponse.ok(moderationService.restorationRequests(status, page, size)));
     }

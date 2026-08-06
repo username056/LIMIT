@@ -24,6 +24,8 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -34,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ModerationRiskService {
+    private static final Logger log = LoggerFactory.getLogger(ModerationRiskService.class);
     private static final int MAX_PAGE_SIZE = 100;
     private static final int MAX_TITLE_CANDIDATES = 300;
     private static final int MAX_IMAGE_CANDIDATES = 500;
@@ -201,6 +204,7 @@ public class ModerationRiskService {
         signal.resolve(adminId, note, LocalDateTime.now(clock));
         actionLogRepository.save(AdminActionLog.of(
                 adminId, "MODERATION_RISK_RESOLVE", "MODERATION_RISK_SIGNAL", signalId, note));
+        log.info("moderation risk signal resolved: signalId={}, adminId={}", signalId, adminId);
         return riskResponse(signal);
     }
 
@@ -278,6 +282,13 @@ public class ModerationRiskService {
         riskRepository.findByFingerprint(candidate.getFingerprint()).ifPresentOrElse(
                 existing -> existing.refresh(candidate.getScore(), candidate.getDetail()),
                 () -> riskRepository.save(candidate));
+        log.info(
+                "moderation risk signal analyzed: sellerId={}, listingId={}, relatedListingId={}, type={}, score={}",
+                candidate.getSellerId(),
+                candidate.getListingId(),
+                candidate.getRelatedListingId(),
+                candidate.getType(),
+                candidate.getScore());
     }
 
     static int titleSimilarity(String first, String second) {
