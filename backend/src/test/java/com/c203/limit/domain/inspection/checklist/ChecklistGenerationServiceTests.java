@@ -31,6 +31,7 @@ import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class ChecklistGenerationServiceTests {
@@ -285,6 +286,314 @@ class ChecklistGenerationServiceTests {
                         BusinessException.class,
                         exception -> assertThat(exception.getErrorCode())
                                 .isEqualTo(ErrorCode.CHECKLIST_DEVICE_TYPE_NOT_SUPPORTED));
+    }
+
+    @Test
+    void resolveConfirmedFeatureItemsReturnsEmptyWhenNothingConfirmed() {
+        when(categoryRepository.findById(201L))
+                .thenReturn(Optional.of(laptop(OsFamily.WINDOWS)));
+
+        assertThat(service.resolveConfirmedFeatureItems(201L, Set.of())).isEmpty();
+        assertThat(service.resolveConfirmedFeatureItems(201L, null)).isEmpty();
+        verifyNoInteractions(supplementClient, templateRepository);
+    }
+
+    @Test
+    void resolveConfirmedFeatureItemsNormalizesCodeAndMapsCatalogItem() {
+        when(categoryRepository.findById(101L)).thenReturn(Optional.of(smartphone()));
+
+        var items = service.resolveConfirmedFeatureItems(101L, Set.of(" wireless_charging "));
+
+        assertThat(items).containsOnlyKeys("WIRELESS_CHARGING");
+        assertThat(items.get("WIRELESS_CHARGING").itemCode()).isEqualTo("PHN-FTR-WCHG");
+        assertThat(items.get("WIRELESS_CHARGING").evidenceType()).isEqualTo(EvidenceType.VIDEO);
+        verifyNoInteractions(supplementClient);
+    }
+
+    @Test
+    void resolveConfirmedFeatureItemsRejectsBlankOrUnknownFeatureCode() {
+        when(categoryRepository.findById(201L))
+                .thenReturn(Optional.of(laptop(OsFamily.WINDOWS)));
+
+        assertThatThrownBy(() -> service.resolveConfirmedFeatureItems(201L, Set.of("  ")))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+        assertThatThrownBy(() -> service.resolveConfirmedFeatureItems(201L, Set.of("HOLOGRAM")))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+    }
+
+    @Test
+    void resolveConfirmedFeatureItemsRejectsMoreFeaturesThanTheCatalogLimit() {
+        when(categoryRepository.findById(201L))
+                .thenReturn(Optional.of(laptop(OsFamily.WINDOWS)));
+
+        assertThatThrownBy(() -> service.resolveConfirmedFeatureItems(
+                        201L,
+                        Set.of("CAMERA", "WIFI", "BLUETOOTH", "OLED", "NUMPAD", "SD_CARD")))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+    }
+
+    @Test
+    void rejectsDeactivatedDeviceModel() {
+        Category model = laptop(OsFamily.WINDOWS);
+        model.deactivate();
+        when(categoryRepository.findById(201L)).thenReturn(Optional.of(model));
+
+        assertThatThrownBy(() -> service.generateForModel(201L, Set.of()))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.DEVICE_MODEL_NOT_FOUND));
+        verifyNoInteractions(supplementClient);
+    }
+
+    @Test
+    void rejectsUnknownDeviceModel() {
+        when(categoryRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.generateForModel(999L, Set.of()))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.DEVICE_MODEL_NOT_FOUND));
+    }
+
+    @Test
+    void rejectsGenerationWhenNonLaptopModelHasNoPublishedTemplate() throws Exception {
+        when(categoryRepository.findById(101L)).thenReturn(Optional.of(smartphone()));
+        ModelChecklistResearch research = ModelChecklistResearch.start(101L, 1);
+        research.complete(new ObjectMapper().writeValueAsString(
+                new ChecklistSupplementResult(true, List.of(), List.of())));
+        when(researchRepository.findFirstByDeviceModelIdOrderByResearchVersionDesc(101L))
+                .thenReturn(Optional.of(research));
+        when(templateRepository.findFirstByCategoryIdAndStatusOrderByVersionDesc(
+                        101L, ChecklistTemplateStatus.PUBLISHED))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.generateForModel(101L, Set.of()))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.CHECKLIST_TEMPLATE_NOT_FOUND));
+    }
+
+    @Test
+    void rejectsGenerationWithMoreConfirmedFeaturesThanAllowed() {
+        when(categoryRepository.findById(201L))
+                .thenReturn(Optional.of(laptop(OsFamily.WINDOWS)));
+
+        assertThatThrownBy(() -> service.generateForModel(
+                        201L,
+                        Set.of("CAMERA", "WIFI", "BLUETOOTH", "OLED", "NUMPAD", "SD_CARD")))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+        verifyNoInteractions(supplementClient);
+    }
+
+    @Test
+    void rejectsDirectInputOnUnsupportedLaptopOs() {
+        assertThatThrownBy(() -> service.generateCustom(
+                        "Apple", "MacBook Pro", null, OsFamily.MACOS, Set.of()))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.CHECKLIST_OS_NOT_SUPPORTED));
+        verifyNoInteractions(supplementClient);
+    }
+
+    @Test
+    void rejectsDirectInputWithoutOsFamily() {
+        assertThatThrownBy(() -> service.generateCustom(
+                        "LG", "gram Pro 17", "17Z90SP", null, Set.of()))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.INVALID_INPUT_VALUE));
+        verifyNoInteractions(supplementClient);
+    }
+
+    @Test
+    void appliesAiEvidenceToMatchingDirectInputItem() {
+        when(supplementClient.suggest(any()))
+                .thenReturn(new ChecklistSupplementResult(
+                        true,
+                        List.of(new ChecklistSuggestion(
+                                "CAMERA",
+                                "내장 카메라",
+                                ChecklistEvidenceStatus.VERIFIED,
+                                "공식 사양",
+                                "카메라 앱에서 확인하세요.",
+                                "https://www.lg.com/support/gram",
+                                "LG support")),
+                        List.of()));
+
+        GeneratedChecklist result = service.generateCustom(
+                "LG", "gram Pro 17", " ", OsFamily.WINDOWS, Set.of("CAMERA"));
+
+        assertThat(result.aiApplied()).isTrue();
+        assertThat(result.items())
+                .filteredOn(item -> "LAP-FTR-CAM".equals(item.itemCode()))
+                .singleElement()
+                .satisfies(item -> {
+                    assertThat(item.evidenceStatus()).isEqualTo(ChecklistEvidenceStatus.VERIFIED);
+                    assertThat(item.sourceUrl()).isEqualTo("https://www.lg.com/support/gram");
+                    assertThat(item.sourceTitle()).isEqualTo("LG support");
+                });
+        assertThat(result.aiSuggestions())
+                .singleElement()
+                .satisfies(suggestion -> {
+                    assertThat(suggestion.itemCode()).isEqualTo("LAP-FTR-CAM");
+                    assertThat(suggestion.evidenceType())
+                            .isEqualTo(EvidenceType.SELLER_CONFIRMATION);
+                });
+    }
+
+    @Test
+    void dropsSuggestionsWithUnsafeSourceOrUnknownFeature() {
+        when(supplementClient.suggest(any()))
+                .thenReturn(new ChecklistSupplementResult(
+                        true,
+                        List.of(
+                                new ChecklistSuggestion(
+                                        "WIFI",
+                                        "Wi-Fi",
+                                        ChecklistEvidenceStatus.VERIFIED,
+                                        "공식 사양",
+                                        "확인하세요.",
+                                        "http://insecure.example.com/spec",
+                                        "insecure"),
+                                new ChecklistSuggestion(
+                                        "  ",
+                                        "빈 코드",
+                                        ChecklistEvidenceStatus.VERIFIED,
+                                        "공식 사양",
+                                        "확인하세요.",
+                                        "https://www.lg.com/support/gram",
+                                        "LG support"),
+                                new ChecklistSuggestion(
+                                        "HOLOGRAM",
+                                        "홀로그램",
+                                        ChecklistEvidenceStatus.VERIFIED,
+                                        "공식 사양",
+                                        "확인하세요.",
+                                        "https://www.lg.com/support/gram",
+                                        "LG support")),
+                        List.of("RJ45_PORT", "   ", "홀로그램 디스플레이")));
+
+        GeneratedChecklist result = service.generateCustom(
+                "LG", "gram Pro 17", null, OsFamily.WINDOWS, Set.of());
+
+        assertThat(result.aiSuggestions()).isEmpty();
+        assertThat(result.reviewCandidates()).containsExactly("홀로그램 디스플레이");
+    }
+
+    @Test
+    void keepsVerifiedBaseChecklistWhenDirectInputSupplementFails() {
+        when(supplementClient.suggest(any()))
+                .thenThrow(new IllegalStateException("timeout"));
+
+        GeneratedChecklist result = service.generateCustom(
+                "LG", "gram Pro 17", null, OsFamily.WINDOWS, Set.of());
+
+        assertThat(result.aiApplied()).isFalse();
+        assertThat(result.aiSuggestions()).isEmpty();
+        assertThat(result.reviewCandidates()).isEmpty();
+        assertThat(result.items()).hasSize(13);
+    }
+
+    @Test
+    void reusesResearchCreatedConcurrentlyWhenInsertViolatesUniqueConstraint() throws Exception {
+        when(categoryRepository.findById(201L))
+                .thenReturn(Optional.of(laptop(OsFamily.WINDOWS)));
+        ModelChecklistResearch concurrent = ModelChecklistResearch.start(201L, 1);
+        concurrent.complete(new ObjectMapper().writeValueAsString(
+                new ChecklistSupplementResult(true, List.of(), List.of())));
+        ReflectionTestUtils.setField(concurrent, "id", 402L);
+        when(researchRepository.findFirstByDeviceModelIdOrderByResearchVersionDesc(201L))
+                .thenReturn(Optional.empty(), Optional.of(concurrent));
+        when(researchRepository.saveAndFlush(any(ModelChecklistResearch.class)))
+                .thenThrow(new DataIntegrityViolationException("duplicate research"));
+
+        GeneratedChecklist result = service.generateForModel(201L, Set.of());
+
+        assertThat(result.researchId()).isEqualTo(402L);
+        assertThat(result.researchStatus()).isEqualTo("PENDING_REVIEW");
+        verifyNoInteractions(supplementClient);
+    }
+
+    @Test
+    void rethrowsWhenConcurrentResearchIsStillMissingAfterConflict() {
+        when(categoryRepository.findById(201L))
+                .thenReturn(Optional.of(laptop(OsFamily.WINDOWS)));
+        when(researchRepository.findFirstByDeviceModelIdOrderByResearchVersionDesc(201L))
+                .thenReturn(Optional.empty());
+        when(researchRepository.saveAndFlush(any(ModelChecklistResearch.class)))
+                .thenThrow(new DataIntegrityViolationException("duplicate research"));
+
+        assertThatThrownBy(() -> service.generateForModel(201L, Set.of()))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        verifyNoInteractions(supplementClient);
+    }
+
+    @Test
+    void ignoresResearchResultThatIsNotReviewable() throws Exception {
+        when(categoryRepository.findById(201L))
+                .thenReturn(Optional.of(laptop(OsFamily.WINDOWS)));
+        ModelChecklistResearch research = ModelChecklistResearch.start(201L, 1);
+        research.fail(new ObjectMapper()
+                .writeValueAsString(ChecklistSupplementResult.requestFailed()));
+        when(researchRepository.findFirstByDeviceModelIdOrderByResearchVersionDesc(201L))
+                .thenReturn(Optional.of(research));
+
+        GeneratedChecklist result = service.generateForModel(201L, Set.of());
+
+        assertThat(result.researchStatus()).isEqualTo("FAILED");
+        assertThat(result.aiApplied()).isFalse();
+        assertThat(result.aiSuggestions()).isEmpty();
+        assertThat(result.reviewCandidates()).isEmpty();
+        verifyNoInteractions(supplementClient);
+    }
+
+    @Test
+    void failsWhenStoredResearchResultCannotBeDeserialized() {
+        when(categoryRepository.findById(201L))
+                .thenReturn(Optional.of(laptop(OsFamily.WINDOWS)));
+        ModelChecklistResearch research = ModelChecklistResearch.start(201L, 1);
+        research.complete("not-a-json-document");
+        when(researchRepository.findFirstByDeviceModelIdOrderByResearchVersionDesc(201L))
+                .thenReturn(Optional.of(research));
+
+        assertThatThrownBy(() -> service.generateForModel(201L, Set.of()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("failed to deserialize checklist research");
+    }
+
+    @Test
+    void marksResearchFailedWhenSupplementIsUnavailable() {
+        when(categoryRepository.findById(201L))
+                .thenReturn(Optional.of(laptop(OsFamily.WINDOWS)));
+        when(supplementClient.suggest(any()))
+                .thenReturn(ChecklistSupplementResult.unavailable());
+
+        GeneratedChecklist result = service.generateForModel(201L, Set.of());
+
+        assertThat(result.researchStatus()).isEqualTo("FAILED");
+        assertThat(result.researchId()).isEqualTo(401L);
+        ArgumentCaptor<ModelChecklistResearch> captor =
+                ArgumentCaptor.forClass(ModelChecklistResearch.class);
+        verify(researchRepository, times(2)).saveAndFlush(captor.capture());
+        assertThat(captor.getValue().getResultJson())
+                .contains("\"failureCode\":\"AI_UNAVAILABLE\"");
     }
 
     private void stubPublishedTemplate(Long modelId) {
