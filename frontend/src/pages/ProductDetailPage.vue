@@ -5,6 +5,7 @@ import DefaultLayout from '../layouts/DefaultLayout.vue'
 import BaseButton from '../components/BaseButton.vue'
 import BaseCard from '../components/BaseCard.vue'
 import ProfileAvatar from '../components/ProfileAvatar.vue'
+import DiagnosisSpecList from '../components/DiagnosisSpecList.vue'
 import { addFavorite, getFavoriteStatus, removeFavorite } from '../api/favorites'
 import {
   createReinspectionRequest,
@@ -20,6 +21,22 @@ import { getProductDiagnosisSummary } from '../api/inspection'
 import { getSellerProfile } from '../api/seller'
 import { getAccessToken, getSessionMember } from '../auth/session'
 import { canSellerMarkSold, canSellerReopen, isSoldOut } from '../utils/productStatus'
+import {
+  ALL_BATTERY_FIELDS,
+  BASIC_INFO_FIELDS,
+  BATTERY_DETAIL_FIELDS,
+  BATTERY_FALLBACK_FIELDS,
+  BATTERY_GRADE_BASIS,
+  BATTERY_GRADE_DISCLAIMER,
+  BATTERY_UNAVAILABLE_DESCRIPTION,
+  BATTERY_UNAVAILABLE_TITLE,
+  BATTERY_UNMEASURABLE_DESCRIPTION,
+  BATTERY_UNMEASURABLE_TITLE,
+  CYCLE_COUNT_DISCLAIMER,
+  GRAPHICS_DEVICE_FIELDS,
+  batteryGradeFor,
+  diagnosisFieldValue,
+} from '../utils/diagnosisFields'
 
 const route = useRoute()
 const router = useRouter()
@@ -102,26 +119,6 @@ function evidenceTypeLabel(type) {
 // ocr_result/dxdiag_result/battery_report_result에서 취합된 필드별 자동 인식 사양입니다.
 const diagnosisSummaryItems = ref([])
 const diagnosisDisclaimer = ref('')
-const DIAGNOSIS_FIELD_LABELS = {
-  MODEL_NAME: '모델명',
-  CPU: 'CPU',
-  RAM: 'RAM',
-  GPU: 'GPU',
-  STORAGE_CAPACITY: '저장 용량',
-  OS_VERSION: 'OS 버전',
-  GPU_MEMORY: 'GPU 메모리',
-  DRIVER_VERSION: '그래픽 드라이버 버전',
-  SOUND_DEVICE: '사운드 장치',
-  DESIGN_CAPACITY: '배터리 설계 용량',
-  FULL_CHARGE_CAPACITY: '완전 충전 용량',
-  CYCLE_COUNT: '배터리 충전 횟수',
-  BATTERY_MANUFACTURER: '배터리 제조사',
-  CAPACITY_RATIO: '배터리 용량 비율',
-}
-
-function diagnosisFieldLabel(fieldName) {
-  return DIAGNOSIS_FIELD_LABELS[fieldName] || fieldName
-}
 
 // 인식에 성공한 항목 수입니다. 옆 검증 카드와 같은 배지·막대로 보여 주어 두 카드를 같은
 // 눈으로 읽게 합니다. 실패한 항목도 목록에는 남기므로 분모는 전체 항목 수입니다.
@@ -137,9 +134,81 @@ const diagnosisRate = computed(() => {
   return total ? Math.round((available / total) * 100) : 0
 })
 
-// 값이 길면 잘려(...) 보입니다. 커서를 올리면 원문 전체를 툴팁으로 보여 줍니다.
-// 눌러서 펼치는 방식은 누를 수 있다는 걸 먼저 알아야 해서 올려놓기만 해도 보이게 했습니다.
-const activeDiagnosisField = ref(null)
+function findDiagnosisItem(fieldName) {
+  return diagnosisSummaryItems.value.find((item) => item.fieldName === fieldName)
+}
+
+function pickDiagnosisItems(fieldNames) {
+  return fieldNames.map(findDiagnosisItem).filter(Boolean)
+}
+
+// 배터리 외 사양은 그대로 필드 단위 목록입니다.
+const basicInfoItems = computed(() => pickDiagnosisItems(BASIC_INFO_FIELDS))
+const graphicsDeviceItems = computed(() => pickDiagnosisItems(GRAPHICS_DEVICE_FIELDS))
+
+/*
+  배터리는 셋 중 하나 상태로 보여줍니다.
+  ---------------------------------------------------------------------------
+  구매자가 궁금한 건 원시 수치가 아니라 "이 배터리를 믿고 써도 되는가"입니다. 그래서
+  용량 비율(건강도)이 있으면 등급 카드로, 없으면 확보된 값만 참고 정보로, 그마저 없으면
+  한 줄 안내로 대체합니다. 값이 없는 필드를 추정하지 않는 게 원칙입니다.
+*/
+const capacityRatioItem = computed(() => findDiagnosisItem('CAPACITY_RATIO'))
+const cycleCountItem = computed(() => findDiagnosisItem('CYCLE_COUNT'))
+
+/*
+  값 자체를 파싱해 확인합니다. status만 AVAILABLE이고 값이 비정상(빈 문자열, 숫자가 아님)이면
+  등급을 매길 수 없으니 "측정 불가" 분기로 보냅니다. status만 믿고 넘어가면 batteryGrade가
+  null인 채로 .label/.scenario에 접근해 화면이 깨집니다.
+*/
+const batteryRatioValue = computed(() => {
+  if (capacityRatioItem.value?.status !== 'AVAILABLE') return null
+  const raw = capacityRatioItem.value.value
+  // Number('')는 0으로 변환되어 isFinite를 그냥 통과합니다. 빈 값은 여기서 먼저 걸러 냅니다.
+  if (raw === null || raw === undefined || String(raw).trim() === '') return null
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) ? parsed : null
+})
+
+const hasBatteryHealth = computed(() => batteryRatioValue.value !== null)
+const hasAnyBatteryInfo = computed(() => ALL_BATTERY_FIELDS
+  .some((fieldName) => findDiagnosisItem(fieldName)?.status === 'AVAILABLE'))
+
+// 등급 판정은 반드시 원본 값 기준입니다. 반올림한 값으로 판정하면 84.6%가 85%로 반올림되어
+// "우수" 구간(85% 이상)에 걸쳐 있지도 않은데 우수로 뜨는 식의 오판정이 생깁니다.
+const batteryGrade = computed(() => (
+  batteryRatioValue.value === null ? null : batteryGradeFor(batteryRatioValue.value)
+))
+
+// 표시는 소수 첫째 자리까지 내림합니다. 반올림은 84.95%처럼 등급 경계(85) 바로 아래 값을
+// "85.0%"로 보이게 만들어 배지(양호)와 숫자(85%)가 모순돼 보일 수 있습니다. 내림은 정수
+// 경계에 대해 항상 안전합니다(x >= B이면 floor(x*10)/10 >= B가 수학적으로 보장됩니다).
+const batteryRatioDisplay = computed(() => (
+  batteryRatioValue.value === null ? null : (Math.floor(batteryRatioValue.value * 10) / 10).toFixed(1)
+))
+
+const BATTERY_TONE_BADGE_CLASSES = {
+  excellent: 'bg-emerald-50 text-emerald-600',
+  good: 'bg-sky-50 text-sky-600',
+  caution: 'bg-amber-50 text-amber-600',
+  replace: 'bg-rose-50 text-rose-600',
+}
+const BATTERY_TONE_BAR_CLASSES = {
+  excellent: 'bg-emerald-500',
+  good: 'bg-sky-500',
+  caution: 'bg-amber-500',
+  replace: 'bg-rose-500',
+}
+
+const batteryGradeBadgeClass = computed(() => BATTERY_TONE_BADGE_CLASSES[batteryGrade.value?.tone] || '')
+const batteryGradeBarClass = computed(() => BATTERY_TONE_BAR_CLASSES[batteryGrade.value?.tone] || '')
+
+// 건강도만 못 구했을 때 그나마 확보된 배터리 정보입니다. 실패한 필드까지 늘어놓으면
+// "측정할 수 없습니다" 안내와 중복돼 오히려 헷갈리므로 성공한 값만 보여줍니다.
+const batteryFallbackItems = computed(() => pickDiagnosisItems(BATTERY_FALLBACK_FIELDS)
+  .filter((item) => item.status === 'AVAILABLE'))
+
+const batteryDetailItems = computed(() => pickDiagnosisItems(BATTERY_DETAIL_FIELDS))
 
 // 증빙 원본을 크게 보는 팝업입니다. 목록 안 썸네일은 56px이라 영상 재생에는 너무 작습니다.
 const mediaViewer = ref(null)
@@ -922,7 +991,7 @@ onMounted(async () => {
           </section>
 
           <!-- ocr_result/dxdiag_result/battery_report_result 취합값. 항목별 자료 첨부 여부와는
-               별개로, 실제로 인식된 사양 값 자체를 필드 단위로 보여줍니다. -->
+               별개로, 실제로 인식된 사양 값 자체를 그룹 단위로 보여줍니다. -->
           <div
             v-if="diagnosisSummaryItems.length"
             class="card-soft rounded-lg bg-surface p-5 sm:p-6"
@@ -959,52 +1028,123 @@ onMounted(async () => {
                 :style="{ width: `${diagnosisRate}%` }"
               />
             </div>
+
+            <!-- 기본 정보: 이게 무슨 기기인지부터 보여줍니다. -->
+            <section
+              v-if="basicInfoItems.length"
+              class="mt-5"
+            >
+              <h3 class="text-xs font-semibold text-text-sub">
+                기본 정보
+              </h3>
+              <DiagnosisSpecList :items="basicInfoItems" />
+            </section>
+
             <!--
-                항목마다 회색 박스를 두면 개수만큼 상자가 늘어서 지저분해집니다. 하나의 옅은 카드
-                안에서 구분선으로만 나눕니다. 순서는 서버가 준 그대로 둡니다.
-              -->
-            <dl class="spec-list mt-3">
+              배터리 상태: 원시 수치 나열 대신 "믿고 써도 되는가"에 답하는 카드입니다.
+              건강도(용량 비율)를 못 구한 경우까지 감안해 3단계로 나눕니다.
+            -->
+            <section class="mt-5">
+              <h3 class="text-xs font-semibold text-text-sub">
+                배터리 상태
+              </h3>
+
               <div
-                v-for="item in diagnosisSummaryItems"
-                :key="item.fieldName"
-                class="spec-row relative"
+                v-if="hasBatteryHealth"
+                class="mt-2 rounded-lg border border-slate-100 bg-slate-50 p-4"
               >
-                <dt class="w-[130px] shrink-0 text-[13px] font-medium text-text-sub">
-                  {{ diagnosisFieldLabel(item.fieldName) }}
-                </dt>
-                <!--
-                    값이 길면 잘려 보입니다. 눌러서 펼치게 하면 눌러야 한다는 걸 먼저 알아야 하므로,
-                    올려놓기만 해도 전체가 보이게 합니다. 키보드 포커스에도 같이 뜹니다.
-                  -->
-                <dd class="min-w-0 flex-1 text-right">
+                <div class="flex flex-wrap items-baseline gap-2">
+                  <span class="text-2xl font-bold text-text-main">{{ batteryRatioDisplay }}%</span>
                   <span
-                    v-if="item.status === 'AVAILABLE'"
-                    class="block cursor-default truncate text-sm font-semibold text-text-main"
-                    tabindex="0"
-                    @mouseenter="activeDiagnosisField = item.fieldName"
-                    @mouseleave="activeDiagnosisField = null"
-                    @focus="activeDiagnosisField = item.fieldName"
-                    @blur="activeDiagnosisField = null"
+                    class="rounded-pill px-2.5 py-1 text-xs font-bold"
+                    :class="batteryGradeBadgeClass"
                   >
-                    {{ item.value }}
+                    {{ batteryGrade.label }}
                   </span>
-                  <!-- 인식하지 못한 값은 흐리게 둡니다. 읽을 게 없는 줄에 시선이 가면 안 됩니다. -->
-                  <span
-                    v-else
-                    class="block truncate text-sm font-normal text-slate-300"
-                  >
-                    인식 실패
-                  </span>
-                </dd>
-                <div
-                  v-if="activeDiagnosisField === item.fieldName"
-                  role="tooltip"
-                  class="diagnosis-tooltip pointer-events-none absolute right-0 top-full z-10 mt-1 max-w-[min(20rem,80vw)] whitespace-normal break-words rounded-md bg-slate-800 px-3 py-1.5 text-left text-xs font-normal text-white shadow-elevated"
-                >
-                  {{ item.value }}
                 </div>
+                <p class="mt-3 text-sm text-text-sub">
+                  {{ batteryGrade.scenario }}
+                </p>
+                <!-- 처음에는 구매 판단에 필요한 등급·한 줄 안내만 두고, 근거 수치와 설명은
+                     필요할 때만 열어 보게 합니다. 기본 상태는 닫혀 있습니다. -->
+                <details class="group mt-3 border-t border-slate-200 pt-3">
+                  <summary class="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-semibold text-primary">
+                    <span>배터리 상세 정보</span>
+                    <span>
+                      <span class="group-open:hidden">펼치기</span>
+                      <span class="hidden group-open:inline">접기</span>
+                    </span>
+                  </summary>
+                  <div class="mt-3">
+                    <!-- 등급 4단계는 넓은 구간을 가진 것도 있어, 구간 안 위치를 막대로 함께 보여줍니다. -->
+                    <div class="h-2 overflow-hidden rounded-pill bg-slate-200">
+                      <div
+                        class="h-full rounded-pill"
+                        :class="batteryGradeBarClass"
+                        :style="{ width: `${batteryRatioDisplay}%` }"
+                      />
+                    </div>
+                    <p
+                      v-if="cycleCountItem?.status === 'AVAILABLE'"
+                      class="mt-3 text-xs text-text-sub"
+                    >
+                      충전 사이클 {{ diagnosisFieldValue('CYCLE_COUNT', cycleCountItem.value) }} · {{ CYCLE_COUNT_DISCLAIMER }}
+                    </p>
+                    <p class="mt-3 text-xs text-text-sub">
+                      {{ BATTERY_GRADE_DISCLAIMER }}
+                    </p>
+                    <p class="mt-1 text-xs text-text-sub">
+                      {{ BATTERY_GRADE_BASIS }}
+                    </p>
+                    <div
+                      v-if="batteryDetailItems.length"
+                      class="mt-3"
+                    >
+                      <p class="text-xs font-semibold text-text-sub">
+                        용량 상세
+                      </p>
+                      <DiagnosisSpecList :items="batteryDetailItems" />
+                    </div>
+                  </div>
+                </details>
               </div>
-            </dl>
+
+              <div
+                v-else-if="hasAnyBatteryInfo"
+                class="mt-2 rounded-lg border border-slate-100 bg-slate-50 p-4"
+              >
+                <p class="text-sm font-semibold text-text-main">
+                  {{ BATTERY_UNMEASURABLE_TITLE }}
+                </p>
+                <p class="mt-1 text-xs text-text-sub">
+                  {{ BATTERY_UNMEASURABLE_DESCRIPTION }}
+                </p>
+                <DiagnosisSpecList :items="batteryFallbackItems" />
+              </div>
+
+              <div
+                v-else
+                class="mt-2 rounded-lg border border-slate-100 bg-slate-50 p-4"
+              >
+                <p class="text-sm font-semibold text-slate-400">
+                  {{ BATTERY_UNAVAILABLE_TITLE }}
+                </p>
+                <p class="mt-1 text-xs text-text-sub">
+                  {{ BATTERY_UNAVAILABLE_DESCRIPTION }}
+                </p>
+              </div>
+            </section>
+
+            <!-- 그래픽·장치 정보: 구매자가 우선순위 낮게 보는 값들이라 배터리 뒤로 둡니다. -->
+            <section
+              v-if="graphicsDeviceItems.length"
+              class="mt-5"
+            >
+              <h3 class="text-xs font-semibold text-text-sub">
+                그래픽·장치 정보
+              </h3>
+              <DiagnosisSpecList :items="graphicsDeviceItems" />
+            </section>
           </div>
         </div>
 
@@ -1254,27 +1394,6 @@ onMounted(async () => {
   }
 }
 
-/* 자동 인식 사양: 옅은 카드 하나에 구분선으로만 행을 나눕니다. */
-.spec-list {
-  background-color: #f8fafc;
-  border: 1px solid #f1f5f9;
-  border-radius: 16px;
-  padding: 0 16px;
-}
-
-.spec-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.spec-row:last-child {
-  border-bottom: none;
-}
-
 /* 검증 체크리스트: 흰 카드 하나에 구분선으로만 항목을 나눕니다. */
 .checklist-card {
   background: #fff;
@@ -1290,21 +1409,5 @@ onMounted(async () => {
 
 .checklist-row:last-child {
   border-bottom: none;
-}
-
-/* 툴팁이 툭 튀어나오지 않고 짧게 떠오르게 합니다. */
-.diagnosis-tooltip {
-  animation: tooltip-in 140ms ease-out;
-}
-
-@keyframes tooltip-in {
-  from { opacity: 0; transform: translateY(-2px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .diagnosis-tooltip {
-    animation: none;
-  }
 }
 </style>
