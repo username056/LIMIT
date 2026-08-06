@@ -5,15 +5,26 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.c203.limit.domain.product.dto.response.ProductDetailResponse;
+import com.c203.limit.domain.product.entity.ListingStatus;
 import com.c203.limit.domain.product.moderation.dto.request.AdminModerationDecisionRequest;
 import com.c203.limit.domain.product.moderation.dto.request.AdminRestorationDecisionRequest;
+import com.c203.limit.domain.product.moderation.dto.request.ResolveRiskSignalRequest;
 import com.c203.limit.domain.product.moderation.dto.response.AdminListingReportResponse;
+import com.c203.limit.domain.product.moderation.dto.response.AdminModeratedProductResponse;
 import com.c203.limit.domain.product.moderation.dto.response.AdminRestorationRequestResponse;
+import com.c203.limit.domain.product.moderation.dto.response.ModerationDashboardResponse;
+import com.c203.limit.domain.product.moderation.dto.response.ModerationRiskSignalResponse;
+import com.c203.limit.domain.product.moderation.entity.ListingModerationStatus;
+import com.c203.limit.domain.product.moderation.entity.ListingReportStatus;
 import com.c203.limit.domain.product.moderation.entity.ModerationDecision;
+import com.c203.limit.domain.product.moderation.entity.ModerationRiskStatus;
+import com.c203.limit.domain.product.moderation.entity.ModerationRiskType;
+import com.c203.limit.domain.product.moderation.entity.RestorationRequestStatus;
 import com.c203.limit.domain.product.moderation.entity.RestorationDecision;
 import com.c203.limit.domain.product.moderation.service.ListingModerationService;
 import com.c203.limit.domain.product.moderation.service.ModerationRiskService;
 import com.c203.limit.domain.product.service.ProductApplicationService;
+import com.c203.limit.global.response.PageResponse;
 import com.c203.limit.global.security.CurrentUser;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -96,5 +107,78 @@ class AdminModerationControllerTests {
         var result = controller.productDetail(1001L);
 
         assertThat(result.getBody().data()).isSameAs(response);
+    }
+
+    @Test
+    void adminCanReadEveryModerationQueueAndDashboard() {
+        ModerationDashboardResponse dashboard =
+                new ModerationDashboardResponse(1, 2, 3, 4, 5, List.of(), List.of());
+        PageResponse<AdminListingReportResponse> reports = emptyPage();
+        PageResponse<AdminRestorationRequestResponse> restorations = emptyPage();
+        PageResponse<ModerationRiskSignalResponse> risks = emptyPage();
+        PageResponse<AdminModeratedProductResponse> products = emptyPage();
+        when(riskService.dashboard()).thenReturn(dashboard);
+        when(moderationService.reports(ListingReportStatus.PENDING, 0, 20))
+                .thenReturn(reports);
+        when(moderationService.restorationRequests(RestorationRequestStatus.PENDING, 0, 20))
+                .thenReturn(restorations);
+        when(riskService.signals(
+                        ModerationRiskStatus.OPEN,
+                        ModerationRiskType.SIMILAR_IMAGE,
+                        0,
+                        20))
+                .thenReturn(risks);
+        when(riskService.products(
+                        "gram",
+                        55L,
+                        ListingStatus.ON_SALE,
+                        ListingModerationStatus.SUSPENDED,
+                        0,
+                        20))
+                .thenReturn(products);
+
+        assertThat(controller.dashboard().getBody().data()).isSameAs(dashboard);
+        assertThat(controller.reports(ListingReportStatus.PENDING, 0, 20).getBody().data())
+                .isSameAs(reports);
+        assertThat(controller.restorationRequests(RestorationRequestStatus.PENDING, 0, 20)
+                        .getBody()
+                        .data())
+                .isSameAs(restorations);
+        assertThat(controller.riskSignals(
+                                ModerationRiskStatus.OPEN,
+                                ModerationRiskType.SIMILAR_IMAGE,
+                                0,
+                                20)
+                        .getBody()
+                        .data())
+                .isSameAs(risks);
+        assertThat(controller.products(
+                                "gram",
+                                55L,
+                                ListingStatus.ON_SALE,
+                                ListingModerationStatus.SUSPENDED,
+                                0,
+                                20)
+                        .getBody()
+                        .data())
+                .isSameAs(products);
+    }
+
+    @Test
+    void adminIdentityIsPassedToRiskResolution() {
+        ResolveRiskSignalRequest request = new ResolveRiskSignalRequest("reviewed");
+        ModerationRiskSignalResponse response = org.mockito.Mockito.mock(
+                ModerationRiskSignalResponse.class);
+        when(currentUser.adminId()).thenReturn(9L);
+        when(riskService.resolve(9L, 701L, "reviewed")).thenReturn(response);
+
+        var result = controller.resolveRiskSignal(701L, request);
+
+        verify(riskService).resolve(9L, 701L, "reviewed");
+        assertThat(result.getBody().data()).isSameAs(response);
+    }
+
+    private <T> PageResponse<T> emptyPage() {
+        return new PageResponse<>(List.of(), 0, 20, 0, 0, false);
     }
 }
