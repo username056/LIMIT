@@ -137,6 +137,54 @@ class DeviceCatalogMigrationIntegrationTests extends AbstractMySqlIntegrationTes
         assertThat(storages).containsExactly(128, 256, 512);
     }
 
+    @Test
+    void seedsGalaxyBookFamiliesWithSelectableVariantsAndPublishedChecklists() {
+        List<String> modelCodes = List.of(
+                "NT960XGK",
+                "NT960QGK",
+                "NT960XGL",
+                "NT960XMB",
+                "NT750XHD",
+                "NT960XHA",
+                "NT960QHA");
+
+        assertThat(jdbcTemplate.queryForList(
+                        "SELECT model_code FROM device_model "
+                                + "WHERE model_code IN (?, ?, ?, ?, ?, ?, ?) ORDER BY model_code",
+                        String.class,
+                        modelCodes.toArray()))
+                .containsExactlyInAnyOrderElementsOf(modelCodes);
+        assertThat(count(
+                        """
+                        SELECT COUNT(*)
+                          FROM device_model m
+                         WHERE m.model_code IN (
+                             'NT960XGK', 'NT960QGK', 'NT960XGL', 'NT960XMB',
+                             'NT750XHD', 'NT960XHA', 'NT960QHA'
+                         )
+                           AND NOT EXISTS (
+                               SELECT 1 FROM device_variant v
+                                WHERE v.model_id = m.model_id AND v.is_active = b'1'
+                           )
+                        """))
+                .isZero();
+        assertThat(count(
+                        """
+                        SELECT COUNT(*)
+                          FROM device_model m
+                         WHERE m.model_code IN (
+                             'NT960XGK', 'NT960QGK', 'NT960XGL', 'NT960XMB',
+                             'NT750XHD', 'NT960XHA', 'NT960QHA'
+                         )
+                           AND NOT EXISTS (
+                               SELECT 1 FROM checklist_template t
+                                WHERE t.category_id = m.model_id
+                                  AND t.status = 'PUBLISHED'
+                           )
+                        """))
+                .isZero();
+    }
+
     /** 용량 정보가 없는 모델에는 기본 조합 하나가 만들어진다. */
     @Test
     void createsBaseVariantForModelsWithoutStorageList() {
