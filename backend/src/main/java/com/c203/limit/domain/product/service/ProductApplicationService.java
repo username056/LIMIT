@@ -779,10 +779,23 @@ public class ProductApplicationService {
         return (root, query, cb) -> cb.equal(root.get("status"), status);
     }
 
+    /*
+      검색어는 판매글 제목뿐 아니라 기기 모델과도 맞춥니다.
+      -------------------------------------------------------------------------
+      제목만 보면 판매자가 '급처 노트북 팝니다'처럼 적었을 때 모델명으로 찾을 수 없습니다.
+      구매자는 대개 기종을 먼저 떠올리므로, 판매하기에서 고른 기기 모델의 이름과 제조사도
+      함께 봅니다.
+    */
     private Specification<Listing> keyword(String value) {
-        return (root, query, cb) -> value == null || value.isBlank()
-                ? cb.conjunction()
-                : cb.like(cb.lower(root.get("title")), "%" + value.toLowerCase() + "%");
+        return (root, query, cb) -> {
+            if (value == null || value.isBlank()) return cb.conjunction();
+            String pattern = "%" + value.toLowerCase() + "%";
+            var model = root.join("category", jakarta.persistence.criteria.JoinType.LEFT);
+            return cb.or(
+                    cb.like(cb.lower(root.get("title")), pattern),
+                    cb.like(cb.lower(model.get("name")), pattern),
+                    cb.like(cb.lower(model.get("manufacturer")), pattern));
+        };
     }
 
     private Specification<Listing> category(Long categoryId, Long modelId) {
