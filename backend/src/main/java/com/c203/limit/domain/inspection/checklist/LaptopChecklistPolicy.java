@@ -123,7 +123,7 @@ public class LaptopChecklistPolicy {
         if (osFamily == OsFamily.WINDOWS) {
             definitions.add(fileRequired(
                     "LAP-BAT-010",
-                    "배터리 상태",
+                    "배터리 성능",
                     "배터리 설계 용량과 현재 완전 충전 용량을 확인합니다.",
                     "powercfg /batteryreport로 battery-report.html을 생성해 등록하세요. 생성이 불가능하면 배터리 상태 화면 캡처를 등록하세요.",
                     "BATTERY_REPORT"));
@@ -141,7 +141,7 @@ public class LaptopChecklistPolicy {
         } else {
             definitions.add(required(
                     "LAP-BAT-010",
-                    "배터리 상태",
+                    "배터리 성능",
                     "Linux에서 배터리 건강도와 충전 상태를 확인합니다.",
                     "전원 설정 또는 upower 결과에서 배터리 상태가 보이도록 스크린샷을 등록하세요.",
                     EvidenceType.PHOTO));

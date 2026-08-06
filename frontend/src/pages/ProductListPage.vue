@@ -150,7 +150,7 @@ async function search(page = 0) {
       ...restFilters,
       ...verifiedCountRange(verificationCountRanges),
       page,
-      size: 18,
+      size: 9,
     })
     if (requestId !== latestSearchRequestId) return
     products.value = response?.data || []
@@ -256,11 +256,11 @@ watch(() => [route.query.q, route.query.categoryId], async ([keyword, categoryId
             </div>
 
             <label class="mt-5 block text-xs font-semibold text-text-main">
-              상품명
+              모델명
               <input
                 v-model.trim="filters.keyword"
                 type="search"
-                placeholder="모델명, 상품명"
+                placeholder="모델명"
                 class="mt-2 w-full rounded-md border border-border bg-bg px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:bg-white"
               >
             </label>

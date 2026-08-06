@@ -75,7 +75,7 @@ describe('ProductListPage', () => {
     await next.trigger('click')
     await flushPromises()
 
-    expect(getProducts).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, size: 18 }))
+    expect(getProducts).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, size: 9 }))
     expect(wrapper.text()).toContain('다음 상품')
   })
 
