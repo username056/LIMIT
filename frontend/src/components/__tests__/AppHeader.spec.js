@@ -118,38 +118,6 @@ describe('AppHeader', () => {
     알림 API가 없어 안 읽은 채팅과 받은 검증 약속으로 셉니다.
     아래 셋은 점이 켜지는 조건, 꺼지는 조건, 그리고 못 세었을 때를 확인합니다.
   */
-  it('손댈 일이 없으면 벨에 점을 켜지 않는다', async () => {
-    signedIn({ nickname: '회원' })
-    const wrapper = mountHeader()
-    await flushPromises()
-
-    expect(wrapper.get('[aria-label="알림"]').classes()).not.toContain('notification-btn--on')
-  })
-
-  it('안 읽은 채팅이 있으면 벨에 점을 켠다', async () => {
-    signedIn({ nickname: '회원' })
-    getChatRooms.mockResolvedValue({ content: [{ roomId: 1, unreadCount: 2 }] })
-
-    const wrapper = mountHeader()
-    await flushPromises()
-
-    expect(wrapper.get('[aria-label="알림 (새 소식 있음)"]').classes())
-      .toContain('notification-btn--on')
-  })
-
-  it('내가 받은 검증 약속이 있으면 벨에 점을 켠다', async () => {
-    signedIn({ nickname: '회원' })
-    getMyRtcCalls.mockResolvedValue([
-      { callId: 1, status: 'PROPOSED', incoming: true, scheduledAt: futureScheduledAt },
-    ])
-
-    const wrapper = mountHeader()
-    await flushPromises()
-
-    expect(wrapper.get('[aria-label="알림 (새 소식 있음)"]').classes())
-      .toContain('notification-btn--on')
-  })
-
   it('시간이 지난 약속으로는 알리지 않는다', async () => {
     signedIn({ nickname: '회원' })
     // 시각 +30분이 지나면 서버가 수락을 거부해서(RTC_SESSION_EXPIRED) 손쓸 것이 없습니다.
@@ -160,7 +128,6 @@ describe('AppHeader', () => {
     const wrapper = mountHeader()
     await flushPromises()
 
-    expect(wrapper.get('[aria-label="알림"]').classes()).not.toContain('notification-btn--on')
   })
 
   it('내가 보낸 오늘 약속은 응답을 기다리는 중이라고 덧붙인다', async () => {
@@ -172,13 +139,13 @@ describe('AppHeader', () => {
 
     const wrapper = mountHeader()
     await flushPromises()
-    await wrapper.get('[aria-label="알림 (새 소식 있음)"]').trigger('click')
+    await wrapper.get('[aria-label="알림"]').trigger('click')
 
     expect(wrapper.text()).toContain(appointment.label)
     expect(wrapper.text()).toContain('상대방의 응답을 기다리고 있습니다.')
   })
 
-  it('벨을 누르면 말풍선에 두 줄을 보여 주고 점을 끈다', async () => {
+  it('벨을 누르면 말풍선에 두 줄을 보여 준다', async () => {
     signedIn({ nickname: '회원' })
     const appointment = upcomingToday()
     getChatRooms.mockResolvedValue({ content: [{ roomId: 1, unreadCount: 3 }] })
@@ -189,7 +156,7 @@ describe('AppHeader', () => {
     const wrapper = mountHeader()
     await flushPromises()
 
-    const bell = wrapper.get('[aria-label="알림 (새 소식 있음)"]')
+    const bell = wrapper.get('[aria-label="알림"]')
     await bell.trigger('click')
 
     expect(wrapper.text()).toContain('안 읽은 채팅이')
@@ -197,57 +164,12 @@ describe('AppHeader', () => {
     expect(wrapper.text()).toContain('오늘의 검증 약속')
     expect(wrapper.text()).toContain(appointment.label)
 
-    // 한 번 본 소식으로는 점이 다시 켜지지 않습니다.
-    expect(wrapper.find('[aria-label="알림 (새 소식 있음)"]').exists()).toBe(false)
-    expect(wrapper.get('[aria-label="알림"]').classes()).not.toContain('notification-btn--on')
   })
 
   /*
     확인한 뒤 새로고침해도 점이 다시 켜지면, 확인했는데도 손댈 일이 남은 것처럼 보입니다.
     브라우저에 남긴 기록으로 같은 상태인지 비교하므로, 다시 마운트해도 꺼져 있어야 합니다.
   */
-  it('한 번 확인하면 새로고침해도 점이 켜지지 않는다', async () => {
-    signedIn({ nickname: '회원' })
-    getChatRooms.mockResolvedValue({ content: [{ roomId: 1, unreadCount: 3 }] })
-    getMyRtcCalls.mockResolvedValue([])
-    getMyReinspectionRequests.mockResolvedValue([])
-
-    const first = mountHeader()
-    await flushPromises()
-    await first.get('[aria-label="알림 (새 소식 있음)"]').trigger('click')
-
-    // 새로고침을 흉내 냅니다. 화면을 새로 그려도 확인 기록은 남아 있어야 합니다.
-    const second = mountHeader()
-    await flushPromises()
-
-    expect(second.find('[aria-label="알림 (새 소식 있음)"]').exists()).toBe(false)
-    /*
-      브라우저에 남는 값은 확인 여부를 비교하는 데만 쓰이고, 읽어도 무슨 소식이 몇 건인지
-      알 수 없어야 합니다. 원문('3|...' 형태)이 그대로 남지 않는지 봅니다.
-    */
-    const stored = window.localStorage.getItem('limit.notice-seen')
-    expect(stored).toBeTruthy()
-    expect(stored).not.toContain('|')
-  })
-
-  it('새 소식이 생기면 다시 점이 켜진다', async () => {
-    signedIn({ nickname: '회원' })
-    getChatRooms.mockResolvedValue({ content: [{ roomId: 1, unreadCount: 3 }] })
-    getMyRtcCalls.mockResolvedValue([])
-    getMyReinspectionRequests.mockResolvedValue([])
-
-    const first = mountHeader()
-    await flushPromises()
-    await first.get('[aria-label="알림 (새 소식 있음)"]').trigger('click')
-
-    // 안 읽은 채팅이 늘어나면 확인한 상태와 달라지므로 다시 알려야 합니다.
-    getChatRooms.mockResolvedValue({ content: [{ roomId: 1, unreadCount: 5 }] })
-    const second = mountHeader()
-    await flushPromises()
-
-    expect(second.find('[aria-label="알림 (새 소식 있음)"]').exists()).toBe(true)
-  })
-
   it('소식이 없으면 말풍선에 없다고 알린다', async () => {
     signedIn({ nickname: '회원' })
     const wrapper = mountHeader()
@@ -283,7 +205,7 @@ describe('AppHeader', () => {
 
     const wrapper = mountHeader()
     await flushPromises()
-    await wrapper.get('[aria-label="알림 (새 소식 있음)"]').trigger('click')
+    await wrapper.get('[aria-label="알림"]').trigger('click')
 
     expect(wrapper.text()).toContain('재촬영 요청이')
     expect(wrapper.text()).toContain('2건')
@@ -301,7 +223,7 @@ describe('AppHeader', () => {
 
     const wrapper = mountHeader()
     await flushPromises()
-    await wrapper.get('[aria-label="알림 (새 소식 있음)"]').trigger('click')
+    await wrapper.get('[aria-label="알림"]').trigger('click')
 
     expect(wrapper.text()).toContain('요청한 재촬영이')
     expect(wrapper.text()).toContain('1건')
@@ -320,19 +242,6 @@ describe('AppHeader', () => {
     await wrapper.get('[aria-label="알림"]').trigger('click')
 
     expect(wrapper.text()).toContain('새로운 소식이 없습니다.')
-  })
-
-  it('세지 못하면 점을 켜지 않는다', async () => {
-    signedIn({ nickname: '회원' })
-    getChatRooms.mockRejectedValue(new Error('네트워크 오류'))
-    getMyRtcCalls.mockRejectedValue(new Error('네트워크 오류'))
-    getMyReinspectionRequests.mockRejectedValue(new Error('네트워크 오류'))
-
-    const wrapper = mountHeader()
-    await flushPromises()
-
-    // 없는 알림을 있다고 하는 편이 더 나쁩니다.
-    expect(wrapper.get('[aria-label="알림"]').classes()).not.toContain('notification-btn--on')
   })
 
   it('로그인하지 않으면 신호를 세지 않는다', async () => {
