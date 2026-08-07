@@ -530,6 +530,16 @@ function captureStatusOf(checklistItemId) {
   return mediaOf(checklistItemId).length ? 'captured' : 'idle'
 }
 
+/*
+  진단 자료 항목은 '촬영'이 아니라 '첨부'라고 부릅니다.
+  ---------------------------------------------------------------------------
+  배터리 리포트나 시스템 진단 정보는 프로그램이 만들어 준 파일을 올리는 것이지 찍는 것이
+  아닙니다. '미촬영'이라고 적으면 카메라를 찾게 됩니다.
+*/
+function isFileItem(item) {
+  return item?.evidenceType === 'DIAGNOSTIC_FILE'
+}
+
 function maxMediaFor(item) {
   return Number(item?.maxCount) > 0 ? Number(item.maxCount) : DEFAULT_MAX_MEDIA_PER_ITEM
 }
@@ -2516,13 +2526,6 @@ onMounted(async () => {
                   :style="{ width: `${listingImageProgress}%` }"
                 />
               </div>
-              <p class="mt-2 text-[11px] text-text-sub">
-                최근 처리시간:
-                체크리스트 {{ registrationMetrics.checklistMs ?? '-' }}ms ·
-                이미지 압축 {{ registrationMetrics.imageCompressionMs ?? '-' }}ms ·
-                영상 압축 {{ registrationMetrics.videoCompressionMs ?? '-' }}ms ·
-                S3 업로드 {{ registrationMetrics.s3UploadMs ?? '-' }}ms
-              </p>
               <p
                 v-if="!listingImages.length"
                 class="mt-4 rounded-md bg-bg px-4 py-5 text-center text-sm text-text-sub"
@@ -2735,14 +2738,17 @@ onMounted(async () => {
                         :class="['captured', 'auto-completed'].includes(captureStatusOf(item.checklistItemId)) ? 'text-primary' : 'text-text-sub'"
                       >
                         <template v-if="captureStatusOf(item.checklistItemId) === 'captured'">
-                          첨부 {{ mediaOf(item.checklistItemId).length }} / {{ maxMediaFor(item) }}
+                          <template v-if="isFileItem(item)">첨부 완료</template>
+                          <template v-else>첨부 {{ mediaOf(item.checklistItemId).length }} / {{ maxMediaFor(item) }}</template>
                         </template>
                         <template v-else-if="captureProgressLabel(item.checklistItemId)">
                           {{ captureProgressLabel(item.checklistItemId) }}
                         </template>
                         <template v-else-if="captureStatusOf(item.checklistItemId) === 'auto-completed'">자동 입력 완료</template>
-                        <template v-else-if="activeCaptureItemId === item.checklistItemId">촬영 대기</template>
-                        <template v-else>미촬영</template>
+                        <template v-else-if="activeCaptureItemId === item.checklistItemId">
+                          {{ isFileItem(item) ? '파일 대기' : '촬영 대기' }}
+                        </template>
+                        <template v-else>{{ isFileItem(item) ? '미첨부' : '미촬영' }}</template>
                       </span>
                     </div>
                   </div>
@@ -2758,7 +2764,7 @@ onMounted(async () => {
 
             <div class="card-soft rounded-lg bg-surface p-6">
               <h2 class="text-base font-bold text-text-main">
-                {{ activeCaptureItem ? `${guideTitleFor(activeCaptureItem)} 촬영 프리뷰` : '촬영 프리뷰' }}
+                {{ activeCaptureItem ? `${guideTitleFor(activeCaptureItem)} ${isFileItem(activeCaptureItem) ? '파일' : '촬영'} 프리뷰` : '촬영 프리뷰' }}
               </h2>
 
               <div class="relative mt-4 flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg border border-border bg-bg">
@@ -3068,12 +3074,16 @@ onMounted(async () => {
 
               <div class="mt-5 rounded-lg bg-bg p-4 text-xs leading-6 text-text-sub">
                 <p class="mb-1 font-bold text-text-main">
-                  촬영 꿀팁 가이드
+                  {{ isFileItem(activeCaptureItem) ? '파일' : '촬영' }} 꿀팁 가이드
                 </p>
                 <p v-if="guideStepsFor(activeCaptureItem)">
                   • {{ guideStepsFor(activeCaptureItem) }}
                 </p>
-                <p>• 흔들림을 줄이려면 촬영 순간 잠시 호흡을 멈추고 1초간 유지해 주세요.</p>
+                <!-- 흔들림 안내는 직접 찍는 항목에만 뜻이 있습니다. 파일을 올리는 항목에는
+                     해당하지 않아 감춥니다. -->
+                <p v-if="!isFileItem(activeCaptureItem)">
+                  • 흔들림을 줄이려면 촬영 순간 잠시 호흡을 멈추고 1초간 유지해 주세요.
+                </p>
               </div>
             </div>
 
