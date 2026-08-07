@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AdminPage from '../AdminPage.vue'
 import { clearAuthSession, setAuthSession } from '../../auth/session'
 import {
+  deleteDeviceModelRequest,
   getAdminAccounts,
   getAdminActionLog,
   getAdminActionLogs,
@@ -28,6 +29,7 @@ vi.mock('../../api/admin', () => ({
   approveDeviceModelRequest: vi.fn(),
   createAdminAccount: vi.fn(),
   createMemberRestriction: vi.fn(),
+  deleteDeviceModelRequest: vi.fn(),
   getAdminAccounts: vi.fn(),
   getAdminActionLog: vi.fn(),
   getAdminActionLogs: vi.fn(),
@@ -86,7 +88,10 @@ describe('AdminPage', () => {
     ])
   })
 
-  afterEach(() => clearAuthSession())
+  afterEach(() => {
+    vi.restoreAllMocks()
+    clearAuthSession()
+  })
 
   it('일반 회원 로그인과 분리된 관리자 로그인 화면을 표시한다', () => {
     const wrapper = mount(AdminPage, {
@@ -289,6 +294,82 @@ describe('AdminPage', () => {
     expect(wrapper.text()).toContain('Samsung Galaxy S25')
     expect(wrapper.text()).toContain('노트북')
     expect(wrapper.text()).toContain('사후 검토 완료')
+  })
+
+  it('신규 모델 요청을 확인 후 삭제하고 목록에서 제거한다', async () => {
+    const request = {
+      requestId: 91,
+      categoryId: 10,
+      requestedByMemberId: 7,
+      manufacturer: 'Samsung',
+      modelName: 'Galaxy S25',
+      modelCode: 'SM-S931N',
+      osFamily: 'ANDROID',
+      status: 'PENDING',
+      createdAt: '2026-07-30T16:03:00',
+    }
+    getDeviceModelRequests.mockResolvedValue([request])
+    deleteDeviceModelRequest.mockResolvedValue(undefined)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    setAuthSession({
+      accessToken: 'tk',
+      admin: { name: '관리자', roles: ['SUPER_ADMIN'] },
+    })
+
+    const wrapper = mount(AdminPage, {
+      global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } },
+    })
+    await flushPromises()
+    await wrapper.findAll('button')
+      .find((button) => button.text() === '신규 기기 모델 검토')
+      .trigger('click')
+    await flushPromises()
+
+    await wrapper.findAll('button')
+      .find((button) => button.text() === '삭제')
+      .trigger('click')
+    await flushPromises()
+
+    expect(deleteDeviceModelRequest).toHaveBeenCalledWith(91)
+    expect(wrapper.text()).toContain('기기 모델 요청을 삭제하고 등록 모델을 비활성화했습니다.')
+    expect(wrapper.text()).toContain('검토 대기 중인 모델 요청이 없습니다.')
+  })
+
+  it('신규 모델 요청 삭제 실패 시 항목과 오류 메시지를 유지한다', async () => {
+    const request = {
+      requestId: 91,
+      categoryId: 10,
+      requestedByMemberId: 7,
+      manufacturer: 'Samsung',
+      modelName: 'Galaxy S25',
+      modelCode: 'SM-S931N',
+      osFamily: 'ANDROID',
+      status: 'PENDING',
+      createdAt: '2026-07-30T16:03:00',
+    }
+    getDeviceModelRequests.mockResolvedValue([request])
+    deleteDeviceModelRequest.mockRejectedValue(new Error('요청 삭제 실패'))
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    setAuthSession({
+      accessToken: 'tk',
+      admin: { name: '관리자', roles: ['SUPER_ADMIN'] },
+    })
+
+    const wrapper = mount(AdminPage, {
+      global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } },
+    })
+    await flushPromises()
+    await wrapper.findAll('button')
+      .find((button) => button.text() === '신규 기기 모델 검토')
+      .trigger('click')
+    await flushPromises()
+    await wrapper.findAll('button')
+      .find((button) => button.text() === '삭제')
+      .trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('요청 삭제 실패')
+    expect(wrapper.text()).toContain('Samsung Galaxy S25')
   })
 
   it('작업명을 눌러 로그 상세를 조회하고 사유를 수정한다', async () => {

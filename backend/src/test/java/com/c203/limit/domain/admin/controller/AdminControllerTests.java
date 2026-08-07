@@ -476,6 +476,16 @@ class AdminControllerTests {
     }
 
     @Test
+    void deletesDeviceModelRequestWithCurrentAdminId() {
+        when(currentUser.adminId()).thenReturn(ADMIN_ID);
+
+        ResponseEntity<?> response = controller.deleteDeviceModelRequest(41L);
+
+        assertThat(response.getStatusCode().value()).isEqualTo(204);
+        verify(deviceModelRequestService).delete(41L, ADMIN_ID);
+    }
+
+    @Test
     void reconcilesPaymentById() {
         PaymentReconcileResponse reconcile = mock(PaymentReconcileResponse.class);
         when(paymentService.reconcile(77L)).thenReturn(reconcile);

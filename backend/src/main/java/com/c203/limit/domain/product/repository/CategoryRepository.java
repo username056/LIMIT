@@ -2,6 +2,7 @@ package com.c203.limit.domain.product.repository;
 
 import com.c203.limit.domain.product.entity.Category;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -19,6 +20,10 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
 
     @EntityGraph(attributePaths = "parent")
     List<Category> findByParentIdAndIsActiveTrueOrderByDisplayOrderAsc(Long parentId);
+
+    @EntityGraph(attributePaths = "parent")
+    Optional<Category> findFirstByParentIdAndManufacturerIgnoreCaseAndNameIgnoreCase(
+            Long parentId, String manufacturer, String name);
 
     @EntityGraph(attributePaths = "parent")
     @Query(

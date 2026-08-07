@@ -14,6 +14,7 @@ import {
   createMemberRestriction,
   approveChecklistResearch,
   approveDeviceModelRequest,
+  deleteDeviceModelRequest,
   getAdminAccounts,
   getAdminActionLog,
   getAdminActionLogs,
@@ -52,6 +53,7 @@ const deviceModelRequests = ref([])
 const deviceCategories = ref([])
 const editingModelRequestId = ref(null)
 const isSavingModelRequest = ref(false)
+const deletingModelRequestId = ref(null)
 const modelRequestForm = reactive({
   categoryId: '',
   manufacturer: '',
@@ -318,6 +320,32 @@ async function rejectModelRequest(request) {
     successMessage.value = '기기 모델 요청을 반려했습니다.'
   } catch (error) {
     showError(error, '기기 모델 요청을 반려하지 못했습니다.')
+  }
+}
+
+async function deleteModelRequest(request) {
+  if (deletingModelRequestId.value) return
+  const confirmed = window.confirm(
+    `‘${request.manufacturer} ${request.modelName}’ 요청을 삭제할까요?\n`
+      + '검토 요청은 종료되고 즉시 등록된 모델은 비활성화됩니다.',
+  )
+  if (!confirmed) return
+
+  deletingModelRequestId.value = request.requestId
+  errorMessage.value = ''
+  successMessage.value = ''
+  try {
+    await deleteDeviceModelRequest(request.requestId)
+    deviceModelRequests.value = deviceModelRequests.value
+      .filter((item) => item.requestId !== request.requestId)
+    if (editingModelRequestId.value === request.requestId) {
+      editingModelRequestId.value = null
+    }
+    successMessage.value = '기기 모델 요청을 삭제하고 등록 모델을 비활성화했습니다.'
+  } catch (error) {
+    showError(error, '기기 모델 요청을 삭제하지 못했습니다.')
+  } finally {
+    deletingModelRequestId.value = null
   }
 }
 
@@ -939,9 +967,19 @@ onMounted(() => {
           <BaseButton
             type="button"
             variant="secondary"
+            :disabled="deletingModelRequestId === request.requestId"
             @click="rejectModelRequest(request)"
           >
             반려
+          </BaseButton>
+          <BaseButton
+            type="button"
+            variant="outline"
+            class="border-red-200 text-red-600 hover:border-red-400 hover:text-red-700"
+            :disabled="deletingModelRequestId === request.requestId"
+            @click="deleteModelRequest(request)"
+          >
+            {{ deletingModelRequestId === request.requestId ? '삭제 중…' : '삭제' }}
           </BaseButton>
         </div>
       </BaseCard>

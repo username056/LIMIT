@@ -6,6 +6,7 @@ import com.c203.limit.domain.admin.repository.AdminActionLogRepository;
 import com.c203.limit.domain.inspection.checklist.ChecklistGenerationContext;
 import com.c203.limit.domain.inspection.checklist.ChecklistSupplementClient;
 import com.c203.limit.domain.inspection.checklist.ChecklistSuggestion;
+import com.c203.limit.domain.inspection.checklist.ChecklistSuggestionNormalizer;
 import com.c203.limit.domain.inspection.checklist.ChecklistSupplementResult;
 import com.c203.limit.domain.inspection.checklist.DeviceChecklistFeatureCatalog;
 import com.c203.limit.domain.inspection.checklist.GeneratedChecklistItem;
@@ -28,7 +29,6 @@ import com.c203.limit.global.exception.ErrorCode;
 import com.c203.limit.global.response.PageResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.LinkedHashSet;
@@ -60,6 +60,7 @@ public class ModelChecklistResearchService {
     private final AdminActionLogRepository actionLogRepository;
     private final LaptopChecklistPolicy laptopPolicy;
     private final DeviceChecklistFeatureCatalog featureCatalog;
+    private final ChecklistSuggestionNormalizer suggestionNormalizer;
     private final ChecklistSupplementClient supplementClient;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
@@ -72,6 +73,7 @@ public class ModelChecklistResearchService {
             AdminActionLogRepository actionLogRepository,
             LaptopChecklistPolicy laptopPolicy,
             DeviceChecklistFeatureCatalog featureCatalog,
+            ChecklistSuggestionNormalizer suggestionNormalizer,
             ChecklistSupplementClient supplementClient,
             ObjectMapper objectMapper,
             PlatformTransactionManager transactionManager) {
@@ -82,6 +84,7 @@ public class ModelChecklistResearchService {
         this.actionLogRepository = actionLogRepository;
         this.laptopPolicy = laptopPolicy;
         this.featureCatalog = featureCatalog;
+        this.suggestionNormalizer = suggestionNormalizer;
         this.supplementClient = supplementClient;
         this.objectMapper = objectMapper;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
@@ -156,7 +159,7 @@ public class ModelChecklistResearchService {
         Category model = activeModel(research.getDeviceModelId());
         ChecklistSupplementResult supplement = readSupplement(research);
         List<ChecklistSuggestion> validSuggestions =
-                validSuggestions(model.getDeviceType(), supplement.suggestions());
+                suggestionNormalizer.normalize(model.getDeviceType(), supplement.suggestions());
         Set<String> approvedCodes = approvedCodes(validSuggestions, approvedFeatureCodes);
         research.approve(adminId, null, note);
         actionLogRepository.save(AdminActionLog.of(
@@ -209,9 +212,10 @@ public class ModelChecklistResearchService {
         }
 
         ChecklistSupplementResult retryResult = supplement;
-        return Objects.requireNonNull(
+        ModelChecklistResearch finishedResearch = Objects.requireNonNull(
                 transactionTemplate.execute(
                         status -> finishResearch(target.researchId(), retryResult)));
+        return response(finishedResearch);
     }
 
     private RetryTarget beginResearch(Long modelId, Long adminId) {
@@ -244,7 +248,7 @@ public class ModelChecklistResearchService {
         return new RetryTarget(research.getId(), context);
     }
 
-    private ChecklistResearchResponse finishResearch(
+    private ModelChecklistResearch finishResearch(
             Long researchId, ChecklistSupplementResult supplement) {
         ModelChecklistResearch research = researchRepository
                 .findByIdForUpdate(researchId)
@@ -264,7 +268,7 @@ public class ModelChecklistResearchService {
                     supplement.failureCode());
         }
         researchRepository.saveAndFlush(research);
-        return response(research);
+        return research;
     }
 
     private ModelChecklistResearch pendingResearch(Long researchId) {
@@ -352,23 +356,6 @@ public class ModelChecklistResearchService {
                 null);
     }
 
-    private List<ChecklistSuggestion> validSuggestions(
-            DeviceType deviceType, List<ChecklistSuggestion> suggestions) {
-        if (suggestions == null) {
-            return List.of();
-        }
-        return suggestions.stream()
-                .filter(suggestion ->
-                        suggestion != null
-                                && suggestion.featureCode() != null
-                                && !suggestion.featureCode().isBlank())
-                .filter(suggestion ->
-                        featureCatalog.supports(deviceType, suggestion.featureCode()))
-                .filter(suggestion -> isSafeSource(suggestion.sourceUrl()))
-                .limit(DeviceChecklistFeatureCatalog.MAX_ADDITIONAL_ITEMS)
-                .toList();
-    }
-
     private ChecklistResearchResponse response(ModelChecklistResearch research) {
         Category model = categoryRepository
                 .findById(research.getDeviceModelId())
@@ -389,7 +376,9 @@ public class ModelChecklistResearchService {
                 model.getName(),
                 research.getResearchVersion(),
                 research.getStatus().name(),
-                validSuggestions(model.getDeviceType(), supplement.suggestions()).stream()
+                suggestionNormalizer
+                        .normalize(model.getDeviceType(), supplement.suggestions())
+                        .stream()
                         .map(ChecklistSuggestionResponse::from)
                         .toList(),
                 supplement.reviewCandidates(),
@@ -431,20 +420,6 @@ public class ModelChecklistResearchService {
 
     public record LatestResearchSummary(
             ModelChecklistResearchStatus status, int researchVersion) {}
-
-    private boolean isSafeSource(String sourceUrl) {
-        if (sourceUrl == null || sourceUrl.isBlank()) {
-            return false;
-        }
-        try {
-            URI uri = URI.create(sourceUrl);
-            return "https".equalsIgnoreCase(uri.getScheme())
-                    && uri.getHost() != null
-                    && !uri.getHost().isBlank();
-        } catch (IllegalArgumentException exception) {
-            return false;
-        }
-    }
 
     private static String normalize(String code) {
         return code.trim().toUpperCase(Locale.ROOT);

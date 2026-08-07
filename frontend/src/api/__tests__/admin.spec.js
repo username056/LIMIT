@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  deleteDeviceModelRequest,
   getAdminDeviceModelProductMaterials,
   getAdminDeviceModelProducts,
   getAdminDeviceModelResearches,
@@ -56,5 +57,17 @@ describe('admin model api', () => {
       [`${API_BASE_URL}/admin/device-models/202/products/901/materials`, 'GET'],
     ])
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual(statusPayload)
+  })
+
+  it('신규 기기 모델 검토 요청 삭제 경로를 사용한다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(ok())
+    vi.stubGlobal('fetch', fetchMock)
+
+    await deleteDeviceModelRequest(91)
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_BASE_URL}/admin/device-model-requests/91`,
+      expect.objectContaining({ method: 'DELETE' }),
+    )
   })
 })
