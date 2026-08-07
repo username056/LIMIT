@@ -199,6 +199,44 @@ class DeviceModelRequestServiceTests {
     }
 
     @Test
+    void updateRelinksAndCorrectsLegacyCategoryModel() {
+        Fixture fixture = fixture();
+        Category oldParent = topLevel(1L, DeviceType.SMARTPHONE);
+        Category correctedParent = topLevel(2L, DeviceType.SMARTPHONE);
+        Category legacyModel = leaf(oldParent, 102L, "Galxy S25", "SM-S931", 1);
+        Category sibling = leaf(correctedParent, 201L, "Galaxy S24", "SM-S921N", 1);
+        DeviceModelRequest request = pendingRequest(501L);
+        when(fixture.requests().findByIdForUpdate(501L)).thenReturn(Optional.of(request));
+        when(fixture.categories().findById(2L)).thenReturn(Optional.of(correctedParent));
+        when(fixture.categories()
+                        .findFirstByParentIdAndManufacturerIgnoreCaseAndNameIgnoreCase(
+                                1L, "Samsnug", "Galxy S25"))
+                .thenReturn(Optional.of(legacyModel));
+        when(fixture.categories().findByParentIdAndIsActiveTrueOrderByDisplayOrderAsc(2L))
+                .thenReturn(List.of(sibling));
+        ChecklistTemplate sourceTemplate = publishedTemplate(201L, 1, 301L);
+        when(fixture.templates().findFirstByCategoryIdAndStatusOrderByVersionAsc(
+                        201L, ChecklistTemplateStatus.PUBLISHED))
+                .thenReturn(Optional.of(sourceTemplate));
+        when(fixture.templateItems().findByChecklistTemplateIdOrderByDisplayOrderAsc(301L))
+                .thenReturn(List.of());
+        when(fixture.templates().findFirstByCategoryIdAndStatusOrderByVersionDesc(
+                        102L, ChecklistTemplateStatus.PUBLISHED))
+                .thenReturn(Optional.of(sourceTemplate));
+        when(fixture.templates().saveAndFlush(any(ChecklistTemplate.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        DeviceModelRequestResponse result =
+                fixture.service().update(501L, 9L, updateRequest(2L));
+
+        assertThat(result.resolvedModelId()).isEqualTo(102L);
+        assertThat(legacyModel.getParent().getId()).isEqualTo(2L);
+        assertThat(legacyModel.getName()).isEqualTo("Galaxy S25");
+        verify(fixture.catalogRegistrar()).registerReported(legacyModel, 7L);
+        verify(fixture.catalogRegistrar()).update(legacyModel);
+    }
+
+    @Test
     void reviewCompletesAlreadyProvisionedModel() {
         CategoryRepository categories = mock(CategoryRepository.class);
         DeviceModelRequestRepository requests = mock(DeviceModelRequestRepository.class);
@@ -222,20 +260,87 @@ class DeviceModelRequestServiceTests {
                 "SM-S921N",
                 List.of(256),
                 1);
-        ReflectionTestUtils.setField(sourceModel, "id", 101L);
+        ReflectionTestUtils.setField(sourceModel, "id", 102L);
         DeviceModelRequest request =
                 DeviceModelRequest.create(7L, 1L, "Samsung", "Galaxy S25", null, OsFamily.ANDROID);
         ReflectionTestUtils.setField(request, "id", 501L);
         request.provision(102L);
 
         when(requests.findByIdForUpdate(501L)).thenReturn(Optional.of(request));
+        when(categories.findById(102L)).thenReturn(Optional.of(sourceModel));
 
         var result = service.approve(501L, 9L, "공식 모델 확인");
 
         assertThat(result.status()).isEqualTo("APPROVED");
         assertThat(result.resolvedCategoryId()).isEqualTo(102L);
+        verify(catalogRegistrar).registerReported(sourceModel, 7L);
         verify(catalogRegistrar).completeReview(102L, 9L, "공식 모델 확인");
         verify(logs).save(any());
+    }
+
+    @Test
+    void reviewRepairsLegacyRequestWithoutResolvedModel() {
+        Fixture fixture = fixture();
+        Category parent = topLevel(1L, DeviceType.SMARTPHONE);
+        Category sibling = leaf(parent, 101L, "Galaxy S24", "SM-S921N", 1);
+        ChecklistTemplate sourceTemplate = publishedTemplate(101L, 1, 301L);
+        DeviceModelRequest request = pendingRequest(501L);
+        when(fixture.requests().findByIdForUpdate(501L)).thenReturn(Optional.of(request));
+        when(fixture.categories().findById(1L)).thenReturn(Optional.of(parent));
+        when(fixture.categories().findByParentIdOrderByDisplayOrderAsc(1L))
+                .thenReturn(List.of(sibling));
+        when(fixture.categories().saveAndFlush(any(Category.class)))
+                .thenAnswer(invocation -> {
+                    Category model = invocation.getArgument(0);
+                    ReflectionTestUtils.setField(model, "id", 102L);
+                    return model;
+                });
+        when(fixture.categories().findByParentIdAndIsActiveTrueOrderByDisplayOrderAsc(1L))
+                .thenReturn(List.of(sibling));
+        when(fixture.templates().findFirstByCategoryIdAndStatusOrderByVersionAsc(
+                        101L, ChecklistTemplateStatus.PUBLISHED))
+                .thenReturn(Optional.of(sourceTemplate));
+        when(fixture.templateItems().findByChecklistTemplateIdOrderByDisplayOrderAsc(301L))
+                .thenReturn(List.of(templateItem(sourceTemplate)));
+        when(fixture.templates().saveAndFlush(any(ChecklistTemplate.class)))
+                .thenAnswer(invocation -> {
+                    ChecklistTemplate template = invocation.getArgument(0);
+                    ReflectionTestUtils.setField(template, "id", 302L);
+                    return template;
+                });
+
+        DeviceModelRequestResponse result =
+                fixture.service().approve(501L, 9L, "레거시 요청 복구");
+
+        assertThat(result.status()).isEqualTo("APPROVED");
+        assertThat(result.resolvedModelId()).isEqualTo(102L);
+        verify(fixture.catalogRegistrar())
+                .registerReported(any(Category.class), org.mockito.ArgumentMatchers.eq(7L));
+        verify(fixture.catalogRegistrar()).completeReview(102L, 9L, "레거시 요청 복구");
+        verify(fixture.actionLogs()).save(any());
+    }
+
+    @Test
+    void reviewRelinksLegacyRequestToExistingCategoryModel() {
+        Fixture fixture = fixture();
+        Category parent = topLevel(1L, DeviceType.SMARTPHONE);
+        Category existingModel = leaf(parent, 102L, "Galxy S25", "SM-S931", 1);
+        DeviceModelRequest request = pendingRequest(501L);
+        when(fixture.requests().findByIdForUpdate(501L)).thenReturn(Optional.of(request));
+        when(fixture.categories().findById(1L)).thenReturn(Optional.of(parent));
+        when(fixture.categories()
+                        .findFirstByParentIdAndManufacturerIgnoreCaseAndNameIgnoreCase(
+                                1L, "Samsnug", "Galxy S25"))
+                .thenReturn(Optional.of(existingModel));
+
+        DeviceModelRequestResponse result =
+                fixture.service().approve(501L, 9L, "기존 모델 연결");
+
+        assertThat(result.status()).isEqualTo("APPROVED");
+        assertThat(result.resolvedModelId()).isEqualTo(102L);
+        verify(fixture.catalogRegistrar()).registerReported(existingModel, 7L);
+        verify(fixture.catalogRegistrar()).completeReview(102L, 9L, "기존 모델 연결");
+        verify(fixture.templates(), never()).saveAndFlush(any(ChecklistTemplate.class));
     }
 
     @Test
@@ -584,7 +689,7 @@ class DeviceModelRequestServiceTests {
     }
 
     @Test
-    void rejectsUpdateWhenProvisionedModelRowIsMissing() {
+    void updatesRequestDetailsWhenProvisionedModelRowIsMissing() {
         Fixture fixture = fixture();
         DeviceModelRequest request = pendingRequest(501L);
         request.provision(102L);
@@ -593,12 +698,14 @@ class DeviceModelRequestServiceTests {
                 .thenReturn(Optional.of(topLevel(1L, DeviceType.SMARTPHONE)));
         when(fixture.categories().findById(102L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> fixture.service().update(501L, 9L, updateRequest(1L)))
-                .isInstanceOfSatisfying(
-                        BusinessException.class,
-                        exception -> assertThat(exception.getErrorCode())
-                                .isEqualTo(ErrorCode.DEVICE_MODEL_NOT_FOUND));
-        verifyNoInteractions(fixture.actionLogs());
+        DeviceModelRequestResponse result =
+                fixture.service().update(501L, 9L, updateRequest(1L));
+
+        assertThat(result.manufacturer()).isEqualTo("Samsung");
+        assertThat(result.modelName()).isEqualTo("Galaxy S25");
+        assertThat(result.resolvedModelId()).isEqualTo(102L);
+        verify(fixture.actionLogs()).save(any());
+        verifyNoInteractions(fixture.catalogRegistrar());
     }
 
     @Test
@@ -646,6 +753,41 @@ class DeviceModelRequestServiceTests {
         verify(fixture.actionLogs()).save(any());
     }
 
+    @Test
+    void deleteClosesRequestAndDeactivatesProvisionedModel() {
+        Fixture fixture = fixture();
+        Category parent = topLevel(1L, DeviceType.SMARTPHONE);
+        Category model = leaf(parent, 102L, "Galaxy S25", "SM-S931N", 1);
+        DeviceModelRequest request = pendingRequest(501L);
+        request.provision(102L);
+        when(fixture.requests().findByIdForUpdate(501L)).thenReturn(Optional.of(request));
+        when(fixture.categories().findById(102L)).thenReturn(Optional.of(model));
+
+        fixture.service().delete(501L, 9L);
+
+        assertThat(request.getStatus()).isEqualTo(DeviceModelRequestStatus.REJECTED);
+        assertThat(request.getReviewNote()).isEqualTo("관리자 삭제");
+        assertThat(model.isActive()).isFalse();
+        verify(fixture.catalogRegistrar()).deactivate(102L);
+        verify(fixture.actionLogs()).save(any());
+    }
+
+    @Test
+    void deleteAlsoClosesLegacyRequestWithoutResolvedModel() {
+        Fixture fixture = fixture();
+        DeviceModelRequest request = pendingRequest(501L);
+        when(fixture.requests().findByIdForUpdate(501L)).thenReturn(Optional.of(request));
+
+        fixture.service().delete(501L, 9L);
+
+        assertThat(request.getStatus()).isEqualTo(DeviceModelRequestStatus.REJECTED);
+        verify(fixture.categories())
+                .findFirstByParentIdAndManufacturerIgnoreCaseAndNameIgnoreCase(
+                        1L, "Samsnug", "Galxy S25");
+        verifyNoInteractions(fixture.catalogRegistrar());
+        verify(fixture.actionLogs()).save(any());
+    }
+
     /** 리프 행이 이미 사라졌어도 신규 카탈로그 쪽 비활성화는 그대로 진행돼야 한다. */
     @Test
     void rejectionStillDeactivatesCatalogWhenLeafCategoryRowIsGone() {
@@ -670,7 +812,10 @@ class DeviceModelRequestServiceTests {
 
         assertThat(result.status()).isEqualTo("REJECTED");
         assertThat(result.resolvedModelId()).isNull();
-        verifyNoInteractions(fixture.categories(), fixture.catalogRegistrar());
+        verify(fixture.categories())
+                .findFirstByParentIdAndManufacturerIgnoreCaseAndNameIgnoreCase(
+                        1L, "Samsnug", "Galxy S25");
+        verifyNoInteractions(fixture.catalogRegistrar());
         verify(fixture.actionLogs()).save(any());
     }
 

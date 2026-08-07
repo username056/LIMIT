@@ -20,6 +20,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -208,6 +209,14 @@ public interface AdminApi {
     ResponseEntity<?> rejectDeviceModelRequest(
             @PathVariable("requestId") Long requestId,
             @Valid @RequestBody ReviewDeviceModelRequest request);
+
+    @Operation(
+            summary = "직접 입력 기기 모델 요청 삭제",
+            description = "요청을 반려 상태로 종료하고 즉시 등록된 모델을 비활성화합니다.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponse(responseCode = "204", description = "기기 모델 요청 삭제 성공")
+    @DeleteMapping("/device-model-requests/{requestId}")
+    ResponseEntity<?> deleteDeviceModelRequest(@PathVariable("requestId") Long requestId);
 
     @Operation(
             summary = "결제 PG 대사(reconcile)",

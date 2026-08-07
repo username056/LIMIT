@@ -13,6 +13,7 @@ import com.c203.limit.domain.admin.dto.response.ChecklistResearchResponse;
 import com.c203.limit.domain.admin.repository.AdminActionLogRepository;
 import com.c203.limit.domain.inspection.checklist.ChecklistEvidenceStatus;
 import com.c203.limit.domain.inspection.checklist.ChecklistSuggestion;
+import com.c203.limit.domain.inspection.checklist.ChecklistSuggestionNormalizer;
 import com.c203.limit.domain.inspection.checklist.ChecklistSupplementClient;
 import com.c203.limit.domain.inspection.checklist.ChecklistSupplementResult;
 import com.c203.limit.domain.inspection.checklist.DeviceChecklistFeatureCatalog;
@@ -87,14 +88,17 @@ class ModelChecklistResearchServiceTests {
                 .thenAnswer(invocation -> Optional.ofNullable(savedResearch.get()));
 
         objectMapper = new ObjectMapper();
+        LaptopChecklistPolicy laptopPolicy = new LaptopChecklistPolicy();
+        DeviceChecklistFeatureCatalog featureCatalog = new DeviceChecklistFeatureCatalog();
         service = new ModelChecklistResearchService(
                 researchRepository,
                 categoryRepository,
                 mock(ChecklistTemplateRepository.class),
                 mock(ChecklistTemplateItemRepository.class),
                 actionLogRepository,
-                new LaptopChecklistPolicy(),
-                new DeviceChecklistFeatureCatalog(),
+                laptopPolicy,
+                featureCatalog,
+                new ChecklistSuggestionNormalizer(laptopPolicy, featureCatalog),
                 supplementClient,
                 objectMapper,
                 transactionManager);
@@ -121,6 +125,38 @@ class ModelChecklistResearchServiceTests {
         assertThat(savedResearch.get().getStatus())
                 .isEqualTo(ModelChecklistResearchStatus.PENDING_REVIEW);
         verify(actionLogRepository).save(any());
+    }
+
+    @Test
+    void retryReturnsNormalizedSuggestionFromAiClientPayload() throws Exception {
+        ModelChecklistResearch research = failedResearch();
+        when(researchRepository.findById(501L)).thenReturn(Optional.of(research));
+        when(researchRepository.findFirstByDeviceModelIdOrderByResearchVersionDesc(201L))
+                .thenReturn(Optional.of(research));
+        when(categoryRepository.findById(201L)).thenReturn(Optional.of(laptop()));
+        when(supplementClient.suggest(any()))
+                .thenReturn(new ChecklistSupplementResult(
+                        true,
+                        List.of(new ChecklistSuggestion(
+                                " camera ",
+                                "내장 카메라",
+                                ChecklistEvidenceStatus.VERIFIED,
+                                "제조사 공식 자료에서 확인했습니다.",
+                                "카메라 앱에서 실제 동작을 확인하세요.",
+                                "https://www.samsung.com/support/camera",
+                                "Samsung support")),
+                        List.of()));
+
+        ChecklistResearchResponse response = service.retry(501L, 900L);
+
+        assertThat(response.status()).isEqualTo("PENDING_REVIEW");
+        assertThat(response.suggestions())
+                .singleElement()
+                .satisfies(suggestion -> {
+                    assertThat(suggestion.featureCode()).isEqualTo("CAMERA");
+                    assertThat(suggestion.evidenceType()).isEqualTo("SELLER_CONFIRMATION");
+                    assertThat(suggestion.itemCode()).isEqualTo("LAP-FTR-CAM");
+                });
     }
 
     @Test
@@ -403,6 +439,30 @@ class ModelChecklistResearchServiceTests {
     }
 
     @Test
+    void latestDeduplicatesSuggestionsBeforeApplyingTheLimit() throws Exception {
+        ModelChecklistResearch research = pendingReviewResearch(
+                708L,
+                supplementJson(
+                        rawSuggestion(" camera ", "https://www.samsung.com/1"),
+                        suggestion(LaptopFeatureCode.CAMERA, "https://www.samsung.com/2"),
+                        suggestion(LaptopFeatureCode.WIFI, "https://www.samsung.com/3"),
+                        suggestion(LaptopFeatureCode.OLED, "https://www.samsung.com/4"),
+                        suggestion(LaptopFeatureCode.NUMPAD, "https://www.samsung.com/5"),
+                        suggestion(LaptopFeatureCode.SD_CARD, "https://www.samsung.com/6"),
+                        suggestion(LaptopFeatureCode.THUNDERBOLT, "https://www.samsung.com/7")));
+        when(researchRepository.findFirstByDeviceModelIdOrderByResearchVersionDesc(201L))
+                .thenReturn(Optional.of(research));
+        when(categoryRepository.findById(201L)).thenReturn(Optional.of(laptop()));
+
+        ChecklistResearchResponse response = service.latest(201L);
+
+        assertThat(response.suggestions())
+                .hasSize(DeviceChecklistFeatureCatalog.MAX_ADDITIONAL_ITEMS)
+                .extracting(ChecklistSuggestionResponse::featureCode)
+                .containsExactly("CAMERA", "WIFI", "OLED", "NUMPAD", "SD_CARD");
+    }
+
+    @Test
     void latestSummariesReturnsEmptyMapWithoutModelIds() {
         assertThat(service.latestSummaries(null)).isEmpty();
         assertThat(service.latestSummaries(Set.of())).isEmpty();
@@ -639,14 +699,17 @@ class ModelChecklistResearchServiceTests {
     }
 
     private ModelChecklistResearchService serviceWith(ObjectMapper mapper) {
+        LaptopChecklistPolicy laptopPolicy = new LaptopChecklistPolicy();
+        DeviceChecklistFeatureCatalog featureCatalog = new DeviceChecklistFeatureCatalog();
         return new ModelChecklistResearchService(
                 researchRepository,
                 categoryRepository,
                 mock(ChecklistTemplateRepository.class),
                 mock(ChecklistTemplateItemRepository.class),
                 actionLogRepository,
-                new LaptopChecklistPolicy(),
-                new DeviceChecklistFeatureCatalog(),
+                laptopPolicy,
+                featureCatalog,
+                new ChecklistSuggestionNormalizer(laptopPolicy, featureCatalog),
                 supplementClient,
                 mapper,
                 transactionManager);
@@ -673,9 +736,7 @@ class ModelChecklistResearchServiceTests {
                 "제조사 공식 자료에서 확인했습니다.",
                 "실제 동작 여부를 확인하세요.",
                 sourceUrl,
-                "제조사 지원 페이지",
-                EvidenceType.VIDEO,
-                "LTP-FTR-TEST");
+                "제조사 지원 페이지");
     }
 
     private ModelChecklistResearch pendingReviewResearch(long id, String resultJson) {

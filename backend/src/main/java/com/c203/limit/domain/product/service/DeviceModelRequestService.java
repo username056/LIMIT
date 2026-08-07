@@ -18,6 +18,7 @@ import com.c203.limit.domain.product.repository.DeviceModelRequestRepository;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.util.List;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -113,16 +114,17 @@ public class DeviceModelRequestService {
                         requestId)) {
             throw new BusinessException(ErrorCode.DEVICE_MODEL_REQUEST_DUPLICATED);
         }
+        Category model = linkedModel(request).orElse(null);
         request.updateDetails(
                 category.getId(),
                 manufacturer,
                 modelName,
                 update.modelCode(),
                 update.osFamily());
-        if (request.getResolvedModelId() != null) {
-            Category model = categoryRepository
-                    .findById(request.getResolvedModelId())
-                    .orElseThrow(() -> new BusinessException(ErrorCode.DEVICE_MODEL_NOT_FOUND));
+        if (model != null) {
+            if (!model.getId().equals(request.getResolvedModelId())) {
+                request.provision(model.getId());
+            }
             Long previousParentId = model.getParent() == null ? null : model.getParent().getId();
             model.updateLeaf(
                     category,
@@ -130,6 +132,7 @@ public class DeviceModelRequestService {
                     manufacturer,
                     update.osFamily(),
                     update.modelCode());
+            catalogRegistrar.registerReported(model, request.getRequestedByMemberId());
             catalogRegistrar.update(model);
             if (!category.getId().equals(previousParentId)) {
                 publishBaseTemplate(model, category, false);
@@ -152,11 +155,9 @@ public class DeviceModelRequestService {
     @Transactional
     public DeviceModelRequestResponse approve(Long requestId, Long adminId, String note) {
         DeviceModelRequest request = pendingRequest(requestId);
-        if (request.getResolvedModelId() == null) {
-            throw new BusinessException(ErrorCode.DEVICE_MODEL_NOT_FOUND);
-        }
-        request.approve(adminId, request.getResolvedModelId(), note);
-        catalogRegistrar.completeReview(request.getResolvedModelId(), adminId, note);
+        Category model = ensureProvisionedModel(request);
+        request.approve(adminId, model.getId(), note);
+        catalogRegistrar.completeReview(model.getId(), adminId, note);
         actionLogRepository.save(AdminActionLog.of(
                 adminId,
                 "DEVICE_MODEL_REQUEST_APPROVE",
@@ -166,7 +167,7 @@ public class DeviceModelRequestService {
         log.info(
                 "device model request reviewed: requestId={}, modelId={}",
                 requestId,
-                request.getResolvedModelId());
+                model.getId());
         return DeviceModelRequestResponse.from(request);
     }
 
@@ -174,10 +175,7 @@ public class DeviceModelRequestService {
     public DeviceModelRequestResponse reject(Long requestId, Long adminId, String note) {
         DeviceModelRequest request = pendingRequest(requestId);
         request.reject(adminId, note);
-        if (request.getResolvedModelId() != null) {
-            categoryRepository.findById(request.getResolvedModelId()).ifPresent(Category::deactivate);
-            catalogRegistrar.deactivate(request.getResolvedModelId());
-        }
+        deactivateProvisionedModel(request);
         actionLogRepository.save(AdminActionLog.of(
                 adminId,
                 "DEVICE_MODEL_REQUEST_REJECT",
@@ -186,6 +184,70 @@ public class DeviceModelRequestService {
                 note));
         log.info("device model request rejected: requestId={}", requestId);
         return DeviceModelRequestResponse.from(request);
+    }
+
+    @Transactional
+    public void delete(Long requestId, Long adminId) {
+        DeviceModelRequest request = pendingRequest(requestId);
+        request.reject(adminId, "관리자 삭제");
+        deactivateProvisionedModel(request);
+        actionLogRepository.save(AdminActionLog.of(
+                adminId,
+                "DEVICE_MODEL_REQUEST_DELETE",
+                "DEVICE_MODEL_REQUEST",
+                requestId,
+                "신규 기기 모델 요청 삭제"));
+        log.info("device model request deleted: requestId={}", requestId);
+    }
+
+    private Category ensureProvisionedModel(DeviceModelRequest request) {
+        Category existing = linkedModel(request).orElse(null);
+        if (existing != null) {
+            if (!existing.getId().equals(request.getResolvedModelId())) {
+                request.provision(existing.getId());
+                log.info(
+                        "legacy device model request relinked: requestId={}, modelId={}",
+                        request.getId(),
+                        existing.getId());
+            }
+            catalogRegistrar.registerReported(existing, request.getRequestedByMemberId());
+            return existing;
+        }
+
+        Category parent = categoryRepository
+                .findById(request.getParentCategoryId())
+                .filter(category -> category.getParent() == null && category.isActive())
+                .orElseThrow(() -> new BusinessException(ErrorCode.DEVICE_MODEL_NOT_FOUND));
+        Category repaired = provision(request, parent);
+        request.provision(repaired.getId());
+        log.info(
+                "legacy device model request repaired: requestId={}, modelId={}",
+                request.getId(),
+                repaired.getId());
+        return repaired;
+    }
+
+    private Optional<Category> linkedModel(DeviceModelRequest request) {
+        if (request.getResolvedModelId() != null) {
+            Optional<Category> resolved = categoryRepository.findById(request.getResolvedModelId());
+            if (resolved.isPresent()) {
+                return resolved;
+            }
+        }
+        return categoryRepository
+                .findFirstByParentIdAndManufacturerIgnoreCaseAndNameIgnoreCase(
+                        request.getParentCategoryId(),
+                        request.getManufacturer(),
+                        request.getModelName());
+    }
+
+    private void deactivateProvisionedModel(DeviceModelRequest request) {
+        Optional<Category> linked = linkedModel(request);
+        linked.ifPresent(Category::deactivate);
+        Long modelId = linked.map(Category::getId).orElse(request.getResolvedModelId());
+        if (modelId != null) {
+            catalogRegistrar.deactivate(modelId);
+        }
     }
 
     private DeviceModelRequest pendingRequest(Long requestId) {

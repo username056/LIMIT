@@ -26,6 +26,10 @@
   관리자 모델 수정이나 재조사 결과는 새 매물부터 적용되고 기존 매물은 바뀌지 않는다.
 - AI는 선택한 기기 유형에 등록된 기능 코드만 후보로 반환한다.
 - 기능 후보는 공식 제조사 제품·지원 문서에서 확인된 경우에만 반환한다.
+- 기능 코드는 서버에서 대문자로 정규화하고, 동일 기능 코드나 최종 체크리스트 항목 코드가 겹치는
+  후보는 하나만 남긴 뒤 최대 5개 제한을 적용한다.
+- `evidenceType`과 `itemCode`는 AI 응답을 그대로 신뢰하지 않고 서버의 기기별 카탈로그·정책에서
+  결정론적으로 채운다.
 - 서비스에 점검 방법이 정의되지 않은 공식 기능은 관리자용 `reviewCandidates`로만 저장하며 체크리스트에는 자동 추가하지 않는다.
 - AI 호출이 비활성화되거나 실패해도 기본 체크리스트 생성은 성공한다.
 
@@ -107,6 +111,7 @@ ACTIVE 판매자만 호출할 수 있다.
 - `PATCH /api/v1/admin/device-model-requests/{requestId}`
 - `POST /api/v1/admin/device-model-requests/{requestId}/approval`
 - `POST /api/v1/admin/device-model-requests/{requestId}/rejection`
+- `DELETE /api/v1/admin/device-model-requests/{requestId}`
 - `GET /api/v1/admin/device-models?reviewStatus=PENDING_REVIEW`
 - `GET /api/v1/admin/device-models/{modelId}`
 - `PATCH /api/v1/admin/device-models/{modelId}`
@@ -121,6 +126,11 @@ ACTIVE 판매자만 호출할 수 있다.
 수행된다. 등록된 모델은 판매하기 화면의 해당 카테고리 모델 목록에 활성 상태로 노출된다. 모델 목록
 검색은 제조사, 모델명과 모델 코드를 대상으로 하며, 목록 첫 페이지 밖의 모델도 검색어로
 서버에서 다시 조회할 수 있다.
+
+과거 데이터 정리로 요청의 `resolvedModelId` 연결이나 정식 `device_model` 행이 누락된 경우,
+관리자 사후 검토 완료 시 같은 카테고리·제조사·모델명의 기존 모델을 우선 다시 연결한다. 기존
+모델도 없으면 요청 정보로 모델과 기본 템플릿을 복구한 뒤 검토를 완료한다. 삭제 API는 요청을
+반려 상태로 종료하고 연결된 모델을 비활성화하지만 기존 상품과 감사 이력은 삭제하지 않는다.
 
 ### 상품 등록과 스냅샷
 
