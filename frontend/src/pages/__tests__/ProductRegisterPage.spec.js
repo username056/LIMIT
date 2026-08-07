@@ -1904,6 +1904,10 @@ describe('ProductRegisterPage', () => {
       expect(wrapper.text()).toContain('파일 대기')
       expect(wrapper.text()).not.toContain('촬영 대기')
       expect(wrapper.text()).not.toContain('미촬영')
+      expect(wrapper.text()).toContain('배터리 리포트 파일 프리뷰')
+      expect(wrapper.text()).toContain('파일 꿀팁 가이드')
+      // 흔들림 안내는 직접 찍는 항목에만 뜻이 있습니다.
+      expect(wrapper.text()).not.toContain('흔들림을 줄이려면')
     })
 
     it('진단 자료 항목에는 촬영 버튼을 두지 않고 파일 형식만 열어 준다', async () => {

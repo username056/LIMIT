@@ -2764,7 +2764,7 @@ onMounted(async () => {
 
             <div class="card-soft rounded-lg bg-surface p-6">
               <h2 class="text-base font-bold text-text-main">
-                {{ activeCaptureItem ? `${guideTitleFor(activeCaptureItem)} 촬영 프리뷰` : '촬영 프리뷰' }}
+                {{ activeCaptureItem ? `${guideTitleFor(activeCaptureItem)} ${isFileItem(activeCaptureItem) ? '파일' : '촬영'} 프리뷰` : '촬영 프리뷰' }}
               </h2>
 
               <div class="relative mt-4 flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg border border-border bg-bg">
@@ -3074,12 +3074,16 @@ onMounted(async () => {
 
               <div class="mt-5 rounded-lg bg-bg p-4 text-xs leading-6 text-text-sub">
                 <p class="mb-1 font-bold text-text-main">
-                  촬영 꿀팁 가이드
+                  {{ isFileItem(activeCaptureItem) ? '파일' : '촬영' }} 꿀팁 가이드
                 </p>
                 <p v-if="guideStepsFor(activeCaptureItem)">
                   • {{ guideStepsFor(activeCaptureItem) }}
                 </p>
-                <p>• 흔들림을 줄이려면 촬영 순간 잠시 호흡을 멈추고 1초간 유지해 주세요.</p>
+                <!-- 흔들림 안내는 직접 찍는 항목에만 뜻이 있습니다. 파일을 올리는 항목에는
+                     해당하지 않아 감춥니다. -->
+                <p v-if="!isFileItem(activeCaptureItem)">
+                  • 흔들림을 줄이려면 촬영 순간 잠시 호흡을 멈추고 1초간 유지해 주세요.
+                </p>
               </div>
             </div>
 
