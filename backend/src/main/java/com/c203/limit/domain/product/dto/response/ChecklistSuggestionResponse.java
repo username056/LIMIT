@@ -25,12 +25,14 @@ public record ChecklistSuggestionResponse(
         return new ChecklistSuggestionResponse(
                 suggestion.featureCode(),
                 suggestion.featureName(),
-                suggestion.evidenceStatus().name(),
+                suggestion.evidenceStatus() == null
+                        ? null
+                        : suggestion.evidenceStatus().name(),
                 suggestion.reason(),
                 suggestion.checkGuide(),
                 suggestion.sourceUrl(),
                 suggestion.sourceTitle(),
-                suggestion.evidenceType().name(),
+                suggestion.evidenceType() == null ? null : suggestion.evidenceType().name(),
                 suggestion.itemCode());
     }
 }

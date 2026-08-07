@@ -125,6 +125,10 @@ export function rejectDeviceModelRequest(requestId, payload) {
   return apiClient.post(`/admin/device-model-requests/${requestId}/rejection`, payload)
 }
 
+export function deleteDeviceModelRequest(requestId) {
+  return apiClient.delete(`/admin/device-model-requests/${requestId}`)
+}
+
 export function getModerationDashboard() {
   return apiClient.get('/admin/moderation/dashboard')
 }
