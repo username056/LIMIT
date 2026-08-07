@@ -1882,6 +1882,34 @@ describe('ProductRegisterPage', () => {
 
     // 배터리 리포트·시스템 진단 정보는 기기가 내보낸 파일을 그대로 올려야 값을 신뢰할 수 있습니다.
     // 화면을 찍은 사진은 업로드로 받아 주되 촬영 버튼으로 권하지는 않습니다.
+    // 배터리 리포트나 진단 정보는 프로그램이 만든 파일을 올리는 것이라 찍는 것이 아닙니다.
+    // '미촬영'이라고 적으면 카메라를 찾게 됩니다.
+    it('진단 자료 항목은 촬영이 아니라 첨부라고 말한다', async () => {
+      getProductChecklist.mockResolvedValue([
+        {
+          checklistItemId: 7004,
+          itemCode: 'BAT-001',
+          name: '배터리 리포트',
+          evidenceType: 'DIAGNOSTIC_FILE',
+          isRequired: true,
+          status: 'PENDING',
+        },
+      ])
+
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await goToCaptureStep(wrapper)
+
+      // 항목이 하나뿐이면 바로 선택되어 '파일 대기'가 됩니다. 어느 쪽이든 '촬영'은 쓰지 않습니다.
+      expect(wrapper.text()).toContain('파일 대기')
+      expect(wrapper.text()).not.toContain('촬영 대기')
+      expect(wrapper.text()).not.toContain('미촬영')
+      expect(wrapper.text()).toContain('배터리 리포트 파일 프리뷰')
+      expect(wrapper.text()).toContain('파일 꿀팁 가이드')
+      // 흔들림 안내는 직접 찍는 항목에만 뜻이 있습니다.
+      expect(wrapper.text()).not.toContain('흔들림을 줄이려면')
+    })
+
     it('진단 자료 항목에는 촬영 버튼을 두지 않고 파일 형식만 열어 준다', async () => {
       getProductChecklist.mockResolvedValue([
         {
