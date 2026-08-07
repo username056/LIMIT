@@ -8,8 +8,6 @@ import SellerNoticeModal from './SellerNoticeModal.vue'
 import {
   doneRecaptureCount,
   hasNotice,
-  hasUnreadNotification,
-  markNotificationsSeen,
   pendingRecaptureCount,
   refreshNotificationDot,
   startNotificationDotWatch,
@@ -87,9 +85,8 @@ onBeforeUnmount(() => {
 })
 
 /*
-  로그인 상태가 바뀌면 세는 것도 같이 켜고 끕니다.
-  로그아웃한 채로 계속 부르면 401만 쌓이고, 로그인한 직후에 안 부르면 새로고침할
-  때까지 점이 안 켜집니다.
+  로그인 상태가 바뀌면 세는 것도 같이 켜고 끕니다. 로그아웃한 채로 계속 부르면 401만
+  쌓이고, 로그인한 직후에 안 부르면 말풍선이 빈 채로 열립니다.
 */
 watch(member, (current, previous) => {
   if (current && !previous) startNotificationDotWatch()
@@ -115,13 +112,13 @@ watch(() => route.path, (current, previous) => {
   둘뿐이고, 둘 다 누르면 갈 곳이 이미 있는 화면(채팅·실시간 확인)입니다.
   한 줄 보려고 화면을 하나 더 두면 오히려 손이 늘어납니다.
 
-  열어 본 순간 점을 끕니다. 소식이 바뀌면 다시 켜집니다.
+  벨 위의 점은 두지 않습니다. 손댈 일이 없을 때도 점이 남아 있는 것처럼 느껴져 오히려
+  신경이 쓰였습니다. 소식은 눌러서 확인합니다.
 */
 const isNoticeOpen = ref(false)
 
 function toggleNotice() {
   isNoticeOpen.value = !isNoticeOpen.value
-  if (isNoticeOpen.value) markNotificationsSeen()
 }
 
 function closeNotice() {
@@ -275,10 +272,9 @@ async function logoutMember() {
           <div class="relative">
             <button
               type="button"
-              :aria-label="hasUnreadNotification ? '알림 (새 소식 있음)' : '알림'"
+              aria-label="알림"
               :aria-expanded="isNoticeOpen"
               class="header-icon-btn notification-btn flex items-center justify-center"
-              :class="{ 'notification-btn--on': hasUnreadNotification }"
               @click="toggleNotice"
             >
               <svg
@@ -693,18 +689,6 @@ async function logoutMember() {
 */
 .notification-btn {
   position: relative;
-}
-
-.notification-btn--on::after {
-  content: '';
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #6366f1, #93c5fd);
-  border: 1.5px solid #fff;
 }
 
 /* 벨에서 톡 튀어나오는 느낌만 줍니다. 길면 누른 뒤 읽기까지 기다리게 됩니다. */
