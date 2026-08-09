@@ -50,6 +50,7 @@ import {
 } from '../utils/camera'
 import { MAX_PRICE_DIGITS, formatPriceDigits, toPriceDigits } from '../utils/priceInput'
 import { guideContentFor, guideImageFor } from '../utils/checklistGuideImages'
+import { OCR_FIELD_NAMES, isDeviceInfoItem, isDiagnosisComplete } from '../utils/diagnosisCompletion'
 import { CHECKABLE_ITEM_CODES, toUniversalCheckItems } from '../features/deviceCheck/checkableItemCodes'
 
 const WIZARD_STEPS = [
@@ -316,35 +317,18 @@ function diagnosisFieldLabel(fieldName) {
 // 항목의 자동화 종류가 다룰 수 있는 필드 전체 목록입니다. 자동 인식이 실패했거나(값 없음)
 // 일부만 인식됐을 때도, 인식 못한 필드까지 빈 입력 칸으로 미리 보여줘서 드롭다운 없이
 // 바로 타이핑해 저장할 수 있게 합니다.
-const OCR_FIELD_NAMES = ['MODEL_NAME', 'STORAGE_CAPACITY', 'OS_VERSION', 'CPU']
 const DXDIAG_FIELD_NAMES = ['RAM', 'GPU', 'GPU_MEMORY', 'DRIVER_VERSION', 'SOUND_DEVICE']
 const BATTERY_REPORT_FIELD_NAMES = [
   'DESIGN_CAPACITY', 'FULL_CHARGE_CAPACITY', 'CYCLE_COUNT', 'BATTERY_MANUFACTURER', 'CAPACITY_RATIO',
 ]
-const COMPLETION_FIELD_NAMES_BY_PARSER = {
-  DXDIAG: ['RAM', 'GPU'],
-  BATTERY_REPORT: ['DESIGN_CAPACITY', 'FULL_CHARGE_CAPACITY', 'CAPACITY_RATIO'],
-}
-
-function isDeviceInfoItem(item) {
-  return ['LAP-SCR-013', 'SYS-003'].includes(item?.itemCode)
-}
 
 function hasAutomaticallyDetectedValue(field) {
   return String(field?.fileParseValue ?? field?.ocrValue ?? '').trim().length > 0
 }
 
-function diagnosisCompletionFieldNames(item) {
-  if (isDeviceInfoItem(item)) return OCR_FIELD_NAMES
-  return COMPLETION_FIELD_NAMES_BY_PARSER[item?.parserType] || []
-}
-
 function isAutomatedDiagnosisComplete(item) {
-  const requiredFieldNames = diagnosisCompletionFieldNames(item)
-  if (!requiredFieldNames.length) return false
-
   const fields = diagnosisState[item.checklistItemId]?.fields || []
-  return requiredFieldNames.every((fieldName) => {
+  return isDiagnosisComplete(item, (fieldName) => {
     const field = fields.find((candidate) => candidate.fieldName === fieldName)
     return hasAutomaticallyDetectedValue(field)
   })

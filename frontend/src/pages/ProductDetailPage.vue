@@ -21,6 +21,7 @@ import { getProductDiagnosisSummary } from '../api/inspection'
 import { getSellerProfile } from '../api/seller'
 import { getAccessToken, getSessionMember } from '../auth/session'
 import { canSellerMarkSold, canSellerReopen, isSoldOut } from '../utils/productStatus'
+import { isDiagnosisComplete } from '../utils/diagnosisCompletion'
 import {
   ALL_BATTERY_FIELDS,
   BASIC_INFO_FIELDS,
@@ -85,10 +86,23 @@ const buyerChecklist = computed(() => buyerChecklistItems.value.map((item) => {
     required: item.required ?? item.isRequired ?? false,
     // 자료가 한 장이라도 올라와 있으면 확인된 것으로 봅니다. 서버는 항목별 최소 장수·길이까지
     // 채워야 COMPLETED로 두는데, 구매자에게는 "자료가 있느냐"가 먼저 궁금한 정보입니다.
-    completed: item.status === 'COMPLETED' || evidence.length > 0,
+    //
+    // 진단 프로그램이 채운 항목은 증빙 파일이 남지 않습니다. 값은 옆 '자동 인식된 사양'
+    // 카드에 멀쩡히 떠 있는데 여기만 '자료 준비 중'이 되던 이유입니다. 판매하기 화면이
+    // '자동 입력 완료'라고 부르는 것과 같은 기준으로 봅니다.
+    completed: item.status === 'COMPLETED' || evidence.length > 0 || isAutoFilled(item),
     evidence,
   }
 }))
+
+// 판단 기준은 utils/diagnosisCompletion에 있고, 값을 찾는 방법만 여기서 알려 줍니다.
+// 등록 화면은 항목별 fields를, 이 화면은 상품 전체의 사양 요약을 들고 있습니다.
+function isAutoFilled(item) {
+  return isDiagnosisComplete(item, (fieldName) => {
+    const field = findDiagnosisItem(fieldName)
+    return field?.status === 'AVAILABLE' && String(field.value ?? '').trim().length > 0
+  })
+}
 
 // 위 기준으로 다시 셉니다. 서버가 준 요약을 그대로 쓰면 항목에는 ✓가 떠 있는데 개수는 안 올라가
 // 화면 안에서 숫자가 어긋납니다.
