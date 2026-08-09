@@ -40,6 +40,7 @@ class DxdiagParsingServiceTests {
     @Mock ListingOwnerReader listingOwnerReader;
     @Mock DxdiagFileFetcher dxdiagFileFetcher;
     @Mock DxdiagParser dxdiagParser;
+    @Mock DeviceInfoCompletionService deviceInfoCompletionService;
 
     DxdiagParsingService service;
 
@@ -47,7 +48,12 @@ class DxdiagParsingServiceTests {
     void setUp() {
         service =
                 new DxdiagParsingService(
-                        evidenceRepository, dxdiagResultRepository, listingOwnerReader, dxdiagFileFetcher, dxdiagParser);
+                        evidenceRepository,
+                        dxdiagResultRepository,
+                        listingOwnerReader,
+                        dxdiagFileFetcher,
+                        dxdiagParser,
+                        deviceInfoCompletionService);
     }
 
     private Evidence readyEvidence(EvidenceType evidenceType) {
