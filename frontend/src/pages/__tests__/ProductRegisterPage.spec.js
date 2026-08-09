@@ -1709,12 +1709,39 @@ describe('ProductRegisterPage', () => {
   // 폰에서는 카메라만 열려 앨범을 못 쓰고, 노트북에서는 촬영을 못 하던 문제를 버튼 분리로 풉니다.
   describe('촬영과 파일 업로드 선택', () => {
     // 영상은 60초·100MB 제한에 걸리면 한참 압축한 끝에 실패합니다. 올리기 전에 알려 줍니다.
-    it('영상 제한을 항목별·판매글별로 구분해 알려준다', async () => {
+    /*
+      1초짜리 영상을 올린 판매자가 뜻 모를 422만 받았습니다. 화면에 60초 상한만 적혀
+      있었고 최소 길이는 어디에도 없었기 때문입니다. 서버가 준 항목 값을 그대로 읽습니다.
+    */
+    it('영상 항목이 있으면 최소·최대 길이를 함께 알려준다', async () => {
+      getProductChecklist.mockResolvedValue([
+        {
+          checklistItemId: 7010,
+          itemCode: 'DIS-010',
+          name: '화면 전체 터치',
+          evidenceType: 'VIDEO',
+          isRequired: true,
+          status: 'PENDING',
+          minDurationSec: 5,
+          maxDurationSec: 60,
+        },
+      ])
+
       const wrapper = mount(ProductRegisterPage, { global: globalOptions })
       await flushPromises()
       await goToCaptureStep(wrapper)
 
-      expect(wrapper.text()).toContain('영상은 항목마다 1개씩, 60초 이내·100MB 이하만 올릴 수 있습니다. (판매글 전체로는 최대 6개)')
+      expect(wrapper.text()).toContain('5~60초')
+      expect(wrapper.text()).toContain('동작이 이어지는 모습이 보여야')
+    })
+
+    // 사진과 진단 파일만 있는 기종에는 올릴 일 없는 조건이라 띄우지 않습니다.
+    it('영상 항목이 없으면 영상 안내를 띄우지 않는다', async () => {
+      const wrapper = mount(ProductRegisterPage, { global: globalOptions })
+      await flushPromises()
+      await goToCaptureStep(wrapper)
+
+      expect(wrapper.text()).not.toContain('영상은 항목마다')
     })
 
     it('카메라가 있는 기기의 사진 항목에는 촬영과 파일 업로드를 함께 보여준다', async () => {
