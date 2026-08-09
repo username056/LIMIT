@@ -123,6 +123,29 @@ class ProductDraftProgressServiceTests {
         assertThat(response.results()).containsEntry(11L, DeviceCheckResult.SUCCESS);
     }
 
+    /*
+      판매 중인 상품을 고치면서 점검하는 경우다. draftStep 기록은 DRAFT에서만 허용되는데, 예전에는
+      그 한 줄 때문에 409가 나면서 점검 결과까지 함께 롤백됐다. 판매자에게는 "점검 결과를 저장하지
+      못했습니다"만 뜨고, 분명히 점검한 항목이 계속 미점검으로 남았다.
+    */
+    @Test
+    void savesResultsForAListingThatIsAlreadyOnSale() {
+        ListingChecklistItem item = confirmationItem(19L);
+        when(checklistItems.findByListingIdOrderByDisplayOrderAsc(PRODUCT_ID))
+                .thenReturn(List.of(item));
+        listing.completePrecheck();
+        listing.publish();
+
+        ProductDraftProgressResponse response = service.update(
+                SELLER_ID,
+                PRODUCT_ID,
+                new UpdateProductDraftProgressRequest(
+                        2, List.of(new ChecklistItemResult(19L, DeviceCheckResult.SUCCESS))));
+
+        assertThat(item.getCompletionStatus()).isEqualTo(ChecklistItemCompletionStatus.COMPLETED);
+        assertThat(response.results()).containsEntry(19L, DeviceCheckResult.SUCCESS);
+    }
+
     @Test
     void failedResultIsNotStoredAsCompleted() {
         ListingChecklistItem item = confirmationItem(12L);

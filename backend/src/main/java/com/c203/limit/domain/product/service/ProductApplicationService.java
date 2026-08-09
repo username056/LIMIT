@@ -721,15 +721,6 @@ public class ProductApplicationService {
         return new ChecklistSummaryResponse(metrics.required(), metrics.completedRequired(), 0);
     }
 
-    private int required(Long listingId) {
-        return Math.toIntExact(checklistItemRepository.countByListingIdAndIsRequiredTrue(listingId));
-    }
-
-    private int completedRequired(Long listingId) {
-        return Math.toIntExact(
-                checklistItemRepository.countByListingIdAndIsRequiredTrueAndCompletionStatus(
-                        listingId, ChecklistItemCompletionStatus.COMPLETED));
-    }
 
 
     private Map<Long, ProductMetrics> loadMetrics(List<Listing> listings) {

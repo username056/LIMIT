@@ -12,6 +12,7 @@ import com.c203.limit.domain.inspection.repository.ListingChecklistItemRepositor
 import com.c203.limit.domain.product.dto.request.UpdateProductDraftProgressRequest;
 import com.c203.limit.domain.product.dto.response.ProductDraftProgressResponse;
 import com.c203.limit.domain.product.entity.Listing;
+import com.c203.limit.domain.product.entity.ListingStatus;
 import com.c203.limit.domain.product.repository.ListingRepository;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
@@ -101,7 +102,21 @@ public class ProductDraftProgressService {
             deviceResults.forEach(result -> webResults.put(result.testType(), result.result()));
             listing.updateWebDeviceCheckResults(webResults);
         }
-        listing.updateDraftStep(request.step());
+        /*
+          단계 기록은 초안일 때만 남긴다.
+          -----------------------------------------------------------------------
+          updateDraftStep은 DRAFT가 아니면 PRODUCT_EDIT_NOT_ALLOWED(409)를 던진다. 그래서 이미
+          판매 중인 상품을 고치면서 실동작 점검이나 개인정보 확인을 하면, 위에서 반영한 결과까지
+          함께 롤백되어 "점검 결과를 저장하지 못했습니다"만 뜨고 아무것도 남지 않았다. 판매자
+          입장에서는 분명히 점검했는데 계속 미점검으로 보였다.
+
+          판매 중 상품 수정은 원래 허용하는 동작이다(PRODUCT_EDIT_NOT_ALLOWED 문구도 '초안·판매
+          중·숨김 상태에서만 수정할 수 있다'고 말한다). 초안에서 어디까지 왔는지를 나타내는
+          draftStep만 판매 중인 상품에 의미가 없을 뿐이라, 그 기록만 건너뛴다.
+        */
+        if (listing.getStatus() == ListingStatus.DRAFT) {
+            listing.updateDraftStep(request.step());
+        }
         log.info(
                 "Product draft progress updated: productId={}, step={}, checklistResultCount={}",
                 productId,
