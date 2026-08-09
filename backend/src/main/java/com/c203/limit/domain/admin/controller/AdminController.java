@@ -276,6 +276,12 @@ public class AdminController implements AdminApi {
     }
 
     @Override
+    public ResponseEntity<?> deleteDeviceModelRequest(Long requestId) {
+        deviceModelRequestService.delete(requestId, currentUser.adminId());
+        return ResponseEntity.noContent().build();
+    }
+
+    @Override
     public ResponseEntity<?> reconcilePayment(Long paymentId) {
         return ResponseEntity.ok(ApiResponse.ok(paymentService.reconcile(paymentId)));
     }

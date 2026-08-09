@@ -5,7 +5,6 @@ import com.c203.limit.domain.inspection.entity.ChecklistTemplateItem;
 import com.c203.limit.domain.inspection.entity.ModelChecklistResearch;
 import com.c203.limit.domain.inspection.enums.ChecklistTemplateStatus;
 import com.c203.limit.domain.inspection.enums.DeviceType;
-import com.c203.limit.domain.inspection.enums.EvidenceType;
 import com.c203.limit.domain.inspection.enums.ModelChecklistResearchStatus;
 import com.c203.limit.domain.inspection.repository.ChecklistTemplateItemRepository;
 import com.c203.limit.domain.inspection.repository.ChecklistTemplateRepository;
@@ -17,7 +16,6 @@ import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
@@ -38,6 +36,7 @@ public class ChecklistGenerationService {
     private final ModelChecklistResearchRepository researchRepository;
     private final LaptopChecklistPolicy laptopPolicy;
     private final DeviceChecklistFeatureCatalog featureCatalog;
+    private final ChecklistSuggestionNormalizer suggestionNormalizer;
     private final ChecklistSupplementClient supplementClient;
     private final ObjectMapper objectMapper;
 
@@ -48,6 +47,7 @@ public class ChecklistGenerationService {
             ModelChecklistResearchRepository researchRepository,
             LaptopChecklistPolicy laptopPolicy,
             DeviceChecklistFeatureCatalog featureCatalog,
+            ChecklistSuggestionNormalizer suggestionNormalizer,
             ChecklistSupplementClient supplementClient,
             ObjectMapper objectMapper) {
         this.categoryRepository = categoryRepository;
@@ -56,6 +56,7 @@ public class ChecklistGenerationService {
         this.researchRepository = researchRepository;
         this.laptopPolicy = laptopPolicy;
         this.featureCatalog = featureCatalog;
+        this.suggestionNormalizer = suggestionNormalizer;
         this.supplementClient = supplementClient;
         this.objectMapper = objectMapper;
     }
@@ -133,7 +134,7 @@ public class ChecklistGenerationService {
         ModelChecklistResearch research = findOrResearch(model, context);
         ChecklistSupplementResult supplement = usableSupplement(research);
         List<ChecklistSuggestion> suggestions =
-                validSuggestions(context.deviceType(), supplement.suggestions());
+                suggestionNormalizer.normalize(context.deviceType(), supplement.suggestions());
         Set<String> suggestedCodes = suggestions.stream()
                 .map(ChecklistSuggestion::featureCode)
                 .map(code -> code.trim().toUpperCase(Locale.ROOT))
@@ -221,7 +222,7 @@ public class ChecklistGenerationService {
         }
 
         List<ChecklistSuggestion> suggestions =
-                validSuggestions(context.deviceType(), supplement.suggestions());
+                suggestionNormalizer.normalize(context.deviceType(), supplement.suggestions());
         Map<String, ChecklistSuggestion> suggestionByFeature = new LinkedHashMap<>();
         suggestions.forEach(suggestion ->
                 suggestionByFeature.putIfAbsent(suggestion.featureCode(), suggestion));
@@ -278,7 +279,7 @@ public class ChecklistGenerationService {
             ModelChecklistResearch research) {
         ChecklistSupplementResult supplement = usableSupplement(research);
         List<ChecklistSuggestion> suggestions =
-                validSuggestions(context.deviceType(), supplement.suggestions());
+                suggestionNormalizer.normalize(context.deviceType(), supplement.suggestions());
         return new GeneratedChecklist(
                 context.deviceModelId(),
                 context.manufacturer(),
@@ -436,52 +437,6 @@ public class ChecklistGenerationService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.DEVICE_MODEL_NOT_FOUND));
     }
 
-    private List<ChecklistSuggestion> validSuggestions(
-            DeviceType deviceType, List<ChecklistSuggestion> suggestions) {
-        if (suggestions == null) {
-            return List.of();
-        }
-        Map<String, ChecklistSuggestion> unique = new LinkedHashMap<>();
-        suggestions.stream()
-                .filter(suggestion ->
-                        suggestion != null && !isBlank(suggestion.featureCode()))
-                .filter(suggestion ->
-                        featureCatalog.supports(deviceType, suggestion.featureCode()))
-                .filter(suggestion -> isSafeSource(suggestion.sourceUrl()))
-                .limit(DeviceChecklistFeatureCatalog.MAX_ADDITIONAL_ITEMS)
-                .forEach(suggestion -> unique.putIfAbsent(
-                        suggestion.featureCode().trim().toUpperCase(Locale.ROOT),
-                        suggestion
-                                .withEvidenceType(evidenceType(
-                                        deviceType, suggestion.featureCode()))
-                                .withItemCode(itemCode(
-                                        deviceType, suggestion.featureCode()))));
-        return List.copyOf(unique.values());
-    }
-
-    private EvidenceType evidenceType(DeviceType deviceType, String featureCode) {
-        String normalized = featureCode.trim().toUpperCase(Locale.ROOT);
-        if (deviceType == DeviceType.LAPTOP) {
-            return laptopPolicy.evidenceType(LaptopFeatureCode.valueOf(normalized));
-        }
-        return featureCatalog
-                .find(deviceType, normalized)
-                .map(DeviceChecklistFeatureCatalog.FeatureDefinition::evidenceType)
-                .orElseThrow();
-    }
-
-    /** 이 feature를 확정했을 때 실제로 생성되는 체크리스트 항목 코드. 카탈로그/정책에서 결정론적으로 파생한다. */
-    private String itemCode(DeviceType deviceType, String featureCode) {
-        String normalized = featureCode.trim().toUpperCase(Locale.ROOT);
-        if (deviceType == DeviceType.LAPTOP) {
-            return laptopPolicy.itemCode(LaptopFeatureCode.valueOf(normalized));
-        }
-        return featureCatalog
-                .find(deviceType, normalized)
-                .map(DeviceChecklistFeatureCatalog.FeatureDefinition::itemCode)
-                .orElseThrow();
-    }
-
     private ChecklistGenerationContext context(
             Long deviceModelId,
             DeviceType deviceType,
@@ -524,18 +479,6 @@ public class ChecklistGenerationService {
                 && osFamily != OsFamily.WINDOWS
                 && osFamily != OsFamily.LINUX) {
             throw new BusinessException(ErrorCode.CHECKLIST_OS_NOT_SUPPORTED);
-        }
-    }
-
-    private boolean isSafeSource(String sourceUrl) {
-        if (isBlank(sourceUrl)) {
-            return false;
-        }
-        try {
-            URI uri = URI.create(sourceUrl);
-            return "https".equalsIgnoreCase(uri.getScheme()) && !isBlank(uri.getHost());
-        } catch (IllegalArgumentException exception) {
-            return false;
         }
     }
 

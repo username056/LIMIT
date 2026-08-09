@@ -10,6 +10,7 @@ import com.c203.limit.domain.inspection.dto.response.DiagnosisSummaryItem;
 import com.c203.limit.domain.inspection.dto.response.ProductDiagnosisSummaryResponse;
 import com.c203.limit.domain.inspection.enums.DiagnosisSummaryStatus;
 import com.c203.limit.domain.inspection.service.ProductDiagnosisSummaryService;
+import com.c203.limit.global.security.CurrentUser;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,6 +26,7 @@ class InspectionProductDiagnosisSummaryControllerTests {
     private static final Long PRODUCT_ID = 1L;
 
     @Mock ProductDiagnosisSummaryService productDiagnosisSummaryService;
+    @Mock CurrentUser currentUser;
 
     MockMvc mockMvc;
 
@@ -32,7 +34,8 @@ class InspectionProductDiagnosisSummaryControllerTests {
     void setUp() {
         mockMvc =
                 MockMvcBuilders.standaloneSetup(
-                                new InspectionProductDiagnosisSummaryController(productDiagnosisSummaryService))
+                                new InspectionProductDiagnosisSummaryController(
+                                        productDiagnosisSummaryService, currentUser))
                         .build();
     }
 
@@ -48,7 +51,8 @@ class InspectionProductDiagnosisSummaryControllerTests {
                                         "file cpu",
                                         DiagnosisSummaryStatus.AVAILABLE)),
                         "자동 추출값은 참고 정보이며 상품의 정상 여부를 보증하지 않습니다.");
-        when(productDiagnosisSummaryService.getSummary(eq(PRODUCT_ID))).thenReturn(response);
+        when(currentUser.memberIdOrNull()).thenReturn(null);
+        when(productDiagnosisSummaryService.getSummary(eq(PRODUCT_ID), eq(null))).thenReturn(response);
 
         mockMvc.perform(get("/api/v1/inspections/products/{productId}/diagnosis-summary", PRODUCT_ID))
                 .andExpect(status().isOk())

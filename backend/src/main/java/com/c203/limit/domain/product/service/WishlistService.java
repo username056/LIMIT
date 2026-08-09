@@ -52,6 +52,7 @@ public class WishlistService {
     public WishlistCreateResult add(Long memberId, Long productId) {
         Listing listing = listingRepository
                 .findByIdAndStatusAndDeletedAtIsNull(productId, ListingStatus.ON_SALE)
+                .filter(Listing::isPubliclyVisible)
                 .orElseThrow(() -> new BusinessException(ErrorCode.LISTING_NOT_FOUND));
         return creator.createOrGet(memberId, listing);
     }
@@ -60,6 +61,7 @@ public class WishlistService {
     public FavoriteStatusResponse status(Long memberId, Long productId) {
         if (listingRepository
                 .findByIdAndStatusAndDeletedAtIsNull(productId, ListingStatus.ON_SALE)
+                .filter(Listing::isPubliclyVisible)
                 .isEmpty()) {
             throw new BusinessException(ErrorCode.LISTING_NOT_FOUND);
         }

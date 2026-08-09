@@ -29,12 +29,34 @@
 | `GET` | `/api/v1/admin/device-models/{modelId}/products/{productId}/materials` | 관리자 | 선택 상품의 사진·영상·검수 증빙 조회 |
 | `GET` | `/api/v1/admin/device-models/{modelId}/researches` | 관리자 | 모델 AI 조사 이력 페이징 조회 |
 | `POST` | `/api/v1/admin/device-models/{modelId}/researches` | 관리자 | 현재 모델 정보로 새 버전 AI 재조사 |
+| `GET` | `/api/v1/admin/device-model-requests` | 관리자 | 신규 기기 모델 검토 요청 목록 조회 |
+| `PATCH` | `/api/v1/admin/device-model-requests/{requestId}` | 관리자 | 신규 기기 모델 요청 정보 수정 |
+| `POST` | `/api/v1/admin/device-model-requests/{requestId}/approval` | 관리자 | 신규 기기 모델 사후 검토 완료 |
+| `POST` | `/api/v1/admin/device-model-requests/{requestId}/rejection` | 관리자 | 신규 기기 모델 요청 반려 |
+| `DELETE` | `/api/v1/admin/device-model-requests/{requestId}` | 관리자 | 신규 기기 모델 요청 삭제·등록 모델 비활성화 |
+| `GET` | `/api/v1/admin/moderation/dashboard` | 관리자 | 신고·복구·이상 활동 요약과 주의 판매자 조회 |
+| `GET` | `/api/v1/admin/reports` | 관리자 | 상품 신고 목록 조회 |
+| `POST` | `/api/v1/admin/reports/{reportId}/decisions` | 관리자 | 신고 기각·경고·판매 중지 결정 |
+| `GET` | `/api/v1/admin/restoration-requests` | 관리자 | 판매 중지 상품 복구 신청 목록 조회 |
+| `POST` | `/api/v1/admin/restoration-requests/{requestId}/decisions` | 관리자 | 복구 승인·반려 결정 |
+| `GET` | `/api/v1/admin/risk-signals` | 관리자 | 판매 시작 빈도·유사 제목·유사 이미지 신호 조회 |
+| `PATCH` | `/api/v1/admin/risk-signals/{signalId}` | 관리자 | 위험 신호 검토 완료 기록 |
+| `GET` | `/api/v1/admin/products` | 관리자 | 전체 상품 판매·운영 상태 검색 |
+| `GET` | `/api/v1/admin/products/{productId}` | 관리자 | 판매 중지를 포함한 상품 상세 조회 |
 
 마지막 활성 `SUPER_ADMIN`을 강등하거나 정지하는 요청은 거절한다.
 
 모델 목록은 `keyword`, `categoryId`, `manufacturerId`, `isActive`, `reviewStatus`, `researchStatus`, `page`, `size`, `sort` 조건을 받는다. 정렬은 `updatedAt,desc`, `createdAt,desc`, `modelName,asc`를 지원한다. 연관 상품은 `updatedAt,desc` 또는 `createdAt,desc`로 조회한다.
 
 모델 삭제는 참조 중인 매물·판매 옵션·AI 조사·검수 증빙을 지우지 않는 논리 삭제다. 비활성화 사유를 필수로 기록하고 필요하면 활성 상태인 대체 모델을 지정한다. 기존 상품은 그대로 조회·거래할 수 있고, 해당 모델만 신규 판매 등록 검색에서 제외된다. 상품 자료는 모델 상세와 함께 일괄 조회하지 않고 연관 상품을 선택했을 때 별도 API로 지연 조회한다.
+
+신규 기기 모델 검토 화면의 삭제도 물리 삭제가 아니다. 검토 요청은 `REJECTED`로 종료하고 즉시
+등록된 모델을 비활성화해 신규 판매 선택에서 제외하며, 기존 상품과 감사 이력은 보존한다.
+
+상품 운영 화면의 위험 신호는 관리자 검토 순서를 돕는 자료이며 회원이나 상품을 자동 제재하지
+않는다. 관리자는 신고 근거를 확인해 경고 또는 판매 중지를 결정하고, 판매 중지 상품은 판매자가
+수정 후 복구를 신청해도 관리자 승인이 끝나기 전까지 공개되지 않는다. 상세 상태 전이와 탐지
+기준은 [마켓플레이스 신고·운영 API](marketplace-moderation.md)를 따른다.
 
 작업 로그 상세에서는 작업 종류, 대상, 변경 전후 데이터, 접속 IP와 사유를 조회한다.
 감사 무결성을 위해 작업 종류·대상·발생 시각은 변경할 수 없으며 `PATCH`는 최대 500자의

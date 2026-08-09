@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.c203.limit.domain.inspection.enums.DeviceCheckResult;
 import com.c203.limit.domain.inspection.enums.DeviceType;
 import com.c203.limit.domain.inspection.enums.TestType;
+import com.c203.limit.domain.product.moderation.entity.ListingModerationStatus;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.time.LocalDateTime;
@@ -602,5 +603,59 @@ class ListingTests {
         listing.updateWebDeviceCheckResults(null);
 
         assertThat(listing.getWebDeviceCheckResults()).isNull();
+    }
+
+    @Test
+    void warningKeepsProductPublicUntilSellerAcknowledgesIt() {
+        Listing listing = onSaleListing();
+
+        listing.issueModerationWarning("상품 설명을 확인해 주세요.");
+
+        assertThat(listing.getModerationStatus())
+                .isEqualTo(ListingModerationStatus.WARNING_ACK_REQUIRED);
+        assertThat(listing.isPubliclyVisible()).isTrue();
+
+        listing.acknowledgeModerationWarning();
+
+        assertThat(listing.getModerationStatus()).isEqualTo(ListingModerationStatus.NORMAL);
+        assertThat(listing.isPubliclyVisible()).isTrue();
+        assertThat(listing.getSuspendedReason()).isNull();
+    }
+
+    @Test
+    void suspendedProductNeedsSellerRequestAndAdminApprovalBeforeItIsPublic() {
+        Listing listing = onSaleListing();
+
+        listing.suspendForModeration("금지된 문구를 수정해 주세요.");
+
+        assertThat(listing.getModerationStatus()).isEqualTo(ListingModerationStatus.SUSPENDED);
+        assertThat(listing.isPubliclyVisible()).isFalse();
+        assertThatThrownBy(() -> listing.reserve(2L, RESERVED_UNTIL))
+                .isInstanceOfSatisfying(
+                        BusinessException.class,
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(ErrorCode.LISTING_MODERATION_BLOCKED));
+
+        listing.requestModerationRestoration();
+        assertThat(listing.getModerationStatus())
+                .isEqualTo(ListingModerationStatus.RESTORE_REQUESTED);
+        assertThat(listing.isPubliclyVisible()).isFalse();
+
+        listing.approveModerationRestoration();
+        assertThat(listing.getModerationStatus()).isEqualTo(ListingModerationStatus.NORMAL);
+        assertThat(listing.isPubliclyVisible()).isTrue();
+    }
+
+    @Test
+    void rejectedRestorationReturnsProductToSuspendedState() {
+        Listing listing = onSaleListing();
+        listing.suspendForModeration("사진을 교체해 주세요.");
+        listing.requestModerationRestoration();
+
+        listing.rejectModerationRestoration("수정된 사진을 확인할 수 없습니다.");
+
+        assertThat(listing.getModerationStatus()).isEqualTo(ListingModerationStatus.SUSPENDED);
+        assertThat(listing.getSuspendedReason()).isEqualTo("수정된 사진을 확인할 수 없습니다.");
+        assertThat(listing.isPubliclyVisible()).isFalse();
     }
 }

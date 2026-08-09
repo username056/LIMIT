@@ -47,7 +47,8 @@ public class ProductEvidenceController implements ProductEvidenceApi {
     public ResponseEntity<ApiResponse<List<ProductChecklistItemResponse>>> getProductChecklist(
             Long productId, String status, boolean requiredOnly) {
         return ResponseEntity.ok(
-                ApiResponse.ok(productChecklistService.findAll(productId, status, requiredOnly)));
+                ApiResponse.ok(productChecklistService.findAll(
+                        productId, status, requiredOnly, currentUser.memberIdOrNull())));
     }
 
     @Override

@@ -55,13 +55,16 @@ class ChecklistGenerationServiceTests {
                     ReflectionTestUtils.setField(research, "id", 401L);
                     return research;
                 });
+        LaptopChecklistPolicy laptopPolicy = new LaptopChecklistPolicy();
+        DeviceChecklistFeatureCatalog featureCatalog = new DeviceChecklistFeatureCatalog();
         service = new ChecklistGenerationService(
                 categoryRepository,
                 templateRepository,
                 templateItemRepository,
                 researchRepository,
-                new LaptopChecklistPolicy(),
-                new DeviceChecklistFeatureCatalog(),
+                laptopPolicy,
+                featureCatalog,
+                new ChecklistSuggestionNormalizer(laptopPolicy, featureCatalog),
                 supplementClient,
                 new ObjectMapper());
     }
@@ -92,6 +95,33 @@ class ChecklistGenerationServiceTests {
                 .containsExactly("CAMERA");
         assertThat(result.reviewCandidates()).containsExactly("조도 센서");
         assertThat(result.researchStatus()).isEqualTo("PENDING_REVIEW");
+    }
+
+    @Test
+    void deduplicatesAiSuggestionsBeforeApplyingTheLimit() {
+        when(supplementClient.suggest(any()))
+                .thenReturn(new ChecklistSupplementResult(
+                        true,
+                        List.of(
+                                suggestion(" camera ", "https://www.samsung.com/1"),
+                                suggestion("CAMERA", "https://www.samsung.com/2"),
+                                suggestion("WIFI", "https://www.samsung.com/3"),
+                                suggestion("OLED", "https://www.samsung.com/4"),
+                                suggestion("NUMPAD", "https://www.samsung.com/5"),
+                                suggestion("SD_CARD", "https://www.samsung.com/6"),
+                                suggestion("THUNDERBOLT", "https://www.samsung.com/7")),
+                        List.of()));
+
+        GeneratedChecklist result = service.generateCustom(
+                "Samsung", "Galaxy Book", null, OsFamily.WINDOWS, Set.of());
+
+        assertThat(result.aiSuggestions())
+                .hasSize(DeviceChecklistFeatureCatalog.MAX_ADDITIONAL_ITEMS)
+                .extracting(ChecklistSuggestion::featureCode)
+                .containsExactly("CAMERA", "WIFI", "OLED", "NUMPAD", "SD_CARD");
+        assertThat(result.aiSuggestions())
+                .extracting(ChecklistSuggestion::itemCode)
+                .doesNotHaveDuplicates();
     }
 
     @Test
@@ -648,5 +678,16 @@ class ChecklistGenerationServiceTests {
                 1);
         ReflectionTestUtils.setField(model, "id", 101L);
         return model;
+    }
+
+    private ChecklistSuggestion suggestion(String featureCode, String sourceUrl) {
+        return new ChecklistSuggestion(
+                featureCode,
+                "기능",
+                ChecklistEvidenceStatus.VERIFIED,
+                "제조사 공식 자료에서 확인했습니다.",
+                "실제 동작 여부를 확인하세요.",
+                sourceUrl,
+                "제조사 지원 페이지");
     }
 }

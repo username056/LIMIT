@@ -12,6 +12,7 @@ import com.c203.limit.domain.product.entity.MediaUploadStatus;
 import com.c203.limit.domain.product.repository.ListingImageRepository;
 import com.c203.limit.domain.product.repository.ListingRepository;
 import com.c203.limit.domain.product.repository.MediaUploadSessionRepository;
+import com.c203.limit.domain.product.moderation.service.ListingImageCompletedEvent;
 import com.c203.limit.domain.product.storage.MediaObjectStorage;
 import com.c203.limit.domain.product.storage.S3MediaProperties;
 import com.c203.limit.global.exception.BusinessException;
@@ -144,18 +145,30 @@ public class ListingImageUploadService {
                     exception.statusCode());
             throw new BusinessException(ErrorCode.MEDIA_STORAGE_UNAVAILABLE);
         }
-        return completionService.complete(
+        ListingImageResponse response = completionService.complete(
                 sellerId,
                 productId,
                 request,
                 LocalDateTime.now(clock));
+        events.publishEvent(new ListingImageCompletedEvent(
+                response.getImageId(), session.getBucketName(), session.getFinalObjectKey()));
+        return response;
     }
 
     @Transactional(readOnly = true)
     public List<ListingImageResponse> findAll(Long productId) {
-        listingRepository
+        return findAll(productId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ListingImageResponse> findAll(Long productId, Long viewerMemberId) {
+        Listing listing = listingRepository
                 .findByIdAndDeletedAtIsNull(productId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.PRODUCT_NOT_FOUND));
+        boolean isOwner = viewerMemberId != null && viewerMemberId.equals(listing.getSellerId());
+        if (!isOwner && !listing.isPubliclyVisible()) {
+            throw new BusinessException(ErrorCode.PRODUCT_NOT_FOUND);
+        }
         return imageRepository.findAllByListingIdOrderByDisplayOrderAscIdAsc(productId).stream()
                 .map(image -> ListingImageResponse.of(image, url(image.getS3Key())))
                 .toList();

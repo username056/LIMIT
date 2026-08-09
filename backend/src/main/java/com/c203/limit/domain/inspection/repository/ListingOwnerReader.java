@@ -33,5 +33,31 @@ public class ListingOwnerReader {
                 .optional();
     }
 
+    public Optional<ListingVisibilityInfo> findVisibilityById(Long listingId) {
+        return jdbcClient
+                .sql(
+                        """
+                        SELECT id, seller_id, status, moderation_status
+                        FROM listing
+                        WHERE id = :listingId AND deleted_at IS NULL
+                        """)
+                .param("listingId", listingId)
+                .query((resultSet, rowNum) -> new ListingVisibilityInfo(
+                        resultSet.getLong("id"),
+                        resultSet.getLong("seller_id"),
+                        resultSet.getString("status"),
+                        resultSet.getString("moderation_status")))
+                .optional();
+    }
+
     public record ListingOwnerInfo(Long listingId, Long sellerId) {}
+
+    public record ListingVisibilityInfo(
+            Long listingId, Long sellerId, String status, String moderationStatus) {
+        public boolean publiclyVisible() {
+            return "ON_SALE".equals(status)
+                    && ("NORMAL".equals(moderationStatus)
+                            || "WARNING_ACK_REQUIRED".equals(moderationStatus));
+        }
+    }
 }

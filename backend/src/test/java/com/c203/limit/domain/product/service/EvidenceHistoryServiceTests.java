@@ -38,6 +38,7 @@ class EvidenceHistoryServiceTests {
         Listing listing = mock(Listing.class);
         ListingChecklistItem item = mock(ListingChecklistItem.class);
         when(listing.getSellerId()).thenReturn(10L);
+        when(listing.isPubliclyVisible()).thenReturn(true);
         when(item.isVisibleToBuyer()).thenReturn(false);
         when(listings.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(listing));
         when(items.findByIdAndListingId(2L, 1L)).thenReturn(Optional.of(item));

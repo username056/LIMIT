@@ -17,6 +17,7 @@ MySQL 스키마는 애플리케이션 시작 시 Flyway가 적용하고, Hiberna
 - `V20260810__create_device_model_request.sql`: 판매자의 미등록 기기 모델 검토 요청 추가
 - `V20260816__support_immediate_model_checklist.sql`: 즉시 모델 등록, 사후 검토 상태와 버전형 AI 재조사 지원
 - `V20260818__extend_device_model_management.sql`: 모델 비활성화 감사 이력·대체 모델과 관리자 검색용 인덱스 추가
+- `V20260828__create_marketplace_moderation.sql`: 상품 운영 상태, 신고·복구 신청·위험 신호와 이미지 해시 추가
 
 `V20260721`은 기존 `member_role`, `user_sanction`, `user_account.member_type`을 삭제하지 않는다. 기존 `member_type` 값도 보존하며, 신규 회원 INSERT를 막지 않도록 해당 컬럼만 nullable/default 호환 상태로 바꾼다.
 

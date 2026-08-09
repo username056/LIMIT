@@ -167,6 +167,7 @@ class WishlistServiceTests {
         ReflectionTestUtils.setField(category, "manufacturer", "Samsung");
         Listing listing = Listing.createDraft(MEMBER_ID + 1, category, "Galaxy S24", "상태 양호", 650000, 5L);
         ReflectionTestUtils.setField(listing, "id", PRODUCT_ID);
+        ReflectionTestUtils.setField(listing, "status", ListingStatus.ON_SALE);
         return listing;
     }
 

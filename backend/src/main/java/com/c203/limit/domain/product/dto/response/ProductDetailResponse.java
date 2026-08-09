@@ -1,5 +1,6 @@
 package com.c203.limit.domain.product.dto.response;
 
+import com.c203.limit.domain.product.moderation.dto.response.SellerModerationNoticeResponse;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -34,6 +35,15 @@ public class ProductDetailResponse {
 
     @Schema(example = "ON_SALE")
     private final String status;
+
+    @Schema(description = "판매자 본인 조회에서만 실제 값을 제공하는 운영 상태", example = "NORMAL")
+    private final String moderationStatus;
+
+    @Schema(description = "판매자 본인 조회에서만 제공하는 운영 조치 사유")
+    private final String moderationReason;
+
+    @Schema(description = "판매자에게 공개된 신고 안내. 신고자 정보는 포함하지 않음")
+    private final List<SellerModerationNoticeResponse> moderationNotices;
 
     @Schema(example = "서울 강남구")
     private final String tradeRegion;
