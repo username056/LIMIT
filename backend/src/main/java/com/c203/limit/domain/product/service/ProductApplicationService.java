@@ -684,13 +684,15 @@ public class ProductApplicationService {
     }
 
     private int required(Long listingId) {
-        return Math.toIntExact(checklistItemRepository.countByListingIdAndIsRequiredTrue(listingId));
+        return Math.toIntExact(
+                checklistItemRepository.countByListingIdAndIsRequiredTrueAndVisibleToBuyerTrue(listingId));
     }
 
     private int completedRequired(Long listingId) {
         return Math.toIntExact(
-                checklistItemRepository.countByListingIdAndIsRequiredTrueAndCompletionStatus(
-                        listingId, ChecklistItemCompletionStatus.COMPLETED));
+                checklistItemRepository
+                        .countByListingIdAndIsRequiredTrueAndVisibleToBuyerTrueAndCompletionStatus(
+                                listingId, ChecklistItemCompletionStatus.COMPLETED));
     }
 
 
@@ -837,9 +839,11 @@ public class ProductApplicationService {
         return (root, query, cb) -> {
             var completedQuery = query.subquery(Long.class);
             var completedItem = completedQuery.from(ListingChecklistItem.class);
+            // 카드에 보이는 숫자로 거르는 필터다. 세는 대상도 그 숫자와 같아야 한다.
             completedQuery.select(cb.count(completedItem)).where(
                     cb.equal(completedItem.get("listingId"), root.get("id")),
                     cb.isTrue(completedItem.get("isRequired")),
+                    cb.isTrue(completedItem.get("visibleToBuyer")),
                     cb.equal(
                             completedItem.get("completionStatus"),
                             ChecklistItemCompletionStatus.COMPLETED));
@@ -866,13 +870,15 @@ public class ProductApplicationService {
             var requiredItem = requiredQuery.from(ListingChecklistItem.class);
             requiredQuery.select(cb.count(requiredItem)).where(
                     cb.equal(requiredItem.get("listingId"), root.get("id")),
-                    cb.isTrue(requiredItem.get("isRequired")));
+                    cb.isTrue(requiredItem.get("isRequired")),
+                    cb.isTrue(requiredItem.get("visibleToBuyer")));
 
             var incompleteQuery = query.subquery(Long.class);
             var incompleteItem = incompleteQuery.from(ListingChecklistItem.class);
             incompleteQuery.select(cb.count(incompleteItem)).where(
                     cb.equal(incompleteItem.get("listingId"), root.get("id")),
                     cb.isTrue(incompleteItem.get("isRequired")),
+                    cb.isTrue(incompleteItem.get("visibleToBuyer")),
                     cb.notEqual(
                             incompleteItem.get("completionStatus"),
                             ChecklistItemCompletionStatus.COMPLETED));
