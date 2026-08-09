@@ -11,6 +11,7 @@ import com.c203.limit.domain.inspection.entity.BatteryReportResult;
 import com.c203.limit.domain.inspection.entity.DxdiagResult;
 import com.c203.limit.domain.inspection.entity.ListingChecklistItem;
 import com.c203.limit.domain.inspection.entity.OcrResult;
+import com.c203.limit.domain.inspection.enums.ChecklistItemCompletionStatus;
 import com.c203.limit.domain.inspection.enums.DiagnosisFieldName;
 import com.c203.limit.domain.inspection.enums.DiagnosisSourceType;
 import com.c203.limit.domain.inspection.enums.AutomationType;
@@ -225,8 +226,12 @@ class DiagnosisValueConfirmationServiceTests {
     void savesDeviceInfoValueWithoutEvidence() {
         stubItemAndOwnership();
         when(listingChecklistItem.getItemCode()).thenReturn("LAP-SCR-013");
+        when(listingChecklistItem.getCompletionStatus())
+                .thenReturn(ChecklistItemCompletionStatus.PENDING);
         when(diagnosisAggregationService.getFieldValue(ITEM_ID, DiagnosisFieldName.MODEL_NAME))
                 .thenReturn(new DiagnosisAggregationService.DiagnosisFieldValue(null, null, null, null));
+        // 나머지 값이 비어 있으면 항목은 아직 완료가 아니다.
+        stubEmptyField(DiagnosisFieldName.STORAGE_CAPACITY);
 
         DiagnosisValueUpdateResponse response =
                 service.confirm(
@@ -238,6 +243,55 @@ class DiagnosisValueConfirmationServiceTests {
                 .correctManualDeviceInfo(DiagnosisFieldName.MODEL_NAME, "Galaxy Book4 Ultra");
         org.mockito.Mockito.verify(listingChecklistItemRepository).save(listingChecklistItem);
         assertThat(response.getConfirmedValue()).isEqualTo("Galaxy Book4 Ultra");
+    }
+
+    // 기기 정보는 사진 없이 값만 채워질 수 있다. 그때는 증빙 row가 없어 항목이 PENDING에 남고,
+    // 판매자는 다 채웠는데 검증 개수가 오르지 않았다.
+    @Test
+    void completesDeviceInfoItemWhenEveryFieldIsFilled() {
+        stubItemAndOwnership();
+        when(listingChecklistItem.getItemCode()).thenReturn("SYS-003");
+        when(listingChecklistItem.getCompletionStatus())
+                .thenReturn(ChecklistItemCompletionStatus.PENDING);
+        when(diagnosisAggregationService.getFieldValue(ITEM_ID, DiagnosisFieldName.MODEL_NAME))
+                .thenReturn(new DiagnosisAggregationService.DiagnosisFieldValue(null, null, null, null));
+        stubFilledField(DiagnosisFieldName.STORAGE_CAPACITY, "512GB");
+        stubFilledField(DiagnosisFieldName.OS_VERSION, "Windows 11");
+        stubFilledField(DiagnosisFieldName.CPU, "Core i7");
+
+        // 마지막 한 칸을 채우는 순간 항목이 완료된다.
+        service.confirm(
+                ITEM_ID, SELLER_ID, new DiagnosisValueUpdateRequest("MODEL_NAME", "Galaxy Book5"));
+
+        org.mockito.Mockito.verify(listingChecklistItem).markCompleted();
+    }
+
+    @Test
+    void leavesDeviceInfoItemPendingWhileAnyFieldIsEmpty() {
+        stubItemAndOwnership();
+        when(listingChecklistItem.getItemCode()).thenReturn("SYS-003");
+        when(listingChecklistItem.getCompletionStatus())
+                .thenReturn(ChecklistItemCompletionStatus.PENDING);
+        when(diagnosisAggregationService.getFieldValue(ITEM_ID, DiagnosisFieldName.MODEL_NAME))
+                .thenReturn(new DiagnosisAggregationService.DiagnosisFieldValue(null, null, null, null));
+        stubFilledField(DiagnosisFieldName.STORAGE_CAPACITY, "512GB");
+        stubFilledField(DiagnosisFieldName.OS_VERSION, "Windows 11");
+        stubEmptyField(DiagnosisFieldName.CPU);
+
+        service.confirm(
+                ITEM_ID, SELLER_ID, new DiagnosisValueUpdateRequest("MODEL_NAME", "Galaxy Book5"));
+
+        org.mockito.Mockito.verify(listingChecklistItem, org.mockito.Mockito.never()).markCompleted();
+    }
+
+    private void stubFilledField(DiagnosisFieldName fieldName, String value) {
+        when(diagnosisAggregationService.getFieldValue(ITEM_ID, fieldName))
+                .thenReturn(new DiagnosisAggregationService.DiagnosisFieldValue(value, null, 1L, null));
+    }
+
+    private void stubEmptyField(DiagnosisFieldName fieldName) {
+        when(diagnosisAggregationService.getFieldValue(ITEM_ID, fieldName))
+                .thenReturn(new DiagnosisAggregationService.DiagnosisFieldValue(null, null, null, null));
     }
 
     @Test

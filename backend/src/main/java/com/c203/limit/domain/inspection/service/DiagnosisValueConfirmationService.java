@@ -6,6 +6,7 @@ import com.c203.limit.domain.inspection.entity.BatteryReportResult;
 import com.c203.limit.domain.inspection.entity.DxdiagResult;
 import com.c203.limit.domain.inspection.entity.ListingChecklistItem;
 import com.c203.limit.domain.inspection.entity.OcrResult;
+import com.c203.limit.domain.inspection.enums.ChecklistItemCompletionStatus;
 import com.c203.limit.domain.inspection.enums.DiagnosisFieldName;
 import com.c203.limit.domain.inspection.enums.DiagnosisSourceType;
 import com.c203.limit.domain.inspection.enums.OcrFieldType;
@@ -34,6 +35,12 @@ public class DiagnosisValueConfirmationService {
     private static final Logger log = LoggerFactory.getLogger(DiagnosisValueConfirmationService.class);
     private static final String MANUAL_SOURCE_LABEL = "manual";
     private static final java.util.Set<String> DEVICE_INFO_ITEM_CODES = java.util.Set.of("LAP-SCR-013", "SYS-003");
+    // 기기 정보 항목이 다루는 네 값. 이게 다 차면 확인된 것으로 본다.
+    private static final java.util.List<DiagnosisFieldName> DEVICE_INFO_FIELDS = java.util.List.of(
+            DiagnosisFieldName.MODEL_NAME,
+            DiagnosisFieldName.STORAGE_CAPACITY,
+            DiagnosisFieldName.OS_VERSION,
+            DiagnosisFieldName.CPU);
 
     private final ListingChecklistItemRepository listingChecklistItemRepository;
     private final ListingOwnerReader listingOwnerReader;
@@ -77,6 +84,7 @@ public class DiagnosisValueConfirmationService {
             }
             String originalValue = item.manualDiagnosisValue(fieldName);
             item.correctManualDeviceInfo(fieldName, request.getConfirmedValue());
+            markDeviceInfoCompletedIfFilled(item, itemId, fieldName, request.getConfirmedValue());
             listingChecklistItemRepository.save(item);
             return new DiagnosisValueUpdateResponse(
                     itemId, fieldName.name(), originalValue, request.getConfirmedValue(), LocalDateTime.now());
@@ -84,6 +92,7 @@ public class DiagnosisValueConfirmationService {
         String originalValue = current.fileParseValue() != null ? current.fileParseValue() : current.ocrValue();
 
         applyCorrection(current.sourceType(), current.sourceEvidenceId(), fieldName, request.getConfirmedValue());
+        markDeviceInfoCompletedIfFilled(item, itemId, fieldName, request.getConfirmedValue());
 
         log.info(
                 "diagnosis value confirmed: itemId={}, fieldName={}, sourceType={}",
@@ -93,6 +102,37 @@ public class DiagnosisValueConfirmationService {
 
         return new DiagnosisValueUpdateResponse(
                 itemId, fieldName.name(), originalValue, request.getConfirmedValue(), LocalDateTime.now());
+    }
+
+    /**
+     * 기기 정보 항목은 사진 없이 값만 채워질 수 있다. 진단 프로그램이 넣어 주거나 판매자가 직접
+     * 입력하는 경우인데, 그때는 증빙 row가 생기지 않아 {@code EvidenceUploadCompletionService}가
+     * 손댈 일이 없고 항목이 PENDING에 남아 있었다. 판매자는 다 채웠는데 상품 목록의 검증 개수는
+     * 오르지 않고 구매자에게는 미완료로 보였다.
+     *
+     * <p>네 값이 모두 차면 완료로 둔다. 판매하기 화면이 '자동 입력 완료'라고 부르는 기준과 같다.
+     * 값의 출처는 따지지 않는다 — OCR로 두 개, 손으로 두 개 채운 경우도 다 찬 것은 마찬가지다.
+     */
+    private void markDeviceInfoCompletedIfFilled(
+            ListingChecklistItem item, Long itemId, DiagnosisFieldName editedField, String editedValue) {
+        if (item.getItemCode() == null || !DEVICE_INFO_ITEM_CODES.contains(item.getItemCode())) return;
+        if (item.getCompletionStatus() == ChecklistItemCompletionStatus.COMPLETED) return;
+
+        boolean allFilled = DEVICE_INFO_FIELDS.stream().allMatch(field -> {
+            // 방금 넣은 값은 그대로 본다. 아직 flush 전이라 다시 조회하면 안 보일 수 있다.
+            if (field == editedField) return hasText(editedValue);
+            DiagnosisAggregationService.DiagnosisFieldValue value =
+                    diagnosisAggregationService.getFieldValue(itemId, field);
+            return hasText(value.fileParseValue()) || hasText(value.ocrValue());
+        });
+        if (!allFilled) return;
+
+        item.markCompleted();
+        log.info("device info item completed without evidence: itemId={}", itemId);
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private boolean isDeviceInfoField(DiagnosisFieldName fieldName) {
