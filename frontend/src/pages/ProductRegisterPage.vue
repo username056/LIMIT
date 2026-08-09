@@ -50,6 +50,7 @@ import {
 } from '../utils/camera'
 import { MAX_PRICE_DIGITS, formatPriceDigits, toPriceDigits } from '../utils/priceInput'
 import { guideContentFor, guideImageFor } from '../utils/checklistGuideImages'
+import { OCR_FIELD_NAMES, isDeviceInfoItem, isDiagnosisComplete } from '../utils/diagnosisCompletion'
 import { CHECKABLE_ITEM_CODES, toUniversalCheckItems } from '../features/deviceCheck/checkableItemCodes'
 
 const WIZARD_STEPS = [
@@ -316,35 +317,18 @@ function diagnosisFieldLabel(fieldName) {
 // 항목의 자동화 종류가 다룰 수 있는 필드 전체 목록입니다. 자동 인식이 실패했거나(값 없음)
 // 일부만 인식됐을 때도, 인식 못한 필드까지 빈 입력 칸으로 미리 보여줘서 드롭다운 없이
 // 바로 타이핑해 저장할 수 있게 합니다.
-const OCR_FIELD_NAMES = ['MODEL_NAME', 'STORAGE_CAPACITY', 'OS_VERSION', 'CPU']
 const DXDIAG_FIELD_NAMES = ['RAM', 'GPU', 'GPU_MEMORY', 'DRIVER_VERSION', 'SOUND_DEVICE']
 const BATTERY_REPORT_FIELD_NAMES = [
   'DESIGN_CAPACITY', 'FULL_CHARGE_CAPACITY', 'CYCLE_COUNT', 'BATTERY_MANUFACTURER', 'CAPACITY_RATIO',
 ]
-const COMPLETION_FIELD_NAMES_BY_PARSER = {
-  DXDIAG: ['RAM', 'GPU'],
-  BATTERY_REPORT: ['DESIGN_CAPACITY', 'FULL_CHARGE_CAPACITY', 'CAPACITY_RATIO'],
-}
-
-function isDeviceInfoItem(item) {
-  return ['LAP-SCR-013', 'SYS-003'].includes(item?.itemCode)
-}
 
 function hasAutomaticallyDetectedValue(field) {
   return String(field?.fileParseValue ?? field?.ocrValue ?? '').trim().length > 0
 }
 
-function diagnosisCompletionFieldNames(item) {
-  if (isDeviceInfoItem(item)) return OCR_FIELD_NAMES
-  return COMPLETION_FIELD_NAMES_BY_PARSER[item?.parserType] || []
-}
-
 function isAutomatedDiagnosisComplete(item) {
-  const requiredFieldNames = diagnosisCompletionFieldNames(item)
-  if (!requiredFieldNames.length) return false
-
   const fields = diagnosisState[item.checklistItemId]?.fields || []
-  return requiredFieldNames.every((fieldName) => {
+  return isDiagnosisComplete(item, (fieldName) => {
     const field = fields.find((candidate) => candidate.fieldName === fieldName)
     return hasAutomaticallyDetectedValue(field)
   })
@@ -601,25 +585,6 @@ const mediaChecklistItems = computed(
   () => checklistItems.value.filter((item) => item.evidenceType !== 'SELLER_CONFIRMATION'),
 )
 
-/*
-  영상 안내는 영상 항목이 있을 때만 띄웁니다.
-  ---------------------------------------------------------------------------
-  사진과 진단 파일만 있는 기종에도 영상 제한이 적혀 있어, 올릴 일 없는 조건을 읽게
-  됩니다. 길이도 화면에 60초만 적어 두었더니 1초짜리를 올린 판매자가 뜻 모를 오류만
-  받았습니다. 서버가 내려준 항목 값을 그대로 읽어, 값이 바뀌면 화면도 따라가게 합니다.
-*/
-const videoChecklistItems = computed(
-  () => mediaChecklistItems.value.filter((item) => item.evidenceType === 'VIDEO'),
-)
-
-const videoDurationNotice = computed(() => {
-  const items = videoChecklistItems.value
-  if (!items.length) return ''
-  const min = Math.min(...items.map((item) => Number(item.minDurationSec) || 0))
-  const max = Math.max(...items.map((item) => Number(item.maxDurationSec) || 0))
-  const range = min && max ? `${min}~${max}초` : (max ? `${max}초 이내` : '')
-  return `영상은 항목마다 1개씩${range ? `, ${range}` : ''}·100MB 이하만 올릴 수 있습니다.`
-})
 // SELLER_CONFIRMATION 항목 중 checkableItemCodes.js가 실동작 점검 대상으로 지정한 itemCode는
 // DeviceCheckPage에서 실제로 눌러보고 받은 결과만 신뢰해야 합니다. 여기 체크박스로 노출하면
 // 판매자가 점검 없이 그냥 체크해서 SUCCESS로 덮어버릴 수 있어 개인정보 확인 항목과 분리합니다.
@@ -3097,14 +3062,6 @@ onMounted(async () => {
 
               <p class="mt-2 text-center text-[11px] text-text-sub">
                 사진 추가 후 이미지를 클릭하시면 삭제 버튼을 확인할 수 있습니다.
-              </p>
-              <!-- 영상 항목이 없는 기종에서는 올릴 일 없는 조건이라 띄우지 않습니다. -->
-              <p
-                v-if="videoDurationNotice"
-                class="mt-1 text-center text-[11px] text-text-sub"
-              >
-                {{ videoDurationNotice }}
-                동작이 이어지는 모습이 보여야 구매자가 확인할 수 있습니다.
               </p>
 
               <div class="mt-5 rounded-lg bg-bg p-4 text-xs leading-6 text-text-sub">
