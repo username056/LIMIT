@@ -600,6 +600,26 @@ const previewConfirmationItemCount = computed(
 const mediaChecklistItems = computed(
   () => checklistItems.value.filter((item) => item.evidenceType !== 'SELLER_CONFIRMATION'),
 )
+
+/*
+  영상 안내는 영상 항목이 있을 때만 띄웁니다.
+  ---------------------------------------------------------------------------
+  사진과 진단 파일만 있는 기종에도 영상 제한이 적혀 있어, 올릴 일 없는 조건을 읽게
+  됩니다. 길이도 화면에 60초만 적어 두었더니 1초짜리를 올린 판매자가 뜻 모를 오류만
+  받았습니다. 서버가 내려준 항목 값을 그대로 읽어, 값이 바뀌면 화면도 따라가게 합니다.
+*/
+const videoChecklistItems = computed(
+  () => mediaChecklistItems.value.filter((item) => item.evidenceType === 'VIDEO'),
+)
+
+const videoDurationNotice = computed(() => {
+  const items = videoChecklistItems.value
+  if (!items.length) return ''
+  const min = Math.min(...items.map((item) => Number(item.minDurationSec) || 0))
+  const max = Math.max(...items.map((item) => Number(item.maxDurationSec) || 0))
+  const range = min && max ? `${min}~${max}초` : (max ? `${max}초 이내` : '')
+  return `영상은 항목마다 1개씩${range ? `, ${range}` : ''}·100MB 이하만 올릴 수 있습니다.`
+})
 // SELLER_CONFIRMATION 항목 중 checkableItemCodes.js가 실동작 점검 대상으로 지정한 itemCode는
 // DeviceCheckPage에서 실제로 눌러보고 받은 결과만 신뢰해야 합니다. 여기 체크박스로 노출하면
 // 판매자가 점검 없이 그냥 체크해서 SUCCESS로 덮어버릴 수 있어 개인정보 확인 항목과 분리합니다.
@@ -1437,9 +1457,19 @@ async function handleCaptureFile(item, file) {
   let durationSeconds = null
   if (item.evidenceType === 'VIDEO') {
     durationSeconds = await readVideoDuration(file)
+    const minDuration = Number(item.minDurationSec) || null
     const maxDuration = Number(item.maxDurationSec) || null
-    if (maxDuration && durationSeconds && durationSeconds > maxDuration) {
+    if (durationSeconds && maxDuration && durationSeconds > maxDuration) {
       openAlert(`‘${item.name}’ 항목은 ${maxDuration}초 이내 영상만 올릴 수 있습니다.`)
+      return
+    }
+    // 짧은 영상은 동작이 이어지는 모습이 담기지 않아 서버가 거절합니다. 압축을 시작하기
+    // 전에 이유까지 알려 줍니다. 숫자만 말하면 트집처럼 읽힙니다.
+    if (durationSeconds && minDuration && durationSeconds < minDuration) {
+      openAlert(
+        `‘${item.name}’ 항목은 ${minDuration}초 이상 영상이 필요합니다.\n`
+        + '동작이 이어지는 모습이 보여야 구매자가 확인할 수 있습니다.',
+      )
       return
     }
   }
@@ -3068,8 +3098,13 @@ onMounted(async () => {
               <p class="mt-2 text-center text-[11px] text-text-sub">
                 사진 추가 후 이미지를 클릭하시면 삭제 버튼을 확인할 수 있습니다.
               </p>
-              <p class="mt-1 text-center text-[11px] text-text-sub">
-                영상은 항목마다 1개씩, 60초 이내·100MB 이하만 올릴 수 있습니다. (판매글 전체로는 최대 6개)
+              <!-- 영상 항목이 없는 기종에서는 올릴 일 없는 조건이라 띄우지 않습니다. -->
+              <p
+                v-if="videoDurationNotice"
+                class="mt-1 text-center text-[11px] text-text-sub"
+              >
+                {{ videoDurationNotice }}
+                동작이 이어지는 모습이 보여야 구매자가 확인할 수 있습니다.
               </p>
 
               <div class="mt-5 rounded-lg bg-bg p-4 text-xs leading-6 text-text-sub">
