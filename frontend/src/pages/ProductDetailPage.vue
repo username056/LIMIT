@@ -93,7 +93,39 @@ const buyerChecklist = computed(() => buyerChecklistItems.value.map((item) => {
     completed: item.status === 'COMPLETED' || evidence.length > 0 || isAutoFilled(item),
     evidence,
   }
-}))
+}).map((item) => ({
+  ...item,
+  statusText: completionText(item),
+  trailingText: trailingText(item),
+})))
+
+/*
+  확인 방법이 항목마다 다릅니다.
+  ---------------------------------------------------------------------------
+  사진·영상은 판매자가 올린 자료를 보고, 키보드·숫자 키패드 같은 실동작 점검은 브라우저가
+  직접 눌러 보게 하고, 사양은 진단 프로그램이 읽습니다. 뒤의 둘은 파일이 남지 않습니다.
+
+  그런데 문구는 자료를 올리는 항목만 염두에 두고 쓰여 있었습니다. 점검을 마친 숫자 키패드가
+  '자료 준비 중 · 자료 없음'으로 보였습니다. 판매자는 다 했는데 안 한 것처럼 읽힙니다.
+*/
+function isSellerCheckItem(item) {
+  return item.evidenceType === 'SELLER_CONFIRMATION'
+}
+
+function completionText(item) {
+  if (!item.completed) return isSellerCheckItem(item) ? '미점검' : '자료 준비 중'
+  if (isSellerCheckItem(item)) return '검증 완료'
+  // 자료 없이 완료된 나머지는 진단 프로그램이 채운 항목입니다.
+  return item.evidence.length ? '판매자 확인 완료' : '자동 인식 완료'
+}
+
+// 자료 목록 자리에 들어갈 한마디입니다. 파일이 안 생기는 항목에 '자료 없음'이라고 하면
+// 빠뜨린 것처럼 보이므로, 무엇으로 확인했는지를 대신 밝힙니다.
+function trailingText(item) {
+  if (isSellerCheckItem(item)) return item.completed ? '실동작 점검' : '자료 없음'
+  if (item.completed) return '자동 인식'
+  return '자료 없음'
+}
 
 // 판단 기준은 utils/diagnosisCompletion에 있고, 값을 찾는 방법만 여기서 알려 줍니다.
 // 등록 화면은 항목별 fields를, 이 화면은 상품 전체의 사양 요약을 들고 있습니다.
@@ -951,7 +983,7 @@ onMounted(async () => {
                   </p>
                   <p class="mt-0.5 text-xs text-text-sub">
                     {{ evidenceTypeLabel(item.evidenceType) }}
-                    · {{ item.completed ? '판매자 확인 완료' : '자료 준비 중' }}
+                    · {{ item.statusText }}
                   </p>
                 </div>
                 <ul
@@ -1005,7 +1037,7 @@ onMounted(async () => {
                 <span
                   v-else
                   class="shrink-0 text-xs text-text-sub"
-                >자료 없음</span>
+                >{{ item.trailingText }}</span>
               </li>
             </ul>
             <p

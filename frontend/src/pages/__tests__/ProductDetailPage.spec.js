@@ -320,6 +320,105 @@ describe('ProductDetailPage', () => {
     expect(itemRow.get('img').attributes('src')).toBe('https://example.test/evidence.jpg')
   })
 
+  // 확인 방법이 다르면 문구도 달라야 합니다. 실동작 점검과 자동 인식은 파일이 남지 않아
+  // 예전에는 다 마친 항목까지 '자료 준비 중 · 자료 없음'으로 보였습니다.
+  it('점검을 마친 실동작 항목은 검증 완료로 보여준다', async () => {
+    getAccessToken.mockReturnValue(null)
+    getProductChecklist.mockResolvedValue([{
+      checklistItemId: 7001,
+      itemCode: 'LAP-FTR-NUM',
+      name: '숫자 키패드',
+      visibleToBuyer: true,
+      evidenceType: 'SELLER_CONFIRMATION',
+      status: 'COMPLETED',
+      required: true,
+    }])
+    getEvidenceHistory.mockResolvedValue([])
+
+    const wrapper = mount(ProductDetailPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    const itemRow = wrapper.get('ul[aria-label="검증 체크리스트 항목"] > li')
+    expect(itemRow.text()).toContain('검증 완료')
+    expect(itemRow.text()).toContain('실동작 점검')
+    expect(itemRow.text()).not.toContain('자료 없음')
+  })
+
+  it('아직 점검하지 않은 실동작 항목은 미점검으로 보여준다', async () => {
+    getAccessToken.mockReturnValue(null)
+    getProductChecklist.mockResolvedValue([{
+      checklistItemId: 7001,
+      itemCode: 'LAP-FTR-NUM',
+      name: '숫자 키패드',
+      visibleToBuyer: true,
+      evidenceType: 'SELLER_CONFIRMATION',
+      status: 'PENDING',
+      required: true,
+    }])
+    getEvidenceHistory.mockResolvedValue([])
+
+    const wrapper = mount(ProductDetailPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    const itemRow = wrapper.get('ul[aria-label="검증 체크리스트 항목"] > li')
+    expect(itemRow.text()).toContain('미점검')
+    expect(itemRow.text()).not.toContain('자료 준비 중')
+  })
+
+  it('진단 프로그램이 채운 항목은 자동 인식 완료로 보여준다', async () => {
+    getAccessToken.mockReturnValue(null)
+    getProductChecklist.mockResolvedValue([{
+      checklistItemId: 7001,
+      itemCode: 'SYS-003',
+      name: '기기 정보 화면',
+      visibleToBuyer: true,
+      evidenceType: 'PHOTO',
+      status: 'PENDING',
+      required: true,
+    }])
+    getEvidenceHistory.mockResolvedValue([])
+    getProductDiagnosisSummary.mockResolvedValue({
+      disclaimer: '',
+      items: [
+        { fieldName: 'MODEL_NAME', value: 'Galaxy Book5', status: 'AVAILABLE' },
+        { fieldName: 'STORAGE_CAPACITY', value: '512GB', status: 'AVAILABLE' },
+        { fieldName: 'OS_VERSION', value: 'Windows 11', status: 'AVAILABLE' },
+        { fieldName: 'CPU', value: 'Core i7', status: 'AVAILABLE' },
+      ],
+    })
+
+    const wrapper = mount(ProductDetailPage, {
+      global: {
+        stubs: {
+          DefaultLayout: layoutStub,
+          BaseButton: buttonStub,
+          RouterLink: { template: '<a><slot /></a>' },
+        },
+      },
+    })
+    await flushPromises()
+
+    const itemRow = wrapper.get('ul[aria-label="검증 체크리스트 항목"] > li')
+    expect(itemRow.text()).toContain('자동 인식 완료')
+    expect(itemRow.text()).not.toContain('자료 준비 중')
+  })
+
   it('숨겨진 체크리스트 항목은 구매자에게 보여주지 않는다', async () => {
     getAccessToken.mockReturnValue(null)
     getProductChecklist.mockResolvedValue([
