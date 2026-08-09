@@ -37,11 +37,6 @@ public interface ListingChecklistItemRepository
       건너뛰어도 된다는 뜻은 아니다 — 등록을 막는 것은 이 값이 아니라 Listing.publish의
       precheckCompleted다.
     */
-    long countByListingIdAndIsRequiredTrueAndVisibleToBuyerTrue(Long listingId);
-
-    long countByListingIdAndIsRequiredTrueAndVisibleToBuyerTrueAndCompletionStatus(
-            Long listingId, ChecklistItemCompletionStatus status);
-
     @Query(
             """
             SELECT item.listingId AS listingId,
