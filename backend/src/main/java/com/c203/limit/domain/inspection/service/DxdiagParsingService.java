@@ -30,18 +30,21 @@ public class DxdiagParsingService {
     private final ListingOwnerReader listingOwnerReader;
     private final DxdiagFileFetcher dxdiagFileFetcher;
     private final DxdiagParser dxdiagParser;
+    private final DeviceInfoCompletionService deviceInfoCompletionService;
 
     public DxdiagParsingService(
             EvidenceRepository evidenceRepository,
             DxdiagResultRepository dxdiagResultRepository,
             ListingOwnerReader listingOwnerReader,
             DxdiagFileFetcher dxdiagFileFetcher,
-            DxdiagParser dxdiagParser) {
+            DxdiagParser dxdiagParser,
+            DeviceInfoCompletionService deviceInfoCompletionService) {
         this.evidenceRepository = evidenceRepository;
         this.dxdiagResultRepository = dxdiagResultRepository;
         this.listingOwnerReader = listingOwnerReader;
         this.dxdiagFileFetcher = dxdiagFileFetcher;
         this.dxdiagParser = dxdiagParser;
+        this.deviceInfoCompletionService = deviceInfoCompletionService;
     }
 
     public DxdiagResult parse(Long evidenceId, Long sellerId) {
@@ -77,6 +80,9 @@ public class DxdiagParsingService {
                 DxdiagResultMapper.toEntity(evidenceId, parsed, PARSER_VERSION, LocalDateTime.now());
         DxdiagResult saved = dxdiagResultRepository.save(entity);
         log.info("dxdiag parsed: evidenceId={}, parseStatus={}", evidenceId, saved.getParseStatus());
+        // DxDiag는 이 항목뿐 아니라 기기 정보 항목의 값(모델명·저장용량·OS·CPU)도 함께 채운다.
+        // 그쪽은 사진이 없어 스스로 완료가 되지 못하므로 여기서 같이 봐 준다.
+        deviceInfoCompletionService.refreshFor(evidence.getListingId());
         return saved;
     }
 
