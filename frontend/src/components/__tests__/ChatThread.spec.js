@@ -358,7 +358,7 @@ describe('ChatThread', () => {
     await flushPromises()
 
     expect(requestRtcCall).toHaveBeenCalledWith(10, {
-      scheduledAt: `${scheduledAt}:00`,
+      scheduledAt: new Date(`${scheduledAt}:00`).toISOString(),
       memo: '배터리 확인',
     })
     expect(wrapper.text()).toContain('통화 약속을 요청했습니다.')
@@ -415,6 +415,23 @@ describe('ChatThread', () => {
 
     expect(wrapper.get('[data-testid="appointment-card"]').attributes('style')).toContain('order: 1')
     expect(wrapper.get('[data-message-sequence="4"]').attributes('style')).toContain('order: 8')
+  })
+
+  it('검수 제출 시각이 기록된 일정은 재입장 버튼을 표시하지 않는다', async () => {
+    getMyRtcCalls.mockResolvedValue([{
+      callId: 31,
+      chatRoomId: 10,
+      status: 'ACCEPTED',
+      scheduledAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+      inspectionSubmittedAt: new Date().toISOString(),
+      rtcSessionId: 7,
+      incoming: false,
+    }])
+
+    const wrapper = mountThread()
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('실시간 검증 입장하기')
   })
 
   it('이미 만료된 약속 카드는 채팅에서 표시하지 않는다', async () => {
