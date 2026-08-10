@@ -64,18 +64,19 @@ class RtcSessionTests {
     }
 
     @Test
-    void keepsOriginalExpirationWhenSessionDisconnects() {
+    void completesInspectionAndClosesSessionImmediately() {
         RtcSession session =
                 RtcSession.waiting(
                         1L, 2L, 3L, 4L, 5L, LocalDateTime.now().plusHours(2));
         LocalDateTime expiresAt = session.getExpiresAt();
         LocalDateTime submittedAt = LocalDateTime.now();
 
-        session.disconnectAfterInspection(RtcEndReason.COMPLETED, "통화 종료", submittedAt);
+        session.completeInspection(RtcEndReason.COMPLETED, "통화 종료", submittedAt);
 
-        assertThat(session.getStatus()).isEqualTo(RtcSessionStatus.WAITING);
+        assertThat(session.getStatus()).isEqualTo(RtcSessionStatus.ENDED);
         assertThat(session.getExpiresAt()).isEqualTo(expiresAt);
         assertThat(session.getInspectionSubmittedAt()).isEqualTo(submittedAt);
-        assertThat(session.isClosed()).isFalse();
+        assertThat(session.getEndedAt()).isEqualTo(submittedAt);
+        assertThat(session.isClosed()).isTrue();
     }
 }

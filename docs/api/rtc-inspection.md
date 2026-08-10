@@ -6,7 +6,7 @@
 - 제안자는 상대가 응답하기 전에 약속 시간·메모를 변경하거나 약속을 취소할 수 있다.
 - 수락 시 상품과 연결된 WebRTC 세션을 만들고 판매자가 offer를 생성한다.
 - SDP, ICE candidate, 특정 부위 확인 요청은 WebSocket으로 상대 참가자에게만 중계한다.
-- 통화 종료 시 확인한 체크리스트 항목과 항목별 메모, 전체 메모를 저장한다.
+- 검수 제출 시 확인한 체크리스트 항목과 항목별 메모, 전체 메모를 저장하고 세션과 일정을 완료한다.
 - 전체 통화 녹화, 미디어 파일 저장, 서버 미디어 중계는 MVP 범위에서 제외한다.
 
 ## API
@@ -22,14 +22,16 @@
 | GET | `/api/v1/rtc-sessions/{sessionId}` | 세션·상품 체크리스트 조회 |
 | POST | `/api/v1/rtc-sessions/{sessionId}/join` | 최초 입장·재입장용 2분 단기 토큰 발급 |
 | POST | `/api/v1/rtc-sessions/{sessionId}/connected` | P2P 또는 TURN 연결 성공 기록 |
-| POST | `/api/v1/rtc-sessions/{sessionId}/end` | 체크리스트·메모 저장 후 현재 연결 종료. 기존 세션 만료 시각은 유지 |
+| POST | `/api/v1/rtc-sessions/{sessionId}/end` | 체크리스트·메모 저장 후 세션과 일정을 완료 |
 | WS | `/ws/rtc?token=...` | offer, answer, ICE, 재협상, 부위 요청, 종료 중계 |
 
 모든 REST 성공 응답은 `{ "data": ..., "meta": null }` 형식이다. WebSocket 입장 토큰은 REST 인증 후 발급되며 한 번 사용하면 즉시 폐기된다.
 
 `GET /api/v1/calls` 응답은 일정 시각 `scheduledAt`, 상대 닉네임 `counterpartName`,
-세션 만료 시각 `sessionExpiresAt`을 포함한다. 같은 채팅방에 `PROPOSED` 또는 `ACCEPTED`
-일정이 있으면 새 일정 생성은 `RTC006`으로 거절하고 기존 일정이 있음을 안내한다.
+활성 세션 만료 시각 `sessionExpiresAt`과 검수 제출 시각 `inspectionSubmittedAt`을 포함한다.
+완료된 일정의 `sessionExpiresAt`은 `null`이다. 같은
+채팅방에 활성 `PROPOSED` 또는 `ACCEPTED` 일정이 있으면 새 일정 생성은 `RTC006`으로
+거절한다. 검수 제출로 일정이 `COMPLETED`가 되면 즉시 새 일정을 만들 수 있다.
 
 ## 연결 실패와 재입장
 
@@ -37,9 +39,8 @@
 2. 시그널링 연결이 끊기거나 복구되지 않으면 사용자가 재입장 버튼으로 새 단기 토큰을 발급받는다.
 3. 같은 회원이 재입장하면 서버는 해당 회원의 이전 WebSocket을 닫고 최신 연결로 교체한다.
 4. 상대가 나가면 `peer-left`, 특정 확인 요청은 `inspection-request` 이벤트로 전달한다.
-5. 한 참가자가 종료하면 현재 P2P 연결만 끊는다. 재입장은 최초 약속에 설정된 세션 만료 시각까지만 허용한다.
-6. 검수 결과를 제출하고 연결을 종료한 시각은 `inspectionSubmittedAt`으로 별도 보존한다. 이후 세션이 만료돼도 이 값은 유지되며 화면에서는 `검수 완료`로 표시한다.
-   유예 시간이 지나면 분 단위 만료 스캔 또는 다음 입장 시점에 `EXPIRED`로 전환한다.
+5. 한 참가자가 검수 결과를 제출하면 세션은 `ENDED`, 일정은 `COMPLETED`가 되며 재입장은 허용하지 않는다.
+6. 검수 결과를 제출한 시각은 `inspectionSubmittedAt`으로 보존하고 화면에서는 즉시 `검수 완료`로 표시한다.
 
 ## 환경 계약
 

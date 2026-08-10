@@ -72,4 +72,17 @@ class CallAppointmentTests {
         assertThatThrownBy(() -> appointment.cancel(20L, null))
                 .isInstanceOf(IllegalStateException.class);
     }
+
+    @Test
+    void acceptedCallCompletesAtInspectionSubmissionTime() {
+        CallAppointment appointment = CallAppointment.propose(
+                10L, 20L, 30L, LocalDateTime.now().minusMinutes(1), null);
+        LocalDateTime completedAt = LocalDateTime.now();
+        appointment.accept(30L);
+
+        appointment.complete(completedAt);
+
+        assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.COMPLETED);
+        assertThat(appointment.getCompletedAt()).isEqualTo(completedAt);
+    }
 }

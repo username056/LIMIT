@@ -59,6 +59,9 @@ class MockPeerConnection {
     this.addTransceiver = vi.fn()
     this.close = vi.fn()
     this.connectionState = 'new'
+    this.signalingState = 'stable'
+    this.createOffer = vi.fn().mockResolvedValue({ type: 'offer', sdp: 'v=0' })
+    this.setLocalDescription = vi.fn().mockResolvedValue(undefined)
     peer = this
   }
 }
@@ -362,6 +365,63 @@ describe('RtcCallPage', () => {
     wrapper.unmount()
   })
 
+  it('구매자는 나중에 도착한 음성 스트림으로 판매자 영상 스트림을 덮어쓰지 않는다', async () => {
+    setAuthSession({ member: { memberId: 2, nickname: '구매자' } })
+    getRtcSession.mockResolvedValue({
+      sessionId: 30,
+      sellerId: 1,
+      buyerId: 2,
+      status: 'ACTIVE',
+      checklistItems: [],
+    })
+    const wrapper = mount(RtcCallPage, {
+      global: { stubs: { DefaultLayout: layoutStub } },
+    })
+    await flushPromises()
+    const videoStream = { id: 'video-stream', getTracks: () => [] }
+    const audioStream = { id: 'audio-stream', getTracks: () => [] }
+
+    await peer.ontrack({ track: { id: 'video', kind: 'video' }, streams: [videoStream] })
+    await peer.ontrack({ track: { id: 'audio', kind: 'audio' }, streams: [audioStream] })
+    await flushPromises()
+
+    expect(wrapper.get('video').element.srcObject).toBe(videoStream)
+    wrapper.unmount()
+  })
+
+  it('판매자가 두 번째로 입장해도 joined 참가자 수를 보고 offer를 시작한다', async () => {
+    const videoTrack = { stop: vi.fn() }
+    navigator.mediaDevices.getUserMedia
+      .mockResolvedValueOnce({ getTracks: () => [videoTrack] })
+      .mockRejectedValueOnce(new DOMException('denied', 'NotAllowedError'))
+    getRtcSession.mockResolvedValue({
+      sessionId: 30,
+      sellerId: 1,
+      buyerId: 2,
+      status: 'ACTIVE',
+      checklistItems: [],
+    })
+    issueRtcJoinToken.mockResolvedValue({
+      signalingUrl: 'ws://localhost/rtc',
+      joinToken: '${TEST_RTC_TOKEN}',
+      offerer: true,
+      iceServers: [],
+    })
+    const wrapper = mount(RtcCallPage, {
+      global: { stubs: { DefaultLayout: layoutStub } },
+    })
+    await flushPromises()
+
+    await rtcSocket.onmessage({
+      data: JSON.stringify({ type: 'joined', participantCount: 2 }),
+    })
+    await flushPromises()
+
+    expect(peer.createOffer).toHaveBeenCalledWith({ iceRestart: false })
+    expect(rtcSocket.send).toHaveBeenCalledWith(expect.stringContaining('"type":"offer"'))
+    wrapper.unmount()
+  })
+
   it('세션 종료 시 영상을 비우고 바로 채팅으로 이동한다', async () => {
     const videoTrack = { stop: vi.fn() }
     navigator.mediaDevices.getUserMedia
@@ -388,7 +448,7 @@ describe('RtcCallPage', () => {
     const video = wrapper.get('video').element
     expect(video.srcObject).not.toBeNull()
 
-    await wrapper.get('button').trigger('click')
+    await wrapper.findAll('button').find((button) => button.text() === '검수 제출 후 나가기').trigger('click')
     await flushPromises()
 
     expect(endRtcSession).toHaveBeenCalled()

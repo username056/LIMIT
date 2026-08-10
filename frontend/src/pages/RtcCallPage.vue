@@ -41,6 +41,7 @@ let localStream
 let optionalAudioStream
 let remoteStream
 let joinInfo
+let offerPending = false
 let connectedRecorded = false
 let reconnectTimer
 let elapsedTimer
@@ -92,9 +93,15 @@ async function attachSellerStream() {
 }
 
 async function createOffer(iceRestart = false) {
-  const offer = await peer.createOffer({ iceRestart })
-  await peer.setLocalDescription(offer)
-  sendSignal('offer', offer)
+  if (offerPending || peer?.signalingState === 'closed') return
+  offerPending = true
+  try {
+    const offer = await peer.createOffer({ iceRestart })
+    await peer.setLocalDescription(offer)
+    sendSignal('offer', offer)
+  } finally {
+    offerPending = false
+  }
 }
 
 async function handleSignal(event) {
@@ -107,6 +114,9 @@ async function handleSignal(event) {
   const peerSignalTypes = ['peer-ready', 'offer', 'answer', 'ice-candidate', 'ice-restart']
   if (peerSignalTypes.includes(message.type) && !peer) return
   try {
+    if (message.type === 'joined' && message.participantCount >= 2 && joinInfo?.offerer) {
+      await createOffer()
+    }
     if (message.type === 'peer-ready' && joinInfo?.offerer) await createOffer()
     if (message.type === 'offer') {
       await peer.setRemoteDescription(message.payload)
@@ -158,6 +168,7 @@ function cleanupRtc() {
   localStream = null
   optionalAudioStream = null
   remoteStream = null
+  offerPending = false
   pendingSignals = []
 }
 
@@ -188,7 +199,7 @@ async function connectRtc() {
       peer.addTransceiver('audio', { direction: 'recvonly' })
     }
     peer.ontrack = async (event) => {
-      remoteStream = event.streams[0]
+      if (event.track.kind === 'video' || !remoteStream) remoteStream = event.streams[0]
       await attachSellerStream()
     }
     peer.onicecandidate = (event) => {
@@ -560,7 +571,7 @@ onBeforeUnmount(() => {
               class="rounded-lg bg-red-50 px-5 py-2.5 text-sm font-bold text-red-500 hover:bg-red-100"
               @click="finish"
             >
-              세션 종료
+              검수 제출 후 나가기
             </button>
             <button
               v-else

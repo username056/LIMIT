@@ -120,7 +120,7 @@ public interface RtcCallApi {
     ResponseEntity<ApiResponse<RtcSessionResponse>> connected(
             @PathVariable Long sessionId, @Valid @RequestBody MarkRtcConnectedRequest request);
 
-    @Operation(summary = "통화 종료 및 확인 체크리스트·메모 저장")
+    @Operation(summary = "검수 제출 후 통화 세션과 일정 완료")
     @ApiResponses(
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "200",
