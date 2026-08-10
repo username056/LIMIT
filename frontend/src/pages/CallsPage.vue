@@ -244,7 +244,7 @@ function isCallInProgress(call) {
 }
 
 function isCallEnded(call) {
-  return ['REJECTED', 'CANCELED'].includes(call.status)
+  return ['COMPLETED', 'REJECTED', 'CANCELED'].includes(call.status)
     || (['PROPOSED', 'ACCEPTED'].includes(call.status) && isSessionExpired(call))
 }
 
@@ -274,6 +274,7 @@ function callTone(call) {
 }
 
 function callStatusLabel(call) {
+  if (call.status === 'COMPLETED') return '검수 완료'
   if (isSessionExpired(call) && call.inspectionSubmittedAt) return '검수 완료'
   if (call.status === 'REJECTED') return '거절됨'
   if (call.status === 'CANCELED') return '취소됨'

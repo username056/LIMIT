@@ -95,6 +95,7 @@ describe('CallsPage', () => {
       { ...outgoingCall, callId: 21, chatRoomId: 7, status: 'ACCEPTED' },
       { ...outgoingCall, callId: 23, chatRoomId: 7, status: 'REJECTED' },
       { ...outgoingCall, callId: 24, chatRoomId: 7, status: 'CANCELED' },
+      { ...outgoingCall, callId: 27, chatRoomId: 7, status: 'COMPLETED' },
       {
         ...outgoingCall,
         callId: 25,
@@ -116,11 +117,11 @@ describe('CallsPage', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('갤럭시 테스트 상품')
-    expect(wrapper.text()).toContain('전체 목록 (6)')
+    expect(wrapper.text()).toContain('전체 목록 (7)')
     expect(wrapper.text()).toContain('대기 (1)')
     expect(wrapper.text()).toContain('진행 중 (1)')
-    expect(wrapper.text()).toContain('종료 (4)')
-    expect(wrapper.findAll('[data-testid="rtc-request-card"]')).toHaveLength(6)
+    expect(wrapper.text()).toContain('종료 (5)')
+    expect(wrapper.findAll('[data-testid="rtc-request-card"]')).toHaveLength(7)
     expect(wrapper.get('[data-testid="rtc-request-card"]').classes()).toContain('request-card')
 
     await wrapper.findAll('button').find((button) => button.text() === '대기 (1)').trigger('click')
@@ -133,9 +134,9 @@ describe('CallsPage', () => {
     expect(wrapper.findAll('[data-testid="rtc-request-card"]')).toHaveLength(1)
     expect(wrapper.text()).toContain('일정 확정')
 
-    await wrapper.findAll('button').find((button) => button.text() === '종료 (4)').trigger('click')
+    await wrapper.findAll('button').find((button) => button.text() === '종료 (5)').trigger('click')
 
-    expect(wrapper.findAll('[data-testid="rtc-request-card"]')).toHaveLength(4)
+    expect(wrapper.findAll('[data-testid="rtc-request-card"]')).toHaveLength(5)
     expect(wrapper.text()).toContain('거절됨')
     expect(wrapper.text()).toContain('취소됨')
     expect(wrapper.text()).toContain('검수 완료')

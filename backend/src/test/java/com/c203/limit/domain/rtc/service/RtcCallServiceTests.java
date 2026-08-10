@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -59,6 +60,9 @@ class RtcCallServiceTests {
         memberRepository = mock(MemberRepository.class);
         eventPublisher = mock(ApplicationEventPublisher.class);
         service = service("", "", "");
+        CallAppointment accepted =
+                appointment(1L, AppointmentStatus.ACCEPTED, LocalDateTime.now().minusMinutes(1));
+        lenient().when(appointmentRepository.findById(1L)).thenReturn(Optional.of(accepted));
     }
 
     private RtcCallService service(String turnUrl, String turnUsername, String turnCredential) {
@@ -226,9 +230,10 @@ class RtcCallServiceTests {
         CallAppointment appointment =
                 CallAppointment.propose(10L, 20L, 30L, scheduledAt, null);
         ReflectionTestUtils.setField(appointment, "id", id);
-        if (status == AppointmentStatus.ACCEPTED) {
+        if (status == AppointmentStatus.ACCEPTED || status == AppointmentStatus.COMPLETED) {
             appointment.accept(30L);
         }
+        if (status == AppointmentStatus.COMPLETED) appointment.complete(LocalDateTime.now());
         return appointment;
     }
 
@@ -399,6 +404,27 @@ class RtcCallServiceTests {
         assertThat(responses.get(0).sessionExpiresAt()).isEqualTo(session.getExpiresAt());
         assertThat(responses.get(0).incoming()).isFalse();
         assertThat(responses.get(0).counterpartName()).isEqualTo("판매자");
+    }
+
+    @Test
+    void omitsExpirationFromCompletedAppointment() {
+        LocalDateTime scheduledAt = LocalDateTime.now().minusMinutes(5);
+        CallAppointment completed =
+                appointment(1L, AppointmentStatus.COMPLETED, scheduledAt);
+        RtcSession session = session(50L, 1L, scheduledAt.plusMinutes(30));
+        session.completeInspection(
+                com.c203.limit.domain.rtc.domain.RtcEndReason.COMPLETED,
+                null,
+                LocalDateTime.now());
+        when(appointmentRepository.findMine(20L)).thenReturn(List.of(completed));
+        when(sessionRepository.findByCallAppointmentIdIn(List.of(1L)))
+                .thenReturn(List.of(session));
+
+        var response = service.findMine(20L).get(0);
+
+        assertThat(response.status()).isEqualTo(AppointmentStatus.COMPLETED.name());
+        assertThat(response.sessionExpiresAt()).isNull();
+        assertThat(response.inspectionSubmittedAt()).isNotNull();
     }
 
     @Test
@@ -660,7 +686,7 @@ class RtcCallServiceTests {
     }
 
     @Test
-    void savesChecklistResultsAndKeepsSessionRejoinableAfterEnd() {
+    void savesChecklistResultsAndCompletesSessionAndAppointment() {
         LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(10);
         RtcSession session = session(10L, 1L, expiresAt);
         List<ListingChecklistItem> items = List.of(checklistItem(200L, "BODY"));
@@ -677,10 +703,12 @@ class RtcCallServiceTests {
                                 "확인 완료",
                                 List.of(new RtcChecklistResultRequest(200L, true, "이상 없음"))));
 
-        assertThat(response.status()).isEqualTo(RtcSessionStatus.WAITING.name());
+        assertThat(response.status()).isEqualTo(RtcSessionStatus.ENDED.name());
         assertThat(response.memo()).isEqualTo("확인 완료");
         assertThat(response.expiresAt()).isEqualTo(expiresAt);
         assertThat(response.inspectionSubmittedAt()).isNotNull();
+        assertThat(appointmentRepository.findById(1L).orElseThrow().getStatus())
+                .isEqualTo(AppointmentStatus.COMPLETED);
         verify(resultRepository).saveAll(anyList());
     }
 

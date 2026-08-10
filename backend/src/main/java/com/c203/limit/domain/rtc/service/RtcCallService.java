@@ -308,6 +308,8 @@ public class RtcCallService {
             throw new BusinessException(ErrorCode.RTC_SESSION_EXPIRED);
         }
         if (session.getStatus() == RtcSessionStatus.ENDED) {
+            CallAppointment appointment = appointment(session.getCallAppointmentId(), memberId);
+            completeAppointmentIfAccepted(appointment, session.getEndedAt());
             return sessionResponse(session);
         }
         List<com.c203.limit.domain.rtc.dto.request.RtcChecklistResultRequest> requested =
@@ -346,12 +348,23 @@ public class RtcCallService {
         } catch (IllegalArgumentException exception) {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
         }
-        session.disconnectAfterInspection(reason, request.memo(), LocalDateTime.now());
+        CallAppointment appointment = appointment(session.getCallAppointmentId(), memberId);
+        LocalDateTime completedAt = LocalDateTime.now();
+        session.completeInspection(reason, request.memo(), completedAt);
+        completeAppointmentIfAccepted(appointment, completedAt);
+        publishAppointmentChanged(appointment.getChatRoomId());
         log.info(
-                "RTC inspection session disconnected: sessionId={}, expiresAt={}",
+                "RTC inspection completed: sessionId={}, callId={}",
                 sessionId,
-                session.getExpiresAt());
+                appointment.getId());
         return sessionResponse(session);
+    }
+
+    private void completeAppointmentIfAccepted(
+            CallAppointment appointment, LocalDateTime completedAt) {
+        if (appointment.getStatus() == AppointmentStatus.ACCEPTED) {
+            appointment.complete(completedAt == null ? LocalDateTime.now() : completedAt);
+        }
     }
 
     private void publishAppointmentChanged(Long roomId) {
@@ -433,7 +446,9 @@ public class RtcCallService {
                                         : appointment.getProposerId())
                         .map(member -> member.getNickname())
                         .orElse(null),
-                session == null ? null : session.getExpiresAt(),
+                session == null || appointment.getStatus() == AppointmentStatus.COMPLETED
+                        ? null
+                        : session.getExpiresAt(),
                 session == null ? null : session.getInspectionSubmittedAt());
     }
 

@@ -113,13 +113,13 @@ public class RtcSession {
         endedAt = LocalDateTime.now();
     }
 
-    public void disconnectAfterInspection(
-            RtcEndReason reason, String memo, LocalDateTime submittedAt) {
+    public void completeInspection(RtcEndReason reason, String memo, LocalDateTime submittedAt) {
         if (status == RtcSessionStatus.ENDED || status == RtcSessionStatus.EXPIRED) return;
-        status = RtcSessionStatus.WAITING;
+        status = RtcSessionStatus.ENDED;
         endReason = reason;
         verificationMemo = memo;
         if (inspectionSubmittedAt == null) inspectionSubmittedAt = submittedAt;
+        endedAt = submittedAt;
     }
 
     public boolean expireIfDue(LocalDateTime now) {
