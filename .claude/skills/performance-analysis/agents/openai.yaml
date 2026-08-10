@@ -1,0 +1,4 @@
+interface:
+  display_name: "Performance Analysis"
+  short_description: "Analyze and verify measurable performance improvements"
+  default_prompt: "Use $performance-analysis to find and verify a measurable performance improvement."

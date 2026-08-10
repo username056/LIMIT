@@ -1,0 +1,4 @@
+interface:
+  display_name: "K6 Load Test"
+  short_description: "Design repeatable k6 baseline and comparison tests"
+  default_prompt: "Use $k6-load-test to create a repeatable baseline and comparison load test."

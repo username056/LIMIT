@@ -1,0 +1,4 @@
+interface:
+  display_name: "Observability Analysis"
+  short_description: "Correlate load tests with Prometheus and Grafana"
+  default_prompt: "Use $observability-analysis to correlate load-test results with application and infrastructure metrics."

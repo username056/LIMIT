@@ -1,0 +1,4 @@
+interface:
+  display_name: "SQL Query Analysis"
+  short_description: "Diagnose SQL bottlenecks with execution evidence"
+  default_prompt: "Use $sql-query-analysis to diagnose this database performance hypothesis with evidence."

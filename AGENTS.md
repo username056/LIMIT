@@ -74,6 +74,14 @@
 - PR 전 test, lint, build, secret scan, 정적 분석·커버리지, 의존성 취약점, API·이벤트 계약 검사를 확인한다.
 - 실행할 수 없는 검증은 성공으로 간주하지 않고 사유와 남은 위험을 보고한다.
 
+## 성능 작업
+
+- 성능 분석, 부하 테스트, 쿼리 최적화, 캐시·인덱스·커넥션 풀 조정 작업은 구현 전에 도구별 performance harness를 읽는다. Codex 계열은 `.agents/harness/performance.md`, Claude 계열은 동일 내용의 `.claude/harness/performance.md`를 사용한다.
+- 성능 문제는 측정 전까지 가설로 표현하고 Baseline을 먼저 측정한다. 개선 후에는 동일한 환경·데이터·부하 조건으로 재측정한다.
+- 병목과 개선 효과는 k6, SQL 로그·실행계획, Prometheus·Grafana 등 확인 가능한 근거로만 판단하고 측정하지 않은 수치를 생성하지 않는다.
+- 방법론은 작업에 맞게 `performance-analysis`, `k6-load-test`, `sql-query-analysis`, `observability-analysis` 스킬을 선택해 사용한다.
+- 운영 환경 부하 테스트, DB migration, 운영 설정 변경은 성능 작업이라는 이유로 허용되지 않으며 기존 승인 규칙을 그대로 따른다.
+
 ## 기본 검증
 
 ```powershell
