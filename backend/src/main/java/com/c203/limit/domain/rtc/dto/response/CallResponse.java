@@ -1,6 +1,6 @@
 package com.c203.limit.domain.rtc.dto.response;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 public record CallResponse(
         Long callId,
@@ -8,11 +8,11 @@ public record CallResponse(
         Long proposerId,
         Long respondentId,
         String status,
-        LocalDateTime scheduledAt,
+        OffsetDateTime scheduledAt,
         String memo,
         String cancelReason,
         Long rtcSessionId,
         boolean incoming,
         String counterpartName,
-        LocalDateTime sessionExpiresAt,
-        LocalDateTime inspectionSubmittedAt) {}
+        OffsetDateTime sessionExpiresAt,
+        OffsetDateTime inspectionSubmittedAt) {}

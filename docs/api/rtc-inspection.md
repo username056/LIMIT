@@ -27,6 +27,9 @@
 
 모든 REST 성공 응답은 `{ "data": ..., "meta": null }` 형식이다. WebSocket 입장 토큰은 REST 인증 후 발급되며 한 번 사용하면 즉시 폐기된다.
 
+일정 시각은 요청과 응답 모두 ISO-8601 offset date-time을 사용한다. 프론트는 사용자가 선택한
+로컬 시각을 UTC(`Z`)로 변환해 전송하고, 서버는 UTC로 저장한 뒤 `Z`가 포함된 값으로 응답한다.
+
 `GET /api/v1/calls` 응답은 일정 시각 `scheduledAt`, 상대 닉네임 `counterpartName`,
 활성 세션 만료 시각 `sessionExpiresAt`과 검수 제출 시각 `inspectionSubmittedAt`을 포함한다.
 완료된 일정의 `sessionExpiresAt`은 `null`이다. 같은
