@@ -94,7 +94,7 @@ public class RtcCallService {
     @Transactional
     public CallResponse request(Long roomId, Long memberId, CreateCallRequest request) {
         ChatRoom room = room(roomId, memberId);
-        if (hasActiveAppointment(roomId, LocalDateTime.now())) {
+        if (hasActiveAppointment(roomId, LocalDateTime.now(ZoneOffset.UTC))) {
             throw new BusinessException(ErrorCode.RTC_ACTIVE_APPOINTMENT_EXISTS);
         }
         Long respondent =
@@ -155,7 +155,11 @@ public class RtcCallService {
                         appointment -> {
                             RtcSession session = sessions.get(appointment.getId());
                             return session == null
-                                    || (!session.isClosed()
+                                    ? appointment
+                                            .getScheduledAt()
+                                            .plusMinutes(30)
+                                            .isAfter(now)
+                                    : (!session.isClosed()
                                             && (session.getExpiresAt() == null
                                                     || session.getExpiresAt().isAfter(now)));
                         });
@@ -199,7 +203,10 @@ public class RtcCallService {
                 publishAppointmentChanged(appointment.getChatRoomId());
                 return callResponse(appointment, null, memberId);
             }
-            if (!appointment.getScheduledAt().plusMinutes(30).isAfter(LocalDateTime.now())) {
+            if (!appointment
+                    .getScheduledAt()
+                    .plusMinutes(30)
+                    .isAfter(LocalDateTime.now(ZoneOffset.UTC))) {
                 throw new BusinessException(ErrorCode.RTC_SESSION_EXPIRED);
             }
             appointment.accept(memberId);
@@ -284,7 +291,7 @@ public class RtcCallService {
     @Transactional
     public RtcJoinResponse join(Long sessionId, Long memberId) {
         RtcSession session = session(sessionId, memberId);
-        ensureJoinable(session, LocalDateTime.now());
+        ensureJoinable(session, LocalDateTime.now(ZoneOffset.UTC));
         var ticket = tokenStore.issue(sessionId, memberId);
         return new RtcJoinResponse(
                 sessionId,
@@ -299,7 +306,7 @@ public class RtcCallService {
     public RtcSessionResponse connected(
             Long sessionId, Long memberId, MarkRtcConnectedRequest request) {
         RtcSession session = session(sessionId, memberId);
-        ensureJoinable(session, LocalDateTime.now());
+        ensureJoinable(session, LocalDateTime.now(ZoneOffset.UTC));
         try {
             session.connect(
                     ConnectionType.valueOf(
@@ -358,7 +365,7 @@ public class RtcCallService {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
         }
         CallAppointment appointment = appointment(session.getCallAppointmentId(), memberId);
-        LocalDateTime completedAt = LocalDateTime.now();
+        LocalDateTime completedAt = LocalDateTime.now(ZoneOffset.UTC);
         session.completeInspection(reason, request.memo(), completedAt);
         completeAppointmentIfAccepted(appointment, completedAt);
         publishAppointmentChanged(appointment.getChatRoomId());
@@ -372,7 +379,8 @@ public class RtcCallService {
     private void completeAppointmentIfAccepted(
             CallAppointment appointment, LocalDateTime completedAt) {
         if (appointment.getStatus() == AppointmentStatus.ACCEPTED) {
-            appointment.complete(completedAt == null ? LocalDateTime.now() : completedAt);
+            appointment.complete(
+                    completedAt == null ? LocalDateTime.now(ZoneOffset.UTC) : completedAt);
         }
     }
 

@@ -3,6 +3,7 @@ package com.c203.limit.domain.rtc.scheduler;
 import com.c203.limit.domain.rtc.domain.RtcSessionStatus;
 import com.c203.limit.domain.rtc.repository.RtcSessionRepository;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,7 +26,7 @@ public class RtcSessionExpirationScheduler {
     @Scheduled(fixedDelayString = "${limit.rtc.expiration-scan-delay-ms:60000}")
     @Transactional
     public void expireDueSessions() {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         RtcSessionRepository sessionRepository = sessionRepositoryProvider.getIfAvailable();
         if (sessionRepository == null) {
             return;
