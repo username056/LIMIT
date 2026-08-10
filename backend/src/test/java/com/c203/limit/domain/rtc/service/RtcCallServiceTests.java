@@ -89,15 +89,20 @@ class RtcCallServiceTests {
                 appointment(
                         1L,
                         AppointmentStatus.ACCEPTED,
-                        LocalDateTime.now().minusMinutes(40));
+                        LocalDateTime.now(ZoneOffset.UTC).minusMinutes(40));
         RtcSession expiredSession =
                 RtcSession.waiting(
-                        1L, 10L, 100L, 20L, 30L, LocalDateTime.now().minusMinutes(10));
+                        1L,
+                        10L,
+                        100L,
+                        20L,
+                        30L,
+                        LocalDateTime.now(ZoneOffset.UTC).minusMinutes(10));
         CallAppointment created =
                 appointment(
                         2L,
                         AppointmentStatus.PROPOSED,
-                        LocalDateTime.now().plusMinutes(10));
+                        LocalDateTime.now(ZoneOffset.UTC).plusMinutes(10));
         stubRequest(previous, expiredSession, created);
 
         var response =
@@ -108,6 +113,24 @@ class RtcCallServiceTests {
 
         assertThat(response.callId()).isEqualTo(2L);
         assertThat(response.status()).isEqualTo(AppointmentStatus.PROPOSED.name());
+    }
+
+    @Test
+    void allowsNewAppointmentAfterAcceptedAppointmentWithoutSessionExpired() {
+        LocalDateTime utcNow = LocalDateTime.now(ZoneOffset.UTC);
+        CallAppointment previous =
+                appointment(1L, AppointmentStatus.ACCEPTED, utcNow.minusMinutes(31));
+        CallAppointment created =
+                appointment(2L, AppointmentStatus.PROPOSED, utcNow.plusMinutes(10));
+        stubRequest(previous, null, created);
+
+        var response =
+                service.request(
+                        10L,
+                        20L,
+                        new CreateCallRequest(OffsetDateTime.now(ZoneOffset.UTC).plusMinutes(10), null));
+
+        assertThat(response.callId()).isEqualTo(2L);
     }
 
     @Test
@@ -169,12 +192,12 @@ class RtcCallServiceTests {
                 appointment(
                         1L,
                         AppointmentStatus.PROPOSED,
-                        LocalDateTime.now().minusMinutes(31));
+                        LocalDateTime.now(ZoneOffset.UTC).minusMinutes(31));
         CallAppointment created =
                 appointment(
                         2L,
                         AppointmentStatus.PROPOSED,
-                        LocalDateTime.now().plusMinutes(10));
+                        LocalDateTime.now(ZoneOffset.UTC).plusMinutes(10));
         stubRequest(previous, null, created);
 
         var response =
@@ -192,7 +215,7 @@ class RtcCallServiceTests {
                 appointment(
                         1L,
                         AppointmentStatus.PROPOSED,
-                        LocalDateTime.now().minusMinutes(31));
+                        LocalDateTime.now(ZoneOffset.UTC).minusMinutes(31));
         when(appointmentRepository.findById(1L)).thenReturn(Optional.of(appointment));
 
         assertThatThrownBy(
@@ -207,6 +230,27 @@ class RtcCallServiceTests {
                         exception ->
                                 assertThat(exception.getErrorCode())
                                         .isEqualTo(ErrorCode.RTC_SESSION_EXPIRED));
+    }
+
+    @Test
+    void acceptsAppointmentScheduledUsingUtcClock() {
+        LocalDateTime scheduledAt = LocalDateTime.now(ZoneOffset.UTC).plusMinutes(10);
+        CallAppointment proposed = appointment(1L, AppointmentStatus.PROPOSED, scheduledAt);
+        ChatRoom room = ChatRoom.create(100L, 20L, 30L);
+        ReflectionTestUtils.setField(room, "id", 10L);
+        RtcSession created = session(50L, 1L, scheduledAt.plusMinutes(30));
+        when(appointmentRepository.findById(1L)).thenReturn(Optional.of(proposed));
+        when(chatRoomRepository.findById(10L)).thenReturn(Optional.of(room));
+        when(sessionRepository.findByCallAppointmentId(1L)).thenReturn(Optional.empty());
+        when(sessionRepository.save(org.mockito.ArgumentMatchers.any())).thenReturn(created);
+
+        var response =
+                service.respond(
+                        1L,
+                        30L,
+                        new com.c203.limit.domain.rtc.dto.request.RespondCallRequest(true, null));
+
+        assertThat(response.status()).isEqualTo(AppointmentStatus.ACCEPTED.name());
     }
 
     private void stubRequest(
@@ -243,7 +287,12 @@ class RtcCallServiceTests {
     void expiresSessionWhenParticipantTriesToRejoinAfterTtl() {
         RtcSession session =
                 RtcSession.waiting(
-                        1L, 2L, 3L, 4L, 5L, LocalDateTime.now().minusMinutes(1));
+                        1L,
+                        2L,
+                        3L,
+                        4L,
+                        5L,
+                        LocalDateTime.now(ZoneOffset.UTC).minusMinutes(1));
         when(sessionRepository.findById(10L)).thenReturn(Optional.of(session));
 
         assertThatThrownBy(() -> service.join(10L, 4L))
@@ -522,8 +571,9 @@ class RtcCallServiceTests {
 
     @Test
     void marksSessionConnectedWithDefaultPeerToPeerType() {
-        RtcSession session = session(10L, 1L, LocalDateTime.now().plusMinutes(10));
-        stubJoinableSession(session, LocalDateTime.now().minusMinutes(1));
+        RtcSession session =
+                session(10L, 1L, LocalDateTime.now(ZoneOffset.UTC).plusMinutes(10));
+        stubJoinableSession(session, LocalDateTime.now(ZoneOffset.UTC).minusMinutes(1));
 
         var response = service.connected(10L, 20L, new MarkRtcConnectedRequest(null));
 
@@ -533,8 +583,9 @@ class RtcCallServiceTests {
 
     @Test
     void rejectsUnknownConnectionType() {
-        RtcSession session = session(10L, 1L, LocalDateTime.now().plusMinutes(10));
-        stubJoinableSession(session, LocalDateTime.now().minusMinutes(1));
+        RtcSession session =
+                session(10L, 1L, LocalDateTime.now(ZoneOffset.UTC).plusMinutes(10));
+        stubJoinableSession(session, LocalDateTime.now(ZoneOffset.UTC).minusMinutes(1));
 
         assertThatThrownBy(
                         () -> service.connected(10L, 20L, new MarkRtcConnectedRequest("SFU")))
@@ -575,8 +626,9 @@ class RtcCallServiceTests {
 
     @Test
     void issuesJoinTicketWithStunServerOnly() {
-        RtcSession session = session(10L, 1L, LocalDateTime.now().plusMinutes(10));
-        stubJoinableSession(session, LocalDateTime.now().minusMinutes(1));
+        RtcSession session =
+                session(10L, 1L, LocalDateTime.now(ZoneOffset.UTC).plusMinutes(10));
+        stubJoinableSession(session, LocalDateTime.now(ZoneOffset.UTC).minusMinutes(1));
 
         var response = service.join(10L, 30L);
 
@@ -591,8 +643,9 @@ class RtcCallServiceTests {
 
     @Test
     void addsTurnServerWhenTurnUrlIsConfigured() {
-        RtcSession session = session(10L, 1L, LocalDateTime.now().plusMinutes(10));
-        stubJoinableSession(session, LocalDateTime.now().minusMinutes(1));
+        RtcSession session =
+                session(10L, 1L, LocalDateTime.now(ZoneOffset.UTC).plusMinutes(10));
+        stubJoinableSession(session, LocalDateTime.now(ZoneOffset.UTC).minusMinutes(1));
 
         var response =
                 service("turn:turn.example.test:3478", "turn-user", "turn-secret")

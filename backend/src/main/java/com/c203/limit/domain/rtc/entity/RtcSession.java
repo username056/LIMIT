@@ -13,6 +13,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 @Entity
@@ -102,7 +103,7 @@ public class RtcSession {
         }
         status = RtcSessionStatus.CONNECTED;
         connectionType = type;
-        if (connectedAt == null) connectedAt = LocalDateTime.now();
+        if (connectedAt == null) connectedAt = LocalDateTime.now(ZoneOffset.UTC);
     }
 
     public void end(RtcEndReason reason, String memo) {
@@ -110,7 +111,7 @@ public class RtcSession {
         status = RtcSessionStatus.ENDED;
         endReason = reason;
         verificationMemo = memo;
-        endedAt = LocalDateTime.now();
+        endedAt = LocalDateTime.now(ZoneOffset.UTC);
     }
 
     public void completeInspection(RtcEndReason reason, String memo, LocalDateTime submittedAt) {
