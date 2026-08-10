@@ -338,6 +338,24 @@ describe('CallsPage', () => {
     expect(wrapper.text()).not.toContain('세션 만료')
   })
 
+  it('검수 제출 시각이 있으면 만료 전에도 종료로 분류하고 입장 버튼을 숨긴다', async () => {
+    getMyRtcCalls.mockResolvedValue([{
+      ...outgoingCall,
+      status: 'ACCEPTED',
+      scheduledAt: new Date(Date.now() - 1000).toISOString(),
+      rtcSessionId: 31,
+      inspectionSubmittedAt: new Date().toISOString(),
+    }])
+
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('진행 중 (0)')
+    expect(wrapper.text()).toContain('종료 (1)')
+    expect(wrapper.text()).toContain('검수 완료')
+    expect(wrapper.findAll('button').some((button) => button.text() === '화상 입장')).toBe(false)
+  })
+
   it('응답 대기 중 예정 시각에서 30분이 지나면 종료로 분류하고 응답 버튼을 숨긴다', async () => {
     getMyRtcCalls.mockResolvedValue([{
       ...outgoingCall,
@@ -400,7 +418,7 @@ describe('CallsPage', () => {
     await flushPromises()
 
     expect(updateRtcCall).toHaveBeenCalledWith(20, {
-      scheduledAt: '2026-08-01T15:30:00',
+      scheduledAt: new Date('2026-08-01T15:30:00').toISOString(),
       memo: '변경된 메모',
     })
     expect(getMyRtcCalls).toHaveBeenCalledTimes(2)

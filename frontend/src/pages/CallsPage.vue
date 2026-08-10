@@ -108,8 +108,16 @@ async function respond(call, accepted) {
 function startEdit(call) {
   cancelingCallId.value = null
   editingCallId.value = call.callId
-  editScheduledAt.value = call.scheduledAt?.slice(0, 16) || ''
+  editScheduledAt.value = localDateTimeInputValue(call.scheduledAt)
   editMemo.value = call.memo || ''
+}
+
+function localDateTimeInputValue(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60 * 1000)
+    .toISOString()
+    .slice(0, 16)
 }
 
 async function saveEdit(call) {
@@ -118,7 +126,7 @@ async function saveEdit(call) {
   errorMessage.value = ''
   try {
     await updateRtcCall(call.callId, {
-      scheduledAt: `${editScheduledAt.value}:00`,
+      scheduledAt: new Date(`${editScheduledAt.value}:00`).toISOString(),
       memo: editMemo.value.trim() || null,
     })
     editingCallId.value = null
@@ -222,6 +230,7 @@ function hasSessionStarted(call) {
 }
 
 function sessionCountdownLabel(call) {
+  if (call.inspectionSubmittedAt) return null
   if (!call.scheduledAt) return null
   if (!hasSessionStarted(call)) return `시작까지 ${remainingTime(call.scheduledAt)}`
   const expiresAt = callExpirationAt(call)
@@ -240,11 +249,12 @@ function isCallPending(call) {
 }
 
 function isCallInProgress(call) {
-  return call.status === 'ACCEPTED' && !isSessionExpired(call)
+  return call.status === 'ACCEPTED' && !call.inspectionSubmittedAt && !isSessionExpired(call)
 }
 
 function isCallEnded(call) {
   return ['COMPLETED', 'REJECTED', 'CANCELED'].includes(call.status)
+    || Boolean(call.inspectionSubmittedAt)
     || (['PROPOSED', 'ACCEPTED'].includes(call.status) && isSessionExpired(call))
 }
 
@@ -274,7 +284,7 @@ function callTone(call) {
 }
 
 function callStatusLabel(call) {
-  if (call.status === 'COMPLETED') return '검수 완료'
+  if (call.status === 'COMPLETED' || call.inspectionSubmittedAt) return '검수 완료'
   if (isSessionExpired(call) && call.inspectionSubmittedAt) return '검수 완료'
   if (call.status === 'REJECTED') return '거절됨'
   if (call.status === 'CANCELED') return '취소됨'
@@ -485,7 +495,7 @@ function remainingTime(expiresAt) {
                     </BaseButton>
                   </template>
                   <BaseButton
-                    v-if="call.rtcSessionId && call.status === 'ACCEPTED' && hasSessionStarted(call) && !isSessionExpired(call)"
+                    v-if="call.rtcSessionId && call.status === 'ACCEPTED' && !call.inspectionSubmittedAt && hasSessionStarted(call) && !isSessionExpired(call)"
                     @click="router.push({ name: 'rtc-call', params: { callId: call.callId } })"
                   >
                     화상 입장

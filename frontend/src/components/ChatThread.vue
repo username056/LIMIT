@@ -400,6 +400,7 @@ function shouldDisplayAppointmentMemo(memo) {
 const latestAppointment = computed(
   () => appointments.value.find(
     (appointment) => ['PROPOSED', 'ACCEPTED'].includes(appointment.status)
+      && !appointment.inspectionSubmittedAt
       && !isAppointmentExpired(appointment),
   ) || null,
 )
@@ -442,7 +443,7 @@ async function requestCallAppointment() {
   callMessage.value = ''
   try {
     await requestRtcCall(props.room.roomId, {
-      scheduledAt: `${callScheduledAt.value}:00`,
+      scheduledAt: new Date(`${callScheduledAt.value}:00`).toISOString(),
       memo: callMemo.value.trim() || null,
     })
     reanchorAppointment()
