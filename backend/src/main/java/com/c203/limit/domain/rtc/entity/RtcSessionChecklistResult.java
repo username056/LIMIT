@@ -8,6 +8,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 
 @Entity
 @Table(
@@ -49,7 +50,7 @@ public class RtcSessionChecklistResult {
         result.checkedBy = checkedBy;
         result.isConfirmed = confirmed;
         result.note = note;
-        result.checkedAt = LocalDateTime.now();
+        result.checkedAt = LocalDateTime.now(ZoneOffset.UTC);
         return result;
     }
 

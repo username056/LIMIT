@@ -9,6 +9,7 @@ import com.c203.limit.domain.rtc.domain.RtcSessionStatus;
 import com.c203.limit.domain.rtc.entity.RtcSession;
 import com.c203.limit.domain.rtc.repository.RtcSessionRepository;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
@@ -21,7 +22,12 @@ class RtcSessionExpirationSchedulerTests {
         ObjectProvider<RtcSessionRepository> provider = mock(ObjectProvider.class);
         RtcSession session =
                 RtcSession.waiting(
-                        1L, 2L, 3L, 4L, 5L, LocalDateTime.now().minusMinutes(1));
+                        1L,
+                        2L,
+                        3L,
+                        4L,
+                        5L,
+                        LocalDateTime.now(ZoneOffset.UTC).minusMinutes(1));
         when(provider.getIfAvailable()).thenReturn(repository);
         when(repository.findAllByStatusInAndExpiresAtLessThanEqual(any(), any()))
                 .thenReturn(List.of(session));
