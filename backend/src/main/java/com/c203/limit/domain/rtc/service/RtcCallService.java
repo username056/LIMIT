@@ -31,6 +31,8 @@ import com.c203.limit.domain.rtc.repository.RtcSessionRepository;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -98,7 +100,11 @@ public class RtcCallService {
         Long respondent =
                 room.getBuyerId().equals(memberId) ? room.getSellerId() : room.getBuyerId();
         LocalDateTime scheduledAt =
-                request.scheduledAt() == null ? LocalDateTime.now() : request.scheduledAt();
+                request.scheduledAt() == null
+                        ? LocalDateTime.now(ZoneOffset.UTC)
+                        : request.scheduledAt()
+                                .withOffsetSameInstant(ZoneOffset.UTC)
+                                .toLocalDateTime();
         CallAppointment appointment =
                 appointmentRepository.save(
                         CallAppointment.propose(
@@ -225,7 +231,10 @@ public class RtcCallService {
     public CallResponse update(Long callId, Long memberId, UpdateCallRequest request) {
         CallAppointment appointment = appointment(callId, memberId);
         try {
-            appointment.update(memberId, request.scheduledAt(), request.memo());
+            appointment.update(
+                    memberId,
+                    request.scheduledAt().withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime(),
+                    request.memo());
         } catch (IllegalStateException exception) {
             throw new BusinessException(ErrorCode.RTC_INVALID_STATE);
         }
@@ -434,7 +443,7 @@ public class RtcCallService {
                 appointment.getProposerId(),
                 appointment.getRespondentId(),
                 appointment.getStatus().name(),
-                appointment.getScheduledAt(),
+                utcOffset(appointment.getScheduledAt()),
                 appointment.getMemo(),
                 appointment.getCancelReason(),
                 session == null ? null : session.getId(),
@@ -448,8 +457,12 @@ public class RtcCallService {
                         .orElse(null),
                 session == null || appointment.getStatus() == AppointmentStatus.COMPLETED
                         ? null
-                        : session.getExpiresAt(),
-                session == null ? null : session.getInspectionSubmittedAt());
+                        : utcOffset(session.getExpiresAt()),
+                session == null ? null : utcOffset(session.getInspectionSubmittedAt()));
+    }
+
+    private OffsetDateTime utcOffset(LocalDateTime value) {
+        return value == null ? null : value.atOffset(ZoneOffset.UTC);
     }
 
     private String memberNickname(Long memberId) {

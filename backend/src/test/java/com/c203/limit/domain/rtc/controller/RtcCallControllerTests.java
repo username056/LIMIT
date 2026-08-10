@@ -10,7 +10,7 @@ import com.c203.limit.domain.rtc.dto.request.UpdateCallRequest;
 import com.c203.limit.domain.rtc.dto.response.CallResponse;
 import com.c203.limit.domain.rtc.service.RtcCallService;
 import com.c203.limit.global.security.CurrentUser;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,7 +31,8 @@ class RtcCallControllerTests {
 
     @Test
     void requestsCallForAuthenticatedMember() {
-        CreateCallRequest request = new CreateCallRequest(LocalDateTime.now().plusMinutes(5), "외관 확인");
+        CreateCallRequest request =
+                new CreateCallRequest(OffsetDateTime.now().plusMinutes(5), "외관 확인");
         CallResponse response = new CallResponse(
                 1L,
                 10L,
@@ -66,7 +67,7 @@ class RtcCallControllerTests {
     @Test
     void updatesCallAsCurrentMember() {
         UpdateCallRequest request =
-                new UpdateCallRequest(LocalDateTime.now().plusMinutes(30), "시간 변경");
+                new UpdateCallRequest(OffsetDateTime.now().plusMinutes(30), "시간 변경");
 
         controller.update(1L, request);
 

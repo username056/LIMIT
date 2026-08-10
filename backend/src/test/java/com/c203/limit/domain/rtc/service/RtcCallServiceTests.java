@@ -33,6 +33,8 @@ import com.c203.limit.domain.rtc.repository.RtcSessionRepository;
 import com.c203.limit.global.exception.BusinessException;
 import com.c203.limit.global.exception.ErrorCode;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -102,7 +104,7 @@ class RtcCallServiceTests {
                 service.request(
                         10L,
                         20L,
-                        new CreateCallRequest(LocalDateTime.now().plusMinutes(10), null));
+                        new CreateCallRequest(OffsetDateTime.now().plusMinutes(10), null));
 
         assertThat(response.callId()).isEqualTo(2L);
         assertThat(response.status()).isEqualTo(AppointmentStatus.PROPOSED.name());
@@ -126,7 +128,7 @@ class RtcCallServiceTests {
                                         10L,
                                         20L,
                                         new CreateCallRequest(
-                                                LocalDateTime.now().plusMinutes(10), null)))
+                                                OffsetDateTime.now().plusMinutes(10), null)))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         exception ->
@@ -153,7 +155,7 @@ class RtcCallServiceTests {
                                         10L,
                                         20L,
                                         new CreateCallRequest(
-                                                LocalDateTime.now().plusMinutes(10), null)))
+                                                OffsetDateTime.now().plusMinutes(10), null)))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         exception ->
@@ -179,7 +181,7 @@ class RtcCallServiceTests {
                 service.request(
                         10L,
                         20L,
-                        new CreateCallRequest(LocalDateTime.now().plusMinutes(10), null));
+                        new CreateCallRequest(OffsetDateTime.now().plusMinutes(10), null));
 
         assertThat(response.callId()).isEqualTo(2L);
     }
@@ -314,12 +316,13 @@ class RtcCallServiceTests {
     void proposerUpdatesProposedCall() {
         CallAppointment appointment = CallAppointment.propose(
                 10L, 20L, 30L, LocalDateTime.now().plusMinutes(10), null);
-        LocalDateTime changedAt = LocalDateTime.now().plusMinutes(30);
+        OffsetDateTime changedAt = OffsetDateTime.now().plusMinutes(30);
         when(appointmentRepository.findById(1L)).thenReturn(Optional.of(appointment));
 
         var response = service.update(1L, 20L, new UpdateCallRequest(changedAt, "외관 확인"));
 
-        assertThat(response.scheduledAt()).isEqualTo(changedAt);
+        assertThat(response.scheduledAt())
+                .isEqualTo(changedAt.withOffsetSameInstant(ZoneOffset.UTC));
         assertThat(response.memo()).isEqualTo("외관 확인");
     }
 
@@ -335,7 +338,7 @@ class RtcCallServiceTests {
                                         1L,
                                         30L,
                                         new UpdateCallRequest(
-                                                LocalDateTime.now().plusMinutes(30), null)))
+                                                OffsetDateTime.now().plusMinutes(30), null)))
                 .isInstanceOfSatisfying(
                         BusinessException.class,
                         exception ->
@@ -401,7 +404,8 @@ class RtcCallServiceTests {
 
         assertThat(responses).hasSize(1);
         assertThat(responses.get(0).rtcSessionId()).isEqualTo(50L);
-        assertThat(responses.get(0).sessionExpiresAt()).isEqualTo(session.getExpiresAt());
+        assertThat(responses.get(0).sessionExpiresAt())
+                .isEqualTo(session.getExpiresAt().atOffset(ZoneOffset.UTC));
         assertThat(responses.get(0).incoming()).isFalse();
         assertThat(responses.get(0).counterpartName()).isEqualTo("판매자");
     }
@@ -791,7 +795,8 @@ class RtcCallServiceTests {
 
         assertThat(response.status()).isEqualTo(AppointmentStatus.ACCEPTED.name());
         assertThat(response.rtcSessionId()).isEqualTo(50L);
-        assertThat(response.sessionExpiresAt()).isEqualTo(created.getExpiresAt());
+        assertThat(response.sessionExpiresAt())
+                .isEqualTo(created.getExpiresAt().atOffset(ZoneOffset.UTC));
     }
 
     @Test
