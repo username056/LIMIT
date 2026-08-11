@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">WebRTC</title>
+  <circle cx="128" cy="128" r="112" fill="#fff"/>
+  <circle cx="93" cy="82" r="34" fill="#4285f4"/>
+  <circle cx="163" cy="82" r="34" fill="#fbbc04"/>
+  <circle cx="76" cy="143" r="34" fill="#34a853"/>
+  <circle cx="180" cy="143" r="34" fill="#ea4335"/>
+  <path d="M102 92h52a18 18 0 0 1 18 18v40a18 18 0 0 1-18 18h-52a18 18 0 0 1-18-18v-40a18 18 0 0 1 18-18Z" fill="#d93025"/>
+  <path d="m154 112 28-16a10 10 0 0 1 15 9v40a10 10 0 0 1-15 9l-28-16Z" fill="#4285f4"/>
+</svg>
