@@ -6,6 +6,7 @@ import org.apache.catalina.connector.ClientAbortException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -106,6 +107,19 @@ public class GlobalExceptionHandler {
             DataIntegrityViolationException exception) {
         // DB 드라이버 메시지에는 테이블·제약명 등 내부 정보가 섞여 있어 로그에도 그대로 남기지 않는다.
         log.warn("data integrity violation");
+        return errorResponse(ErrorCode.DATA_CONFLICT);
+    }
+
+    /**
+     * 낙관적 락 버전 충돌({@code ObjectOptimisticLockingFailureException})과 MySQL 데드락(1213,
+     * {@code CannotAcquireLockException})은 둘 다 이 공통 상위 타입으로 올라온다. 같은 레코드에
+     * 대한 재시도·취소처럼 서비스 코드가 자체 재시도 루프 없이 단일 트랜잭션으로 끝나는 경로에서
+     * 발생하며, 별도 처리 없이 던지면 500으로 응답되던 것을 다른 동시성 충돌과 같은 409로 정리한다.
+     */
+    @ExceptionHandler(ConcurrencyFailureException.class)
+    public ResponseEntity<ApiErrorResponse> handleConcurrencyFailure(
+            ConcurrencyFailureException exception) {
+        log.warn("concurrency failure: {}", exception.getClass().getSimpleName());
         return errorResponse(ErrorCode.DATA_CONFLICT);
     }
 
