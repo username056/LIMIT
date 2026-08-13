@@ -5,8 +5,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
 import org.springframework.core.MethodParameter;
+import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -100,6 +102,19 @@ class GlobalExceptionHandlerTests {
         assertThat(notFoundResponse.getBody()).isNull();
         assertThat(methodNotAllowedResponse.getStatusCode()).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED);
         assertThat(methodNotAllowedResponse.getBody()).isNull();
+    }
+
+    @Test
+    void concurrencyFailureUsesDataConflictContract() {
+        var deadlockResponse = handler.handleConcurrencyFailure(
+                new CannotAcquireLockException("could not execute statement"));
+        var optimisticLockResponse = handler.handleConcurrencyFailure(
+                new ObjectOptimisticLockingFailureException(Object.class, 1L));
+
+        assertThat(deadlockResponse.getStatusCode()).isEqualTo(ErrorCode.DATA_CONFLICT.getStatus());
+        assertThat(deadlockResponse.getBody()).isNotNull();
+        assertThat(deadlockResponse.getBody().error().code()).isEqualTo("CMN008");
+        assertThat(optimisticLockResponse.getStatusCode()).isEqualTo(ErrorCode.DATA_CONFLICT.getStatus());
     }
 
     @Test
