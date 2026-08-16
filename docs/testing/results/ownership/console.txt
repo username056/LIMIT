@@ -1,0 +1,20 @@
+[1차 실행 — 참고용, TTL 초과로 DB 스냅샷은 놓침]
+ownership summary: created=1 conflict=19 serverError=0 winnerBuyerIndex=1 conflictCodes={"PRD001":19}
+checks: 4/4 통과 (exactly one 201 / exactly nineteen 409 / zero 5xx / conflicts are only PRD001 or PAY005)
+
+[2차 실행 — 최종 증거, DB 검증까지 완료된 실행]
+checks_total.......: 4       1.017904/s
+checks_succeeded...: 100.00% 4 out of 4
+checks_failed......: 0.00%   0 out of 4
+
+✓ exactly one 201
+✓ exactly nineteen 409
+✓ zero 5xx
+✓ conflicts are only PRD001 or PAY005
+
+HTTP
+http_req_duration: avg=185.69ms min=10.95ms med=100.66ms max=1.18s p(90)=500.25ms p(95)=506.33ms
+http_req_failed: 47.50% 19 out of 40
+http_reqs: 40 10.179038/s
+
+DB 대조: listing.buyer_id=4 → 2차 실행의 승자 (k6 콘솔의 winnerBuyerIndex 로그 줄은 캡처 과정에서 tail로 잘림, DB의 buyer_id로 대신 확인)

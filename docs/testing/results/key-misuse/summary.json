@@ -1,0 +1,137 @@
+{
+    "metrics": {
+        "iterations": {
+            "count": 1,
+            "rate": 4.873923087807297
+        },
+        "http_reqs": {
+            "count": 4,
+            "rate": 19.495692351229188
+        },
+        "http_req_waiting": {
+            "med": 33.895389,
+            "max": 119.005282,
+            "p(90)": 98.60003470000001,
+            "p(95)": 108.80265834999997,
+            "avg": 48.074412499999994,
+            "min": 5.50159
+        },
+        "http_req_tls_handshaking": {
+            "avg": 0,
+            "min": 0,
+            "med": 0,
+            "max": 0,
+            "p(90)": 0,
+            "p(95)": 0
+        },
+        "http_req_failed": {
+            "passes": 2,
+            "fails": 2,
+            "value": 0.5
+        },
+        "checks": {
+            "fails": 0,
+            "passes": 3,
+            "value": 1
+        },
+        "http_req_receiving": {
+            "med": 0.5933809999999999,
+            "max": 2.154513,
+            "p(90)": 1.7458014000000004,
+            "p(95)": 1.9501571999999996,
+            "avg": 0.917148,
+            "min": 0.327317
+        },
+        "http_req_sending": {
+            "min": 0.039602,
+            "med": 0.115956,
+            "max": 0.353318,
+            "p(90)": 0.30411560000000004,
+            "p(95)": 0.3287167999999999,
+            "avg": 0.156208
+        },
+        "data_received": {
+            "count": 2836,
+            "rate": 13822.445877021495
+        },
+        "http_req_connecting": {
+            "avg": 0.15238325,
+            "min": 0,
+            "med": 0.129307,
+            "max": 0.350919,
+            "p(90)": 0.3232275,
+            "p(95)": 0.33707324999999994
+        },
+        "data_sent": {
+            "count": 1653,
+            "rate": 8056.594864145462
+        },
+        "http_req_duration{expected_response:true}": {
+            "p(95)": 118.01604345000001,
+            "avg": 86.5424175,
+            "min": 51.571722,
+            "med": 86.5424175,
+            "max": 121.513113,
+            "p(90)": 114.51897390000002
+        },
+        "http_req_blocked": {
+            "p(95)": 2.8576006499999993,
+            "avg": 0.93822475,
+            "min": 0.004801,
+            "med": 0.2338125,
+            "max": 3.280473,
+            "p(90)": 2.4347283000000006
+        },
+        "http_req_duration": {
+            "p(95)": 111.02190434999999,
+            "avg": 49.1477685,
+            "min": 5.871509,
+            "med": 34.60322600000001,
+            "max": 121.513113,
+            "p(90)": 100.53069570000002
+        },
+        "iteration_duration": {
+            "avg": 77.47559,
+            "min": 77.47559,
+            "med": 77.47559,
+            "max": 77.47559,
+            "p(90)": 77.47559,
+            "p(95)": 77.47559
+        }
+    },
+    "setup_data": {
+        "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI0NjUzYjI2Zi1kOGI2LTQ3MGItOTA1Ni1mZWI3ZGE1NjY1OGYiLCJzaWQiOjIsImFjdCI6Ik1FTUJFUiIsInJvbGVzIjpbIk1FTUJFUiJdLCJ0eXAiOiJhY2Nlc3MiLCJleHAiOjE3ODY4OTg4MTF9.IgtHR22i0w1Rlxy2uckRA8PI0ja8dC8K7Cbx5HiSwwg",
+        "idempotencyKey": "load-misuse-1786897011796",
+        "listingIdA": 3,
+        "listingIdB": 4
+    },
+    "root_group": {
+        "name": "",
+        "path": "",
+        "id": "d41d8cd98f00b204e9800998ecf8427e",
+        "groups": {},
+        "checks": {
+                "request 1 (listing A, CARD): 201": {
+                    "name": "request 1 (listing A, CARD): 201",
+                    "path": "::request 1 (listing A, CARD): 201",
+                    "id": "a1aaaad5ead831aa61874c87e5e9c5a6",
+                    "passes": 1,
+                    "fails": 0
+                },
+                "request 2 (listing B, same key): 409 PAY004": {
+                    "name": "request 2 (listing B, same key): 409 PAY004",
+                    "path": "::request 2 (listing B, same key): 409 PAY004",
+                    "id": "efffe2419a9a685d1de57ab1b5812ce5",
+                    "passes": 1,
+                    "fails": 0
+                },
+                "request 3 (listing A, different method, same key): 409 PAY004": {
+                    "name": "request 3 (listing A, different method, same key): 409 PAY004",
+                    "path": "::request 3 (listing A, different method, same key): 409 PAY004",
+                    "id": "b4cf56948b0ad6797aee95ae8891de38",
+                    "passes": 1,
+                    "fails": 0
+                }
+            }
+    }
+}

@@ -1,0 +1,5 @@
+SELECT idempotency_key, payment_id, listing_id, buyer_id, status, method FROM payment WHERE idempotency_key LIKE 'load-misuse-%' ORDER BY payment_id;
+idempotency_key                payment_id  listing_id  buyer_id  status     method
+load-misuse-1786897011796      20          3           2         REQUESTED  CARD
+
+-- listing B(id=4)에 대한 Payment 행 없음 (기대대로)

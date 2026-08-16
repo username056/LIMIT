@@ -1,0 +1,21 @@
+-- 2차 실행(최종 증거) 직후, TTL(10분) 이내에 확인
+
+SELECT id, title, status, buyer_id, reserved_until, version FROM listing WHERE id = 1;
+id  title                           status    buyer_id  reserved_until               version
+1   [LOAD] Ownership Test Listing   RESERVED  4         2026-08-16 22:09:04.639568   3
+
+SELECT listing_id, status, COUNT(*) AS payment_count FROM payment WHERE listing_id = 1 GROUP BY listing_id, status;
+(정리 전, 1차 실행분 포함)
+listing_id  status     payment_count
+1           EXPIRED    1
+1           REQUESTED  1
+
+-- 1차 실행분(EXPIRED) 정리
+DELETE FROM payment WHERE listing_id = 1 AND status = 'EXPIRED';
+
+-- 정리 후 재확인
+listing_id  status     payment_count
+1           REQUESTED  1
+
+-- 참고: 1차 실행 DB 확인 시점(지체됨)에는 listing.status가 ON_SALE로 복귀,
+-- buyer_id/reserved_until NULL, version=2 였음 (스케줄러가 만료 처리한 흔적).

@@ -1,0 +1,15 @@
+idempotency summary: success=20 distinctPaymentIds=1 pay004=0 pay005=0 other4xx=0 otherCodes={} serverError=0
+
+checks_total.......: 4       3.128003/s
+checks_succeeded...: 100.00% 4 out of 4
+checks_failed......: 0.00%   0 out of 4
+
+  all 20 responses are 201
+  single distinct paymentId
+  zero PAY004
+  zero 5xx
+
+HTTP
+http_req_duration: avg=310.6ms min=3.89ms med=79.37ms max=1.06s p(90)=1.06s p(95)=1.06s
+http_req_failed: 0.00% 0 out of 21
+http_reqs: 21 16.422015/s
