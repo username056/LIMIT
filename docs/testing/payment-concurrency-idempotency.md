@@ -47,18 +47,18 @@ Test 1과 동일한 규칙. 저장 위치만 구분:
 
 | 항목 | 기대값 | 실제값 | 비고 |
 |---|---|---|---|
-| HTTP 201 | 20 | | |
-| 성공 응답 paymentId 집합 크기 | 1 | | |
-| PAY004 발생 건수 | 0 | | 1건이라도 나오면 실패 |
-| PAY005 발생 건수 | 0 (이론상 가능) | | 나오면 버그 아님, DB 무결성만 확인 |
-| 5xx | 0 | | |
-| 해당 idempotency_key Payment 수 | 1 | | |
-| listing.status | RESERVED | | |
-| REQUESTED Payment 수 | 1 | | |
+| HTTP 201 | 20 | 20 | |
+| 성공 응답 paymentId 집합 크기 | 1 | 1 | payment_id=17 |
+| PAY004 발생 건수 | 0 | 0 | |
+| PAY005 발생 건수 | 0 (이론상 가능) | 0 | |
+| 5xx | 0 | 0 | |
+| 해당 idempotency_key Payment 수 | 1 | 1 | |
+| listing.status | RESERVED | RESERVED | buyer_id=2 |
+| REQUESTED Payment 수 | 1 | 1 | |
 
 ## 7. 결론 (실행 후 채움)
 
-- 합격/불합격:
-- PAY005 발생 시 재분류 근거:
-- 특이사항:
-- 다음 테스트로 넘어가도 되는지:
+- 합격/불합격: **합격**
+- PAY005 발생 시 재분류 근거: 해당 없음 (0건)
+- 특이사항: k6 종료 직후 바로 DB를 확인해 ownership 테스트에서 겪은 TTL 초과 문제 없이 한 번에 검증 완료.
+- 다음 테스트로 넘어가도 되는지: 예

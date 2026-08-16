@@ -1,0 +1,7 @@
+SELECT idempotency_key, payment_id, listing_id, buyer_id, status FROM payment WHERE listing_id = 2 ORDER BY payment_id;
+idempotency_key                   payment_id  listing_id  buyer_id  status
+load-idempotency-1786896950409    17          2           2         REQUESTED
+
+SELECT id, title, status, buyer_id, reserved_until FROM listing WHERE id = 2;
+id  title                             status    buyer_id  reserved_until
+2   [LOAD] Idempotency Test Listing   RESERVED  2         2026-08-17 01:25:50.832187

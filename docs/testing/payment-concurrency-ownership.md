@@ -51,20 +51,20 @@
 
 | 항목 | 기대값 | 실제값 | 비고 |
 |---|---|---|---|
-| HTTP 201 | 1 | | |
-| HTTP 409 | 19 | | |
-| 409 중 PRD001 | - | | |
-| 409 중 PAY005 | - | | |
-| 409 중 그 외 코드 | 0 | | 나오면 실패 |
-| 5xx | 0 | | |
-| listing.status | RESERVED | | |
-| listing.buyer_id | 201 응답 buyer와 일치 | | |
-| REQUESTED Payment 수 | 1 | | |
-| listing 전체 Payment 수 | 1 | | |
-| Hikari pending (종료+2분) | 0 | | |
+| HTTP 201 | 1 | 1 | |
+| HTTP 409 | 19 | 19 | |
+| 409 중 PRD001 | - | 19 | |
+| 409 중 PAY005 | - | 0 | |
+| 409 중 그 외 코드 | 0 | 0 | |
+| 5xx | 0 | 0 | |
+| listing.status | RESERVED | RESERVED | |
+| listing.buyer_id | 201 응답 buyer와 일치 | buyer_id=4 (일치) | |
+| REQUESTED Payment 수 | 1 | 1 | |
+| listing 전체 Payment 수 | 1 | 1 | 아래 특이사항 참고 |
+| Hikari pending (종료+2분) | 0 | 0 | active=0, max=10도 확인 |
 
 ## 7. 결론 (실행 후 채움)
 
-- 합격/불합격:
-- 특이사항:
-- 다음 테스트로 넘어가도 되는지:
+- 합격/불합격: **합격**
+- 특이사항: 1차 실행은 k6 종료 후 DB 확인까지 시간이 지체되어 `reserved_until`(기본 TTL 10분, `limit.product.reservation-ttl-minutes`)을 초과, `PaymentReservationExpirationScheduler`가 listing을 자동으로 ON_SALE/EXPIRED로 되돌렸다. k6 판정 자체는 1차·2차 모두 4개 체크 전부 통과했으나, DB 스냅샷은 TTL 안에 찍어야 RESERVED/REQUESTED를 확인할 수 있다는 재현 조건을 확인. 2차 실행을 즉시 DB 검증까지 마쳤고, 위 표는 2차 실행 기준. 1차 실행분의 EXPIRED Payment 잔여 행은 검증 후 삭제.
+- 다음 테스트로 넘어가도 되는지: 예

@@ -48,12 +48,12 @@ curl 명령에 실제 토큰 값이 찍히므로, 저장 전 토큰 문자열은
 
 | 요청 | 기대 | 실제 | 비고 |
 |---|---|---|---|
-| 1 (listing A, CARD) | 201 | | |
-| 2 (listing B, CARD, 같은 key) | 409 PAY004 | | |
-| 3 (listing A, ACCOUNT_TRANSFER, 같은 key) | 409 PAY004 | | |
-| DB Payment 수 (key=K) | 1 | | |
+| 1 (listing A, CARD) | 201 | 201 | paymentId=20 |
+| 2 (listing B, CARD, 같은 key) | 409 PAY004 | 409 PAY004 | |
+| 3 (listing A, ACCOUNT_TRANSFER, 같은 key) | 409 PAY004 | 409 PAY004 | |
+| DB Payment 수 (key=K) | 1 | 1 | listing A, CARD, REQUESTED |
 
 ## 7. 결론 (실행 후 채움)
 
-- 합격/불합격:
-- 특이사항:
+- 합격/불합격: **합격**
+- 특이사항: curl 대신 k6 스크립트(`key-misuse.js`)로 3개 요청을 순차 실행. 토큰은 `__ENV`로만 주입되고 로그에는 응답 바디만 남아 자격증명 노출 없음.
